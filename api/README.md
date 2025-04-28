@@ -1,0 +1,123 @@
+# Invoice App API
+
+This is the REST API backend for the Invoice Management System built with FastAPI, SQLAlchemy, and Pydantic.
+
+## Features
+
+- Client Management
+- Invoice Management
+- Payment Processing
+- Database integration with SQLAlchemy
+- Data validation with Pydantic
+- API documentation with Swagger UI
+
+## Recent Fixes
+
+- Fixed CORS handling by updating the custom middleware to properly handle OPTIONS preflight requests
+- Added built-in CORS middleware for better cross-origin compatibility
+- Fixed SQLAlchemy query joins in the payments router by using explicit select_from() and join conditions
+- Improved error handling when converting SQLAlchemy objects to dictionaries
+
+## Setup and Installation
+
+1. Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+2. Initialize the database with sample data:
+
+```bash
+python -m api.db_init
+```
+
+3. Run the API server:
+
+```bash
+uvicorn api.main:app --reload
+```
+
+The API will be available at http://localhost:8000, and the API documentation at http://localhost:8000/docs.
+
+## API Endpoints
+
+### Clients
+
+- `GET /api/clients/` - List all clients
+- `GET /api/clients/{client_id}` - Get client details
+- `POST /api/clients/` - Create a new client
+- `PUT /api/clients/{client_id}` - Update a client
+- `DELETE /api/clients/{client_id}` - Delete a client
+
+### Invoices
+
+- `GET /api/invoices/` - List all invoices
+- `GET /api/invoices/{invoice_id}` - Get invoice details
+- `POST /api/invoices/` - Create a new invoice
+- `PUT /api/invoices/{invoice_id}` - Update an invoice
+- `DELETE /api/invoices/{invoice_id}` - Delete an invoice
+
+### Payments
+
+- `GET /api/payments/` - List all payments
+- `GET /api/payments/{payment_id}` - Get payment details
+- `POST /api/payments/` - Create a new payment
+- `PUT /api/payments/{payment_id}` - Update a payment
+- `DELETE /api/payments/{payment_id}` - Delete a payment
+
+## API Documentation
+
+FastAPI provides automatic API documentation using Swagger UI. 
+Access it at http://localhost:8000/docs when the server is running.
+
+## Development
+
+To contribute to this project:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request 
+
+## Running the API
+
+To start the API server:
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Initialize the database (if not already done)
+python run_init.py
+
+# Start the server
+python start.py
+```
+
+The API will be available at http://localhost:8000
+
+## API Documentation
+
+Once the server is running, you can access the interactive API documentation at:
+
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+## API Endpoints
+
+The API provides the following endpoints:
+
+- `/api/clients` - Manage clients
+- `/api/invoices` - Manage invoices
+- `/api/payments` - Manage payments
+
+Each resource supports standard CRUD operations.
+
+## Database
+
+The application uses SQLite for data storage. The database file is `invoice_app.db` in the root directory.
+
+## Sample Data
+
+The database is initialized with sample clients, invoices, and payments when you first run the application. 
