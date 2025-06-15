@@ -3,77 +3,56 @@ from sqlalchemy.orm import Session
 from typing import List
 from datetime import date
 
-from models.database import get_db
-from models.models import Invoice, Item, Client
-from schemas.invoice import (
+from api.models.database import get_db
+from api.models.models import Invoice, Item, Client, User
+from api.schemas.invoice import (
     InvoiceCreate, InvoiceUpdate, Invoice as InvoiceSchema,
     InvoiceWithClient, ItemCreate
 )
+from api.routers.auth import get_current_user
 
-router = APIRouter()
+router = APIRouter(prefix="/invoices", tags=["invoices"])
 
-@router.get("/invoices/", response_model=List[InvoiceWithClient])
+@router.get("/", response_model=List[InvoiceSchema])
 def read_invoices(
     skip: int = 0, 
     limit: int = 100, 
-    status: str = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    query = db.query(
-        Invoice,
-        Client.name.label("client_name")
-    ).join(Client)
-    
-    if status:
-        query = query.filter(Invoice.status == status)
-    
-    invoices = query.offset(skip).limit(limit).all()
-    
-    # Convert SQLAlchemy objects to Pydantic model
-    result = []
-    for invoice_tuple in invoices:
-        invoice_dict = invoice_tuple[0].__dict__
-        invoice_dict["client_name"] = invoice_tuple[1]
-        result.append(invoice_dict)
-    
-    return result
+    invoices = db.query(Invoice).filter(
+        Invoice.tenant_id == current_user.tenant_id
+    ).offset(skip).limit(limit).all()
+    return invoices
 
-@router.get("/invoices/{invoice_id}", response_model=InvoiceWithClient)
-def read_invoice(invoice_id: int, db: Session = Depends(get_db)):
-    invoice = db.query(
-        Invoice,
-        Client.name.label("client_name")
-    ).join(Client).filter(Invoice.id == invoice_id).first()
-    
-    if not invoice:
+@router.get("/{invoice_id}", response_model=InvoiceSchema)
+def read_invoice(
+    invoice_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    invoice = db.query(Invoice).filter(
+        Invoice.id == invoice_id,
+        Invoice.tenant_id == current_user.tenant_id
+    ).first()
+    if invoice is None:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    
-    invoice_dict = invoice[0].__dict__
-    invoice_dict["client_name"] = invoice[1]
-    
-    # Add items to the invoice response
-    items = db.query(Item).filter(Item.invoice_id == invoice_id).all()
-    invoice_dict["items"] = []
-    
-    for item in items:
-        item_dict = item.__dict__.copy()
-        # Remove SQLAlchemy state attribute
-        if "_sa_instance_state" in item_dict:
-            del item_dict["_sa_instance_state"]
-        invoice_dict["items"].append(item_dict)
-    
-    # Remove SQLAlchemy state attribute from invoice dictionary
-    if "_sa_instance_state" in invoice_dict:
-        del invoice_dict["_sa_instance_state"]
-    
-    return invoice_dict
+    return invoice
 
-@router.post("/invoices/", response_model=InvoiceSchema, status_code=status.HTTP_201_CREATED)
-def create_invoice(invoice: InvoiceCreate, db: Session = Depends(get_db)):
-    # Check if client exists
-    client = db.query(Client).filter(Client.id == invoice.client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
+@router.post("/", response_model=InvoiceSchema, status_code=status.HTTP_201_CREATED)
+def create_invoice(
+    invoice: InvoiceCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Verify client belongs to the same tenant
+    if invoice.client_id:
+        client = db.query(Client).filter(
+            Client.id == invoice.client_id,
+            Client.tenant_id == current_user.tenant_id
+        ).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="Client not found")
     
     # Calculate total amount
     total_amount = sum(item.quantity * item.price for item in invoice.items)
@@ -86,7 +65,8 @@ def create_invoice(invoice: InvoiceCreate, db: Session = Depends(get_db)):
         due_date=invoice.due_date,
         amount=total_amount,
         status="pending",
-        notes=invoice.notes
+        notes=invoice.notes,
+        tenant_id=current_user.tenant_id
     )
     
     db.add(db_invoice)
@@ -112,14 +92,31 @@ def create_invoice(invoice: InvoiceCreate, db: Session = Depends(get_db)):
     
     return db_invoice
 
-@router.put("/invoices/{invoice_id}", response_model=InvoiceSchema)
-def update_invoice(invoice_id: int, invoice: InvoiceUpdate, db: Session = Depends(get_db)):
-    db_invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+@router.put("/{invoice_id}", response_model=InvoiceSchema)
+def update_invoice(
+    invoice_id: int, 
+    invoice: InvoiceUpdate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    db_invoice = db.query(Invoice).filter(
+        Invoice.id == invoice_id,
+        Invoice.tenant_id == current_user.tenant_id
+    ).first()
     if db_invoice is None:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
+    # If updating client_id, verify client belongs to the same tenant
+    if invoice.client_id and invoice.client_id != db_invoice.client_id:
+        client = db.query(Client).filter(
+            Client.id == invoice.client_id,
+            Client.tenant_id == current_user.tenant_id
+        ).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="Client not found")
+    
     # Update invoice fields
-    update_data = invoice.model_dump(exclude_unset=True)
+    update_data = invoice.dict(exclude_unset=True)
     
     # Log what fields are being updated
     print(f"Updating invoice {invoice_id} with fields: {update_data}")
@@ -142,31 +139,46 @@ def update_invoice(invoice_id: int, invoice: InvoiceUpdate, db: Session = Depend
             detail=f"Failed to update invoice: {str(e)}"
         )
 
-@router.delete("/invoices/{invoice_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_invoice(invoice_id: int, db: Session = Depends(get_db)):
-    db_invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
-    if db_invoice is None:
+@router.delete("/{invoice_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_invoice(
+    invoice_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    invoice = db.query(Invoice).filter(
+        Invoice.id == invoice_id,
+        Invoice.tenant_id == current_user.tenant_id
+    ).first()
+    if invoice is None:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
     # Delete related items first
     db.query(Item).filter(Item.invoice_id == invoice_id).delete()
     
     # Update client balance
-    client = db.query(Client).filter(Client.id == db_invoice.client_id).first()
+    client = db.query(Client).filter(Client.id == invoice.client_id).first()
     if client:
-        client.balance -= db_invoice.amount
+        client.balance -= invoice.amount
         db.commit()
     
     # Delete invoice
-    db.delete(db_invoice)
+    db.delete(invoice)
     db.commit()
     return None
 
-@router.put("/invoices/{invoice_id}/items", response_model=InvoiceSchema)
-def update_invoice_items(invoice_id: int, items: List[ItemCreate], db: Session = Depends(get_db)):
+@router.put("/{invoice_id}/items", response_model=InvoiceSchema)
+def update_invoice_items(
+    invoice_id: int, 
+    items: List[ItemCreate], 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Update or replace items for an invoice"""
-    # Check if invoice exists
-    db_invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    # Check if invoice exists and belongs to current user's tenant
+    db_invoice = db.query(Invoice).filter(
+        Invoice.id == invoice_id,
+        Invoice.tenant_id == current_user.tenant_id
+    ).first()
     if db_invoice is None:
         raise HTTPException(status_code=404, detail="Invoice not found")
     

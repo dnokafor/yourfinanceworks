@@ -1,6 +1,6 @@
 
-import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import React, { useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Sidebar,
   SidebarContent,
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { UserProfile } from "./UserProfile";
 import { 
   BarChart, 
   ChevronLeft, 
@@ -24,8 +25,55 @@ import {
 
 export function AppSidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(!isMobile);
+  const [tenantName, setTenantName] = useState('InvoiceApp');
+
+  // Get tenant name from user data
+  React.useEffect(() => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      try {
+        const user = JSON.parse(userData);
+        // You can get tenant name from user data or make an API call
+        // For now, we'll use a default or fetch it from the tenant API
+        fetchTenantName();
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+      }
+    }
+  }, []);
+
+  const fetchTenantName = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch('http://localhost:8000/api/tenants/me', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const tenant = await response.json();
+        setTenantName(tenant.name);
+      }
+    } catch (error) {
+      console.error('Error fetching tenant name:', error);
+    }
+  };
+
+  const handleLogout = () => {
+    // Clear authentication data
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    
+    // Redirect to login page
+    navigate('/login');
+  };
 
   const menuItems = [
     { 
@@ -63,8 +111,11 @@ export function AppSidebar() {
     <>
       <Sidebar>
         <SidebarHeader className="py-6 px-2 border-b border-sidebar-border">
-          <div className="flex justify-center items-center">
-            <span className="text-2xl font-bold text-white">InvoiceApp</span>
+          <div className="flex flex-col items-center text-center">
+            <span className="text-xl font-bold text-white">InvoiceApp</span>
+            <span className="text-sm text-gray-300 mt-1 truncate max-w-full px-2">
+              {tenantName}
+            </span>
           </div>
         </SidebarHeader>
         <SidebarContent className="pt-6">
@@ -83,9 +134,17 @@ export function AppSidebar() {
             ))}
           </SidebarMenu>
         </SidebarContent>
-        <SidebarFooter className="py-4 px-2 border-t border-sidebar-border">
+        <SidebarFooter className="py-4 px-2 border-t border-sidebar-border space-y-4">
+          <div className="px-2">
+            <UserProfile />
+          </div>
           <div className="flex justify-center">
-            <Button variant="outline" size="sm" className="text-white border-sidebar-border">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="text-white border-sidebar-border hover:bg-red-600 hover:border-red-600"
+              onClick={handleLogout}
+            >
               Log Out
             </Button>
           </div>

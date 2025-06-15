@@ -2,8 +2,13 @@ from fastapi import FastAPI
 import uvicorn
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import clients, invoices, payments, settings
-from cors_middleware import CustomCORSMiddleware
+from api.routers import clients, invoices, payments, auth, tenant, settings
+from api.cors_middleware import CustomCORSMiddleware
+from api.models.database import engine
+from api.models import models
+
+# Create database tables
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Invoice API",
@@ -23,15 +28,21 @@ app.add_middleware(
 # Add our custom CORS middleware
 app.add_middleware(CustomCORSMiddleware)
 
-# Include routers
-app.include_router(clients.router, prefix="/api", tags=["clients"])
-app.include_router(invoices.router, prefix="/api", tags=["invoices"])
-app.include_router(payments.router, prefix="/api", tags=["payments"])
-app.include_router(settings.router, prefix="/api", tags=["settings"])
+# Include routers (they already have their own prefixes)
+app.include_router(auth.router, prefix="/api")
+app.include_router(tenant.router, prefix="/api")
+app.include_router(clients.router, prefix="/api")
+app.include_router(invoices.router, prefix="/api")
+app.include_router(payments.router, prefix="/api")
+app.include_router(settings.router, prefix="/api")
 
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the Invoice API"}
 
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
+
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True) 
+    uvicorn.run("api.main:app", host="0.0.0.0", port=8000, reload=True) 

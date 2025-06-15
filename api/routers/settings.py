@@ -1,95 +1,99 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Dict, Any
-import json
 
-from models.database import get_db
-from models.models import Settings
-from schemas.settings import Settings as SettingsSchema, SettingsUpdate
+from api.models.database import get_db
+from api.models.models import Tenant, User
+from api.routers.auth import get_current_user
 
-router = APIRouter()
+router = APIRouter(prefix="/settings", tags=["settings"])
 
-DEFAULT_COMPANY_INFO = {
-    "name": "Your Company",
-    "email": "contact@yourcompany.com",
-    "phone": "(555) 123-4567",
-    "address": "123 Business Avenue, Suite 100, New York, NY 10001",
-    "tax_id": "12-3456789",
-    "logo": ""
-}
-
-DEFAULT_INVOICE_SETTINGS = {
-    "prefix": "INV-",
-    "next_number": "0001",
-    "terms": "Payment due within 30 days from the date of invoice.\nLate payments are subject to a 1.5% monthly finance charge.",
-    "notes": "Thank you for your business!",
-    "send_copy": True,
-    "auto_reminders": True
-}
-
-DEFAULT_SETTINGS = {
-    "company_info": DEFAULT_COMPANY_INFO,
-    "invoice_settings": DEFAULT_INVOICE_SETTINGS
-}
-
-@router.get("/settings/", response_model=SettingsSchema)
-def get_settings(db: Session = Depends(get_db)):
-    # Try to get company info and invoice settings from database
-    company_info = db.query(Settings).filter(Settings.key == "company_info").first()
-    invoice_settings = db.query(Settings).filter(Settings.key == "invoice_settings").first()
-
-    # Use defaults if not found
-    company_info_data = company_info.value if company_info else DEFAULT_COMPANY_INFO
-    invoice_settings_data = invoice_settings.value if invoice_settings else DEFAULT_INVOICE_SETTINGS
-
+@router.get("/")
+def get_settings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get tenant settings (using tenant info as settings)"""
+    tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    # Return tenant info formatted as settings
     return {
-        "company_info": company_info_data,
-        "invoice_settings": invoice_settings_data
+        "company_info": {
+            "name": tenant.name,
+            "email": tenant.email or "",
+            "phone": tenant.phone or "",
+            "address": tenant.address or "",
+            "tax_id": tenant.tax_id or "",
+            "logo": tenant.logo_url or ""
+        },
+        "invoice_settings": {
+            "prefix": "INV-",
+            "next_number": "0001",
+            "terms": "Payment due within 30 days from the date of invoice.\nLate payments are subject to a 1.5% monthly finance charge.",
+            "notes": "Thank you for your business!",
+            "send_copy": True,
+            "auto_reminders": True
+        }
     }
 
-@router.put("/settings/", response_model=SettingsSchema)
-def update_settings(settings_update: SettingsUpdate, db: Session = Depends(get_db)):
-    # Get current settings first
-    current_settings = get_settings(db=db)
-    
-    # Update company info if provided
-    if settings_update.company_info:
-        company_info = db.query(Settings).filter(Settings.key == "company_info").first()
-        
-        if company_info:
-            # Update existing
-            company_info.value = settings_update.company_info.model_dump()
-        else:
-            # Create new
-            company_info = Settings(
-                key="company_info",
-                value=settings_update.company_info.model_dump()
-            )
-            db.add(company_info)
-    
-    # Update invoice settings if provided
-    if settings_update.invoice_settings:
-        invoice_settings = db.query(Settings).filter(Settings.key == "invoice_settings").first()
-        
-        if invoice_settings:
-            # Update existing
-            invoice_settings.value = settings_update.invoice_settings.model_dump()
-        else:
-            # Create new
-            invoice_settings = Settings(
-                key="invoice_settings",
-                value=settings_update.invoice_settings.model_dump()
-            )
-            db.add(invoice_settings)
-    
-    try:
-        db.commit()
-        # Return updated settings
-        return get_settings(db=db)
-    except Exception as e:
-        db.rollback()
-        print(f"Error updating settings: {str(e)}")
+@router.put("/")
+def update_settings(
+    settings: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update tenant settings"""
+    # Only tenant admins can update settings
+    if current_user.role != "admin":
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update settings: {str(e)}"
-        ) 
+            status_code=403, 
+            detail="Only tenant admins can update settings"
+        )
+    
+    tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    # Update tenant info from company_info
+    if "company_info" in settings:
+        company_info = settings["company_info"]
+        if "name" in company_info:
+            tenant.name = company_info["name"]
+        if "email" in company_info:
+            tenant.email = company_info["email"]
+        if "phone" in company_info:
+            tenant.phone = company_info["phone"]
+        if "address" in company_info:
+            tenant.address = company_info["address"]
+        if "tax_id" in company_info:
+            tenant.tax_id = company_info["tax_id"]
+        if "logo" in company_info:
+            tenant.logo_url = company_info["logo"]
+    
+    # Note: invoice_settings are currently stored as defaults
+    # In a full implementation, you might want to store these in a separate settings table
+    
+    db.commit()
+    db.refresh(tenant)
+    
+    # Return updated settings
+    return {
+        "company_info": {
+            "name": tenant.name,
+            "email": tenant.email or "",
+            "phone": tenant.phone or "",
+            "address": tenant.address or "",
+            "tax_id": tenant.tax_id or "",
+            "logo": tenant.logo_url or ""
+        },
+        "invoice_settings": {
+            "prefix": "INV-",
+            "next_number": "0001",
+            "terms": "Payment due within 30 days from the date of invoice.\nLate payments are subject to a 1.5% monthly finance charge.",
+            "notes": "Thank you for your business!",
+            "send_copy": True,
+            "auto_reminders": True
+        }
+    } 

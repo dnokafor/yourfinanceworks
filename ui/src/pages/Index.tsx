@@ -17,6 +17,8 @@ const Dashboard = () => {
     invoicesOverdue: 0
   });
   const [loading, setLoading] = useState(true);
+  const [tenantName, setTenantName] = useState('');
+  const [userName, setUserName] = useState('');
 
   useEffect(() => {
     const fetchDashboardStats = async () => {
@@ -32,15 +34,54 @@ const Dashboard = () => {
       }
     };
     
+    const loadUserInfo = () => {
+      const userData = localStorage.getItem('user');
+      if (userData) {
+        try {
+          const user = JSON.parse(userData);
+          setUserName(user.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : user.email);
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+    };
+
+    const fetchTenantName = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const response = await fetch('http://localhost:8000/api/tenants/me', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const tenant = await response.json();
+          setTenantName(tenant.name);
+        }
+      } catch (error) {
+        console.error('Error fetching tenant name:', error);
+      }
+    };
+    
     fetchDashboardStats();
+    loadUserInfo();
+    fetchTenantName();
   }, []);
 
   return (
     <AppLayout>
       <div className="h-full space-y-6 fade-in">
         <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">Overview of your invoicing activity</p>
+          <h1 className="text-3xl font-bold">
+            {userName ? `Welcome back, ${userName}!` : 'Dashboard'}
+          </h1>
+          <p className="text-muted-foreground">
+            {tenantName ? `${tenantName} - Overview of your invoicing activity` : 'Overview of your invoicing activity'}
+          </p>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 slide-in">

@@ -76,11 +76,15 @@ export interface Settings {
 // Generic API request function with error handling
 async function apiRequest<T>(url: string, options: RequestInit = {}): Promise<T> {
   try {
+    // Get JWT token from localStorage
+    const token = localStorage.getItem('token');
+    
     console.log(`Making API request to ${url}`, options);
     const response = await fetch(`${API_BASE_URL}${url}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }),
         ...options.headers,
       },
     });
@@ -93,6 +97,15 @@ async function apiRequest<T>(url: string, options: RequestInit = {}): Promise<T>
       } catch (e) {
         // If JSON parsing fails, use status text
         throw new Error(`Error: ${response.status} ${response.statusText}`);
+      }
+
+      // Handle authentication errors
+      if (response.status === 401 || response.status === 403) {
+        // Clear invalid token and redirect to login
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+        throw new Error('Authentication failed. Please log in again.');
       }
 
       // Better handle validation errors (422)
