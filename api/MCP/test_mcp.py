@@ -68,17 +68,17 @@ async def test_api_client():
         return False
 
 
-async def test_mcp_tools():
-    """Test the MCP tools implementation"""
+async def test_fastmcp_tools():
+    """Test the FastMCP tools implementation"""
     print("\n" + "="*50)
-    print("Testing MCP Tools...")
+    print("Testing FastMCP Tools...")
     
     email = os.getenv("INVOICE_API_EMAIL", "test@example.com")
     password = os.getenv("INVOICE_API_PASSWORD", "test_password")
     api_url = os.getenv("INVOICE_API_BASE_URL", "http://localhost:8000/api")
     
     if not email or not password or email == "test@example.com":
-        print("❌ Skipping MCP tools test - credentials not configured")
+        print("❌ Skipping FastMCP tools test - credentials not configured")
         return False
     
     try:
@@ -87,53 +87,45 @@ async def test_mcp_tools():
             
             # Test list_clients tool
             print("\n🔧 Testing list_clients tool...")
-            result = await tools.list_clients({"skip": 0, "limit": 3})
-            response_text = result[0].text
-            response_data = json.loads(response_text)
+            result = await tools.list_clients(skip=0, limit=3)
             
-            if response_data.get("success"):
-                print(f"✅ list_clients tool successful - found {response_data.get('count', 0)} clients")
+            if result.get("success"):
+                print(f"✅ list_clients tool successful - found {result.get('count', 0)} clients")
             else:
-                print(f"❌ list_clients tool failed: {response_data.get('error')}")
+                print(f"❌ list_clients tool failed: {result.get('error')}")
                 return False
             
             # Test search_clients tool
             print("\n🔧 Testing search_clients tool...")
-            result = await tools.search_clients({"query": "test", "limit": 2})
-            response_text = result[0].text
-            response_data = json.loads(response_text)
+            result = await tools.search_clients(query="test", limit=2)
             
-            if response_data.get("success"):
-                print(f"✅ search_clients tool successful - found {response_data.get('count', 0)} results")
+            if result.get("success"):
+                print(f"✅ search_clients tool successful - found {result.get('count', 0)} results")
             else:
-                print(f"❌ search_clients tool failed: {response_data.get('error')}")
+                print(f"❌ search_clients tool failed: {result.get('error')}")
             
             # Test list_invoices tool
             print("\n🔧 Testing list_invoices tool...")
-            result = await tools.list_invoices({"skip": 0, "limit": 3})
-            response_text = result[0].text
-            response_data = json.loads(response_text)
+            result = await tools.list_invoices(skip=0, limit=3)
             
-            if response_data.get("success"):
-                print(f"✅ list_invoices tool successful - found {response_data.get('count', 0)} invoices")
+            if result.get("success"):
+                print(f"✅ list_invoices tool successful - found {result.get('count', 0)} invoices")
             else:
-                print(f"❌ list_invoices tool failed: {response_data.get('error')}")
+                print(f"❌ list_invoices tool failed: {result.get('error')}")
             
             # Test analytics tools
             print("\n🔧 Testing analytics tools...")
-            result = await tools.get_clients_with_outstanding_balance({})
-            response_text = result[0].text
-            response_data = json.loads(response_text)
+            result = await tools.get_clients_with_outstanding_balance()
             
-            if response_data.get("success"):
-                print(f"✅ outstanding_balance tool successful - found {response_data.get('count', 0)} clients")
+            if result.get("success"):
+                print(f"✅ outstanding_balance tool successful - found {result.get('count', 0)} clients")
             else:
-                print(f"❌ outstanding_balance tool failed: {response_data.get('error')}")
+                print(f"❌ outstanding_balance tool failed: {result.get('error')}")
             
             return True
             
     except Exception as e:
-        print(f"❌ MCP Tools test failed: {e}")
+        print(f"❌ FastMCP Tools test failed: {e}")
         return False
 
 
@@ -172,7 +164,7 @@ def print_usage():
 
 async def main():
     """Main test function"""
-    print("🧪 Invoice Application MCP Server Test")
+    print("🧪 Invoice Application FastMCP Server Test")
     print("="*50)
     
     # Check if the Invoice API is running
@@ -192,16 +184,16 @@ async def main():
     
     # Run tests
     api_success = await test_api_client()
-    tools_success = await test_mcp_tools()
+    tools_success = await test_fastmcp_tools()
     
     # Print results
     print("\n" + "="*50)
     print("Test Results:")
-    print(f"  API Client: {'✅ PASS' if api_success else '❌ FAIL'}")
-    print(f"  MCP Tools:  {'✅ PASS' if tools_success else '❌ FAIL'}")
+    print(f"  API Client:   {'✅ PASS' if api_success else '❌ FAIL'}")
+    print(f"  FastMCP Tools: {'✅ PASS' if tools_success else '❌ FAIL'}")
     
     if api_success and tools_success:
-        print("\n🎉 All tests passed! Your MCP server is ready to use.")
+        print("\n🎉 All tests passed! Your FastMCP server is ready to use.")
     else:
         print("\n⚠️  Some tests failed. Check the error messages above.")
     

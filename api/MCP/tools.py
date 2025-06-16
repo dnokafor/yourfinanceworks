@@ -1,9 +1,8 @@
 """
-MCP Tools for Invoice Application
+FastMCP Tools for Invoice Application
 """
 from typing import Any, Dict, List, Optional
 import json
-from mcp.types import Tool, TextContent
 from pydantic import BaseModel, Field
 
 from .api_client import InvoiceAPIClient
@@ -56,64 +55,7 @@ class CreateInvoiceArgs(BaseModel):
     notes: Optional[str] = Field(default=None, description="Additional notes for the invoice")
 
 
-# MCP Tools definitions
-TOOLS: List[Tool] = [
-    Tool(
-        name="list_clients",
-        description="List all clients with pagination support. Returns client information including balances.",
-        inputSchema=ListClientsArgs.model_json_schema()
-    ),
-    Tool(
-        name="search_clients",
-        description="Search for clients by name, email, phone, or address. Supports partial matches.",
-        inputSchema=SearchClientsArgs.model_json_schema()
-    ),
-    Tool(
-        name="get_client",
-        description="Get detailed information about a specific client by ID, including balance and payment history.",
-        inputSchema=GetClientArgs.model_json_schema()
-    ),
-    Tool(
-        name="create_client",
-        description="Create a new client with the provided information.",
-        inputSchema=CreateClientArgs.model_json_schema()
-    ),
-    Tool(
-        name="list_invoices",
-        description="List all invoices with pagination support. Returns invoice information including client names and payment status.",
-        inputSchema=ListInvoicesArgs.model_json_schema()
-    ),
-    Tool(
-        name="search_invoices",
-        description="Search for invoices by number, client name, status, notes, or amount. Supports partial matches.",
-        inputSchema=SearchInvoicesArgs.model_json_schema()
-    ),
-    Tool(
-        name="get_invoice",
-        description="Get detailed information about a specific invoice by ID, including client information and payment status.",
-        inputSchema=GetInvoiceArgs.model_json_schema()
-    ),
-    Tool(
-        name="create_invoice",
-        description="Create a new invoice for a client with the specified amount and due date.",
-        inputSchema=CreateInvoiceArgs.model_json_schema()
-    ),
-    Tool(
-        name="get_clients_with_outstanding_balance",
-        description="Get all clients that have outstanding balances (unpaid invoices).",
-        inputSchema={}
-    ),
-    Tool(
-        name="get_overdue_invoices",
-        description="Get all invoices that are past their due date and still unpaid.",
-        inputSchema={}
-    ),
-    Tool(
-        name="get_invoice_stats",
-        description="Get overall invoice statistics including total income and other metrics.",
-        inputSchema={}
-    )
-]
+# Tool argument schemas will be used directly with FastMCP decorators
 
 
 class InvoiceTools:
@@ -122,308 +64,200 @@ class InvoiceTools:
     def __init__(self, api_client: InvoiceAPIClient):
         self.api_client = api_client
     
-    async def list_clients(self, arguments: Dict[str, Any]) -> List[TextContent]:
+    async def list_clients(self, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
         """List all clients"""
         try:
-            args = ListClientsArgs(**arguments)
-            clients = await self.api_client.list_clients(skip=args.skip, limit=args.limit)
+            clients = await self.api_client.list_clients(skip=skip, limit=limit)
             
-            response = {
+            return {
                 "success": True,
                 "data": clients,
                 "count": len(clients),
                 "pagination": {
-                    "skip": args.skip,
-                    "limit": args.limit
+                    "skip": skip,
+                    "limit": limit
                 }
             }
-            
-            return [TextContent(
-                type="text",
-                text=json.dumps(response, indent=2, default=str)
-            )]
             
         except AuthenticationError as e:
-            return [TextContent(
-                type="text",
-                text=json.dumps({"success": False, "error": f"Authentication failed: {e}"})
-            )]
+            return {"success": False, "error": f"Authentication failed: {e}"}
         except Exception as e:
-            return [TextContent(
-                type="text",
-                text=json.dumps({"success": False, "error": f"Failed to list clients: {e}"})
-            )]
+            return {"success": False, "error": f"Failed to list clients: {e}"}
     
-    async def search_clients(self, arguments: Dict[str, Any]) -> List[TextContent]:
+    async def search_clients(self, query: str, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
         """Search for clients"""
         try:
-            args = SearchClientsArgs(**arguments)
             clients = await self.api_client.search_clients(
-                query=args.query, 
-                skip=args.skip, 
-                limit=args.limit
+                query=query, 
+                skip=skip, 
+                limit=limit
             )
             
-            response = {
+            return {
                 "success": True,
                 "data": clients,
                 "count": len(clients),
-                "search_query": args.query,
+                "search_query": query,
                 "pagination": {
-                    "skip": args.skip,
-                    "limit": args.limit
+                    "skip": skip,
+                    "limit": limit
                 }
             }
             
-            return [TextContent(
-                type="text",
-                text=json.dumps(response, indent=2, default=str)
-            )]
-            
         except Exception as e:
-            return [TextContent(
-                type="text",
-                text=json.dumps({"success": False, "error": f"Failed to search clients: {e}"})
-            )]
+            return {"success": False, "error": f"Failed to search clients: {e}"}
     
-    async def get_client(self, arguments: Dict[str, Any]) -> List[TextContent]:
+    async def get_client(self, client_id: int) -> Dict[str, Any]:
         """Get a specific client"""
         try:
-            args = GetClientArgs(**arguments)
-            client = await self.api_client.get_client(args.client_id)
+            client = await self.api_client.get_client(client_id)
             
-            response = {
+            return {
                 "success": True,
                 "data": client
             }
             
-            return [TextContent(
-                type="text",
-                text=json.dumps(response, indent=2, default=str)
-            )]
-            
         except Exception as e:
-            return [TextContent(
-                type="text",
-                text=json.dumps({"success": False, "error": f"Failed to get client: {e}"})
-            )]
+            return {"success": False, "error": f"Failed to get client: {e}"}
     
-    async def create_client(self, arguments: Dict[str, Any]) -> List[TextContent]:
+    async def create_client(self, name: str, email: Optional[str] = None, phone: Optional[str] = None, address: Optional[str] = None) -> Dict[str, Any]:
         """Create a new client"""
         try:
-            args = CreateClientArgs(**arguments)
-            client_data = args.model_dump(exclude_none=True)
+            client_data = {"name": name}
+            if email:
+                client_data["email"] = email
+            if phone:
+                client_data["phone"] = phone
+            if address:
+                client_data["address"] = address
+                
             client = await self.api_client.create_client(client_data)
             
-            response = {
+            return {
                 "success": True,
                 "data": client,
                 "message": "Client created successfully"
             }
             
-            return [TextContent(
-                type="text",
-                text=json.dumps(response, indent=2, default=str)
-            )]
-            
         except Exception as e:
-            return [TextContent(
-                type="text",
-                text=json.dumps({"success": False, "error": f"Failed to create client: {e}"})
-            )]
+            return {"success": False, "error": f"Failed to create client: {e}"}
     
-    async def list_invoices(self, arguments: Dict[str, Any]) -> List[TextContent]:
+    async def list_invoices(self, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
         """List all invoices"""
         try:
-            args = ListInvoicesArgs(**arguments)
-            invoices = await self.api_client.list_invoices(skip=args.skip, limit=args.limit)
+            invoices = await self.api_client.list_invoices(skip=skip, limit=limit)
             
-            response = {
+            return {
                 "success": True,
                 "data": invoices,
                 "count": len(invoices),
                 "pagination": {
-                    "skip": args.skip,
-                    "limit": args.limit
+                    "skip": skip,
+                    "limit": limit
                 }
             }
             
-            return [TextContent(
-                type="text",
-                text=json.dumps(response, indent=2, default=str)
-            )]
-            
         except Exception as e:
-            return [TextContent(
-                type="text",
-                text=json.dumps({"success": False, "error": f"Failed to list invoices: {e}"})
-            )]
+            return {"success": False, "error": f"Failed to list invoices: {e}"}
     
-    async def search_invoices(self, arguments: Dict[str, Any]) -> List[TextContent]:
+    async def search_invoices(self, query: str, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
         """Search for invoices"""
         try:
-            args = SearchInvoicesArgs(**arguments)
             invoices = await self.api_client.search_invoices(
-                query=args.query,
-                skip=args.skip,
-                limit=args.limit
+                query=query,
+                skip=skip,
+                limit=limit
             )
             
-            response = {
+            return {
                 "success": True,
                 "data": invoices,
                 "count": len(invoices),
-                "search_query": args.query,
+                "search_query": query,
                 "pagination": {
-                    "skip": args.skip,
-                    "limit": args.limit
+                    "skip": skip,
+                    "limit": limit
                 }
             }
             
-            return [TextContent(
-                type="text",
-                text=json.dumps(response, indent=2, default=str)
-            )]
-            
         except Exception as e:
-            return [TextContent(
-                type="text",
-                text=json.dumps({"success": False, "error": f"Failed to search invoices: {e}"})
-            )]
+            return {"success": False, "error": f"Failed to search invoices: {e}"}
     
-    async def get_invoice(self, arguments: Dict[str, Any]) -> List[TextContent]:
+    async def get_invoice(self, invoice_id: int) -> Dict[str, Any]:
         """Get a specific invoice"""
         try:
-            args = GetInvoiceArgs(**arguments)
-            invoice = await self.api_client.get_invoice(args.invoice_id)
+            invoice = await self.api_client.get_invoice(invoice_id)
             
-            response = {
+            return {
                 "success": True,
                 "data": invoice
             }
             
-            return [TextContent(
-                type="text",
-                text=json.dumps(response, indent=2, default=str)
-            )]
-            
         except Exception as e:
-            return [TextContent(
-                type="text",
-                text=json.dumps({"success": False, "error": f"Failed to get invoice: {e}"})
-            )]
+            return {"success": False, "error": f"Failed to get invoice: {e}"}
     
-    async def create_invoice(self, arguments: Dict[str, Any]) -> List[TextContent]:
+    async def create_invoice(self, client_id: int, amount: float, due_date: str, status: str = "draft", notes: Optional[str] = None) -> Dict[str, Any]:
         """Create a new invoice"""
         try:
-            args = CreateInvoiceArgs(**arguments)
-            invoice_data = args.model_dump(exclude_none=True)
+            invoice_data = {
+                "client_id": client_id,
+                "amount": amount,
+                "due_date": due_date,
+                "status": status
+            }
+            if notes:
+                invoice_data["notes"] = notes
+                
             invoice = await self.api_client.create_invoice(invoice_data)
             
-            response = {
+            return {
                 "success": True,
                 "data": invoice,
                 "message": "Invoice created successfully"
             }
             
-            return [TextContent(
-                type="text",
-                text=json.dumps(response, indent=2, default=str)
-            )]
-            
         except Exception as e:
-            return [TextContent(
-                type="text",
-                text=json.dumps({"success": False, "error": f"Failed to create invoice: {e}"})
-            )]
+            return {"success": False, "error": f"Failed to create invoice: {e}"}
     
-    async def get_clients_with_outstanding_balance(self, arguments: Dict[str, Any]) -> List[TextContent]:
+    async def get_clients_with_outstanding_balance(self) -> Dict[str, Any]:
         """Get clients with outstanding balances"""
         try:
             clients = await self.api_client.get_clients_with_outstanding_balance()
             
-            response = {
+            return {
                 "success": True,
                 "data": clients,
                 "count": len(clients),
                 "message": f"Found {len(clients)} clients with outstanding balances"
             }
             
-            return [TextContent(
-                type="text",
-                text=json.dumps(response, indent=2, default=str)
-            )]
-            
         except Exception as e:
-            return [TextContent(
-                type="text",
-                text=json.dumps({"success": False, "error": f"Failed to get clients with outstanding balance: {e}"})
-            )]
+            return {"success": False, "error": f"Failed to get clients with outstanding balance: {e}"}
     
-    async def get_overdue_invoices(self, arguments: Dict[str, Any]) -> List[TextContent]:
+    async def get_overdue_invoices(self) -> Dict[str, Any]:
         """Get overdue invoices"""
         try:
             invoices = await self.api_client.get_overdue_invoices()
             
-            response = {
+            return {
                 "success": True,
                 "data": invoices,
                 "count": len(invoices),
                 "message": f"Found {len(invoices)} overdue invoices"
             }
             
-            return [TextContent(
-                type="text",
-                text=json.dumps(response, indent=2, default=str)
-            )]
-            
         except Exception as e:
-            return [TextContent(
-                type="text",
-                text=json.dumps({"success": False, "error": f"Failed to get overdue invoices: {e}"})
-            )]
+            return {"success": False, "error": f"Failed to get overdue invoices: {e}"}
     
-    async def get_invoice_stats(self, arguments: Dict[str, Any]) -> List[TextContent]:
+    async def get_invoice_stats(self) -> Dict[str, Any]:
         """Get invoice statistics"""
         try:
             stats = await self.api_client.get_invoice_stats()
             
-            response = {
+            return {
                 "success": True,
                 "data": stats
             }
             
-            return [TextContent(
-                type="text",
-                text=json.dumps(response, indent=2, default=str)
-            )]
-            
         except Exception as e:
-            return [TextContent(
-                type="text",
-                text=json.dumps({"success": False, "error": f"Failed to get invoice stats: {e}"})
-            )]
-    
-    async def execute_tool(self, name: str, arguments: Dict[str, Any]) -> List[TextContent]:
-        """Execute a tool by name"""
-        method_map = {
-            "list_clients": self.list_clients,
-            "search_clients": self.search_clients,
-            "get_client": self.get_client,
-            "create_client": self.create_client,
-            "list_invoices": self.list_invoices,
-            "search_invoices": self.search_invoices,
-            "get_invoice": self.get_invoice,
-            "create_invoice": self.create_invoice,
-            "get_clients_with_outstanding_balance": self.get_clients_with_outstanding_balance,
-            "get_overdue_invoices": self.get_overdue_invoices,
-            "get_invoice_stats": self.get_invoice_stats,
-        }
-        
-        if name not in method_map:
-            return [TextContent(
-                type="text",
-                text=json.dumps({"success": False, "error": f"Unknown tool: {name}"})
-            )]
-        
-        return await method_map[name](arguments) 
+            return {"success": False, "error": f"Failed to get invoice stats: {e}"} 

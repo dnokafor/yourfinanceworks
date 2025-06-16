@@ -1,6 +1,6 @@
-# Invoice Application MCP Server
+# Invoice Application FastMCP Server
 
-This is a Model Context Protocol (MCP) server that provides AI models with tools to interact with the Invoice Application API. It enables AI assistants to list, search, create, and manage clients and invoices through a standardized interface.
+This is a FastMCP (Model Context Protocol) server that provides AI models with tools to interact with the Invoice Application API. It enables AI assistants to list, search, create, and manage clients and invoices through a standardized interface using the modern FastMCP framework.
 
 ## Features
 
@@ -29,6 +29,8 @@ cd api/MCP
 pip install -r requirements.txt
 ```
 
+Note: This implementation uses FastMCP, a modern and simplified framework for building MCP servers with a decorator-based approach.
+
 2. Set up environment variables:
 ```bash
 export INVOICE_API_BASE_URL="http://localhost:8000/api"
@@ -38,7 +40,7 @@ export INVOICE_API_PASSWORD="your_password"
 
 ## Usage
 
-### Running the MCP Server
+### Running the FastMCP Server
 
 ```bash
 # From the api directory
@@ -295,25 +297,56 @@ python -m MCP.server --verbose
 MCP/
 ├── __init__.py          # Package initialization
 ├── __main__.py          # Module entry point
-├── server.py            # Main MCP server implementation
+├── server.py            # Main FastMCP server implementation
 ├── api_client.py        # HTTP client for Invoice API
 ├── auth_client.py       # Authentication handling
-├── tools.py             # MCP tool definitions and implementations
+├── tools.py             # FastMCP tool implementations
 ├── config.py            # Configuration management
-├── requirements.txt     # Python dependencies
+├── requirements.txt     # Python dependencies (includes FastMCP)
 └── README.md           # This file
 ```
 
+### FastMCP Benefits
+
+This implementation uses FastMCP, which provides several advantages over traditional MCP:
+
+- **Simplified Development**: Decorator-based tool definitions (`@mcp.tool()`)
+- **Automatic Type Inference**: Uses Python type hints for schema generation
+- **Better Error Handling**: Built-in error management and logging
+- **Modern Python**: Leverages async/await and modern Python features
+- **Reduced Boilerplate**: Less code needed compared to traditional MCP
+
 ### Adding New Tools
 
-1. Define the tool schema in `tools.py`
-2. Add the tool to the `TOOLS` list
-3. Implement the tool method in the `InvoiceTools` class
-4. Add the method to the `execute_tool` method mapping
+With FastMCP, adding new tools is simpler:
+
+1. Add a new function in `server.py` with the `@mcp.tool()` decorator
+2. Define the function parameters with proper type hints
+3. Implement the business logic by calling the appropriate `InvoiceTools` method
+4. Return a dictionary with the response data
+
+Example:
+```python
+@mcp.tool()
+async def get_client_invoices(client_id: int, status: Optional[str] = None) -> dict:
+    """Get all invoices for a specific client, optionally filtered by status."""
+    if tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+    
+    # Implementation would go here
+    return await tools.get_client_invoices(client_id=client_id, status=status)
+```
 
 ### Testing
 
-Test the MCP server with a simple client:
+Test the FastMCP server with the included test script:
+
+```bash
+cd api
+python MCP/test_mcp.py
+```
+
+Or test the API client directly:
 
 ```python
 import asyncio
@@ -327,6 +360,20 @@ async def test_client():
 asyncio.run(test_client())
 ```
 
+## Why FastMCP?
+
+FastMCP was chosen for this implementation because it:
+
+- **Reduces Complexity**: Traditional MCP requires extensive boilerplate code for tool definitions, schemas, and request handling. FastMCP eliminates this with decorators and automatic type inference.
+
+- **Improves Developer Experience**: Function signatures become the API - no need to manually define JSON schemas or handle argument parsing.
+
+- **Better Error Handling**: Built-in error management and consistent response formatting.
+
+- **Modern Python Features**: Full support for type hints, async/await, and modern Python patterns.
+
+- **Maintainability**: Less code means fewer bugs and easier maintenance.
+
 ## License
 
-This MCP server is part of the Invoice Application project. Please refer to the main project license. 
+This FastMCP server is part of the Invoice Application project. Please refer to the main project license. 
