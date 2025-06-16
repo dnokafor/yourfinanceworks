@@ -11,6 +11,12 @@ import { Link } from "react-router-dom";
 import { invoiceApi, Invoice } from "@/lib/api";
 import { toast } from "sonner";
 
+const formatStatus = (status: string) => {
+  return status.split('_').map(word => 
+    word.charAt(0).toUpperCase() + word.slice(1)
+  ).join(' ');
+};
+
 const Invoices = () => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,6 +29,10 @@ const Invoices = () => {
       try {
         const status = statusFilter !== "all" ? statusFilter : undefined;
         const data = await invoiceApi.getInvoices(status);
+        console.log("Invoices data received:", data);
+        data.forEach(invoice => {
+          console.log(`Invoice ${invoice.number}: amount=${invoice.amount}, paid_amount=${invoice.paid_amount}, outstanding=${invoice.amount - (invoice.paid_amount || 0)}`);
+        });
         setInvoices(data);
       } catch (error) {
         console.error("Failed to fetch invoices:", error);
@@ -98,7 +108,8 @@ const Invoices = () => {
                     <TableHead>Client</TableHead>
                     <TableHead className="hidden sm:table-cell">Date</TableHead>
                     <TableHead className="hidden md:table-cell">Due Date</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="text-right">Total Paid</TableHead>
+                    <TableHead className="text-right">Outstanding Balance</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
@@ -123,7 +134,12 @@ const Invoices = () => {
                         <TableCell>{invoice.client_name}</TableCell>
                         <TableCell className="hidden sm:table-cell">{invoice.date}</TableCell>
                         <TableCell className="hidden md:table-cell">{invoice.due_date}</TableCell>
-                        <TableCell className="text-right font-medium">${invoice.amount.toFixed(2)}</TableCell>
+                        <TableCell className="text-right font-medium">${(invoice.paid_amount || 0).toFixed(2)}</TableCell>
+                        <TableCell className="text-right">
+                          <span className={(invoice.amount - (invoice.paid_amount || 0)) > 0 ? 'text-orange-600 font-medium' : 'text-green-600 font-medium'}>
+                            ${(invoice.amount - (invoice.paid_amount || 0)).toFixed(2)}
+                          </span>
+                        </TableCell>
                         <TableCell>
                           <Badge 
                             variant={
@@ -137,7 +153,7 @@ const Invoices = () => {
                               'bg-red-100 text-red-800 hover:bg-red-100'
                             }
                           >
-                            {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+                            {formatStatus(invoice.status)}
                           </Badge>
                         </TableCell>
                         <TableCell>

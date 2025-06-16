@@ -3,22 +3,29 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Loader2, Pencil } from "lucide-react";
+import { Plus, Search, Loader2, Pencil, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { clientApi, Client } from "@/lib/api";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 const Clients = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+  const [deleting, setDeleting] = useState(false);
   
   useEffect(() => {
     const fetchClients = async () => {
       setLoading(true);
       try {
         const data = await clientApi.getClients();
+        console.log("Clients data from API:", data);
+        data.forEach(client => {
+          console.log(`Client ${client.name}: paid_amount=${client.paid_amount}, balance=${client.balance}`);
+        });
         setClients(data);
       } catch (error) {
         console.error("Failed to fetch clients:", error);
@@ -35,6 +42,23 @@ const Clients = () => {
     client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     client.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleDelete = async () => {
+    if (!clientToDelete) return;
+    
+    setDeleting(true);
+    try {
+      await clientApi.deleteClient(clientToDelete.id);
+      setClients(clients.filter(c => c.id !== clientToDelete.id));
+      toast.success("Client deleted successfully");
+    } catch (error) {
+      console.error("Failed to delete client:", error);
+      toast.error("Failed to delete client");
+    } finally {
+      setDeleting(false);
+      setClientToDelete(null);
+    }
+  };
 
   return (
     <AppLayout>
@@ -75,7 +99,8 @@ const Clients = () => {
                     <TableHead>Email</TableHead>
                     <TableHead>Phone</TableHead>
                     <TableHead className="hidden md:table-cell">Address</TableHead>
-                    <TableHead className="text-right">Balance</TableHead>
+                    <TableHead className="text-right">Total Paid</TableHead>
+                    <TableHead className="text-right">Outstanding Balance</TableHead>
                     <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -96,17 +121,29 @@ const Clients = () => {
                         <TableCell>{client.email}</TableCell>
                         <TableCell>{client.phone}</TableCell>
                         <TableCell className="hidden md:table-cell">{client.address}</TableCell>
+                        <TableCell className="text-right font-medium">
+                          ${client.paid_amount.toFixed(2)}
+                        </TableCell>
                         <TableCell className="text-right">
                           <span className={client.balance > 0 ? 'text-orange-600 font-medium' : 'text-green-600 font-medium'}>
                             ${client.balance.toFixed(2)}
                           </span>
                         </TableCell>
                         <TableCell>
-                          <Link to={`/clients/edit/${client.id}`}>
-                            <Button variant="ghost" size="icon">
-                              <Pencil className="h-4 w-4" />
+                          <div className="flex items-center gap-2">
+                            <Link to={`/clients/edit/${client.id}`}>
+                              <Button variant="ghost" size="icon">
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              onClick={() => setClientToDelete(client)}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
                             </Button>
-                          </Link>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -123,6 +160,30 @@ const Clients = () => {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={!!clientToDelete} onOpenChange={() => setClientToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Client</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p>Are you sure you want to delete {clientToDelete?.name}? This action cannot be undone.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClientToDelete(null)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleDelete}
+              disabled={deleting}
+            >
+              {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 };

@@ -1,23 +1,16 @@
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, Date, Table, DateTime, Boolean, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from datetime import datetime
+from datetime import datetime, date
+from sqlalchemy.ext.declarative import declarative_base
 
-from .database import Base
-
-# Invoice item association table for many-to-many relationship
-invoice_items = Table(
-    'invoice_items',
-    Base.metadata,
-    Column('invoice_id', Integer, ForeignKey('invoices.id'), primary_key=True),
-    Column('item_id', Integer, ForeignKey('items.id'), primary_key=True)
-)
+Base = declarative_base()
 
 class Tenant(Base):
     __tablename__ = "tenants"
     
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False, index=True)  # Company/Organization name
+    name = Column(String, unique=True, index=True)
     subdomain = Column(String, unique=True, nullable=True, index=True)  # Optional subdomain
     is_active = Column(Boolean, default=True, nullable=False)
     
@@ -72,51 +65,35 @@ class Client(Base):
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
     
     name = Column(String, index=True)
-    email = Column(String, index=True)  # Removed unique constraint for multi-tenancy
-    phone = Column(String)
-    address = Column(String)
-    balance = Column(Float, default=0)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
+    email = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    balance = Column(Float, default=0.0)
+    paid_amount = Column(Float, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     tenant = relationship("Tenant", back_populates="clients")
-    invoices = relationship("Invoice", back_populates="client")
-
-class Item(Base):
-    __tablename__ = "items"
-
-    id = Column(Integer, primary_key=True, index=True)
-    description = Column(String)
-    quantity = Column(Integer)
-    price = Column(Float)
-    invoice_id = Column(Integer, ForeignKey("invoices.id"))
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # Relationship
-    invoice = relationship("Invoice", back_populates="items")
+    invoices = relationship("Invoice", back_populates="client", cascade="all, delete-orphan")
 
 class Invoice(Base):
     __tablename__ = "invoices"
 
     id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
-    
-    number = Column(String, index=True)  # Removed unique constraint for multi-tenancy
-    client_id = Column(Integer, ForeignKey("clients.id"))
-    date = Column(Date)
-    due_date = Column(Date)
-    amount = Column(Float, default=0)
-    status = Column(String, default="pending")  # paid, pending, overdue
+    number = Column(String, unique=True, index=True, nullable=False)  # Make number unique
+    amount = Column(Float, nullable=False)
+    due_date = Column(DateTime, nullable=False)
+    status = Column(String, nullable=False, default="draft")
     notes = Column(String, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
+    client_id = Column(Integer, ForeignKey("clients.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     tenant = relationship("Tenant", back_populates="invoices")
     client = relationship("Client", back_populates="invoices")
-    items = relationship("Item", back_populates="invoice", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="invoice", cascade="all, delete-orphan")
 
 class Payment(Base):
@@ -126,11 +103,13 @@ class Payment(Base):
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
     
     invoice_id = Column(Integer, ForeignKey("invoices.id"))
-    amount = Column(Float)
-    date = Column(Date)
-    method = Column(String)  # Credit Card, Bank Transfer, etc.
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
+    amount = Column(Float, nullable=False)
+    payment_date = Column(DateTime, nullable=False, default=datetime.utcnow)
+    payment_method = Column(String, nullable=False, default="system")
+    reference_number = Column(String, nullable=True)
+    notes = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     tenant = relationship("Tenant", back_populates="payments")

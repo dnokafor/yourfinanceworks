@@ -1,15 +1,21 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Search, Filter, Loader2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { paymentApi, Payment } from "@/lib/api";
 import { toast } from "sonner";
 
 const Payments = () => {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
-
+  const [searchQuery, setSearchQuery] = useState("");
+  const [methodFilter, setMethodFilter] = useState("all");
+  
   useEffect(() => {
     const fetchPayments = async () => {
       setLoading(true);
@@ -26,94 +32,103 @@ const Payments = () => {
     
     fetchPayments();
   }, []);
-
-  // Calculate payment statistics
-  const totalReceived = payments.reduce((total, payment) => total + payment.amount, 0);
-  const averagePayment = payments.length > 0 ? totalReceived / payments.length : 0;
+  
+  const filteredPayments = payments.filter(payment => {
+    const matchesSearch = 
+      payment.invoice_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      payment.client_name.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesMethod = methodFilter === "all" || payment.payment_method === methodFilter;
+    
+    return matchesSearch && matchesMethod;
+  });
 
   return (
     <AppLayout>
       <div className="h-full space-y-6 fade-in">
         <div>
           <h1 className="text-3xl font-bold">Payments</h1>
-          <p className="text-muted-foreground">Track payments received from clients</p>
+          <p className="text-muted-foreground">View and manage payment records</p>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 slide-in">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Total Received</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                ${totalReceived.toFixed(2)}
+        <Card className="slide-in">
+          <CardHeader className="pb-3">
+            <div className="flex flex-col sm:flex-row justify-between gap-4">
+              <CardTitle>Payment List</CardTitle>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search payments..."
+                    className="pl-8 w-full sm:w-[200px]"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                <div className="flex gap-2 items-center">
+                  <Filter className="h-4 w-4 text-muted-foreground" />
+                  <Select value={methodFilter} onValueChange={setMethodFilter}>
+                    <SelectTrigger className="w-full sm:w-[150px]">
+                      <SelectValue placeholder="Filter by method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Methods</SelectItem>
+                      <SelectItem value="credit_card">Credit Card</SelectItem>
+                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="system">System</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Payments This Month</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {payments.length}
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Average Payment</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                ${averagePayment.toFixed(2)}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-        
-        <Card className="slide-in" style={{ animationDelay: '100ms' }}>
-          <CardHeader>
-            <CardTitle>Payment History</CardTitle>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
                     <TableHead>Invoice</TableHead>
                     <TableHead>Client</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Amount</TableHead>
                     <TableHead>Method</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="h-24 text-center">
+                      <TableCell colSpan={6} className="h-24 text-center">
                         <div className="flex justify-center items-center">
                           <Loader2 className="h-6 w-6 animate-spin mr-2" />
                           Loading payments...
                         </div>
                       </TableCell>
                     </TableRow>
-                  ) : payments.length > 0 ? (
-                    payments.map((payment) => (
+                  ) : filteredPayments.length > 0 ? (
+                    filteredPayments.map((payment) => (
                       <TableRow key={payment.id}>
-                        <TableCell>{payment.date}</TableCell>
-                        <TableCell className="font-medium">{payment.invoice_number}</TableCell>
+                        <TableCell>{payment.invoice_number}</TableCell>
                         <TableCell>{payment.client_name}</TableCell>
-                        <TableCell>{payment.method}</TableCell>
-                        <TableCell className="text-right font-medium text-green-600">
-                          ${payment.amount.toFixed(2)}
+                        <TableCell>${payment.amount.toFixed(2)}</TableCell>
+                        <TableCell>{new Date(payment.payment_date).toLocaleDateString()}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize">
+                            {payment.payment_method}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize">
+                            {payment.status}
+                          </Badge>
                         </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={5} className="h-24 text-center">
-                        No payments found.
+                      <TableCell colSpan={6} className="h-24 text-center">
+                        No payments found
                       </TableCell>
                     </TableRow>
                   )}

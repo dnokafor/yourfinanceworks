@@ -15,8 +15,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
-from api.models.database import SQLALCHEMY_DATABASE_URL
-from api.models.models import Base, Tenant, User, Client, Invoice, Payment
+from models.database import SQLALCHEMY_DATABASE_URL
+from models.models import Base, Tenant, User, Client, Invoice, Payment
 
 def run_migration():
     # Create engine and session

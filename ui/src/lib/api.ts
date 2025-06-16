@@ -1,6 +1,6 @@
 import { toast } from 'sonner';
 
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api`;
 
 // Type definitions
 export interface Client {
@@ -10,6 +10,7 @@ export interface Client {
   phone: string;
   address: string;
   balance: number;
+  paid_amount: number;
   created_at: string;
   updated_at: string;
 }
@@ -19,18 +20,23 @@ export interface InvoiceItem {
   description: string;
   quantity: number;
   price: number;
+  amount: number;
   invoice_id?: number;
 }
+
+export type InvoiceStatus = "pending" | "paid" | "overdue" | "partially_paid";
 
 export interface Invoice {
   id: number;
   number: string;
   client_id: number;
-  client_name?: string;
+  client_name: string;
+  client_email: string;
   date: string;
   due_date: string;
   amount: number;
-  status: string;
+  paid_amount: number;
+  status: InvoiceStatus;
   notes?: string;
   items: InvoiceItem[];
   created_at: string;
@@ -40,11 +46,15 @@ export interface Invoice {
 export interface Payment {
   id: number;
   invoice_id: number;
-  invoice_number?: string;
-  client_name?: string;
+  invoice_number: string;
+  client_name: string;
   amount: number;
-  date: string;
-  method: string;
+  payment_date: string;
+  payment_method: string;
+  reference_number?: string;
+  notes?: string;
+  status: 'completed' | 'pending' | 'failed';
+  tenant_id: number;
   created_at: string;
   updated_at: string;
 }
@@ -171,31 +181,66 @@ export const clientApi = {
 
 // Invoice API methods
 export const invoiceApi = {
-  getInvoices: (status?: string) => {
-    const queryParams = status ? `?status=${status}` : '';
-    return apiRequest<Invoice[]>(`/invoices/${queryParams}`);
+  getInvoices: async (status?: string): Promise<Invoice[]> => {
+    try {
+      const response = await apiRequest<any[]>(`/invoices/${status ? `?status=${status}` : ''}`);
+      
+      // Map API response to frontend Invoice interface
+      const mappedInvoices: Invoice[] = response.map(apiInvoice => ({
+        id: apiInvoice.id,
+        number: apiInvoice.number || '',
+        client_id: apiInvoice.client_id,
+        client_name: apiInvoice.client_name || '',
+        client_email: '', // API doesn't return this
+        date: apiInvoice.created_at || apiInvoice.date || '',
+        due_date: apiInvoice.due_date || '',
+        amount: apiInvoice.amount || 0,
+        paid_amount: apiInvoice.total_paid || 0, // Map total_paid to paid_amount
+        status: apiInvoice.status || 'pending',
+        notes: apiInvoice.notes || '',
+        items: [], // API doesn't return items for list view
+        created_at: apiInvoice.created_at || '',
+        updated_at: apiInvoice.updated_at || ''
+      }));
+      
+      console.log("Mapped invoices with paid amounts:", mappedInvoices);
+      return mappedInvoices;
+    } catch (error) {
+      console.error('Failed to fetch invoices:', error);
+      throw error;
+    }
   },
   getInvoice: async (id: number) => {
     try {
-      // Get invoice data
-      const invoice = await apiRequest<Invoice>(`/invoices/${id}`);
+      // Get invoice data from API
+      const apiResponse = await apiRequest<any>(`/invoices/${id}`);
       
-      console.log("API response for invoice:", invoice);
+      console.log("API response for invoice:", apiResponse);
       
-      // Initialize items array if missing
-      if (!invoice.items) {
-        invoice.items = [];
-        console.warn("Invoice API response didn't include items array");
-      }
+      // Map API response to frontend Invoice interface
+      const invoice: Invoice = {
+        id: apiResponse.id,
+        number: apiResponse.number || '',
+        client_id: apiResponse.client_id,
+        client_name: apiResponse.client_name || '',
+        client_email: '', // API doesn't return this, we'll need to fetch it separately or leave empty
+        date: apiResponse.created_at || apiResponse.date || '', // Use created_at as fallback for date
+        due_date: apiResponse.due_date || '',
+        amount: apiResponse.amount || 0,
+        paid_amount: apiResponse.total_paid || 0, // API returns total_paid, not paid_amount
+        status: apiResponse.status || 'pending',
+        notes: apiResponse.notes || '',
+        items: [{
+          description: "Service/Product",
+          quantity: 1,
+          price: apiResponse.amount || 0,
+          amount: apiResponse.amount || 0
+        }], // Since API doesn't return items, create a single item with the total amount
+        created_at: apiResponse.created_at || '',
+        updated_at: apiResponse.updated_at || ''
+      };
       
-      // If items exist but they're coming in an unexpected format, handle it
-      if (invoice.items && !Array.isArray(invoice.items)) {
-        console.warn("Items property exists but is not an array:", invoice.items);
-        invoice.items = [];
-      }
-      
-      // For debugging - log what we're returning
-      console.log("Returning invoice with items:", invoice.items);
+      console.log("Mapped invoice object:", invoice);
       
       return invoice;
     } catch (error) {
@@ -204,15 +249,10 @@ export const invoiceApi = {
     }
   },
   createInvoice: (invoice: {
-    number: string;
+    amount: number;
     client_id: number;
-    date: string;
     due_date: string;
-    items: {
-      description: string;
-      quantity: number;
-      price: number;
-    }[];
+    status: string;
     notes?: string;
   }) => 
     apiRequest<Invoice>('/invoices/', {
@@ -224,15 +264,7 @@ export const invoiceApi = {
       method: 'PUT',
       body: JSON.stringify(invoice),
     }),
-  updateInvoiceItems: (id: number, items: InvoiceItem[]) => 
-    apiRequest<Invoice>(`/invoices/${id}/items`, {
-      method: 'PUT',
-      body: JSON.stringify(items.map(item => ({
-        description: item.description,
-        quantity: item.quantity,
-        price: item.price
-      }))),
-    }),
+
   deleteInvoice: (id: number) => 
     apiRequest(`/invoices/${id}`, {
       method: 'DELETE',
@@ -246,8 +278,10 @@ export const paymentApi = {
   createPayment: (payment: {
     invoice_id: number;
     amount: number;
-    date: string;
-    method: string;
+    payment_date: string;
+    payment_method: string;
+    reference_number?: string;
+    notes?: string;
   }) => 
     apiRequest<Payment>('/payments/', {
       method: 'POST',
@@ -275,10 +309,12 @@ export const dashboardApi = {
       ]);
       
       const totalClients = clients.length;
-      const totalIncome = payments.reduce((sum, payment) => sum + payment.amount, 0);
+      const totalIncome = invoices
+        .filter(invoice => invoice.status === 'paid' || invoice.status === 'partially_paid')
+        .reduce((sum, invoice) => sum + invoice.paid_amount, 0);
       const pendingInvoices = invoices
         .filter(invoice => invoice.status === 'pending' || invoice.status === 'overdue')
-        .reduce((sum, invoice) => sum + invoice.amount, 0);
+        .reduce((sum, invoice) => sum + (invoice.amount - (invoice.paid_amount || 0)), 0);
       
       const invoicesPaid = invoices.filter(invoice => invoice.status === 'paid').length;
       const invoicesPending = invoices.filter(invoice => invoice.status === 'pending').length;

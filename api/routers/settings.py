@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Dict, Any
 
-from api.models.database import get_db
-from api.models.models import Tenant, User
-from api.routers.auth import get_current_user
+from models.database import get_db
+from models.models import Tenant, User
+from routers.auth import get_current_user
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 

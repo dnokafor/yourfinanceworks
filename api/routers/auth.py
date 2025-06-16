@@ -1,20 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm, HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from typing import Optional
 import os
 
-from api.models.database import get_db
-from api.models.models import User, Tenant
-from api.schemas.user import UserCreate, UserLogin, Token, UserRead
+from models.database import get_db
+from models.models import User, Tenant
+from schemas.user import UserCreate, UserLogin, Token, UserRead
+from utils.auth import verify_password, get_password_hash
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
-
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # JWT settings
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
@@ -23,12 +20,6 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 security = HTTPBearer()
-
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
-
-def get_password_hash(password):
-    return pwd_context.hash(password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()

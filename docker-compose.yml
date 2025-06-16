@@ -1,0 +1,30 @@
+services:
+  backend:
+    build:
+      context: api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./api/data:/data
+    environment:
+      - DATABASE_URL=sqlite:///data/invoice_app.db
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: ui
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - VITE_API_URL=http://backend:8000/api
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge 

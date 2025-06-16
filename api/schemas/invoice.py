@@ -1,53 +1,37 @@
-from pydantic import BaseModel
-from typing import Optional, List
-from datetime import date, datetime
-
-class ItemBase(BaseModel):
-    description: str
-    quantity: int
-    price: float
-
-class ItemCreate(ItemBase):
-    pass
-
-class Item(ItemBase):
-    id: int
-    invoice_id: int
-
-    class Config:
-        from_attributes = True
+from pydantic import BaseModel, Field
+from typing import Optional
+from datetime import datetime
 
 class InvoiceBase(BaseModel):
-    number: str
-    client_id: int
-    date: date
-    due_date: date
-    notes: Optional[str] = None
+    amount: float = Field(..., description="Total amount of the invoice")
+    due_date: datetime = Field(..., description="Due date of the invoice")
+    status: str = Field(..., description="Status of the invoice (draft, sent, paid, etc.)")
+    notes: Optional[str] = Field(None, description="Additional notes for the invoice")
+    client_id: int = Field(..., description="ID of the client this invoice belongs to")
 
 class InvoiceCreate(InvoiceBase):
-    items: List[ItemCreate]
+    pass
 
 class InvoiceUpdate(BaseModel):
-    number: Optional[str] = None
-    client_id: Optional[int] = None
-    date: Optional[date] = None
-    due_date: Optional[date] = None
-    status: Optional[str] = None
-    notes: Optional[str] = None
+    amount: Optional[float] = Field(None, description="Total amount of the invoice")
+    due_date: Optional[datetime] = Field(None, description="Due date of the invoice")
+    status: Optional[str] = Field(None, description="Status of the invoice (draft, sent, paid, etc.)")
+    notes: Optional[str] = Field(None, description="Additional notes for the invoice")
+    client_id: Optional[int] = Field(None, description="ID of the client this invoice belongs to")
 
 class Invoice(InvoiceBase):
     id: int
-    amount: float
-    status: str
+    number: str
+    tenant_id: int
     created_at: datetime
     updated_at: datetime
-    items: List[Item] = []
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat() if v else None
+        }
 
 class InvoiceWithClient(Invoice):
     client_name: str
-
-    class Config:
-        from_attributes = True 
+    total_paid: float = 0.0 
