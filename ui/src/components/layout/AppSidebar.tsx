@@ -22,6 +22,7 @@ import {
   Settings, 
   Users 
 } from "lucide-react";
+import { API_BASE_URL } from "@/lib/api";
 
 export function AppSidebar() {
   const location = useLocation();
@@ -50,7 +51,7 @@ export function AppSidebar() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch('http://localhost:8000/api/tenants/me', {
+      const response = await fetch(`${API_BASE_URL}/tenants/me`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',

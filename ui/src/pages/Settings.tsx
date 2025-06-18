@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { settingsApi } from "@/lib/api";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const Settings = () => {
   const [loading, setLoading] = useState(true);
@@ -31,6 +32,22 @@ const Settings = () => {
     notes: "Thank you for your business!",
     send_copy: true,
     auto_reminders: true,
+  });
+
+  const [emailSettings, setEmailSettings] = useState({
+    provider: "aws_ses",
+    from_name: "Your Company",
+    from_email: "noreply@yourcompany.com",
+    enabled: false,
+    // AWS SES
+    aws_access_key_id: "",
+    aws_secret_access_key: "",
+    aws_region: "us-east-1",
+    // Azure Email Services
+    azure_connection_string: "",
+    // Mailgun
+    mailgun_api_key: "",
+    mailgun_domain: "",
   });
 
   // Fetch settings when component mounts
@@ -62,6 +79,33 @@ const Settings = () => {
             auto_reminders: settings.invoice_settings.auto_reminders ?? invoiceSettings.auto_reminders,
           });
         }
+
+        // Try to fetch email settings
+        try {
+          const emailConfig = await fetch('/api/email/config', {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            },
+          });
+          
+          if (emailConfig.ok) {
+            const emailData = await emailConfig.json();
+            setEmailSettings({
+              provider: emailData.provider || emailSettings.provider,
+              from_name: emailData.from_name || emailSettings.from_name,
+              from_email: emailData.from_email || emailSettings.from_email,
+              enabled: emailData.enabled ?? emailSettings.enabled,
+              aws_access_key_id: emailData.aws_access_key_id || emailSettings.aws_access_key_id,
+              aws_secret_access_key: emailData.aws_secret_access_key || emailSettings.aws_secret_access_key,
+              aws_region: emailData.aws_region || emailSettings.aws_region,
+              azure_connection_string: emailData.azure_connection_string || emailSettings.azure_connection_string,
+              mailgun_api_key: emailData.mailgun_api_key || emailSettings.mailgun_api_key,
+              mailgun_domain: emailData.mailgun_domain || emailSettings.mailgun_domain,
+            });
+          }
+        } catch (error) {
+          console.log("Email settings not configured yet");
+        }
       } catch (error) {
         console.error("Failed to fetch settings:", error);
         toast.error("Failed to load settings");
@@ -85,6 +129,44 @@ const Settings = () => {
 
   const handleToggleChange = (name: string, checked: boolean) => {
     setInvoiceSettings((prev) => ({ ...prev, [name]: checked }));
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setEmailSettings((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleEmailProviderChange = (provider: string) => {
+    setEmailSettings((prev) => ({ ...prev, provider }));
+  };
+
+  const handleEmailToggleChange = (name: string, checked: boolean) => {
+    setEmailSettings((prev) => ({ ...prev, [name]: checked }));
+  };
+
+  const testEmailConfiguration = async () => {
+    const testEmail = prompt("Enter email address to send test email to:");
+    if (!testEmail) return;
+
+    try {
+      const response = await fetch('/api/email/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({ test_email: testEmail }),
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        toast.success(`Test email sent successfully to ${testEmail}`);
+      } else {
+        toast.error(`Failed to send test email: ${result.message}`);
+      }
+    } catch (error) {
+      toast.error("Failed to send test email");
+    }
   };
 
   const handleSave = async () => {
@@ -112,6 +194,21 @@ const Settings = () => {
       
       // Send to API
       await settingsApi.updateSettings(settingsData);
+      
+      // Save email settings separately
+      try {
+        await fetch('/api/email/config', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          },
+          body: JSON.stringify(emailSettings),
+        });
+      } catch (error) {
+        console.log("Failed to save email settings:", error);
+      }
+      
       toast.success("Settings saved successfully!");
     } catch (error) {
       console.error("Failed to save settings:", error);
@@ -141,9 +238,10 @@ const Settings = () => {
         </div>
 
         <Tabs defaultValue="company" className="slide-in">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsList className="grid w-full max-w-lg grid-cols-3">
             <TabsTrigger value="company">Company Info</TabsTrigger>
             <TabsTrigger value="invoices">Invoice Settings</TabsTrigger>
+            <TabsTrigger value="email">Email Settings</TabsTrigger>
           </TabsList>
           
           <TabsContent value="company" className="mt-6">
@@ -311,6 +409,167 @@ const Settings = () => {
                     Save Changes
                   </Button>
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="email" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Email Configuration</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="email_enabled">Enable Email Service</Label>
+                    <p className="text-sm text-muted-foreground">Enable sending invoices via email</p>
+                  </div>
+                  <Switch 
+                    id="email_enabled" 
+                    checked={emailSettings.enabled} 
+                    onCheckedChange={(checked) => handleEmailToggleChange('enabled', checked)} 
+                  />
+                </div>
+
+                {emailSettings.enabled && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="provider">Email Provider</Label>
+                      <Select value={emailSettings.provider} onValueChange={handleEmailProviderChange}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select email provider" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="aws_ses">AWS SES</SelectItem>
+                          <SelectItem value="azure_email">Azure Email Services</SelectItem>
+                          <SelectItem value="mailgun">Mailgun</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="from_name">From Name</Label>
+                        <Input 
+                          id="from_name" 
+                          name="from_name" 
+                          value={emailSettings.from_name} 
+                          onChange={handleEmailChange} 
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="from_email">From Email</Label>
+                        <Input 
+                          id="from_email" 
+                          name="from_email" 
+                          type="email" 
+                          value={emailSettings.from_email} 
+                          onChange={handleEmailChange} 
+                        />
+                      </div>
+                    </div>
+
+                    {emailSettings.provider === "aws_ses" && (
+                      <div className="space-y-4 p-4 border rounded-lg">
+                        <h4 className="font-medium">AWS SES Configuration</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="aws_access_key_id">Access Key ID</Label>
+                            <Input 
+                              id="aws_access_key_id" 
+                              name="aws_access_key_id" 
+                              type="password"
+                              value={emailSettings.aws_access_key_id} 
+                              onChange={handleEmailChange} 
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="aws_secret_access_key">Secret Access Key</Label>
+                            <Input 
+                              id="aws_secret_access_key" 
+                              name="aws_secret_access_key" 
+                              type="password"
+                              value={emailSettings.aws_secret_access_key} 
+                              onChange={handleEmailChange} 
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="aws_region">AWS Region</Label>
+                          <Select value={emailSettings.aws_region} onValueChange={(value) => setEmailSettings(prev => ({ ...prev, aws_region: value }))}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="us-east-1">US East (N. Virginia)</SelectItem>
+                              <SelectItem value="us-west-2">US West (Oregon)</SelectItem>
+                              <SelectItem value="eu-west-1">EU (Ireland)</SelectItem>
+                              <SelectItem value="ap-southeast-1">Asia Pacific (Singapore)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
+
+                    {emailSettings.provider === "azure_email" && (
+                      <div className="space-y-4 p-4 border rounded-lg">
+                        <h4 className="font-medium">Azure Email Services Configuration</h4>
+                        <div className="space-y-2">
+                          <Label htmlFor="azure_connection_string">Connection String</Label>
+                          <Input 
+                            id="azure_connection_string" 
+                            name="azure_connection_string" 
+                            type="password"
+                            value={emailSettings.azure_connection_string} 
+                            onChange={handleEmailChange} 
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {emailSettings.provider === "mailgun" && (
+                      <div className="space-y-4 p-4 border rounded-lg">
+                        <h4 className="font-medium">Mailgun Configuration</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="mailgun_api_key">API Key</Label>
+                            <Input 
+                              id="mailgun_api_key" 
+                              name="mailgun_api_key" 
+                              type="password"
+                              value={emailSettings.mailgun_api_key} 
+                              onChange={handleEmailChange} 
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="mailgun_domain">Domain</Label>
+                            <Input 
+                              id="mailgun_domain" 
+                              name="mailgun_domain" 
+                              value={emailSettings.mailgun_domain} 
+                              onChange={handleEmailChange} 
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={testEmailConfiguration}
+                      >
+                        Test Configuration
+                      </Button>
+                      <Button onClick={handleSave} disabled={saving}>
+                        {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Save Email Settings
+                      </Button>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

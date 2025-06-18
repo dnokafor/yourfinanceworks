@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
+import { authApi } from "@/lib/api";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -20,39 +21,19 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: email,
-          password: password,
-        }),
+      const data = await authApi.login(email, password);
+      // Store token and user info
+      localStorage.setItem("token", data.access_token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+      toast({
+        title: "Success",
+        description: "Logged in successfully!",
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        // Store token and user info
-        localStorage.setItem("token", data.access_token);
-        localStorage.setItem("user", JSON.stringify(data.user));
-        toast({
-          title: "Success",
-          description: "Logged in successfully!",
-        });
-        navigate("/dashboard");
-      } else {
-        const error = await response.json();
-        toast({
-          title: "Error",
-          description: error.detail || "Login failed",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
+      navigate("/dashboard");
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Network error. Please try again.",
+        description: error.message || "Login failed",
         variant: "destructive",
       });
     } finally {

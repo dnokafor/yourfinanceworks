@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '@/lib/api';
 import { useState, useEffect } from "react";
 import { BarChart, DollarSign, FileText, Users } from "lucide-react";
 import { StatCard } from "@/components/dashboard/StatCard";
@@ -51,7 +52,7 @@ const Dashboard = () => {
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        const response = await fetch('http://localhost:8000/api/tenants/me', {
+        const response = await fetch(`${API_BASE_URL}/tenants/me`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',

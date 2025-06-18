@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Building2 } from 'lucide-react';
+import { authApi } from '@/lib/api';
 
 const Signup: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -44,32 +45,13 @@ const Signup: React.FC = () => {
     }
 
     try {
-      const response = await fetch('http://localhost:8000/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          first_name: formData.first_name,
-          last_name: formData.last_name,
-          email: formData.email,
-          password: formData.password,
-          organization_name: formData.organization_name
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        // Store token and user info
-        localStorage.setItem('token', data.access_token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        navigate('/dashboard');
-      } else {
-        const errorData = await response.json();
-        setError(errorData.detail || 'Registration failed');
-      }
-    } catch (err) {
-      setError('Network error. Please try again.');
+      const data = await authApi.register(formData);
+      // Store token and user info
+      localStorage.setItem('token', data.access_token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      navigate('/dashboard');
+    } catch (err: any) {
+      setError(err.message || 'Registration failed');
     } finally {
       setLoading(false);
     }

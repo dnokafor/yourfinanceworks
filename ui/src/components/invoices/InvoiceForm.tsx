@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CalendarIcon, Plus, Trash, Loader2, DollarSign, FileText, Edit } from "lucide-react";
+import { CalendarIcon, Plus, Trash, Loader2, DollarSign, FileText, Edit, Mail } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import { PDFDownloadLink } from '@react-pdf/renderer';
@@ -71,6 +71,7 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
   const [previewInvoice, setPreviewInvoice] = useState<Invoice | null>(null);
   const [previewKey, setPreviewKey] = useState(0);
   const [showExcessAmountDialog, setShowExcessAmountDialog] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
   const [showNewClientDialog, setShowNewClientDialog] = useState(false);
   const [newClientForm, setNewClientForm] = useState({
     name: "",
@@ -333,6 +334,41 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
 
   const calculateTotal = () => {
     return calculateSubtotal();
+  };
+
+  const sendInvoiceEmail = async () => {
+    if (!invoice?.id) {
+      toast.error("Please save the invoice first before sending");
+      return;
+    }
+
+    setSendingEmail(true);
+    try {
+      const response = await fetch('/api/email/send-invoice', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({
+          invoice_id: invoice.id,
+          include_pdf: true,
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        toast.success("Invoice sent successfully!");
+      } else {
+        toast.error(`Failed to send invoice: ${result.message}`);
+      }
+    } catch (error) {
+      console.error("Error sending invoice email:", error);
+      toast.error("Failed to send invoice email");
+    } finally {
+      setSendingEmail(false);
+    }
   };
 
   const onSubmit = async (data: FormValues) => {
@@ -1095,7 +1131,7 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
                     )}
                   </React.Suspense>
                 </div>
-                <div className="p-2 border-t text-right">
+                <div className="p-2 border-t flex justify-between items-center">
                   {previewInvoice && settings && (
                     <PDFDownloadLink 
                       document={
@@ -1110,6 +1146,24 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
                         loading ? 'Preparing PDF...' : <span className="text-blue-600 hover:underline cursor-pointer">Download PDF</span>
                       }
                     </PDFDownloadLink>
+                  )}
+                  
+                  {invoice?.id && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={sendInvoiceEmail}
+                      disabled={sendingEmail}
+                      className="flex items-center gap-2"
+                    >
+                      {sendingEmail ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Mail className="h-4 w-4" />
+                      )}
+                      {sendingEmail ? 'Sending...' : 'Send Email'}
+                    </Button>
                   )}
                 </div>
               </div>

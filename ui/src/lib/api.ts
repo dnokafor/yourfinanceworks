@@ -1,6 +1,6 @@
 import { toast } from 'sonner';
 
-const API_BASE_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api`;
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 // Type definitions
 export interface Client {
@@ -90,7 +90,7 @@ async function apiRequest<T>(url: string, options: RequestInit = {}): Promise<T>
     const token = localStorage.getItem('token');
     
     console.log(`Making API request to ${url}`, options);
-    const response = await fetch(`${API_BASE_URL}${url}`, {
+    const response = await fetch(url.startsWith('http') ? url : `/api${url}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -176,6 +176,20 @@ export const clientApi = {
   deleteClient: (id: number) => 
     apiRequest(`/clients/${id}`, {
       method: 'DELETE',
+    }),
+};
+
+// Auth API methods
+export const authApi = {
+  login: (email: string, password: string) =>
+    apiRequest<any>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }),
+  register: (userData: any) =>
+    apiRequest<any>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(userData),
     }),
 };
 

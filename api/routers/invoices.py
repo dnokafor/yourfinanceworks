@@ -241,6 +241,24 @@ def delete_invoice(
             detail=f"Failed to delete invoice: {str(e)}"
         )
 
+@router.post("/{invoice_id}/send-email")
+def send_invoice_email(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Send invoice via email - redirect to email service"""
+    from fastapi import Request
+    from fastapi.responses import RedirectResponse
+    
+    # This endpoint redirects to the email service
+    # In a real application, you might want to handle this differently
+    return {
+        "message": "Please use the /api/email/send-invoice endpoint",
+        "invoice_id": invoice_id,
+        "redirect_url": f"/api/email/send-invoice"
+    }
+
 @router.get("/stats/total-income", response_model=dict)
 def get_total_income(
     db: Session = Depends(get_db),

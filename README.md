@@ -11,6 +11,7 @@ A modern, multi-tenant invoice management system built with FastAPI and React. T
 - **Payment Tracking** - Record and track payments against invoices
 - **Dashboard Analytics** - Overview of financial metrics and statistics
 - **PDF Generation** - Export invoices as professional PDF documents
+- **Email Delivery** - Send invoices directly to clients via email with PDF attachments
 - **Responsive Design** - Modern UI that works on desktop and mobile
 
 ### Authentication & Security
@@ -21,6 +22,8 @@ A modern, multi-tenant invoice management system built with FastAPI and React. T
 
 ### Technical Features
 - **RESTful API** - Clean, documented API endpoints
+- **AI Integration (MCP)** - Model Context Protocol server for AI assistant integration
+- **Email Service Integration** - Support for AWS SES, Azure Email Services, and Mailgun
 - **Real-time Updates** - Instant UI updates with optimistic rendering
 - **Search & Filtering** - Advanced filtering and search capabilities
 - **Docker Support** - Containerized deployment ready
@@ -47,6 +50,179 @@ A modern, multi-tenant invoice management system built with FastAPI and React. T
 - **Orchestration**: Docker Compose
 - **Database**: Persistent SQLite with volume mounting
 - **Networking**: Internal Docker network for service communication
+
+## 📧 Email Invoice Delivery
+
+The application includes comprehensive email functionality to send invoices directly to clients with professional PDF attachments.
+
+### 🌟 Email Features
+
+- **Multiple Email Providers** - Support for AWS SES, Azure Email Services, and Mailgun
+- **Professional Templates** - Beautiful HTML and text email templates
+- **PDF Attachments** - Automatically attach invoice PDFs to emails
+- **Configuration Management** - Easy setup through the settings interface
+- **Test Functionality** - Test email configuration before going live
+- **Error Handling** - Comprehensive error handling and logging
+
+### 📊 Supported Email Providers
+
+#### AWS SES (Simple Email Service)
+- **Setup**: Configure AWS credentials and region
+- **Features**: High deliverability, detailed analytics, cost-effective
+- **Requirements**: AWS Access Key ID, Secret Access Key, and region
+
+#### Azure Email Services
+- **Setup**: Configure Azure Communication Services connection string
+- **Features**: Enterprise-grade reliability, global scale
+- **Requirements**: Azure Communication Services connection string
+
+#### Mailgun
+- **Setup**: Configure API key and domain
+- **Features**: Developer-friendly API, detailed tracking
+- **Requirements**: Mailgun API key and verified domain
+
+### 🔧 Email Configuration
+
+1. **Navigate to Settings** → **Email Settings** tab
+2. **Enable Email Service** - Toggle the email functionality
+3. **Select Provider** - Choose from AWS SES, Azure, or Mailgun
+4. **Configure Credentials** - Enter your provider-specific settings
+5. **Test Configuration** - Send a test email to verify setup
+6. **Save Settings** - Store your configuration securely
+
+### 📤 Sending Invoices
+
+#### From Invoice Form
+- Open any saved invoice
+- Click the **Send Email** button in the preview section
+- Email will be sent to the client's email address automatically
+
+#### Via API
+```bash
+POST /api/email/send-invoice
+{
+  "invoice_id": 123,
+  "include_pdf": true,
+  "to_email": "client@example.com"  // Optional override
+}
+```
+
+### 🎨 Email Templates
+
+Professional email templates include:
+- **Company branding** with logo and contact information
+- **Invoice details** including number, date, amount, and status
+- **Payment instructions** and due date information
+- **Professional formatting** for both HTML and text versions
+
+### 🛡️ Security & Best Practices
+
+- **Secure Credential Storage** - All API keys are stored securely
+- **Validation** - Email configuration is validated before saving
+- **Error Handling** - Comprehensive error messages and logging
+- **Rate Limiting** - Built-in protection against email abuse
+
+## 🤖 AI Integration (MCP)
+
+This application includes a **Model Context Protocol (MCP)** server that enables AI assistants (like Claude Desktop) to interact with your invoice system through natural language.
+
+> 📖 **For complete MCP setup, configuration, and development documentation, see [api/MCP/README.md](api/MCP/README.md)**
+
+### 🚀 Quick MCP Overview
+
+The MCP server transforms your invoice system into an AI-accessible service, allowing natural language interactions like:
+- *"Show me all clients with outstanding balances"*
+- *"Create a new invoice for John Doe for $1,500"*
+- *"Find all overdue invoices from last month"*
+
+### 📊 MCP Architecture
+
+```mermaid
+graph LR
+    A[Claude Desktop] -.->|"MCP Protocol<br/>stdio"| B[FastMCP Server]
+    B -->|"JWT Auth"| C[Invoice API Client]
+    C -->|"REST API"| D[FastAPI Backend]
+    D --> E[(SQLite Database)]
+    
+    B --> F["11 MCP Tools<br/>• Client Management<br/>• Invoice Operations<br/>• Analytics"]
+    
+    style A fill:#e1f5fe
+    style B fill:#f3e5f5
+    style C fill:#fff3e0
+    style D fill:#e8f5e8
+    style E fill:#fce4ec
+    style F fill:#f0f4c3
+```
+
+### MCP Features
+- **Client Management**: List, search, create, and retrieve client information
+- **Invoice Operations**: Manage invoices with full CRUD operations
+- **Advanced Search**: Intelligent search across clients and invoices
+- **Analytics**: Get insights on outstanding balances and overdue invoices
+- **Real-time Data**: Direct API integration for up-to-date information
+
+### Available MCP Tools
+- `list_clients` - List all clients with pagination
+- `search_clients` - Search clients by name, email, phone, or address
+- `get_client` - Get detailed client information by ID
+- `create_client` - Create new clients
+- `list_invoices` - List all invoices with pagination
+- `search_invoices` - Search invoices by various fields
+- `get_invoice` - Get detailed invoice information by ID
+- `create_invoice` - Create new invoices
+- `get_clients_with_outstanding_balance` - Find clients with unpaid invoices
+- `get_overdue_invoices` - Get invoices past their due date
+- `get_invoice_stats` - Get overall invoice statistics
+
+### 🔧 Quick Setup
+
+#### 1. Configure Environment
+```bash
+cd api/MCP
+cp example.env .env
+# Edit .env with your credentials
+```
+
+#### 2. Start MCP Server
+```bash
+python -m MCP --email your_email@example.com --password your_password
+```
+
+#### 3. Configure Claude Desktop
+Add to your `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "invoice-app": {
+      "command": "/path/to/your/venv/bin/python",
+      "args": ["/path/to/your/project/api/launch_mcp.py", "--email", "your_email", "--password", "your_password"],
+      "env": {
+        "INVOICE_API_BASE_URL": "http://localhost:8000/api"
+      }
+    }
+  }
+}
+```
+
+### 📚 Detailed Documentation
+
+For comprehensive setup instructions, configuration options, troubleshooting, and development guides:
+
+**👉 [Complete MCP Documentation →](api/MCP/README.md)**
+
+The MCP documentation includes:
+- 📊 Architecture diagrams and visual guides
+- 🛠️ Detailed installation and configuration
+- 📋 Environment variable reference
+- 🔒 Security best practices
+- 🧪 Testing and development setup
+- 🎯 Claude Desktop integration examples
+- 📸 Screenshots and example conversations
+- 🖼️ **Live screenshots** showing MCP tools in action:
+  - Creating invoice clients through natural language
+  - Listing and searching clients
+  - Managing invoices with AI assistance
+  - Real Claude Desktop integration examples
 
 ## 📋 Prerequisites
 
@@ -244,10 +420,11 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 🔮 Roadmap
 
-- [ ] Email invoice delivery
+- [x] **AI Integration (MCP)** - Model Context Protocol server for AI assistants ✨
+- [x] **Email Invoice Delivery** - Support for AWS SES, Azure Email Services, and Mailgun ✨
 - [ ] Recurring invoices
 - [ ] Multi-currency support
-- [ ] Advanced reporting and analytics
+- [ ] Advanced reporting and analytics  
 - [ ] Mobile app (React Native)
 - [ ] Integration with payment gateways
 - [ ] Automated backup system

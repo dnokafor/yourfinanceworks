@@ -132,6 +132,8 @@ def init_db():
         raise e
     finally:
         db.close()
+    
+    logger.info("Database initialized successfully with sample data.")
 
 if __name__ == "__main__":
     init_db() 

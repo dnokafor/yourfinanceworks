@@ -5,17 +5,25 @@ from fastapi.responses import JSONResponse
 import traceback
 import logging
 
-from routers import clients, invoices, payments, auth, tenant, settings
+from routers import clients, invoices, payments, auth, tenant, settings, email
 from cors_middleware import CustomCORSMiddleware
 from models.database import engine
 from models import models
+from db_init import init_db
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create database tables
-models.Base.metadata.create_all(bind=engine)
+# Initialize database (create tables and populate initial data)
+try:
+    logger.info("Starting database initialization...")
+    init_db()
+    logger.info("Database initialization completed successfully.")
+except Exception as e:
+    logger.error(f"Database initialization failed: {str(e)}")
+    logger.error(f"Traceback: {traceback.format_exc()}")
+    # Don't raise the exception to allow the app to start even if DB init fails
 
 app = FastAPI(
     title="Invoice API",
@@ -37,15 +45,6 @@ async def catch_exceptions_middleware(request: Request, call_next):
             content={"detail": f"Internal server error: {str(e)}"}
         )
 
-# Add built-in CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # Add our custom CORS middleware
 app.add_middleware(CustomCORSMiddleware)
 
@@ -56,6 +55,7 @@ app.include_router(clients.router, prefix="/api")
 app.include_router(invoices.router, prefix="/api")
 app.include_router(payments.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
+app.include_router(email.router, prefix="/api")
 
 @app.get("/")
 def read_root():
