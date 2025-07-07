@@ -529,9 +529,13 @@ export const discountRulesApi = {
     apiRequest(`/discount-rules/${id}`, {
       method: 'DELETE',
     }),
-  calculateDiscount: (subtotal: number) => 
-    apiRequest<DiscountCalculation>('/discount-rules/calculate', {
+  calculateDiscount: (subtotal: number) => {
+    console.log("Sending discount calculation request:", {
+      url: `/discount-rules/calculate?subtotal=${subtotal}`,
+      subtotal: subtotal
+    });
+    return apiRequest<DiscountCalculation>(`/discount-rules/calculate?subtotal=${subtotal}`, {
       method: 'POST',
-      body: JSON.stringify({ subtotal }),
-    }),
+    });
+  },
 }; 
