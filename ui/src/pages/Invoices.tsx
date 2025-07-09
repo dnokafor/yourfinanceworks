@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Link } from "react-router-dom";
 import { invoiceApi, Invoice } from "@/lib/api";
 import { toast } from "sonner";
+import { CurrencyDisplay } from "@/components/ui/currency-display";
 
 const formatStatus = (status: string) => {
   return status.split('_').map(word => 
@@ -136,10 +137,12 @@ const Invoices = () => {
                         <TableCell>{invoice.client_name}</TableCell>
                         <TableCell className="hidden sm:table-cell">{invoice.date}</TableCell>
                         <TableCell className="hidden md:table-cell">{invoice.due_date}</TableCell>
-                        <TableCell className="text-right font-medium">${(invoice.paid_amount || 0).toFixed(2)}</TableCell>
+                        <TableCell className="text-right font-medium">
+                          <CurrencyDisplay amount={invoice.paid_amount || 0} currency={invoice.currency} />
+                        </TableCell>
                         <TableCell className="text-right">
                           <span className={(invoice.amount - (invoice.paid_amount || 0)) > 0 ? 'text-orange-600 font-medium' : 'text-green-600 font-medium'}>
-                            ${(invoice.amount - (invoice.paid_amount || 0)).toFixed(2)}
+                            <CurrencyDisplay amount={invoice.amount - (invoice.paid_amount || 0)} currency={invoice.currency} />
                           </span>
                         </TableCell>
                         <TableCell>

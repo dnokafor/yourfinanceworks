@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Trash2, Edit, Plus } from "lucide-react";
+import { CurrencyManager } from "@/components/ui/currency-manager";
 
 const Settings = () => {
   const [loading, setLoading] = useState(true);
@@ -409,9 +410,10 @@ const Settings = () => {
         </div>
 
         <Tabs defaultValue="company" className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="company">Company Info</TabsTrigger>
             <TabsTrigger value="invoices">Invoice Settings</TabsTrigger>
+            <TabsTrigger value="currencies">Currencies</TabsTrigger>
             <TabsTrigger value="discount-rules">Discount Rules</TabsTrigger>
             <TabsTrigger value="email">Email Settings</TabsTrigger>
             <TabsTrigger value="export">Data Management</TabsTrigger>
@@ -582,6 +584,17 @@ const Settings = () => {
                     Save Changes
                   </Button>
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="currencies" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Currency Management</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CurrencyManager />
               </CardContent>
             </Card>
           </TabsContent>

@@ -142,6 +142,28 @@ export interface DiscountCalculation {
   };
 }
 
+export interface InvoiceHistory {
+  id: number;
+  invoice_id: number;
+  tenant_id: number;
+  user_id: number;
+  action: string;
+  details?: string;
+  previous_values?: Record<string, any>;
+  current_values?: Record<string, any>;
+  created_at: string;
+}
+
+export interface InvoiceHistoryCreate {
+  invoice_id: number;
+  tenant_id: number;
+  user_id: number;
+  action: string;
+  details?: string;
+  previous_values?: Record<string, any>;
+  current_values?: Record<string, any>;
+}
+
 // Generic API request function with error handling
 export async function apiRequest<T>(url: string, options: RequestInit = {}, config: { isLogin?: boolean } = {}): Promise<T> {
   try {
@@ -262,6 +284,17 @@ export const crmApi = {
 // Currency API methods
 export const currencyApi = {
     getSupportedCurrencies: () => apiRequest<any>('/currency/supported'),
+    createCustomCurrency: (data: any) => apiRequest<any>('/currency/custom', {
+        method: 'POST',
+        body: JSON.stringify(data),
+    }),
+    updateCustomCurrency: (id: number, data: any) => apiRequest<any>(`/currency/custom/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+    }),
+    deleteCustomCurrency: (id: number) => apiRequest<any>(`/currency/custom/${id}`, {
+        method: 'DELETE',
+    }),
 };
 
 // Auth API methods
@@ -294,6 +327,7 @@ export const invoiceApi = {
         date: apiInvoice.created_at || apiInvoice.date || '',
         due_date: apiInvoice.due_date || '',
         amount: apiInvoice.amount || 0,
+        currency: apiInvoice.currency || 'USD', // Map currency from API response
         paid_amount: apiInvoice.total_paid || 0, // Map total_paid to paid_amount
         status: apiInvoice.status || 'pending',
         notes: apiInvoice.notes || '',
@@ -328,6 +362,7 @@ export const invoiceApi = {
         date: apiResponse.created_at || apiResponse.date || '', // Use created_at as fallback for date
         due_date: apiResponse.due_date || '',
         amount: apiResponse.amount || 0,
+        currency: apiResponse.currency || 'USD', // Map currency from API response
         paid_amount: apiResponse.total_paid || 0, // API returns total_paid, not paid_amount
         status: apiResponse.status || 'pending',
         notes: apiResponse.notes || '',
@@ -366,13 +401,16 @@ export const invoiceApi = {
       body: JSON.stringify(invoiceData),
     }),
   deleteInvoice: (id: number) => 
-    apiRequest(`/invoices/${id}`, {
-      method: 'DELETE',
-    }),
-  calculateDiscount: (subtotal: number) => 
-    apiRequest<DiscountCalculation>('/invoices/calculate-discount', {
+    apiRequest(`/invoices/${id}`, { method: 'DELETE' }),
+  
+  // Invoice history methods
+  getInvoiceHistory: (invoiceId: number) => 
+    apiRequest<InvoiceHistory[]>(`/invoices/${invoiceId}/history`),
+  
+  createInvoiceHistoryEntry: (invoiceId: number, historyEntry: InvoiceHistoryCreate) => 
+    apiRequest<InvoiceHistory>(`/invoices/${invoiceId}/history`, {
       method: 'POST',
-      body: JSON.stringify({ subtotal }),
+      body: JSON.stringify(historyEntry),
     }),
 };
 

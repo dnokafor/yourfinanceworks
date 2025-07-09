@@ -65,10 +65,20 @@ export function CurrencySelector({
       console.log('Currency API response:', data);
       
       if (data.currencies && data.currencies.length > 0) {
-        setCurrencies(data.currencies);
+        // Filter to only show active currencies from database
+        const activeCurrencies = data.currencies.filter((c: Currency) => c.is_active);
+        
+        // Combine database currencies with fallback currencies, avoiding duplicates
+        const fallbackCodes = new Set(FALLBACK_CURRENCIES.map(c => c.code));
+        const combinedCurrencies = [
+          ...activeCurrencies,
+          ...FALLBACK_CURRENCIES.filter(c => !activeCurrencies.some(db => db.code === c.code))
+        ];
+        
+        setCurrencies(combinedCurrencies);
         setUsingFallback(false);
         setError(null);
-        console.log('Successfully loaded currencies from API');
+        console.log('Successfully loaded currencies from API and fallbacks');
       } else {
         console.log('API returned empty currencies, using fallback');
         setUsingFallback(true);

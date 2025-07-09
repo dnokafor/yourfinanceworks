@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import date
+from datetime import date, datetime
 import logging
 
 from models.database import get_db
@@ -9,7 +9,7 @@ from models.models import User
 from routers.auth import get_current_user
 from services.currency_service import CurrencyService
 from schemas.currency import (
-    SupportedCurrency, CurrencyListResponse, CurrencyRate,
+    SupportedCurrency, SupportedCurrencyCreate, SupportedCurrencyUpdate, CurrencyListResponse, CurrencyRate,
     CurrencyRateCreate, CurrencyRateUpdate, ExchangeRateListResponse,
     CurrencyConversion
 )
@@ -252,4 +252,154 @@ def delete_exchange_rate(
         raise HTTPException(
             status_code=500,
             detail="Failed to delete exchange rate"
+        ) 
+
+@router.post("/custom", response_model=SupportedCurrency)
+def create_custom_currency(
+    currency_data: SupportedCurrencyCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Create a custom currency"""
+    try:
+        from models.models import SupportedCurrency as SupportedCurrencyModel
+        
+        # Check if currency code already exists
+        existing_currency = db.query(SupportedCurrencyModel).filter(
+            SupportedCurrencyModel.code == currency_data.code.upper()
+        ).first()
+        
+        if existing_currency:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Currency with code {currency_data.code.upper()} already exists"
+            )
+        
+        # Create new currency
+        new_currency = SupportedCurrencyModel(
+            code=currency_data.code.upper(),
+            name=currency_data.name,
+            symbol=currency_data.symbol,
+            decimal_places=currency_data.decimal_places,
+            is_active=currency_data.is_active
+        )
+        
+        # Set updated_at if the column exists
+        try:
+            new_currency.updated_at = datetime.utcnow()
+        except AttributeError:
+            # updated_at column might not exist yet
+            pass
+        
+        db.add(new_currency)
+        db.commit()
+        db.refresh(new_currency)
+        
+        return new_currency
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating custom currency: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to create custom currency"
+        )
+
+@router.put("/custom/{currency_id}", response_model=SupportedCurrency)
+def update_custom_currency(
+    currency_id: int,
+    currency_update: SupportedCurrencyUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update a custom currency"""
+    try:
+        from models.models import SupportedCurrency as SupportedCurrencyModel
+        
+        # Get existing currency
+        existing_currency = db.query(SupportedCurrencyModel).filter(
+            SupportedCurrencyModel.id == currency_id
+        ).first()
+        
+        if not existing_currency:
+            raise HTTPException(
+                status_code=404,
+                detail="Currency not found"
+            )
+        
+        # Update fields
+        if currency_update.name is not None:
+            existing_currency.name = currency_update.name
+        
+        if currency_update.symbol is not None:
+            existing_currency.symbol = currency_update.symbol
+        
+        if currency_update.decimal_places is not None:
+            existing_currency.decimal_places = currency_update.decimal_places
+        
+        if currency_update.is_active is not None:
+            existing_currency.is_active = currency_update.is_active
+        
+        from datetime import datetime
+        try:
+            existing_currency.updated_at = datetime.utcnow()
+        except AttributeError:
+            # updated_at column might not exist yet
+            pass
+        
+        db.commit()
+        db.refresh(existing_currency)
+        
+        return existing_currency
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating custom currency: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to update custom currency"
+        )
+
+@router.delete("/custom/{currency_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_custom_currency(
+    currency_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a custom currency"""
+    try:
+        from models.models import SupportedCurrency as SupportedCurrencyModel
+        
+        # Get existing currency
+        existing_currency = db.query(SupportedCurrencyModel).filter(
+            SupportedCurrencyModel.id == currency_id
+        ).first()
+        
+        if not existing_currency:
+            raise HTTPException(
+                status_code=404,
+                detail="Currency not found"
+            )
+        
+        # Check if currency is being used in invoices or payments
+        from models.models import Invoice, Payment
+        invoice_count = db.query(Invoice).filter(Invoice.currency == existing_currency.code).count()
+        payment_count = db.query(Payment).filter(Payment.currency == existing_currency.code).count()
+        
+        if invoice_count > 0 or payment_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot delete currency {existing_currency.code} as it is being used in {invoice_count} invoices and {payment_count} payments"
+            )
+        
+        db.delete(existing_currency)
+        db.commit()
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting custom currency: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to delete custom currency"
         ) 

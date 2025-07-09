@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 from models.database import get_db
 from models.models import Invoice, Client, User, Payment, InvoiceItem, DiscountRule
-from schemas.invoice import InvoiceCreate, InvoiceUpdate, Invoice as InvoiceSchema, InvoiceWithClient
+from schemas.invoice import InvoiceCreate, InvoiceUpdate, Invoice as InvoiceSchema, InvoiceWithClient, InvoiceHistory, InvoiceHistoryCreate
 from routers.auth import get_current_user
 from utils.invoice import generate_invoice_number
 from services.currency_service import CurrencyService
@@ -259,6 +259,12 @@ def update_invoice(
         # Initialize currency service for validation
         currency_service = CurrencyService(db)
         
+        # Capture old values before updating
+        old_currency = db_invoice.currency
+        old_discount_value = db_invoice.discount_value
+        old_discount_type = db_invoice.discount_type
+        old_amount = db_invoice.amount
+
         # Update invoice fields
         update_data = invoice.dict(exclude_unset=True)
         for key, value in update_data.items():
@@ -277,7 +283,14 @@ def update_invoice(
         # Handle items update if provided
         if invoice.items is not None:
             logger.info(f"Processing {len(invoice.items)} items for invoice {invoice_id}")
-            logger.info(f"Items data: {[{'id': item.id, 'description': item.description, 'description_length': len(item.description) if item.description else 0} for item in invoice.items]}")
+            logger.info(f"Items data: " + str([
+                {
+                    'id': getattr(item, 'id', None),
+                    'description': getattr(item, 'description', None),
+                    'description_length': len(getattr(item, 'description', '') or '')
+                }
+                for item in invoice.items
+            ]))
             
             # Get existing items
             existing_items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).all()
@@ -289,16 +302,16 @@ def update_invoice(
             
             # Process each item in the update request
             for item_data in invoice.items:
-                logger.info(f"Processing item: id={item_data.id}, description='{item_data.description}', description_length={len(item_data.description) if item_data.description else 0}")
+                logger.info(f"Processing item: id={getattr(item_data, 'id', None)}, description='{getattr(item_data, 'description', None)}', description_length={len(getattr(item_data, 'description', '') or '')}")
                 
                 if item_data.id and item_data.id in existing_items_dict:
                     # Update existing item
                     existing_item = existing_items_dict[item_data.id]
-                    logger.info(f"Updating existing item {item_data.id}: description from '{existing_item.description}' to '{item_data.description}'")
-                    existing_item.description = item_data.description
-                    existing_item.quantity = float(item_data.quantity)
-                    existing_item.price = float(item_data.price)
-                    existing_item.amount = float(item_data.quantity) * float(item_data.price)
+                    logger.info(f"Updating existing item {getattr(item_data, 'id', None)}: description from '{getattr(existing_item, 'description', None)}' to '{getattr(item_data, 'description', None)}'")
+                    existing_item.description = getattr(item_data, 'description', existing_item.description)
+                    existing_item.quantity = float(getattr(item_data, 'quantity', existing_item.quantity))
+                    existing_item.price = float(getattr(item_data, 'price', existing_item.price))
+                    existing_item.amount = float(getattr(item_data, 'quantity', existing_item.quantity)) * float(getattr(item_data, 'price', existing_item.price))
                     existing_item.updated_at = datetime.utcnow()
                     updated_item_ids.add(item_data.id)
                 else:
@@ -318,6 +331,36 @@ def update_invoice(
                 if item_id not in updated_item_ids:
                     db.delete(item)
         
+        # Create history entry for the update
+        from models.models import InvoiceHistory as InvoiceHistoryModel
+        changes = []
+        if invoice.currency and old_currency != invoice.currency:
+            changes.append(f"Currency changed from {old_currency} to {invoice.currency}")
+        if invoice.discount_value is not None and old_discount_value != invoice.discount_value:
+            old_discount = f"{old_discount_value}{'%' if old_discount_type == 'percentage' else ' (fixed)'}"
+            new_discount = f"{invoice.discount_value}{'%' if invoice.discount_type == 'percentage' else ' (fixed)'}"
+            changes.append(f"Discount changed from {old_discount} to {new_discount}")
+        history_entry = InvoiceHistoryModel(
+            invoice_id=invoice_id,
+            tenant_id=current_user.tenant_id,
+            user_id=current_user.id,
+            action='update',
+            details='; '.join(changes) if changes else 'Invoice details modified',
+            previous_values={
+                'currency': old_currency,
+                'discount_value': old_discount_value,
+                'discount_type': old_discount_type,
+                'amount': old_amount
+            },
+            current_values={
+                'currency': db_invoice.currency,
+                'discount_value': db_invoice.discount_value,
+                'discount_type': db_invoice.discount_type,
+                'amount': db_invoice.amount
+            }
+        )
+        
+        db.add(history_entry)
         db_invoice.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(db_invoice)
@@ -495,4 +538,92 @@ def calculate_discount(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to calculate discount: {str(e)}"
+        ) 
+
+@router.get("/{invoice_id}/history", response_model=List[InvoiceHistory])
+def get_invoice_history(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get update history for a specific invoice"""
+    try:
+        from models.models import InvoiceHistory as InvoiceHistoryModel
+        
+        # Verify invoice exists and belongs to user's tenant
+        invoice = db.query(Invoice).filter(
+            Invoice.id == invoice_id,
+            Invoice.tenant_id == current_user.tenant_id
+        ).first()
+        
+        if not invoice:
+            raise HTTPException(
+                status_code=404,
+                detail="Invoice not found"
+            )
+        
+        # Get history records
+        history = db.query(InvoiceHistoryModel).filter(
+            InvoiceHistoryModel.invoice_id == invoice_id,
+            InvoiceHistoryModel.tenant_id == current_user.tenant_id
+        ).order_by(InvoiceHistoryModel.created_at.desc()).all()
+        
+        return history
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching invoice history: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to fetch invoice history"
+        )
+
+@router.post("/{invoice_id}/history", response_model=InvoiceHistory)
+def create_invoice_history_entry(
+    invoice_id: int,
+    history_entry: InvoiceHistoryCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Create a new history entry for an invoice"""
+    try:
+        from models.models import InvoiceHistory as InvoiceHistoryModel
+        
+        # Verify invoice exists and belongs to user's tenant
+        invoice = db.query(Invoice).filter(
+            Invoice.id == invoice_id,
+            Invoice.tenant_id == current_user.tenant_id
+        ).first()
+        
+        if not invoice:
+            raise HTTPException(
+                status_code=404,
+                detail="Invoice not found"
+            )
+        
+        # Create history entry
+        db_history = InvoiceHistoryModel(
+            invoice_id=invoice_id,
+            tenant_id=current_user.tenant_id,
+            user_id=current_user.id,
+            action=history_entry.action,
+            details=history_entry.details,
+            previous_values=history_entry.previous_values,
+            current_values=history_entry.current_values
+        )
+        
+        db.add(db_history)
+        db.commit()
+        db.refresh(db_history)
+        
+        return db_history
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating invoice history entry: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to create invoice history entry"
         ) 

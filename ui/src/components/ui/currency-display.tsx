@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { currencyApi } from '@/lib/api';
 
 interface CurrencyDisplayProps {
   amount: number;
@@ -7,8 +8,13 @@ interface CurrencyDisplayProps {
   showCode?: boolean;
 }
 
-// Common currency symbols
-const currencySymbols: { [key: string]: { symbol: string; decimals: number } } = {
+interface CurrencyInfo {
+  symbol: string;
+  decimals: number;
+}
+
+// Common currency symbols (fallback)
+const fallbackCurrencySymbols: { [key: string]: { symbol: string; decimals: number } } = {
   'USD': { symbol: '$', decimals: 2 },
   'EUR': { symbol: '€', decimals: 2 },
   'GBP': { symbol: '£', decimals: 2 },
@@ -27,22 +33,55 @@ export function CurrencyDisplay({
   className = "", 
   showCode = false 
 }: CurrencyDisplayProps) {
-  const formatCurrency = (amount: number, currencyCode: string) => {
-    const currencyInfo = currencySymbols[currencyCode.toUpperCase()];
-    
-    if (currencyInfo) {
-      const formattedAmount = amount.toFixed(currencyInfo.decimals);
-      const symbol = currencyInfo.symbol;
-      
-      if (showCode) {
-        return `${symbol}${formattedAmount} ${currencyCode}`;
+  const [currencyInfo, setCurrencyInfo] = useState<CurrencyInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchCurrencyInfo = async () => {
+      try {
+        const response = await currencyApi.getSupportedCurrencies();
+        const currencies = response.currencies || [];
+        const foundCurrency = currencies.find(c => c.code === currency.toUpperCase());
+        
+        if (foundCurrency) {
+          setCurrencyInfo({
+            symbol: foundCurrency.symbol,
+            decimals: foundCurrency.decimal_places
+          });
+        } else {
+          // Use fallback for traditional currencies
+          const fallback = fallbackCurrencySymbols[currency.toUpperCase()];
+          setCurrencyInfo(fallback || { symbol: currency, decimals: 2 });
+        }
+      } catch (error) {
+        console.error('Failed to fetch currency info:', error);
+        // Use fallback
+        const fallback = fallbackCurrencySymbols[currency.toUpperCase()];
+        setCurrencyInfo(fallback || { symbol: currency, decimals: 2 });
+      } finally {
+        setLoading(false);
       }
-      return `${symbol}${formattedAmount}`;
+    };
+
+    fetchCurrencyInfo();
+  }, [currency]);
+
+  const formatCurrency = (amount: number, currencyCode: string) => {
+    if (loading || !currencyInfo) {
+      // Show loading state or fallback
+      const fallback = fallbackCurrencySymbols[currencyCode.toUpperCase()];
+      const info = fallback || { symbol: currencyCode, decimals: 2 };
+      const formattedAmount = amount.toFixed(info.decimals);
+      return `${info.symbol}${formattedAmount}`;
     }
     
-    // Fallback for unknown currencies
-    const formattedAmount = amount.toFixed(2);
-    return `${formattedAmount} ${currencyCode}`;
+    const formattedAmount = amount.toFixed(currencyInfo.decimals);
+    const symbol = currencyInfo.symbol;
+    
+    if (showCode) {
+      return `${symbol}${formattedAmount} ${currencyCode}`;
+    }
+    return `${symbol}${formattedAmount}`;
   };
 
   return (

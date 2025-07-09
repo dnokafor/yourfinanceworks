@@ -92,10 +92,8 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
   const [updateHistory, setUpdateHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [isRecurring, setIsRecurring] = useState(invoice?.is_recurring || false);
-  const [previousDiscount, setPreviousDiscount] = useState<{value: number, type: string} | null>(
-    invoice ? { value: invoice.discount_value || 0, type: invoice.discount_type || 'percentage' } : null
-  );
-  const [updateHistoryCache, setUpdateHistoryCache] = useState<{[key: string]: any[]}>({});
+
+
   const [itemKeyCounter, setItemKeyCounter] = useState(0);
   const [appliedDiscountRule, setAppliedDiscountRule] = useState<{
     id: number;
@@ -108,9 +106,12 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
   const [isRefreshingForm, setIsRefreshingForm] = useState(false);
 
   // Fetch update history for the invoice
-  const fetchUpdateHistory = useCallback(async (invoiceId: number, invoiceData?: Invoice, previousDiscountInfo?: {value: number, type: string}) => {
+  const fetchUpdateHistory = useCallback(async (invoiceId: number) => {
     setLoadingHistory(true);
     try {
+      // Get history from API
+      const history = await invoiceApi.getInvoiceHistory(invoiceId);
+      
       // Get all payments for this invoice
       const allPayments = await paymentApi.getPayments();
       const invoicePayments = allPayments
@@ -128,75 +129,25 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
         notes: payment.notes
       }));
 
-      // Use provided invoice data or fall back to the prop
-      const currentInvoice = invoiceData || invoice;
-
-      // Get existing history from cache
-      const existingHistory = updateHistoryCache[invoiceId] || [];
-
-      // Add invoice creation entry (only if not already exists)
-      const creationHistory = existingHistory.find(entry => entry.id === 'creation') ? [] : [{
+      // Add invoice creation entry if not in history
+      const hasCreationEntry = history.some(entry => entry.action === 'Invoice Created');
+      const creationHistory = hasCreationEntry ? [] : [{
         id: 'creation',
         type: 'creation',
         action: 'Invoice Created',
-        amount: currentInvoice?.amount || 0,
-        date: currentInvoice?.created_at || new Date().toISOString(),
-        details: `Invoice ${currentInvoice?.number} created`,
+        amount: invoice?.amount || 0,
+        date: invoice?.created_at || new Date().toISOString(),
+        details: `Invoice ${invoice?.number} created`,
         notes: null
       }];
 
-      // Add new update entries for this update
-      const newUpdateEntries = [];
-      
-      // Use the actual updated_at timestamp from the invoice, or current time as fallback
-      const updateTimestamp = currentInvoice?.updated_at || new Date().toISOString();
-      
-      // Add discount change entry if there was a change
-      console.log("Checking for discount change:", {
-        previousDiscountInfo,
-        currentDiscountValue: currentInvoice?.discount_value,
-        currentDiscountType: currentInvoice?.discount_type,
-        hasChange: previousDiscountInfo && currentInvoice?.discount_value !== previousDiscountInfo.value
-      });
-      
-      if (previousDiscountInfo && currentInvoice?.discount_value !== previousDiscountInfo.value) {
-        const discountText = currentInvoice?.discount_value && currentInvoice.discount_value > 0
-          ? `Discount changed from ${previousDiscountInfo.value}${previousDiscountInfo.type === 'percentage' ? '%' : ' (fixed)'} to ${currentInvoice.discount_value}${currentInvoice.discount_type === 'percentage' ? '%' : ' (fixed)'}`
-          : `Discount removed (was ${previousDiscountInfo.value}${previousDiscountInfo.type === 'percentage' ? '%' : ' (fixed)'})`;
-        
-        console.log("Adding discount change entry:", discountText);
-        
-        newUpdateEntries.push({
-          id: `discount-update-${updateTimestamp}`,
-          type: 'update',
-          action: 'Discount Changed',
-          amount: currentInvoice?.amount || 0,
-          date: updateTimestamp,
-          details: discountText,
-          notes: null
+      // Combine API history with payment history and creation entry
+      const allHistory = [...history, ...creationHistory, ...paymentHistory]
+        .sort((a, b) => {
+          const dateA = 'date' in a ? a.date : a.created_at;
+          const dateB = 'date' in b ? b.date : b.created_at;
+          return new Date(dateB).getTime() - new Date(dateA).getTime();
         });
-      }
-
-      // Add general update entry for this update
-      newUpdateEntries.push({
-        id: `update-${updateTimestamp}`,
-        type: 'update',
-        action: 'Invoice Updated',
-        amount: currentInvoice?.amount || 0,
-        date: updateTimestamp,
-        details: `Invoice details modified`,
-        notes: null
-      });
-
-      // Combine existing history with new entries
-      const allHistory = [...existingHistory, ...creationHistory, ...newUpdateEntries, ...paymentHistory]
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-      // Update cache
-      setUpdateHistoryCache(prev => ({
-        ...prev,
-        [invoiceId]: allHistory
-      }));
 
       setUpdateHistory(allHistory);
     } catch (error) {
@@ -205,7 +156,7 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
     } finally {
       setLoadingHistory(false);
     }
-  }, [invoice, updateHistoryCache]);
+  }, [invoice]);
 
   // Fetch clients and settings
   useEffect(() => {
@@ -234,15 +185,9 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
   // Fetch update history when invoice is available
       useEffect(() => {
       if (invoice && isEdit) {
-        // Initialize cache with existing history
-        const existingHistory = updateHistoryCache[invoice.id] || [];
-        if (existingHistory.length === 0) {
-          fetchUpdateHistory(invoice.id, invoice);
-        } else {
-          setUpdateHistory(existingHistory);
-        }
+        fetchUpdateHistory(invoice.id);
       }
-    }, [invoice, isEdit, fetchUpdateHistory, updateHistoryCache]);
+    }, [invoice, isEdit, fetchUpdateHistory]);
 
 
 
@@ -545,6 +490,7 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
         due_date: value.dueDate ? format(value.dueDate, 'yyyy-MM-dd') : previewInvoice?.due_date || '',
         status: value.status || previewInvoice?.status || 'pending',
         notes: value.notes || previewInvoice?.notes || '',
+        currency: value.currency || previewInvoice?.currency || 'USD',
         items: itemsWithAmount,
         subtotal: itemsWithAmount.reduce((sum, item) => sum + item.amount, 0),
         discount_type: value.discountType || previewInvoice?.discount_type || "percentage",
@@ -856,16 +802,18 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
             finalDiscountValue: updateData.discount_value
           });
           
-          // Capture current discount values before update for change tracking
+          // Capture current values before update for change tracking
           const currentDiscountValue = data.discountValue || 0;
           const currentDiscountType = data.discountType || 'percentage';
+          const currentCurrency = data.currency || 'USD';
           
-          console.log("Captured discount values before update:", {
+          console.log("Captured values before update:", {
             currentDiscountValue,
             currentDiscountType,
+            currentCurrency,
             formDiscountValue: form.getValues("discountValue"),
             formDiscountType: form.getValues("discountType"),
-            previousDiscountState: previousDiscount
+            formCurrency: form.getValues("currency")
           });
           
           console.log("Updating invoice with data:", updateData);
@@ -917,7 +865,7 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
                     // Update the form with the new paid amount
                     form.setValue("paidAmount", updatedInvoice.paid_amount);
                     // Refresh the update history
-                    await fetchUpdateHistory(invoice.id, updatedInvoice);
+                    await fetchUpdateHistory(invoice.id);
                   } catch (refreshError) {
                     console.error("Failed to refresh invoice data:", refreshError);
                   }
@@ -990,7 +938,7 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
                       // Update the form with the new paid amount
                       form.setValue("paidAmount", updatedInvoice.paid_amount);
                       // Refresh the update history
-                      await fetchUpdateHistory(invoice.id, updatedInvoice);
+                      await fetchUpdateHistory(invoice.id);
                     } catch (refreshError) {
                       console.error("Failed to refresh invoice data:", refreshError);
                     }
@@ -1098,23 +1046,12 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
             
             // Refresh the update history with the updated invoice data and previous discount info
             console.log("Calling fetchUpdateHistory with:", {
-              invoiceId: updatedInvoice.id,
-              previousDiscountInfo: previousDiscount || {
-                value: currentDiscountValue,
-                type: currentDiscountType
-              }
+              invoiceId: updatedInvoice.id
             });
             
-            await fetchUpdateHistory(updatedInvoice.id, updatedInvoice, previousDiscount || {
-              value: currentDiscountValue,
-              type: currentDiscountType
-            });
+            await fetchUpdateHistory(updatedInvoice.id);
             
-            // Update previous discount for next change tracking
-            setPreviousDiscount({
-              value: updatedInvoice.discount_value || 0,
-              type: updatedInvoice.discount_type || 'percentage'
-            });
+
           } catch (refreshError) {
             console.error("Failed to refresh invoice data after update:", refreshError);
           }
@@ -1288,10 +1225,19 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
                                {entry.type === 'update' && (
                                  <Edit className="w-4 h-4 text-orange-600" />
                                )}
-                               <span className="font-medium text-sm">{entry.action}</span>
+                               <span className="font-medium text-sm">
+                                 {entry.action === 'update' ? 'Update' : entry.action}
+                               </span>
                              </div>
                             <span className="text-xs text-muted-foreground">
-                              {format(new Date(entry.date), "MMM dd, HH:mm")}
+                              {(() => {
+                                const dateValue = (entry as any).date || (entry as any).created_at;
+                                if (dateValue && !isNaN(new Date(dateValue).getTime())) {
+                                  return format(new Date(dateValue), "MMM dd, HH:mm");
+                                } else {
+                                  return "Invalid date";
+                                }
+                              })()}
                             </span>
                           </div>
                           <div className="text-sm space-y-1">

@@ -193,6 +193,7 @@ class SupportedCurrency(Base):
     decimal_places = Column(Integer, default=2, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now(), nullable=True)
 
 class CurrencyRate(Base):
     __tablename__ = "currency_rates"
@@ -222,4 +223,24 @@ class InvoiceItem(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    invoice = relationship("Invoice", back_populates="items") 
+    invoice = relationship("Invoice", back_populates="items")
+
+class InvoiceHistory(Base):
+    __tablename__ = "invoice_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_id = Column(Integer, ForeignKey("invoices.id", ondelete="CASCADE"), nullable=False)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    action = Column(String, nullable=False)  # 'creation', 'update', 'payment', 'currency_change', 'discount_change'
+    details = Column(String, nullable=True)
+    previous_values = Column(JSON, nullable=True)  # Store previous values for comparison
+    current_values = Column(JSON, nullable=True)   # Store current values
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    invoice = relationship("Invoice")
+    tenant = relationship("Tenant")
+    user = relationship("User") 

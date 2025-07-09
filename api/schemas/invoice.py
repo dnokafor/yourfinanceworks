@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime, date
 
 class InvoiceItemBase(BaseModel):
@@ -10,7 +10,7 @@ class InvoiceItemBase(BaseModel):
 class InvoiceItemCreate(InvoiceItemBase):
     pass
 
-class InvoiceItemUpdate(InvoiceItemBase):
+class InvoiceItemUpdate(BaseModel):
     id: Optional[int] = None
 
 class InvoiceItem(InvoiceItemBase):
@@ -69,3 +69,24 @@ class InvoiceWithClient(Invoice):
     client_name: str
     total_paid: float = 0.0
     items: List[InvoiceItem] = [] 
+
+class InvoiceHistoryBase(BaseModel):
+    action: str
+    details: Optional[str] = None
+    previous_values: Optional[Dict[str, Any]] = None
+    current_values: Optional[Dict[str, Any]] = None
+
+class InvoiceHistoryCreate(InvoiceHistoryBase):
+    invoice_id: int
+    tenant_id: int
+    user_id: int
+
+class InvoiceHistory(InvoiceHistoryBase):
+    id: int
+    invoice_id: int
+    tenant_id: int
+    user_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True 

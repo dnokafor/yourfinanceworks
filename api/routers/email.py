@@ -137,7 +137,8 @@ async def send_invoice_email(
                 pdf_content = generate_invoice_pdf(
                     invoice_data=invoice_data,
                     client_data=client_data,
-                    company_data=company_data
+                    company_data=company_data,
+                    db=db
                 )
             except Exception as e:
                 logger.error(f"Failed to generate PDF: {str(e)}")

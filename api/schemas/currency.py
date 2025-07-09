@@ -9,6 +9,15 @@ class SupportedCurrencyBase(BaseModel):
     decimal_places: int = Field(2, description="Number of decimal places")
     is_active: bool = Field(True, description="Whether the currency is active")
 
+class SupportedCurrencyCreate(SupportedCurrencyBase):
+    pass
+
+class SupportedCurrencyUpdate(BaseModel):
+    name: Optional[str] = Field(None, description="Currency name")
+    symbol: Optional[str] = Field(None, description="Currency symbol")
+    decimal_places: Optional[int] = Field(None, description="Number of decimal places")
+    is_active: Optional[bool] = Field(None, description="Whether the currency is active")
+
 class SupportedCurrency(SupportedCurrencyBase):
     id: int
     created_at: datetime

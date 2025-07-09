@@ -8,6 +8,12 @@ from typing import Dict, Any, List
 import io
 from datetime import datetime
 import logging
+from sqlalchemy.orm import Session
+from models.database import get_db
+from models.models import SupportedCurrency
+from sqlalchemy.orm import Session
+from models.database import get_db
+from models.models import SupportedCurrency
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +64,8 @@ class InvoicePDFGenerator:
         invoice_data: Dict[str, Any],
         client_data: Dict[str, Any],
         company_data: Dict[str, Any],
-        items: List[Dict[str, Any]] = None
+        items: List[Dict[str, Any]] = None,
+        db: Session = None
     ) -> bytes:
         """Generate a PDF invoice and return as bytes"""
         try:
@@ -92,15 +99,15 @@ class InvoicePDFGenerator:
             
             # Invoice items table
             if items:
-                story.extend(self._build_items_table(items))
+                story.extend(self._build_items_table(items, invoice_data.get('currency', 'USD'), db))
             else:
                 # Create a simple items table if no items provided
-                story.extend(self._build_simple_total(invoice_data))
+                story.extend(self._build_simple_total(invoice_data, db))
             
             story.append(Spacer(1, 20))
             
             # Total and payment info
-            story.extend(self._build_totals(invoice_data))
+            story.extend(self._build_totals(invoice_data, db))
             story.append(Spacer(1, 30))
             
             # Notes
@@ -197,7 +204,7 @@ class InvoicePDFGenerator:
         
         return elements
     
-    def _build_items_table(self, items: List[Dict[str, Any]]) -> List:
+    def _build_items_table(self, items: List[Dict[str, Any]], currency_code: str, db: Session) -> List:
         """Build items table"""
         elements = []
         
@@ -209,8 +216,8 @@ class InvoicePDFGenerator:
             table_data.append([
                 item.get('description', ''),
                 str(item.get('quantity', 1)),
-                f"${item.get('price', 0):.2f}",
-                f"${item.get('amount', 0):.2f}"
+                self._format_currency(item.get('price', 0), currency_code, db),
+                self._format_currency(item.get('amount', 0), currency_code, db)
             ])
         
         # Create table
@@ -237,14 +244,16 @@ class InvoicePDFGenerator:
         
         return elements
     
-    def _build_simple_total(self, invoice_data: Dict[str, Any]) -> List:
+    def _build_simple_total(self, invoice_data: Dict[str, Any], db: Session) -> List:
         """Build simple total section when no items are provided"""
         elements = []
+        
+        currency_code = invoice_data.get('currency', 'USD')
         
         # Simple service/total line
         table_data = [
             ['Description', 'Amount'],
-            ['Services/Products', f"${invoice_data.get('amount', 0):.2f}"]
+            ['Services/Products', self._format_currency(invoice_data.get('amount', 0), currency_code, db)]
         ]
         
         simple_table = Table(table_data, colWidths=[4*inch, 2*inch])
@@ -268,23 +277,24 @@ class InvoicePDFGenerator:
         
         return elements
     
-    def _build_totals(self, invoice_data: Dict[str, Any]) -> List:
+    def _build_totals(self, invoice_data: Dict[str, Any], db: Session) -> List:
         """Build totals section"""
         elements = []
         
         amount = invoice_data.get('amount', 0)
         paid_amount = invoice_data.get('paid_amount', 0)
         balance_due = amount - paid_amount
+        currency_code = invoice_data.get('currency', 'USD')
         
         # Totals table
         totals_data = [
-            ['Subtotal:', f"${amount:.2f}"],
+            ['Subtotal:', self._format_currency(amount, currency_code, db)],
         ]
         
         if paid_amount > 0:
-            totals_data.append(['Paid Amount:', f"${paid_amount:.2f}"])
+            totals_data.append(['Paid Amount:', self._format_currency(paid_amount, currency_code, db)])
         
-        totals_data.append(['Balance Due:', f"${balance_due:.2f}"])
+        totals_data.append(['Balance Due:', self._format_currency(balance_due, currency_code, db)])
         
         totals_table = Table(totals_data, colWidths=[4*inch, 2*inch])
         totals_table.setStyle(TableStyle([
@@ -326,6 +336,28 @@ class InvoicePDFGenerator:
         
         return elements
     
+    def _format_currency(self, amount: float, currency_code: str, db: Session) -> str:
+        """Format amount with proper currency code and decimal places"""
+        try:
+            # Get currency info from database
+            currency = db.query(SupportedCurrency).filter(
+                SupportedCurrency.code == currency_code.upper(),
+                SupportedCurrency.is_active == True
+            ).first()
+            
+            if currency:
+                decimal_places = currency.decimal_places
+                formatted_amount = f"{amount:.{decimal_places}f}"
+                return f"{formatted_amount} {currency_code.upper()}"
+            else:
+                # Fallback for unknown currencies
+                return f"{amount:.2f} {currency_code.upper()}"
+                
+        except Exception as e:
+            logger.warning(f"Error formatting currency {currency_code}: {e}")
+            # Fallback to USD formatting
+            return f"{amount:.2f} USD"
+
     def _format_date(self, date_str: str) -> str:
         """Format date string for display"""
         if not date_str:
@@ -346,8 +378,9 @@ def generate_invoice_pdf(
     invoice_data: Dict[str, Any],
     client_data: Dict[str, Any],
     company_data: Dict[str, Any],
-    items: List[Dict[str, Any]] = None
+    items: List[Dict[str, Any]] = None,
+    db: Session = None
 ) -> bytes:
     """Convenience function to generate invoice PDF"""
     generator = InvoicePDFGenerator()
-    return generator.generate_invoice_pdf(invoice_data, client_data, company_data, items) 
+    return generator.generate_invoice_pdf(invoice_data, client_data, company_data, items, db) 
