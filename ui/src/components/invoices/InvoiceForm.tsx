@@ -805,6 +805,8 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
               amount: (Number(item.quantity) || 1) * (Number(item.price) || 0),
               id: item.id
             })),
+            is_recurring: data.isRecurring,
+            recurring_frequency: data.recurringFrequency,
           };
           
           console.log("Saving invoice with discount data:", {

@@ -12,6 +12,9 @@ class InvoiceItemCreate(InvoiceItemBase):
 
 class InvoiceItemUpdate(BaseModel):
     id: Optional[int] = None
+    description: Optional[str] = None
+    quantity: Optional[float] = None
+    price: Optional[float] = None
 
 class InvoiceItem(InvoiceItemBase):
     id: int

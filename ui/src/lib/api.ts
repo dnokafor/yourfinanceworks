@@ -456,12 +456,19 @@ export const dashboardApi = {
       ]);
       
       const totalClients = clients.length;
-      const totalIncome = invoices
-        .filter(invoice => invoice.status === 'paid' || invoice.status === 'partially_paid')
-        .reduce((sum, invoice) => sum + invoice.paid_amount, 0);
-      const pendingInvoices = invoices
-        .filter(invoice => invoice.status === 'pending' || invoice.status === 'overdue')
-        .reduce((sum, invoice) => sum + (invoice.amount - (invoice.paid_amount || 0)), 0);
+      // Group totals by currency
+      const totalIncome: Record<string, number> = {};
+      const pendingInvoices: Record<string, number> = {};
+      
+      invoices.forEach(invoice => {
+        const currency = invoice.currency || 'USD';
+        if (invoice.status === 'paid' || invoice.status === 'partially_paid') {
+          totalIncome[currency] = (totalIncome[currency] || 0) + invoice.paid_amount;
+        }
+        if (invoice.status === 'pending' || invoice.status === 'overdue') {
+          pendingInvoices[currency] = (pendingInvoices[currency] || 0) + (invoice.amount - (invoice.paid_amount || 0));
+        }
+      });
       
       const invoicesPaid = invoices.filter(invoice => invoice.status === 'paid').length;
       const invoicesPending = invoices.filter(invoice => invoice.status === 'pending').length;
@@ -478,8 +485,8 @@ export const dashboardApi = {
     } catch (error) {
       console.error('Failed to get dashboard stats:', error);
       return {
-        totalIncome: 0,
-        pendingInvoices: 0,
+        totalIncome: {},
+        pendingInvoices: {},
         totalClients: 0,
         invoicesPaid: 0,
         invoicesPending: 0,

@@ -88,7 +88,12 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 slide-in">
           <StatCard
             title="Total Income"
-            value={`$${dashboardStats.totalIncome.toFixed(2)}`}
+            value={Object.entries(dashboardStats.totalIncome).length === 0
+              ? "$0.00"
+              : Object.entries(dashboardStats.totalIncome)
+                  .map(([currency, amount]) => `${amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ${currency}`)
+                  .join(', ')
+            }
             icon={DollarSign}
             description="Revenue from paid invoices"
             trend={{ value: 12.5, isPositive: true }}
@@ -96,7 +101,12 @@ const Dashboard = () => {
           />
           <StatCard
             title="Pending Amount"
-            value={`$${dashboardStats.pendingInvoices.toFixed(2)}`}
+            value={Object.entries(dashboardStats.pendingInvoices).length === 0
+              ? "$0.00"
+              : Object.entries(dashboardStats.pendingInvoices)
+                  .map(([currency, amount]) => `${amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ${currency}`)
+                  .join(' / ')
+            }
             icon={FileText}
             description="Awaiting payment"
             trend={{ value: 5.2, isPositive: true }}

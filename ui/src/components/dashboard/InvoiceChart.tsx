@@ -38,15 +38,12 @@ export function InvoiceChart() {
       const label = `${monthName} '${year}`;
       const startOfMonth = new Date(month.getFullYear(), month.getMonth(), 1);
       const endOfMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0);
-      console.log('Bar:', label, 'Start:', startOfMonth, 'End:', endOfMonth);
       // Get invoices for this month
       const monthInvoices = invoiceData.filter(invoice => {
         const invoiceDate = new Date(invoice.date || invoice.created_at);
-        console.log('Invoice:', invoice.number, 'Date:', invoice.date, 'Created:', invoice.created_at, 'Parsed:', invoiceDate);
         if (isNaN(invoiceDate.getTime())) return false;
         return invoiceDate >= startOfMonth && invoiceDate <= endOfMonth;
       });
-      console.log('Invoices for', label, ':', monthInvoices);
       // Calculate totals
       const paid = monthInvoices
         .filter(inv => inv.status === 'paid')
@@ -54,13 +51,16 @@ export function InvoiceChart() {
       const pending = monthInvoices
         .filter(inv => inv.status === 'pending')
         .reduce((sum, inv) => sum + inv.amount, 0);
+      const partiallyPaid = monthInvoices
+        .filter(inv => inv.status === 'partially_paid')
+        .reduce((sum, inv) => sum + inv.amount, 0);
       return {
         name: label,
         paid: parseFloat(paid.toFixed(2)),
-        pending: parseFloat(pending.toFixed(2))
+        pending: parseFloat(pending.toFixed(2)),
+        partiallyPaid: parseFloat(partiallyPaid.toFixed(2)),
       };
     });
-    console.log('Final chart data:', chartData);
     setChartData(chartData);
   };
 
@@ -96,10 +96,11 @@ export function InvoiceChart() {
                     borderRadius: "6px",
                     boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
                   }}
-                  formatter={(value) => [`$${value}`, ""]}
+                  formatter={(value, name) => [`$${value}`, name === 'paid' ? 'Paid' : name === 'pending' ? 'Pending' : 'Partially Paid']}
                 />
                 <Bar dataKey="paid" name="Paid" fill="#38bdf8" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="pending" name="Pending" fill="#60a5fa" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="partiallyPaid" name="Partially Paid" fill="#fbbf24" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
