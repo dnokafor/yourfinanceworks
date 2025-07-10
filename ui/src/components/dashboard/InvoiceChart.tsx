@@ -96,11 +96,23 @@ export function InvoiceChart() {
                     borderRadius: "6px",
                     boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
                   }}
-                  formatter={(value, name) => [`$${value}`, name === 'paid' ? 'Paid' : name === 'pending' ? 'Pending' : 'Partially Paid']}
+                  formatter={(value, name, props) => {
+                  let categoryName = '';
+                  if (props.dataKey === 'paid') {
+                    categoryName = 'Paid';
+                  } else if (props.dataKey === 'partiallyPaid') {
+                    categoryName = 'Partially Paid';
+                  } else if (props.dataKey === 'pending') {
+                    categoryName = 'Pending';
+                  } else {
+                    categoryName = name; // Fallback
+                  }
+                  return [`${value}`, categoryName];
+                }}
                 />
-                <Bar dataKey="paid" name="Paid" fill="#38bdf8" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="paid" name="Paid" fill="#38bdf8" radius={[4, 4, 0, 0]} stackId="a" />
+                <Bar dataKey="partiallyPaid" name="Partially Paid" fill="#fbbf24" radius={[4, 4, 0, 0]} stackId="a" />
                 <Bar dataKey="pending" name="Pending" fill="#60a5fa" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="partiallyPaid" name="Partially Paid" fill="#fbbf24" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
