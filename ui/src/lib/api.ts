@@ -460,19 +460,125 @@ export const dashboardApi = {
       const totalIncome: Record<string, number> = {};
       const pendingInvoices: Record<string, number> = {};
       
+      console.log('Dashboard API - Processing invoices:', invoices.length);
       invoices.forEach(invoice => {
         const currency = invoice.currency || 'USD';
+        console.log(`Invoice ${invoice.number}: status=${invoice.status}, amount=${invoice.amount}, paid_amount=${invoice.paid_amount}, currency=${currency}`);
+        
         if (invoice.status === 'paid' || invoice.status === 'partially_paid') {
           totalIncome[currency] = (totalIncome[currency] || 0) + invoice.paid_amount;
+          console.log(`Added to totalIncome[${currency}]: ${invoice.paid_amount}`);
         }
-        if (invoice.status === 'pending' || invoice.status === 'overdue') {
-          pendingInvoices[currency] = (pendingInvoices[currency] || 0) + (invoice.amount - (invoice.paid_amount || 0));
+        // Calculate pending amounts for invoices that are not fully paid
+        if (invoice.status === 'pending' || invoice.status === 'overdue' || invoice.status === 'partially_paid') {
+          const outstandingAmount = invoice.amount - (invoice.paid_amount || 0);
+          console.log(`Outstanding amount for ${invoice.number}: ${outstandingAmount}`);
+          if (outstandingAmount > 0) {
+            pendingInvoices[currency] = (pendingInvoices[currency] || 0) + outstandingAmount;
+            console.log(`Added to pendingInvoices[${currency}]: ${outstandingAmount}`);
+          }
         }
       });
+      
+      console.log('Final dashboard stats:', { totalIncome, pendingInvoices });
       
       const invoicesPaid = invoices.filter(invoice => invoice.status === 'paid').length;
       const invoicesPending = invoices.filter(invoice => invoice.status === 'pending').length;
       const invoicesOverdue = invoices.filter(invoice => invoice.status === 'overdue').length;
+      
+      // Calculate trends by comparing current month vs previous month
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+      const previousMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+      const previousYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+      
+      // Helper function to calculate total for a specific month
+      const calculateMonthlyTotal = (targetMonth: number, targetYear: number) => {
+        return invoices
+          .filter(invoice => {
+            const invoiceDate = new Date(invoice.created_at);
+            return invoiceDate.getMonth() === targetMonth && 
+                   invoiceDate.getFullYear() === targetYear &&
+                   (invoice.status === 'paid' || invoice.status === 'partially_paid');
+          })
+          .reduce((sum, invoice) => sum + (invoice.paid_amount || 0), 0);
+      };
+      
+      // Helper function to calculate pending for a specific month
+      const calculateMonthlyPending = (targetMonth: number, targetYear: number) => {
+        return invoices
+          .filter(invoice => {
+            const invoiceDate = new Date(invoice.created_at);
+            return invoiceDate.getMonth() === targetMonth && 
+                   invoiceDate.getFullYear() === targetYear &&
+                   (invoice.status === 'pending' || invoice.status === 'overdue' || invoice.status === 'partially_paid');
+          })
+          .reduce((sum, invoice) => {
+            const outstandingAmount = invoice.amount - (invoice.paid_amount || 0);
+            return sum + (outstandingAmount > 0 ? outstandingAmount : 0);
+          }, 0);
+      };
+      
+      // Helper function to calculate client count for a specific month
+      const calculateMonthlyClients = (targetMonth: number, targetYear: number) => {
+        const clientIds = new Set();
+        invoices
+          .filter(invoice => {
+            const invoiceDate = new Date(invoice.created_at);
+            return invoiceDate.getMonth() === targetMonth && 
+                   invoiceDate.getFullYear() === targetYear;
+          })
+          .forEach(invoice => clientIds.add(invoice.client_id));
+        return clientIds.size;
+      };
+      
+      // Helper function to calculate overdue count for a specific month
+      const calculateMonthlyOverdue = (targetMonth: number, targetYear: number) => {
+        return invoices
+          .filter(invoice => {
+            const invoiceDate = new Date(invoice.created_at);
+            return invoiceDate.getMonth() === targetMonth && 
+                   invoiceDate.getFullYear() === targetYear &&
+                   invoice.status === 'overdue';
+          }).length;
+      };
+      
+      // Calculate current and previous month totals
+      const currentMonthIncome = calculateMonthlyTotal(currentMonth, currentYear);
+      const previousMonthIncome = calculateMonthlyTotal(previousMonth, previousYear);
+      const currentMonthPending = calculateMonthlyPending(currentMonth, currentYear);
+      const previousMonthPending = calculateMonthlyPending(previousMonth, previousYear);
+      const currentMonthClients = calculateMonthlyClients(currentMonth, currentYear);
+      const previousMonthClients = calculateMonthlyClients(previousMonth, previousYear);
+      const currentMonthOverdue = calculateMonthlyOverdue(currentMonth, currentYear);
+      const previousMonthOverdue = calculateMonthlyOverdue(previousMonth, previousYear);
+      
+      // Calculate percentage changes
+      const calculatePercentageChange = (current: number, previous: number) => {
+        if (previous === 0) return current > 0 ? 100 : 0;
+        return ((current - previous) / previous) * 100;
+      };
+      
+      const incomeTrend = calculatePercentageChange(currentMonthIncome, previousMonthIncome);
+      const pendingTrend = calculatePercentageChange(currentMonthPending, previousMonthPending);
+      const clientsTrend = calculatePercentageChange(currentMonthClients, previousMonthClients);
+      const overdueTrend = calculatePercentageChange(currentMonthOverdue, previousMonthOverdue);
+      
+      console.log('Trend calculations:', {
+        currentMonthIncome,
+        previousMonthIncome,
+        incomeTrend,
+        currentMonthPending,
+        previousMonthPending,
+        pendingTrend,
+        currentMonthClients,
+        previousMonthClients,
+        clientsTrend,
+        currentMonthOverdue,
+        previousMonthOverdue,
+        overdueTrend
+      });
       
       return {
         totalIncome,
@@ -481,6 +587,12 @@ export const dashboardApi = {
         invoicesPaid,
         invoicesPending,
         invoicesOverdue,
+        trends: {
+          income: { value: Math.round(incomeTrend * 10) / 10, isPositive: incomeTrend >= 0 },
+          pending: { value: Math.round(pendingTrend * 10) / 10, isPositive: pendingTrend >= 0 },
+          clients: { value: Math.round(clientsTrend * 10) / 10, isPositive: clientsTrend >= 0 },
+          overdue: { value: Math.round(overdueTrend * 10) / 10, isPositive: overdueTrend >= 0 }
+        }
       };
     } catch (error) {
       console.error('Failed to get dashboard stats:', error);
@@ -491,6 +603,12 @@ export const dashboardApi = {
         invoicesPaid: 0,
         invoicesPending: 0,
         invoicesOverdue: 0,
+        trends: {
+          income: { value: 0, isPositive: true },
+          pending: { value: 0, isPositive: true },
+          clients: { value: 0, isPositive: true },
+          overdue: { value: 0, isPositive: false }
+        }
       };
     }
   }

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
 import { invoiceApi, Invoice } from "@/lib/api";
 import { toast } from "sonner";
+import { CurrencyDisplay } from "@/components/ui/currency-display";
 
 export function RecentInvoices() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -61,7 +62,9 @@ export function RecentInvoices() {
                     <TableRow key={invoice.id}>
                       <TableCell className="font-medium">{invoice.number}</TableCell>
                       <TableCell>{invoice.client_name}</TableCell>
-                      <TableCell>${invoice.amount.toFixed(2)}</TableCell>
+                      <TableCell>
+                        <CurrencyDisplay amount={invoice.amount} currency={invoice.currency} />
+                      </TableCell>
                       <TableCell>
                         <Badge 
                           variant={

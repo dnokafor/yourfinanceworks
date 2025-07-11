@@ -75,6 +75,7 @@ export interface Payment {
   invoice_id: number;
   invoice: Invoice;
   amount: number;
+  currency: string;
   payment_date: string;
   payment_method: string;
   reference_number: string;

@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { paymentApi, Payment } from "@/lib/api";
 import { toast } from "sonner";
+import { CurrencyDisplay } from "@/components/ui/currency-display";
 
 const Payments = () => {
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -111,8 +112,10 @@ const Payments = () => {
                       <TableRow key={payment.id}>
                         <TableCell>{payment.invoice_number}</TableCell>
                         <TableCell>{payment.client_name}</TableCell>
-                        <TableCell>${payment.amount.toFixed(2)}</TableCell>
                         <TableCell>{new Date(payment.payment_date).toLocaleDateString()}</TableCell>
+                        <TableCell>
+                          <CurrencyDisplay amount={payment.amount} currency={payment.currency || 'USD'} />
+                        </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="capitalize">
                             {payment.payment_method}

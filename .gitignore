@@ -31,3 +31,4 @@ api/venv
 api/**/__pycache__
 api/.env
 api/invoice_api.egg-info
+api/*.db

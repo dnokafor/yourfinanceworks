@@ -7,19 +7,58 @@ import { InvoiceChart } from "@/components/dashboard/InvoiceChart";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { dashboardApi } from "@/lib/api";
 import { toast } from "sonner";
+import { CurrencyDisplay } from "@/components/ui/currency-display";
 
 const Dashboard = () => {
   const [dashboardStats, setDashboardStats] = useState({
-    totalIncome: 0,
-    pendingInvoices: 0,
+    totalIncome: {},
+    pendingInvoices: {},
     totalClients: 0,
     invoicesPaid: 0,
     invoicesPending: 0,
-    invoicesOverdue: 0
+    invoicesOverdue: 0,
+    trends: {
+      income: { value: 0, isPositive: true },
+      pending: { value: 0, isPositive: true },
+      clients: { value: 0, isPositive: true },
+      overdue: { value: 0, isPositive: false }
+    }
   });
   const [loading, setLoading] = useState(true);
   const [tenantName, setTenantName] = useState('');
   const [userName, setUserName] = useState('');
+
+  // Helper function to format multiple currencies as string
+  const formatMultiCurrencyString = (currencyAmounts: Record<string, number>) => {
+    if (Object.keys(currencyAmounts).length === 0) {
+      return "$0.00";
+    }
+    
+    return Object.entries(currencyAmounts)
+      .map(([currency, amount]) => {
+        // Use fallback symbols for common currencies
+        const symbols: { [key: string]: string } = {
+          'USD': '$',
+          'EUR': '€',
+          'GBP': '£',
+          'CAD': 'C$',
+          'AUD': 'A$',
+          'JPY': '¥',
+          'CHF': 'CHF',
+          'CNY': '¥',
+          'INR': '₹',
+          'BRL': 'R$',
+          'BTC': '₿',
+          'ETH': 'Ξ',
+          'XRP': 'XRP',
+          'SOL': '◎'
+        };
+        
+        const symbol = symbols[currency.toUpperCase()] || currency;
+        return `${symbol}${amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+      })
+      .join(' / ');
+  };
 
   useEffect(() => {
     const fetchDashboardStats = async () => {
@@ -88,28 +127,18 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 slide-in">
           <StatCard
             title="Total Income"
-            value={Object.entries(dashboardStats.totalIncome).length === 0
-              ? "$0.00"
-              : Object.entries(dashboardStats.totalIncome)
-                  .map(([currency, amount]) => `${amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ${currency}`)
-                  .join(', ')
-            }
+            value={formatMultiCurrencyString(dashboardStats.totalIncome)}
             icon={DollarSign}
             description="Revenue from paid invoices"
-            trend={{ value: 12.5, isPositive: true }}
+            trend={dashboardStats.trends.income}
             loading={loading}
           />
           <StatCard
             title="Pending Amount"
-            value={Object.entries(dashboardStats.pendingInvoices).length === 0
-              ? "$0.00"
-              : Object.entries(dashboardStats.pendingInvoices)
-                  .map(([currency, amount]) => `${amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ${currency}`)
-                  .join(' / ')
-            }
+            value={formatMultiCurrencyString(dashboardStats.pendingInvoices)}
             icon={FileText}
             description="Awaiting payment"
-            trend={{ value: 5.2, isPositive: true }}
+            trend={dashboardStats.trends.pending}
             loading={loading}
           />
           <StatCard
@@ -117,7 +146,7 @@ const Dashboard = () => {
             value={dashboardStats.totalClients.toString()}
             icon={Users}
             description="Active client accounts"
-            trend={{ value: 0, isPositive: true }}
+            trend={dashboardStats.trends.clients}
             loading={loading}
           />
           <StatCard
@@ -125,7 +154,7 @@ const Dashboard = () => {
             value={dashboardStats.invoicesOverdue.toString()}
             icon={FileText}
             description="Invoices past due date"
-            trend={{ value: 2.5, isPositive: false }}
+            trend={dashboardStats.trends.overdue}
             loading={loading}
           />
         </div>

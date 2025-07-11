@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import apiService from '@/services/api';
 import { Payment } from '@/types';
+import { formatCurrency } from '@/utils/currency';
 
 const PaymentsScreen: React.FC = () => {
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -53,17 +54,14 @@ const PaymentsScreen: React.FC = () => {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount);
+  const formatCurrencyAmount = (amount: number, currency: string = 'USD') => {
+    return formatCurrency(amount, currency);
   };
 
   const renderPayment = ({ item }: { item: Payment }) => (
     <TouchableOpacity style={styles.paymentCard}>
       <View style={styles.paymentHeader}>
-        <Text style={styles.paymentAmount}>{formatCurrency(item.amount)}</Text>
+        <Text style={styles.paymentAmount}>{formatCurrencyAmount(item.amount, item.currency || 'USD')}</Text>
         <Text style={styles.paymentMethod}>{item.payment_method}</Text>
       </View>
       <Text style={styles.invoiceNumber}>

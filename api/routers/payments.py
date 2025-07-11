@@ -54,7 +54,8 @@ def read_payments(
                 "client_name": client_name,
                 "tenant_id": payment.tenant_id,
                 "created_at": payment.created_at,
-                "updated_at": payment.updated_at
+                "updated_at": payment.updated_at,
+                "status": "completed"  # Add status field
             }
             result.append(payment_dict)
 
@@ -108,7 +109,8 @@ def read_payment(
             "client_name": client_name,
             "tenant_id": payment.tenant_id,
             "created_at": payment.created_at,
-            "updated_at": payment.updated_at
+            "updated_at": payment.updated_at,
+            "status": "completed"  # Add status field
         }
         return payment_dict
     except HTTPException:
