@@ -9,6 +9,7 @@ import { Badge } from './badge';
 import { Trash2, Edit, Plus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { currencyApi } from '@/lib/api';
+import { apiRequest } from '@/lib/api';
 
 interface Currency {
   id: number;
@@ -89,8 +90,35 @@ export function CurrencyManager() {
     }
   };
 
+  const checkCurrencyUsage = async (currencyCode: string): Promise<{ used: boolean; count: number }> => {
+    try {
+      // Check if currency is used in invoices
+      const invoices = await apiRequest<any[]>('/invoices/');
+      const invoiceCount = invoices.filter(invoice => invoice.currency === currencyCode).length;
+      
+      // Check if currency is used in payments
+      const payments = await apiRequest<any[]>('/payments/');
+      const paymentCount = payments.filter(payment => payment.currency === currencyCode).length;
+      
+      const totalCount = invoiceCount + paymentCount;
+      return { used: totalCount > 0, count: totalCount };
+    } catch (error) {
+      console.error('Failed to check currency usage:', error);
+      return { used: false, count: 0 };
+    }
+  };
+
   const handleUpdateCurrency = async (currency: Currency, updates: CurrencyUpdate) => {
     try {
+      // If trying to disable a currency, check if it's used
+      if (updates.is_active === false) {
+        const usage = await checkCurrencyUsage(currency.code);
+        if (usage.used) {
+          toast.error(`Cannot disable ${currency.name} (${currency.code}) as it is used in ${usage.count} invoice(s) or payment(s). Please update or delete those records first.`);
+          return;
+        }
+      }
+
       await currencyApi.updateCustomCurrency(currency.id, updates);
       toast.success('Currency updated successfully');
       fetchCurrencies();

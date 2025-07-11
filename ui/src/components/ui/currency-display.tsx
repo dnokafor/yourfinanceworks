@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { currencyApi } from '@/lib/api';
+import { AlertTriangle } from 'lucide-react';
 
 interface CurrencyDisplayProps {
   amount: number;
@@ -11,6 +12,7 @@ interface CurrencyDisplayProps {
 interface CurrencyInfo {
   symbol: string;
   decimals: number;
+  is_active?: boolean;
 }
 
 // Common currency symbols (fallback)
@@ -35,6 +37,7 @@ export function CurrencyDisplay({
 }: CurrencyDisplayProps) {
   const [currencyInfo, setCurrencyInfo] = useState<CurrencyInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isInactive, setIsInactive] = useState(false);
 
   useEffect(() => {
     const fetchCurrencyInfo = async () => {
@@ -46,18 +49,22 @@ export function CurrencyDisplay({
         if (foundCurrency) {
           setCurrencyInfo({
             symbol: foundCurrency.symbol,
-            decimals: foundCurrency.decimal_places
+            decimals: foundCurrency.decimal_places,
+            is_active: foundCurrency.is_active
           });
+          setIsInactive(!foundCurrency.is_active);
         } else {
           // Use fallback for traditional currencies
           const fallback = fallbackCurrencySymbols[currency.toUpperCase()];
-          setCurrencyInfo(fallback || { symbol: currency, decimals: 2 });
+          setCurrencyInfo(fallback || { symbol: currency, decimals: 2, is_active: true });
+          setIsInactive(false);
         }
       } catch (error) {
         console.error('Failed to fetch currency info:', error);
         // Use fallback
         const fallback = fallbackCurrencySymbols[currency.toUpperCase()];
-        setCurrencyInfo(fallback || { symbol: currency, decimals: 2 });
+        setCurrencyInfo(fallback || { symbol: currency, decimals: 2, is_active: true });
+        setIsInactive(false);
       } finally {
         setLoading(false);
       }
@@ -85,8 +92,11 @@ export function CurrencyDisplay({
   };
 
   return (
-    <span className={className}>
+    <span className={`${className} ${isInactive ? 'text-orange-600' : ''}`}>
       {formatCurrency(amount, currency)}
+      {isInactive && (
+        <AlertTriangle className="inline h-3 w-3 ml-1 text-orange-500" title="This currency is inactive" />
+      )}
     </span>
   );
 }

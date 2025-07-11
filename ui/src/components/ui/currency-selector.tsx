@@ -19,17 +19,17 @@ interface CurrencySelectorProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
-  onCurrenciesLoaded?: () => void; // <-- add this
+  onCurrenciesLoaded?: () => void;
+  includeInactive?: boolean; // Add this prop to include inactive currencies
 }
 
 // Fallback currencies that will always be available
 const FALLBACK_CURRENCIES: Currency[] = [
   { id: 1, code: 'USD', name: 'US Dollar', symbol: '$', decimal_places: 2, is_active: true },
-  { id: 2, code: 'EUR', name: 'Euro', symbol: '€', decimal_places: 2, is_active: true },
-  { id: 3, code: 'GBP', name: 'British Pound', symbol: '£', decimal_places: 2, is_active: true },
-  { id: 4, code: 'CAD', name: 'Canadian Dollar', symbol: 'C$', decimal_places: 2, is_active: true },
-  { id: 5, code: 'AUD', name: 'Australian Dollar', symbol: 'A$', decimal_places: 2, is_active: true },
-  { id: 6, code: 'JPY', name: 'Japanese Yen', symbol: '¥', decimal_places: 0, is_active: true }
+  // { id: 2, code: 'EUR', name: 'Euro', symbol: '€', decimal_places: 2, is_active: true },
+  // { id: 3, code: 'GBP', name: 'British Pound', symbol: '£', decimal_places: 2, is_active: true },
+  // { id: 4, code: 'CAD', name: 'Canadian Dollar', symbol: 'C$', decimal_places: 2, is_active: true },
+  // { id: 6, code: 'JPY', name: 'Japanese Yen', symbol: '¥', decimal_places: 0, is_active: true }
 ];
 
 export function CurrencySelector({
@@ -39,7 +39,8 @@ export function CurrencySelector({
   placeholder = "Select currency",
   disabled = false,
   className = "",
-  onCurrenciesLoaded
+  onCurrenciesLoaded,
+  includeInactive = false // Default to false for new invoices
 }: CurrencySelectorProps) {
   const [currencies, setCurrencies] = useState<Currency[]>(FALLBACK_CURRENCIES);
   const [loading, setLoading] = useState(true);
@@ -67,15 +68,25 @@ export function CurrencySelector({
       console.log('Currency API response:', data);
       
       if (data.currencies && data.currencies.length > 0) {
-        // Filter to only show active currencies from database
-        const activeCurrencies = data.currencies.filter((c: Currency) => c.is_active);
+        let apiCurrencies = data.currencies;
         
-        // Combine database currencies with fallback currencies, avoiding duplicates
-        const fallbackCodes = new Set(FALLBACK_CURRENCIES.map(c => c.code));
+        console.log('All currencies from API:', apiCurrencies.map(c => ({ code: c.code, is_active: c.is_active })));
+        
+        // Filter API currencies to only include active ones
+        apiCurrencies = apiCurrencies.filter((c: Currency) => c.is_active);
+        
+        console.log('Active currencies after filtering:', apiCurrencies.map(c => ({ code: c.code, is_active: c.is_active })));
+        
+        // Use only active fallback currencies
+        const fallbacksToUse = FALLBACK_CURRENCIES.filter(c => c.is_active);
+
+        // Combine API currencies with filtered fallback currencies, avoiding duplicates
         const combinedCurrencies = [
-          ...activeCurrencies,
-          ...FALLBACK_CURRENCIES.filter(c => !activeCurrencies.some(db => db.code === c.code))
+          ...apiCurrencies,
+          ...fallbacksToUse.filter(fb => !apiCurrencies.some(apiC => apiC.code === fb.code))
         ];
+        
+        console.log('Final combined currencies:', combinedCurrencies.map(c => ({ code: c.code, is_active: c.is_active })));
         
         setCurrencies(combinedCurrencies);
         setUsingFallback(false);
@@ -83,6 +94,8 @@ export function CurrencySelector({
         console.log('Successfully loaded currencies from API and fallbacks');
       } else {
         console.log('API returned empty currencies, using fallback');
+        // If API returns empty or fails, use only active fallback currencies
+        setCurrencies(FALLBACK_CURRENCIES.filter(c => c.is_active));
         setUsingFallback(true);
         setError(null);
       }

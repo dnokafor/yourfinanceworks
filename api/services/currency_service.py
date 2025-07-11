@@ -188,17 +188,8 @@ class CurrencyService:
             if currency is not None:
                 return True
             
-            # Fallback: if supported_currencies table doesn't exist or is empty,
-            # allow common currency codes
-            fallback_currencies = {
-                'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CHF', 'CNY', 'INR', 'BRL'
-            }
-            return currency_code.upper() in fallback_currencies
+            return False
             
         except Exception as e:
             logger.warning(f"Error validating currency {currency_code}: {e}")
-            # Fallback: allow common currency codes if there's any database error
-            fallback_currencies = {
-                'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CHF', 'CNY', 'INR', 'BRL'
-            }
-            return currency_code.upper() in fallback_currencies 
+            return False 

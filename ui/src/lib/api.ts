@@ -287,7 +287,7 @@ export const crmApi = {
 
 // Currency API methods
 export const currencyApi = {
-    getSupportedCurrencies: () => apiRequest<any>('/currency/supported'),
+    getSupportedCurrencies: () => apiRequest<any>('/currency/supported?active_only=false'),
     createCustomCurrency: (data: any) => apiRequest<any>('/currency/custom', {
         method: 'POST',
         body: JSON.stringify(data),

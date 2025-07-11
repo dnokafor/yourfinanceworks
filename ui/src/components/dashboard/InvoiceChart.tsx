@@ -29,39 +29,49 @@ export function InvoiceChart() {
 
   const prepareChartData = (invoiceData: Invoice[]) => {
     console.log('Preparing chart data for invoices:', invoiceData);
-    // Prepare data for chart
-    const chartData = Array(6).fill(0).map((_, index) => {
+    const chartDataMap = new Map<string, { paid: number; pending: number; partiallyPaid: number }>();
+
+    // Initialize chart data for the last 6 months
+    for (let i = 0; i < 6; i++) {
       const month = new Date();
-      month.setMonth(month.getMonth() - 5 + index);
+      month.setMonth(month.getMonth() - 5 + i);
       const monthName = month.toLocaleString('default', { month: 'short' });
       const year = month.getFullYear().toString().slice(2);
       const label = `${monthName} '${year}`;
-      const startOfMonth = new Date(month.getFullYear(), month.getMonth(), 1);
-      const endOfMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0);
-      // Get invoices for this month
-      const monthInvoices = invoiceData.filter(invoice => {
-        const invoiceDate = new Date(invoice.date || invoice.created_at);
-        if (isNaN(invoiceDate.getTime())) return false;
-        return invoiceDate >= startOfMonth && invoiceDate <= endOfMonth;
-      });
-      // Calculate totals
-      const paid = monthInvoices
-        .filter(inv => inv.status === 'paid')
-        .reduce((sum, inv) => sum + inv.amount, 0);
-      const pending = monthInvoices
-        .filter(inv => inv.status === 'pending')
-        .reduce((sum, inv) => sum + inv.amount, 0);
-      const partiallyPaid = monthInvoices
-        .filter(inv => inv.status === 'partially_paid')
-        .reduce((sum, inv) => sum + inv.amount, 0);
-      return {
-        name: label,
-        paid: parseFloat(paid.toFixed(2)),
-        pending: parseFloat(pending.toFixed(2)),
-        partiallyPaid: parseFloat(partiallyPaid.toFixed(2)),
-      };
+      chartDataMap.set(label, { paid: 0, pending: 0, partiallyPaid: 0 });
+    }
+
+    invoiceData.forEach(invoice => {
+      const invoiceDate = new Date(invoice.date || invoice.created_at);
+      if (isNaN(invoiceDate.getTime())) return;
+
+      const month = new Date(invoiceDate.getFullYear(), invoiceDate.getMonth(), 1);
+      const monthName = month.toLocaleString('default', { month: 'short' });
+      const year = month.getFullYear().toString().slice(2);
+      const label = `${monthName} '${year}`;
+
+      if (chartDataMap.has(label)) {
+        const currentData = chartDataMap.get(label)!;
+        if (invoice.status === 'paid') {
+          currentData.paid += invoice.amount;
+        } else if (invoice.status === 'partially_paid') {
+          currentData.partiallyPaid += (invoice.paid_amount || 0);
+          currentData.pending += (invoice.amount - (invoice.paid_amount || 0));
+        } else if (invoice.status === 'pending' || invoice.status === 'overdue') {
+          currentData.pending += invoice.amount;
+        }
+        chartDataMap.set(label, currentData);
+      }
     });
-    setChartData(chartData);
+
+    const finalChartData = Array.from(chartDataMap.entries()).map(([name, data]) => ({
+      name,
+      paid: parseFloat(data.paid.toFixed(2)),
+      pending: parseFloat(data.pending.toFixed(2)),
+      partiallyPaid: parseFloat(data.partiallyPaid.toFixed(2)),
+    }));
+    
+    setChartData(finalChartData);
   };
 
   return (
