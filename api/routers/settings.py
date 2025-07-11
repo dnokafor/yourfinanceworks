@@ -6,7 +6,7 @@ from typing import Dict, Any
 import tempfile
 import os
 import shutil
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 import logging
 
 from models.database import get_db
@@ -132,9 +132,6 @@ def export_tenant_data(
         export_db = ExportSession()
         
         try:
-            # Disable foreign key constraints for the export
-            export_db.execute(text("PRAGMA foreign_keys=OFF"))
-            
             # Get tenant record first
             tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
             
@@ -149,13 +146,30 @@ def export_tenant_data(
                 'invoice_items': db.query(InvoiceItem).join(Invoice).filter(Invoice.tenant_id == current_user.tenant_id).all(),
             }
             
-            # Copy data to export database
+            # Copy data to export database with error handling
             for table_name, records in tenant_data.items():
+                logger.info(f"Exporting {len(records)} records from {table_name}")
                 for record in records:
-                    # Create a new instance for the export database
-                    record_dict = {c.name: getattr(record, c.name) for c in record.__table__.columns}
-                    new_record = record.__class__(**record_dict)
-                    export_db.add(new_record)
+                    try:
+                        # Create a new instance for the export database
+                        record_dict = {}
+                        for c in record.__table__.columns:
+                            value = getattr(record, c.name)
+                            # Handle None values and data type conversions
+                            if value is None:
+                                record_dict[c.name] = None
+                            elif isinstance(value, (datetime, date)):
+                                # Keep datetime objects as-is for SQLite
+                                record_dict[c.name] = value
+                            else:
+                                record_dict[c.name] = value
+                        
+                        new_record = record.__class__(**record_dict)
+                        export_db.add(new_record)
+                    except Exception as e:
+                        logger.error(f"Error exporting record from {table_name}: {str(e)}")
+                        # Continue with other records
+                        continue
             
             export_db.commit()
             
@@ -169,6 +183,10 @@ def export_tenant_data(
                 background=lambda: shutil.rmtree(temp_dir, ignore_errors=True)
             )
             
+        except Exception as e:
+            logger.error(f"Error during export database operations: {str(e)}")
+            export_db.rollback()
+            raise
         finally:
             export_db.close()
             
@@ -303,6 +321,11 @@ async def import_tenant_data(
                             new_sequence = start_sequence + i + 1
                             new_invoice_number = f"INV-{date_prefix}-{new_sequence:04d}"
                             
+                            # Calculate subtotal (same as amount if no discount applied)
+                            subtotal = getattr(invoice, 'subtotal', None)
+                            if subtotal is None:
+                                subtotal = invoice.amount
+                            
                             new_invoice = Invoice(
                                 number=new_invoice_number,  # Use generated number instead of original
                                 amount=invoice.amount,
@@ -314,8 +337,11 @@ async def import_tenant_data(
                                 tenant_id=current_user.tenant_id,
                                 created_at=invoice.created_at,
                                 updated_at=datetime.now(timezone.utc),
-                                is_recurring=invoice.is_recurring,
-                                recurring_frequency=invoice.recurring_frequency
+                                is_recurring=getattr(invoice, 'is_recurring', False),
+                                recurring_frequency=getattr(invoice, 'recurring_frequency', None),
+                                discount_type=getattr(invoice, 'discount_type', 'percentage'),
+                                discount_value=getattr(invoice, 'discount_value', 0.0),
+                                subtotal=subtotal
                             )
                             db.add(new_invoice)
                             old_to_new_invoice_ids[invoice.id] = new_invoice

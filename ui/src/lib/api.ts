@@ -624,7 +624,7 @@ export const settingsApi = {
     }),
   exportData: async () => {
     const token = localStorage.getItem('token');
-    const response = await fetch(`${API_BASE_URL}/settings/export-data`, {
+    const response = await fetch(`${API_BASE_URL}/api/settings/export-data`, {
       headers: {
         'Authorization': `Bearer ${token}`,
       },
@@ -661,7 +661,7 @@ export const settingsApi = {
     const formData = new FormData();
     formData.append('file', file);
     
-    const response = await fetch(`${API_BASE_URL}/settings/import-data`, {
+    const response = await fetch(`${API_BASE_URL}/api/settings/import-data`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
