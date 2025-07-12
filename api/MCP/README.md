@@ -72,7 +72,7 @@ sequenceDiagram
     User->>Claude: "List all clients with outstanding balances"
     Claude->>MCP: Tool call: get_clients_with_outstanding_balance()
     MCP->>API: Authenticate with JWT token
-    API->>Backend: GET /api/clients?outstanding=true
+    API->>Backend: GET /api/v1/clients?outstanding=true
     Backend->>DB: Query clients with unpaid invoices
     DB-->>Backend: Client data with balances
     Backend-->>API: JSON response
@@ -346,7 +346,7 @@ echo ".mcp_token" >> .gitignore
 python -m MCP --email user@example.com --password mypassword
 
 # With custom API URL
-python -m MCP --email user@example.com --password mypassword --api-url http://localhost:8000/api
+python -m MCP --email user@example.com --password mypassword --api-url http://localhost:8000/api/v1
 
 # With verbose logging
 python -m MCP --email user@example.com --password mypassword --verbose
@@ -358,7 +358,7 @@ The server can be configured through command-line arguments, which override envi
 
 | CLI Argument | Environment Variable | Default | Description |
 |--------------|---------------------|---------|-------------|
-| `--api-url` | `INVOICE_API_BASE_URL` | `http://localhost:8000/api` | Base URL for the Invoice API |
+| `--api-url` | `INVOICE_API_BASE_URL` | `http://localhost:8000/api/v1` | Base URL for the Invoice API |
 | `--email` | `INVOICE_API_EMAIL` | None | Email for API authentication |
 | `--password` | `INVOICE_API_PASSWORD` | None | Password for API authentication |
 | `--verbose` | N/A | False | Enable verbose logging |
@@ -374,7 +374,7 @@ Add this to your Claude Desktop configuration (`claude_desktop_config.json`):
       "command": "/path/to/your/venv/bin/python",
       "args": ["/path/to/your/project/api/launch_mcp.py", "--email", "your_email@example.com", "--password", "your_password"],
       "env": {
-        "INVOICE_API_BASE_URL": "http://localhost:8000/api"
+        "INVOICE_API_BASE_URL": "http://localhost:8000/api/v1"
       }
     }
   }

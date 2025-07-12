@@ -254,7 +254,7 @@ The application includes comprehensive email functionality to send invoices dire
 
 #### Via API
 ```bash
-POST /api/email/send-invoice
+POST /api/v1/email/send-invoice
 {
   "invoice_id": 123,
   "include_pdf": true,

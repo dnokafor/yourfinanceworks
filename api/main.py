@@ -57,17 +57,17 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
-# Include routers (they already have their own prefixes)
-app.include_router(auth.router, prefix="/api")
-app.include_router(tenant.router, prefix="/api")
-app.include_router(clients.router, prefix="/api")
-app.include_router(invoices.router, prefix="/api")
-app.include_router(payments.router, prefix="/api")
-app.include_router(settings.router, prefix="/api")
-app.include_router(email.router, prefix="/api")
-app.include_router(currency.router, prefix="/api")
-app.include_router(crm.router, prefix="/api")
-app.include_router(discount_rules.router, prefix="/api")
+# Include routers with v1 API versioning
+app.include_router(auth.router, prefix="/api/v1")
+app.include_router(tenant.router, prefix="/api/v1")
+app.include_router(clients.router, prefix="/api/v1")
+app.include_router(invoices.router, prefix="/api/v1")
+app.include_router(payments.router, prefix="/api/v1")
+app.include_router(settings.router, prefix="/api/v1")
+app.include_router(email.router, prefix="/api/v1")
+app.include_router(currency.router, prefix="/api/v1")
+app.include_router(crm.router, prefix="/api/v1")
+app.include_router(discount_rules.router, prefix="/api/v1")
 
 @app.get("/")
 def read_root():

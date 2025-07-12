@@ -526,11 +526,11 @@ class ApiService {
 
   // Settings Methods
   async getSettings(): Promise<Settings> {
-    return await this.request<Settings>('/api/settings/');
+    return await this.request<Settings>('/settings/');
   }
 
   async updateSettings(settings: Partial<Settings>): Promise<Settings> {
-    return await this.request<Settings>('/api/settings/', {
+    return await this.request<Settings>('/settings/', {
       method: 'PUT',
       body: JSON.stringify(settings),
     });

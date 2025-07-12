@@ -8,7 +8,7 @@ class MCPConfig:
     """Configuration settings for the MCP server"""
     
     # API Base URL - can be configured via environment variable
-    API_BASE_URL: str = os.getenv("INVOICE_API_BASE_URL", "http://localhost:8000/api")
+    API_BASE_URL: str = os.getenv("INVOICE_API_BASE_URL", "http://localhost:8000/api/v1")
     
     # Authentication settings
     DEFAULT_EMAIL: Optional[str] = os.getenv("INVOICE_API_EMAIL")

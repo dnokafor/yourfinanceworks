@@ -44,27 +44,27 @@ The API will be available at http://localhost:8000, and the API documentation at
 
 ### Clients
 
-- `GET /api/clients/` - List all clients
-- `GET /api/clients/{client_id}` - Get client details
-- `POST /api/clients/` - Create a new client
-- `PUT /api/clients/{client_id}` - Update a client
-- `DELETE /api/clients/{client_id}` - Delete a client
+- `GET /api/v1/clients/` - List all clients
+- `GET /api/v1/clients/{client_id}` - Get client details
+- `POST /api/v1/clients/` - Create a new client
+- `PUT /api/v1/clients/{client_id}` - Update a client
+- `DELETE /api/v1/clients/{client_id}` - Delete a client
 
 ### Invoices
 
-- `GET /api/invoices/` - List all invoices
-- `GET /api/invoices/{invoice_id}` - Get invoice details
-- `POST /api/invoices/` - Create a new invoice
-- `PUT /api/invoices/{invoice_id}` - Update an invoice
-- `DELETE /api/invoices/{invoice_id}` - Delete an invoice
+- `GET /api/v1/invoices/` - List all invoices
+- `GET /api/v1/invoices/{invoice_id}` - Get invoice details
+- `POST /api/v1/invoices/` - Create a new invoice
+- `PUT /api/v1/invoices/{invoice_id}` - Update an invoice
+- `DELETE /api/v1/invoices/{invoice_id}` - Delete an invoice
 
 ### Payments
 
-- `GET /api/payments/` - List all payments
-- `GET /api/payments/{payment_id}` - Get payment details
-- `POST /api/payments/` - Create a new payment
-- `PUT /api/payments/{payment_id}` - Update a payment
-- `DELETE /api/payments/{payment_id}` - Delete a payment
+- `GET /api/v1/payments/` - List all payments
+- `GET /api/v1/payments/{payment_id}` - Get payment details
+- `POST /api/v1/payments/` - Create a new payment
+- `PUT /api/v1/payments/{payment_id}` - Update a payment
+- `DELETE /api/v1/payments/{payment_id}` - Delete a payment
 
 ## API Documentation
 
@@ -108,9 +108,9 @@ Once the server is running, you can access the interactive API documentation at:
 
 The API provides the following endpoints:
 
-- `/api/clients` - Manage clients
-- `/api/invoices` - Manage invoices
-- `/api/payments` - Manage payments
+- `/api/v1/clients` - Manage clients
+- `/api/v1/invoices` - Manage invoices
+- `/api/v1/payments` - Manage payments
 
 Each resource supports standard CRUD operations.
 

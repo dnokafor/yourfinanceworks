@@ -493,9 +493,9 @@ def send_invoice_email(
     # This endpoint redirects to the email service
     # In a real application, you might want to handle this differently
     return {
-        "message": "Please use the /api/email/send-invoice endpoint",
+        "message": "Please use the /api/v1/email/send-invoice endpoint",
         "invoice_id": invoice_id,
-        "redirect_url": f"/api/email/send-invoice"
+        "redirect_url": f"/api/v1/email/send-invoice"
     }
 
 @router.get("/stats/total-income", response_model=dict)

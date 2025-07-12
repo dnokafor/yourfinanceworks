@@ -105,7 +105,7 @@ const Settings = () => {
 
         // Try to fetch email settings
         try {
-          const emailConfig = await fetch('/api/email/config', {
+          const emailConfig = await fetch('/email/config', {
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('token')}`,
             },
@@ -184,7 +184,7 @@ const Settings = () => {
     if (!testEmail) return;
 
     try {
-      const response = await fetch('/api/email/test', {
+      const response = await fetch('/email/test', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -232,7 +232,7 @@ const Settings = () => {
       
       // Save email settings separately
       try {
-        await fetch('/api/email/config', {
+        await fetch('/email/config', {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
