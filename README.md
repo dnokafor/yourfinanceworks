@@ -43,6 +43,16 @@ A modern, multi-tenant invoice management system built with FastAPI and React, w
 - **Data Integrity** - Comprehensive validation and error handling during import/export
 - **Backup Recommendations** - Built-in guidance for data safety best practices
 
+### 🤖 AI Assistant with MCP Integration
+- **Intelligent Business Queries** - AI assistant automatically detects business-related questions and uses real data
+- **Comprehensive Tool Integration** - 9 different MCP tools for invoice analysis, client management, and business insights
+- **Dynamic Authentication** - Uses current user's session for secure data access
+- **Smart Pattern Detection** - Routes business queries to MCP tools, general questions to LLM
+- **Real-time Data Analysis** - Provides insights based on actual invoice, client, and payment data
+- **Actionable Recommendations** - Suggests business actions based on data analysis
+- **Multi-Provider Support** - Configurable AI providers (OpenAI, Ollama, Anthropic, Google, Custom)
+- **Fallback Intelligence** - Seamlessly switches between MCP tools and LLM based on query type
+
 ### Invoice Management Enhancements ✨
 - **Intelligent Item Management** - Individual invoice item updates without losing data
 - **Immutable Paid Invoices** - Paid invoices are protected from accidental changes (except status)
@@ -58,7 +68,7 @@ A modern, multi-tenant invoice management system built with FastAPI and React, w
 
 ### Technical Features
 - **RESTful API** - Clean, documented API endpoints with consistent data structures
-- **AI Integration (MCP)** - Model Context Protocol server for AI assistant integration
+- **AI Integration (MCP)** - Enhanced Model Context Protocol server with dynamic authentication and comprehensive tool integration
 - **Email Service Integration** - Support for AWS SES, Azure Email Services, and Mailgun with proper API routing
 - **Real-time Updates** - Instant UI updates with optimistic rendering
 - **Search & Filtering** - Advanced filtering and search capabilities
@@ -66,6 +76,25 @@ A modern, multi-tenant invoice management system built with FastAPI and React, w
 - **Database Migrations** - Automated schema management
 
 ## 🆕 Recent Major Updates & Improvements
+
+### 🤖 Enhanced AI Assistant with MCP Integration
+- **✅ Dynamic Authentication** - AI assistant uses current user's JWT token instead of hardcoded credentials
+- **✅ Comprehensive MCP Tools** - 9 different business query patterns with real data access:
+  * Invoice pattern analysis and trend detection
+  * Actionable business recommendations
+  * Client management (list, search, details)
+  * Invoice management (list, search, status)
+  * Payment tracking and history
+  * Overdue invoice detection
+  * Invoice statistics and metrics
+  * Currency management
+  * Outstanding balance tracking
+- **✅ Smart Pattern Detection** - Automatically routes business queries to MCP tools, general questions to LLM
+- **✅ Real Data Integration** - All MCP tools access actual database data through authenticated API calls
+- **✅ Intelligent Fallback** - Seamlessly falls back to LLM for non-business queries
+- **✅ SQLAlchemy Serialization Fix** - Resolved Row object serialization issues in AI endpoints
+- **✅ User Role Management** - Fixed admin role requirements for settings and AI configuration
+- **✅ Test Coverage** - Comprehensive test scripts for MCP integration validation
 
 ### 🎯 CRM System Implementation
 - **✅ Complete Client Notes System** - Full CRUD operations for client notes with user attribution
@@ -205,6 +234,35 @@ eas submit --platform android
 ```
 
 For detailed mobile app documentation, see [mobile/README.md](mobile/README.md).
+
+## 🤖 AI Assistant Usage
+
+The AI assistant provides intelligent business insights using your actual data. Here are some example queries you can try:
+
+### Business Analysis Queries
+- **"Can you analyze my invoice patterns and trends?"** - Get comprehensive invoice analysis
+- **"What actions should I take based on my invoice data?"** - Receive actionable business recommendations
+- **"Show me all my clients"** - List all clients with their details
+- **"Search for clients named John"** - Find specific clients
+- **"Show me all my invoices"** - List all invoices with status and amounts
+- **"Find invoices for client ABC"** - Search invoices by client
+- **"Show me all payments"** - View payment history
+- **"Who owes me money?"** - Check outstanding balances
+- **"Show me overdue invoices"** - Identify overdue payments
+- **"How many invoices do I have?"** - Get invoice statistics
+
+### General Questions
+- **"What is the weather like today?"** - General questions use the LLM
+- **"Explain invoice terms"** - Educational content
+- **"How do I create a professional invoice?"** - Best practices guidance
+
+### AI Configuration
+1. **Navigate to Settings** → **AI Configuration** tab
+2. **Configure AI Provider** - Set up OpenAI, Ollama, or other providers
+3. **Set as Default** - Mark your preferred provider as default
+4. **Test Configuration** - Verify your AI setup works correctly
+
+The AI assistant automatically detects the type of query and uses the appropriate tool (MCP for business data, LLM for general questions).
 
 ## 📧 Email Invoice Delivery
 
