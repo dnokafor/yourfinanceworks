@@ -3,13 +3,18 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm, HT
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, List
 import os
+import secrets
+import hashlib
 
 from models.database import get_db, get_master_db
-from models.models import User, Tenant, MasterUser  # MasterUser for master database operations
-from schemas.user import UserCreate, UserLogin, Token, UserRead
+from models.models import User, Tenant, MasterUser, Invite  # Add Invite import
+from schemas.user import UserCreate, UserLogin, Token, UserRead, UserUpdate, InviteCreate, InviteRead, InviteAccept, UserList, UserRoleUpdate, AdminActivateUser
 from utils.auth import verify_password, get_password_hash
+from models.models_per_tenant import User as TenantUser
+from services.tenant_database_manager import tenant_db_manager
+from middleware.tenant_context_middleware import set_tenant_context
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -60,6 +65,17 @@ def get_current_user(
     if user is None:
         raise credentials_exception
     return user
+
+def generate_invite_token() -> str:
+    """Generate a secure invite token"""
+    return secrets.token_urlsafe(32)
+
+def send_invite_email(email: str, invite_url: str, inviter_name: str, tenant_name: str):
+    """Send invite email (placeholder - implement with your email service)"""
+    # TODO: Implement with your email service (SendGrid, AWS SES, etc.)
+    print(f"Invite email to {email}: {invite_url}")
+    # For now, just print to console
+    return True
 
 @router.post("/register", response_model=Token)
 def register(user: UserCreate, db: Session = Depends(get_master_db)):
@@ -145,7 +161,7 @@ def register(user: UserCreate, db: Session = Depends(get_master_db)):
         
         try:
             # Import the tenant-specific User model (without tenant_id column)
-            from models.models_per_tenant import User as TenantUser
+            # from models.models_per_tenant import User as TenantUser
             
             # Create tenant user using the tenant-specific User model
             tenant_user = TenantUser(
@@ -223,3 +239,350 @@ def login(user_credentials: UserLogin, db: Session = Depends(get_master_db)):
 @router.get("/me", response_model=UserRead)
 def read_users_me(current_user: MasterUser = Depends(get_current_user)):
     return UserRead.from_orm(current_user)
+
+@router.put("/me", response_model=UserRead)
+def update_current_user(
+    user_update: UserUpdate,
+    db: Session = Depends(get_master_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Update current user's profile (first_name, last_name)"""
+    # Only allow updating first_name and last_name for now
+    updated = False
+    if user_update.first_name is not None:
+        current_user.first_name = user_update.first_name
+        updated = True
+    if user_update.last_name is not None:
+        current_user.last_name = user_update.last_name
+        updated = True
+    if not updated:
+        raise HTTPException(status_code=400, detail="No updatable fields provided.")
+    db.commit()
+    db.refresh(current_user)
+
+    # Also update in tenant DB
+    from models.database import set_tenant_context
+    from services.tenant_database_manager import tenant_db_manager
+    set_tenant_context(current_user.tenant_id)
+    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
+    tenant_db = tenant_session()
+    try:
+        tenant_user = tenant_db.query(TenantUser).filter(TenantUser.id == current_user.id).first()
+        if tenant_user:
+            if user_update.first_name is not None:
+                tenant_user.first_name = user_update.first_name
+            if user_update.last_name is not None:
+                tenant_user.last_name = user_update.last_name
+            tenant_db.commit()
+            tenant_db.refresh(tenant_user)
+    finally:
+        tenant_db.close()
+
+    return UserRead.from_orm(current_user)
+
+@router.post("/invite", response_model=InviteRead)
+def invite_user(
+    invite_data: InviteCreate,
+    db: Session = Depends(get_master_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Invite a user to the organization (admin only)"""
+    # Check if current user is admin
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can invite users")
+    
+    # Check if user already exists
+    existing_user = db.query(MasterUser).filter(
+        MasterUser.email == invite_data.email,
+        MasterUser.tenant_id == current_user.tenant_id
+    ).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="User already exists in this organization")
+    
+    # Check if invite already exists and is not expired
+    existing_invite = db.query(Invite).filter(
+        Invite.email == invite_data.email,
+        Invite.tenant_id == current_user.tenant_id,
+        Invite.is_accepted == False,
+        Invite.expires_at > datetime.now(timezone.utc)
+    ).first()
+    if existing_invite:
+        raise HTTPException(status_code=400, detail="User already has a valid pending invite that has not expired")
+    
+    # If there's an expired invite, we can create a new one (this will create a duplicate, but that's okay)
+    # Alternatively, we could update the existing expired invite, but creating new is simpler
+    
+    # Create invite
+    invite = Invite(
+        email=invite_data.email,
+        first_name=invite_data.first_name,
+        last_name=invite_data.last_name,
+        role=invite_data.role,
+        token=generate_invite_token(),
+        expires_at=datetime.now(timezone.utc) + timedelta(days=7),  # 7 days expiry
+        tenant_id=current_user.tenant_id,
+        invited_by_id=current_user.id
+    )
+    
+    db.add(invite)
+    db.commit()
+    db.refresh(invite)
+    
+    # Send invite email
+    invite_url = f"/accept-invite?token={invite.token}"
+    inviter_name = f"{current_user.first_name} {current_user.last_name}".strip() or current_user.email
+    tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+    tenant_name = tenant.name if tenant else "Organization"
+    
+    send_invite_email(invite_data.email, invite_url, inviter_name, tenant_name)
+    
+    # Manually construct response to handle invited_by field
+    invite_response = InviteRead(
+        id=invite.id,
+        email=invite.email,
+        first_name=invite.first_name,
+        last_name=invite.last_name,
+        role=invite.role,
+        is_accepted=invite.is_accepted,
+        expires_at=invite.expires_at,
+        created_at=invite.created_at,
+        invited_by=current_user.email
+    )
+    
+    return invite_response
+
+@router.get("/invites", response_model=List[InviteRead])
+def list_invites(
+    db: Session = Depends(get_master_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """List all invites for the organization (admin only)"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can view invites")
+    
+    invites = db.query(Invite).filter(
+        Invite.tenant_id == current_user.tenant_id
+    ).all()
+    
+    # Manually construct response to handle invited_by field
+    result = []
+    for invite in invites:
+        inviter = db.query(MasterUser).filter(MasterUser.id == invite.invited_by_id).first()
+        invite_dict = {
+            "id": invite.id,
+            "email": invite.email,
+            "first_name": invite.first_name,
+            "last_name": invite.last_name,
+            "role": invite.role,
+            "is_accepted": invite.is_accepted,
+            "expires_at": invite.expires_at,
+            "created_at": invite.created_at,
+            "invited_by": inviter.email if inviter else None
+        }
+        result.append(InviteRead(**invite_dict))
+    
+    return result
+
+@router.post("/accept-invite", response_model=Token)
+def accept_invite(
+    invite_data: InviteAccept,
+    db: Session = Depends(get_master_db)
+):
+    """Accept an invite and create user account"""
+    # Find the invite
+    invite = db.query(Invite).filter(
+        Invite.token == invite_data.token,
+        Invite.is_accepted == False,
+        Invite.expires_at > datetime.now(timezone.utc)
+    ).first()
+    
+    if not invite:
+        raise HTTPException(status_code=400, detail="Invalid or expired invite token")
+    
+    # Check if user already exists
+    existing_user = db.query(MasterUser).filter(
+        MasterUser.email == invite.email,
+        MasterUser.tenant_id == invite.tenant_id
+    ).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="User already exists")
+    
+    # Create user in master database
+    hashed_password = get_password_hash(invite_data.password)
+    user = MasterUser(
+        email=invite.email,
+        hashed_password=hashed_password,
+        first_name=invite_data.first_name or invite.first_name,
+        last_name=invite_data.last_name or invite.last_name,
+        role=invite.role,
+        tenant_id=invite.tenant_id,
+        is_verified=True
+    )
+    
+    db.add(user)
+    
+    # Create user in tenant database
+    set_tenant_context(invite.tenant_id)
+    tenant_db = tenant_db_manager.get_tenant_db()
+    
+    tenant_user = TenantUser(
+        email=invite.email,
+        hashed_password=hashed_password,
+        first_name=invite_data.first_name or invite.first_name,
+        last_name=invite_data.last_name or invite.last_name,
+        role=invite.role,
+        is_verified=True
+    )
+    
+    tenant_db.add(tenant_user)
+    tenant_db.commit()
+    
+    # Mark invite as accepted
+    invite.is_accepted = True
+    invite.accepted_at = datetime.now(timezone.utc)
+    
+    db.commit()
+    db.refresh(user)
+    
+    # Generate access token
+    access_token = create_access_token(data={"sub": user.email})
+    
+    return {"access_token": access_token, "token_type": "bearer", "user": user}
+
+@router.get("/users", response_model=List[UserList])
+def list_users(
+    db: Session = Depends(get_master_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """List all users in the organization (admin only)"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can view users")
+    
+    users = db.query(MasterUser).filter(
+        MasterUser.tenant_id == current_user.tenant_id
+    ).all()
+    
+    return users
+
+@router.put("/users/{user_id}/role", response_model=UserList)
+def update_user_role(
+    user_id: int,
+    role_update: UserRoleUpdate,
+    db: Session = Depends(get_master_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Update user role (admin only)"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can update user roles")
+    
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot update your own role")
+    
+    # Find user in master database
+    user = db.query(MasterUser).filter(
+        MasterUser.id == user_id,
+        MasterUser.tenant_id == current_user.tenant_id
+    ).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Update role in master database
+    user.role = role_update.role
+    db.commit()
+    db.refresh(user)
+    
+    # Update role in tenant database
+    set_tenant_context(current_user.tenant_id)
+    tenant_db = tenant_db_manager.get_tenant_db()
+    
+    tenant_user = tenant_db.query(TenantUser).filter(
+        TenantUser.id == user_id,
+        TenantUser.tenant_id == current_user.tenant_id
+    ).first()
+    
+    if tenant_user:
+        tenant_user.role = role_update.role
+        tenant_db.commit()
+    
+    return user
+
+@router.post("/invites/{invite_id}/activate", response_model=UserList)
+def admin_activate_user(
+    invite_id: int,
+    activation_data: AdminActivateUser,
+    db: Session = Depends(get_master_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Admin activates a pending invite by setting password and creating user account"""
+    # Check if current user is admin
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can activate users")
+    
+    # Find the invite
+    invite = db.query(Invite).filter(
+        Invite.id == invite_id,
+        Invite.tenant_id == current_user.tenant_id,
+        Invite.is_accepted == False
+    ).first()
+    
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invite not found or already accepted")
+    
+    # Check if invite is expired
+    if invite.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Invite has expired")
+    
+    # Check if user already exists
+    existing_user = db.query(MasterUser).filter(
+        MasterUser.email == invite.email,
+        MasterUser.tenant_id == current_user.tenant_id
+    ).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="User already exists")
+    
+    # Create user in master database
+    hashed_password = get_password_hash(activation_data.password)
+    user = MasterUser(
+        email=invite.email,
+        hashed_password=hashed_password,
+        first_name=activation_data.first_name or invite.first_name,
+        last_name=activation_data.last_name or invite.last_name,
+        role=invite.role,
+        tenant_id=invite.tenant_id,
+        is_verified=True
+    )
+    
+    db.add(user)
+    
+    # Mark invite as accepted
+    invite.is_accepted = True
+    invite.accepted_at = datetime.now(timezone.utc)
+    
+    # Commit master database changes first
+    db.commit()
+    db.refresh(user)
+    
+    # Create user in tenant database
+    set_tenant_context(invite.tenant_id)
+    tenant_db = tenant_db_manager.get_tenant_session(invite.tenant_id)()
+    
+    # Check if user already exists in tenant database
+    existing_tenant_user = tenant_db.query(TenantUser).filter(
+        TenantUser.email == invite.email
+    ).first()
+    
+    if not existing_tenant_user:
+        tenant_user = TenantUser(
+            email=invite.email,
+            hashed_password=hashed_password,
+            first_name=activation_data.first_name or invite.first_name,
+            last_name=activation_data.last_name or invite.last_name,
+            role=invite.role,
+            is_verified=True
+        )
+        
+        tenant_db.add(tenant_user)
+        tenant_db.commit()
+    
+    return user

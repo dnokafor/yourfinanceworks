@@ -22,7 +22,8 @@ import {
   FileText, 
   LogOut,
   Settings, 
-  Users 
+  Users,
+  UserCheck
 } from "lucide-react";
 import { API_BASE_URL, settingsApi } from "@/lib/api";
 
@@ -121,7 +122,20 @@ export function AppSidebar() {
     navigate('/login');
   };
 
-  const menuItems = [
+  // Get current user role from localStorage
+  const getCurrentUserRole = () => {
+    try {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      return user?.role || 'user';
+    } catch {
+      return 'user';
+    }
+  };
+
+  const userRole = getCurrentUserRole();
+  const isAdmin = userRole === 'admin';
+
+  const mainMenuItems = [
     { 
       path: '/', 
       label: 'Dashboard', 
@@ -142,6 +156,15 @@ export function AppSidebar() {
       label: 'Payments', 
       icon: <DollarSign className="w-5 h-5" /> 
     },
+    // Only show Users menu item for admin users
+    ...(isAdmin ? [{ 
+      path: '/users', 
+      label: 'Users', 
+      icon: <UserCheck className="w-5 h-5" /> 
+    }] : [])
+  ];
+
+  const settingsMenuItems = [
     { 
       path: '/settings', 
       label: 'Settings', 
@@ -163,7 +186,25 @@ export function AppSidebar() {
         </SidebarHeader>
         <SidebarContent className="pt-6">
           <SidebarMenu>
-            {menuItems.map((item) => (
+            {mainMenuItems.map((item) => (
+              <SidebarMenuItem key={item.path}>
+                <SidebarMenuButton asChild 
+                  className={isActive(item.path) ? "bg-sidebar-accent text-white" : "text-sidebar-foreground/80 hover:text-white"}
+                >
+                  <Link to={item.path} className="flex items-center gap-3 px-3 py-2">
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
+            
+            {/* Separator */}
+            <div className="my-4 px-3">
+              <div className="border-t border-sidebar-border"></div>
+            </div>
+            
+            {settingsMenuItems.map((item) => (
               <SidebarMenuItem key={item.path}>
                 <SidebarMenuButton asChild 
                   className={isActive(item.path) ? "bg-sidebar-accent text-white" : "text-sidebar-foreground/80 hover:text-white"}

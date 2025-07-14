@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List
 
 from models.database import get_db, get_master_db
@@ -9,6 +10,28 @@ from routers.auth import get_current_user
 from services.currency_service import CurrencyService
 
 router = APIRouter(prefix="/tenants", tags=["tenants"])
+
+@router.get("/check-name-availability")
+def check_organization_name_availability(
+    name: str,
+    master_db: Session = Depends(get_master_db)
+):
+    """Check if an organization name is available (public endpoint for signup)"""
+    if not name or len(name.strip()) < 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Organization name must be at least 2 characters long"
+        )
+    
+    # Check if name already exists (case-insensitive)
+    existing_tenant = master_db.query(Tenant).filter(
+        func.lower(Tenant.name) == func.lower(name.strip())
+    ).first()
+    
+    return {
+        "available": existing_tenant is None,
+        "name": name.strip()
+    }
 
 @router.post("/", response_model=TenantSchema)
 def create_tenant(

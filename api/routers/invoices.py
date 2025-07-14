@@ -632,46 +632,66 @@ def update_invoice(
                 }
             )
             db.add(history_entry)
-        db_invoice.updated_at = datetime.now(timezone.utc)
-        db.commit()
-        db.refresh(db_invoice)
-        
-        # Get updated items to include in response
-        items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).all()
-        items_data = [
-            {
-                "id": item.id,
-                "invoice_id": item.invoice_id,
-                "description": item.description,
-                "quantity": item.quantity,
-                "price": item.price,
-                "amount": item.amount
+            db_invoice.updated_at = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(db_invoice)
+            
+            # Get updated items to include in response
+            items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).all()
+            items_data = [
+                {
+                    "id": item.id,
+                    "invoice_id": item.invoice_id,
+                    "description": item.description,
+                    "quantity": item.quantity,
+                    "price": item.price,
+                    "amount": item.amount
+                }
+                for item in items
+            ]
+            
+            logger.info(f"Returning {len(items_data)} items in response: {[{'id': item['id'], 'description': item['description'], 'description_length': len(item['description']) if item['description'] else 0} for item in items_data]}")
+            
+            # Convert to response format
+            invoice_dict = {
+                "id": db_invoice.id,
+                "number": db_invoice.number,
+                "amount": float(db_invoice.amount),
+                "currency": db_invoice.currency,
+                "due_date": db_invoice.due_date.isoformat() if db_invoice.due_date else None,
+                "status": db_invoice.status,
+                "notes": db_invoice.notes,
+                "client_id": db_invoice.client_id,
+                "created_at": db_invoice.created_at.isoformat() if db_invoice.created_at else None,
+                "updated_at": db_invoice.updated_at.isoformat() if db_invoice.updated_at else None,
+                "is_recurring": db_invoice.is_recurring,
+                "recurring_frequency": db_invoice.recurring_frequency,
+                "discount_type": db_invoice.discount_type,
+                "discount_value": float(db_invoice.discount_value) if db_invoice.discount_value else 0,
+                "subtotal": float(db_invoice.subtotal) if db_invoice.subtotal else float(db_invoice.amount),
+                "items": items_data
             }
-            for item in items
-        ]
-        
-        logger.info(f"Returning {len(items_data)} items in response: {[{'id': item['id'], 'description': item['description'], 'description_length': len(item['description']) if item['description'] else 0} for item in items_data]}")
-        
-        # Convert to response format
-        invoice_dict = {
-            "id": db_invoice.id,
-            "number": db_invoice.number,
-            "amount": float(db_invoice.amount),
-            "currency": db_invoice.currency,
-            "due_date": db_invoice.due_date.isoformat() if db_invoice.due_date else None,
-            "status": db_invoice.status,
-            "notes": db_invoice.notes,
-            "client_id": db_invoice.client_id,
-            "created_at": db_invoice.created_at.isoformat() if db_invoice.created_at else None,
-            "updated_at": db_invoice.updated_at.isoformat() if db_invoice.updated_at else None,
-            "is_recurring": db_invoice.is_recurring,
-            "recurring_frequency": db_invoice.recurring_frequency,
-            "discount_type": db_invoice.discount_type,
-            "discount_value": float(db_invoice.discount_value) if db_invoice.discount_value else 0,
-            "subtotal": float(db_invoice.subtotal) if db_invoice.subtotal else float(db_invoice.amount),
-            "items": items_data
-        }
-        return invoice_dict
+            return invoice_dict
+        else:
+            # If no changes, just return the current state
+            return {
+                "id": db_invoice.id,
+                "number": db_invoice.number,
+                "amount": float(db_invoice.amount),
+                "currency": db_invoice.currency,
+                "due_date": db_invoice.due_date.isoformat() if db_invoice.due_date else None,
+                "status": db_invoice.status,
+                "notes": db_invoice.notes,
+                "client_id": db_invoice.client_id,
+                "created_at": db_invoice.created_at.isoformat() if db_invoice.created_at else None,
+                "updated_at": db_invoice.updated_at.isoformat() if db_invoice.updated_at else None,
+                "is_recurring": db_invoice.is_recurring,
+                "recurring_frequency": db_invoice.recurring_frequency,
+                "discount_type": db_invoice.discount_type,
+                "discount_value": float(db_invoice.discount_value) if db_invoice.discount_value else 0,
+                "subtotal": float(db_invoice.subtotal) if db_invoice.subtotal else float(db_invoice.amount),
+                "items": [] # No items if no changes
+            }
     except HTTPException:
         raise
     except Exception as e:

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Building2 } from 'lucide-react';
+import { Eye, EyeOff, Building2, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { authApi } from '@/lib/api';
 
 const Signup: React.FC = () => {
@@ -16,7 +16,73 @@ const Signup: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [organizationNameStatus, setOrganizationNameStatus] = useState<{
+    checking: boolean;
+    available: boolean | null;
+    message: string;
+  }>({
+    checking: false,
+    available: null,
+    message: ''
+  });
   const navigate = useNavigate();
+
+  // Debounced organization name availability check
+  const checkOrganizationNameAvailability = useCallback(async (name: string) => {
+    if (!name) {
+      setOrganizationNameStatus({
+        checking: false,
+        available: null,
+        message: ''
+      });
+      return;
+    }
+    
+    if (name.length < 2) {
+      setOrganizationNameStatus({
+        checking: false,
+        available: false,
+        message: 'Organization name must be at least 2 characters long'
+      });
+      return;
+    }
+
+    setOrganizationNameStatus({
+      checking: true,
+      available: null,
+      message: 'Checking availability...'
+    });
+
+    try {
+      const result = await authApi.checkOrganizationNameAvailability(name);
+      setOrganizationNameStatus({
+        checking: false,
+        available: result.available,
+        message: result.available 
+          ? '✓ Organization name is available' 
+          : '✗ Organization name is already taken. Please choose a different name or contact your organization admin for an invitation.'
+      });
+    } catch (error) {
+      setOrganizationNameStatus({
+        checking: false,
+        available: null,
+        message: 'Error checking availability'
+      });
+    }
+  }, []);
+
+  // Debounce the organization name check
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (formData.organization_name) {
+        checkOrganizationNameAvailability(formData.organization_name);
+      }
+    }, 500); // 500ms delay
+
+    return () => clearTimeout(timeoutId);
+  }, [formData.organization_name, checkOrganizationNameAvailability]);
+
+
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -40,6 +106,20 @@ const Signup: React.FC = () => {
     // Validate password strength
     if (formData.password.length < 6) {
       setError('Password must be at least 6 characters long');
+      setLoading(false);
+      return;
+    }
+
+    // Validate organization name availability
+    if (organizationNameStatus.available === false) {
+      setError('Organization name is not available. Please choose a different name.');
+      setLoading(false);
+      return;
+    }
+
+    // If we're still checking availability, wait for it to complete
+    if (organizationNameStatus.checking) {
+      setError('Please wait while we check organization name availability.');
       setLoading(false);
       return;
     }
@@ -90,12 +170,53 @@ const Signup: React.FC = () => {
                   name="organization_name"
                   type="text"
                   required
-                  className="appearance-none relative block w-full pl-10 pr-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                  className={`appearance-none relative block w-full pl-10 pr-12 py-2 border placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm ${
+                    organizationNameStatus.available === false 
+                      ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
+                      : organizationNameStatus.available === true 
+                      ? 'border-green-300 focus:ring-green-500 focus:border-green-500' 
+                      : 'border-gray-300'
+                  }`}
                   placeholder="Your company or organization name"
                   value={formData.organization_name}
                   onChange={handleChange}
                 />
+                {/* Availability indicator */}
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                  {organizationNameStatus.checking && (
+                    <Loader2 className="h-5 w-5 text-gray-400 animate-spin" />
+                  )}
+                  {organizationNameStatus.available === true && (
+                    <CheckCircle className="h-5 w-5 text-green-500" />
+                  )}
+                  {organizationNameStatus.available === false && (
+                    <XCircle className="h-5 w-5 text-red-500" />
+                  )}
+                </div>
               </div>
+              {/* Status message */}
+              {organizationNameStatus.message && (
+                <div className={`mt-2 p-2 rounded-md text-sm ${
+                  organizationNameStatus.available === true 
+                    ? 'bg-green-50 border border-green-200 text-green-700' 
+                    : organizationNameStatus.available === false 
+                    ? 'bg-red-50 border border-red-200 text-red-700' 
+                    : 'bg-gray-50 border border-gray-200 text-gray-700'
+                }`}>
+                  {organizationNameStatus.message}
+                  {organizationNameStatus.available === false && organizationNameStatus.message.includes('already taken') && (
+                    <div className="mt-2 pt-2 border-t border-red-200">
+                      <p className="text-xs text-red-600">
+                        💡 <strong>Tip:</strong> If you're trying to join an existing organization, ask your admin to{' '}
+                        <Link to="/login" className="underline hover:text-red-800">
+                          invite you
+                        </Link>{' '}
+                        instead of creating a new account.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* First Name */}

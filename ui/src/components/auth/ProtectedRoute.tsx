@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -7,42 +7,66 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Auth check logic extracted for reuse
+  const checkAuth = () => {
+    const token = localStorage.getItem('token');
+    const user = localStorage.getItem('user');
+
+    console.log('ProtectedRoute: Checking authentication', { token: !!token, user: !!user });
+
+    if (!token || !user) {
+      console.log('ProtectedRoute: No token or user found, redirecting to login');
+      setIsAuthenticated(false);
+      setIsLoading(false);
+      navigate('/login', { replace: true });
+      return;
+    }
+
+    try {
+      // Validate that user data is valid JSON
+      JSON.parse(user);
+      console.log('ProtectedRoute: Authentication valid');
+      setIsAuthenticated(true);
+      setIsLoading(false);
+    } catch (error) {
+      console.log('ProtectedRoute: Invalid user data, clearing and redirecting');
+      // Invalid user data, clear and redirect
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      setIsAuthenticated(false);
+      setIsLoading(false);
+      navigate('/login', { replace: true });
+    }
+  };
+
+  // Re-check auth on mount and on every route change
   useEffect(() => {
-    const checkAuth = () => {
-      const token = localStorage.getItem('token');
-      const user = localStorage.getItem('user');
+    checkAuth();
+    // eslint-disable-next-line
+  }, [navigate, location]);
 
-      console.log('ProtectedRoute: Checking authentication', { token: !!token, user: !!user });
-
-      if (!token || !user) {
-        console.log('ProtectedRoute: No token or user found, redirecting to login');
+  // Listen for storage events (cross-tab logout/login)
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'token' && !localStorage.getItem('token')) {
+        console.log('ProtectedRoute: Detected token removal via storage event, redirecting to login');
         setIsAuthenticated(false);
         setIsLoading(false);
         navigate('/login', { replace: true });
-        return;
       }
-
-      try {
-        // Validate that user data is valid JSON
-        JSON.parse(user);
-        console.log('ProtectedRoute: Authentication valid');
-        setIsAuthenticated(true);
-        setIsLoading(false);
-      } catch (error) {
-        console.log('ProtectedRoute: Invalid user data, clearing and redirecting');
-        // Invalid user data, clear and redirect
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+      if (e.key === 'user' && !localStorage.getItem('user')) {
+        console.log('ProtectedRoute: Detected user removal via storage event, redirecting to login');
         setIsAuthenticated(false);
         setIsLoading(false);
         navigate('/login', { replace: true });
       }
     };
-
-    checkAuth();
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
   }, [navigate]);
 
   // Show loading state while checking authentication

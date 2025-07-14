@@ -34,6 +34,30 @@ class MasterUser(Base):
     # Relationships
     tenant = relationship("Tenant")
 
+class Invite(Base):
+    __tablename__ = "invites"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, nullable=False, index=True)
+    first_name = Column(String, nullable=True)
+    last_name = Column(String, nullable=True)
+    role = Column(String, default="user", nullable=False)  # admin, user, viewer
+    token = Column(String, unique=True, nullable=False, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    is_accepted = Column(Boolean, default=False, nullable=False)
+    accepted_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Tenant relationship
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
+    invited_by_id = Column(Integer, ForeignKey("master_users.id"), nullable=False)
+    
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    tenant = relationship("Tenant")
+    invited_by = relationship("MasterUser")
+
 class Tenant(Base):
     __tablename__ = "tenants"
     

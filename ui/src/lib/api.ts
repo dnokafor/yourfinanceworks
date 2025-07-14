@@ -241,9 +241,13 @@ export async function apiRequest<T>(url: string, options: RequestInit = {}, conf
 
       // Handle authentication errors
       if (!config.isLogin && (response.status === 401 || response.status === 403)) {
-        // Clear invalid token but don't redirect here - let the component handle it
+        // Clear invalid token and user
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        // Show toast and redirect to login
+        toast.error('Session expired or unauthorized. Please log in again.');
+        // Use window.location.replace for reliability
+        window.location.replace('/login');
         throw new Error('Authentication failed. Please log in again.');
       }
 
@@ -367,6 +371,15 @@ export const authApi = {
     apiRequest<any>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData),
+    }),
+  checkOrganizationNameAvailability: (name: string) =>
+    apiRequest<{ available: boolean; name: string }>(`/tenants/check-name-availability?name=${encodeURIComponent(name)}`, {
+      method: 'GET',
+    }),
+  activateUser: (inviteId: number, activationData: { password: string; first_name?: string; last_name?: string }) =>
+    apiRequest<any>(`/auth/invites/${inviteId}/activate`, {
+      method: 'POST',
+      body: JSON.stringify(activationData),
     }),
 };
 

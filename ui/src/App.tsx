@@ -14,6 +14,7 @@ import NewInvoice from "./pages/NewInvoice";
 import EditInvoice from "./pages/EditInvoice";
 import Payments from "./pages/Payments";
 import Settings from "./pages/Settings";
+import Users from "./pages/Users";
 import NotFound from "./pages/NotFound";
 import AIAssistant from "./components/AIAssistant";
 
@@ -37,6 +38,7 @@ const App = () => (
           <Route path="/invoices/edit/:id" element={<ProtectedRoute><EditInvoice /></ProtectedRoute>} />
           <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

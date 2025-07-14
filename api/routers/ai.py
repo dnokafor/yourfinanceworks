@@ -562,7 +562,7 @@ This comprehensive payment information was retrieved using your actual payment d
                 print(f"MCP Integration: Exception during tool execution: {e}")
                 # Fallback to LLM
                 pass
-
+        
         # Pattern 4: Client management queries (moved after payment queries)
         elif any(phrase in lower_message for phrase in ["client", "customer", "list clients", "search client", "find client", "show clients", "get clients"]) and not any(phrase in lower_message for phrase in ["payment", "pay", "paid"]):
             print(f"MCP Integration: Detected client management pattern in message: '{message}'")
@@ -589,7 +589,7 @@ This comprehensive payment information was retrieved using your actual payment d
                     except Exception as e:
                         print(f"MCP Integration: Error calling list_clients: {e}")
                         result = {"success": False, "error": str(e)}
-
+                
                 if result.get("success"):
                     clients = result.get("data", [])
                     if clients:

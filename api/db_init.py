@@ -5,8 +5,7 @@ from datetime import datetime, timedelta, timezone
 import logging
 from sqlalchemy.engine.url import make_url
 
-from models.models import Base, User, Tenant, Client, Invoice, Settings
-from routers.payments import Payment
+from models.models import Base, User, Tenant, Client, Invoice, Settings, Payment, Invite, ClientNote, DiscountRule, SupportedCurrency, CurrencyRate, InvoiceItem, InvoiceHistory, AIConfig, MasterUser
 from models.database import SQLALCHEMY_DATABASE_URL
 from utils.auth import get_password_hash
 

@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Badge } from "@/components/ui/badge";
 import { CurrencyManager } from "@/components/ui/currency-manager";
 import { CurrencySelector } from "@/components/ui/currency-selector";
+import { api } from "@/lib/api";
 
 const Settings = () => {
   const queryClient = useQueryClient();
@@ -93,6 +94,15 @@ const Settings = () => {
     mailgun_api_key: "",
     mailgun_domain: "",
   });
+
+  const [userProfile, setUserProfile] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('user') || '{}');
+    } catch {
+      return {};
+    }
+  });
+  const [profileSaving, setProfileSaving] = useState(false);
 
   // Fetch settings when component mounts
   useEffect(() => {
@@ -706,6 +716,31 @@ const Settings = () => {
     }
   };
 
+  const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setUserProfile((prev: any) => ({ ...prev, [name]: value }));
+  };
+
+  const handleProfileSave = async () => {
+    setProfileSaving(true);
+    try {
+      const updated = await api.put('/auth/me', {
+        first_name: userProfile.first_name,
+        last_name: userProfile.last_name,
+      });
+      // Update localStorage and state
+      localStorage.setItem('user', JSON.stringify(updated));
+      setUserProfile(updated);
+      toast.success('Profile updated successfully!');
+      // Optionally, trigger a storage event for other tabs/components
+      window.dispatchEvent(new StorageEvent('storage', { key: 'user' }));
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to update profile');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <AppLayout>
@@ -737,6 +772,41 @@ const Settings = () => {
           </TabsList>
           
           <TabsContent value="company" className="mt-6">
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>User Profile</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="first_name">First Name</Label>
+                    <Input
+                      id="first_name"
+                      name="first_name"
+                      value={userProfile.first_name || ''}
+                      onChange={handleProfileChange}
+                      autoComplete="given-name"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="last_name">Last Name</Label>
+                    <Input
+                      id="last_name"
+                      name="last_name"
+                      value={userProfile.last_name || ''}
+                      onChange={handleProfileChange}
+                      autoComplete="family-name"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end mt-4">
+                  <Button onClick={handleProfileSave} disabled={profileSaving}>
+                    {profileSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Save Profile
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader>
                 <CardTitle>Company Information</CardTitle>
