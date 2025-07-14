@@ -101,6 +101,18 @@ services:
       - invoice_app_network
     restart: unless-stopped
 
+  # Ollama AI service
+  ollama:
+    image: ollama/ollama
+    container_name: invoice_app_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - invoice_app_network
+    restart: unless-stopped
+
   # Database backup service (optional)
   backup:
     image: postgres:15
@@ -120,30 +132,10 @@ services:
       - backup
     command: ["sh", "-c", "chmod +x /backup-tenants.sh && /backup-tenants.sh"]
 
-  # Database migration service (for one-time migration)
-  migration:
-    build:
-      context: ./api
-      dockerfile: Dockerfile
-    container_name: invoice_app_migration
-    environment:
-      - DATABASE_URL=postgresql://postgres:password@postgres-master:5432/invoice_master
-      - PYTHONPATH=/app
-    depends_on:
-      postgres-master:
-        condition: service_healthy
-    networks:
-      - invoice_app_network
-    restart: "no"
-    profiles:
-      - migration
-    volumes:
-      - ./api:/app
-    command: ["python", "scripts/migrate_to_db_per_tenant.py", "--dry-run"]
-
 volumes:
   postgres_master_data:
   redis_data:
+  ollama_data:
 
 networks:
   invoice_app_network:
