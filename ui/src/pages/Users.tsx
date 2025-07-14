@@ -281,7 +281,7 @@ export default function UsersPage() {
                   <tr key={invite.id} className="border-t">
                     <td className="p-2">{invite.email}</td>
                     <td className="p-2">{[invite.first_name, invite.last_name].filter(Boolean).join(" ") || "-"}</td>
-                    <td className="p-2">{invite.role}</td>
+                    <td className="p-2">{invite.role.charAt(0).toUpperCase() + invite.role.slice(1)}</td>
                     <td className={`p-2 font-semibold ${getStatusColor(status)}`}>{status}</td>
                     <td className="p-2">{invite.invited_by || "-"}</td>
                     <td className="p-2">{new Date(invite.expires_at).toLocaleString()}</td>
@@ -328,7 +328,7 @@ export default function UsersPage() {
                 <tr key={user.id} className="border-t">
                   <td className="p-2">{user.email}</td>
                   <td className="p-2">{[user.first_name, user.last_name].filter(Boolean).join(" ") || "-"}</td>
-                  <td className="p-2">{user.role}</td>
+                  <td className="p-2">{user.role.charAt(0).toUpperCase() + user.role.slice(1)}</td>
                   <td className="p-2">{user.is_active ? "Active" : "Inactive"}</td>
                   <td className="p-2">{new Date(user.created_at).toLocaleString()}</td>
                   <td className="p-2">

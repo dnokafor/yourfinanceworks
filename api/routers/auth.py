@@ -423,19 +423,22 @@ def accept_invite(
     
     # Create user in tenant database
     set_tenant_context(invite.tenant_id)
-    tenant_db = tenant_db_manager.get_tenant_db()
+    tenant_db = tenant_db_manager.get_tenant_session(invite.tenant_id)()
     
-    tenant_user = TenantUser(
-        email=invite.email,
-        hashed_password=hashed_password,
-        first_name=invite_data.first_name or invite.first_name,
-        last_name=invite_data.last_name or invite.last_name,
-        role=invite.role,
-        is_verified=True
-    )
-    
-    tenant_db.add(tenant_user)
-    tenant_db.commit()
+    try:
+        tenant_user = TenantUser(
+            email=invite.email,
+            hashed_password=hashed_password,
+            first_name=invite_data.first_name or invite.first_name,
+            last_name=invite_data.last_name or invite.last_name,
+            role=invite.role,
+            is_verified=True
+        )
+        
+        tenant_db.add(tenant_user)
+        tenant_db.commit()
+    finally:
+        tenant_db.close()
     
     # Mark invite as accepted
     invite.is_accepted = True
@@ -494,16 +497,15 @@ def update_user_role(
     
     # Update role in tenant database
     set_tenant_context(current_user.tenant_id)
-    tenant_db = tenant_db_manager.get_tenant_db()
-    
-    tenant_user = tenant_db.query(TenantUser).filter(
-        TenantUser.id == user_id,
-        TenantUser.tenant_id == current_user.tenant_id
-    ).first()
-    
-    if tenant_user:
-        tenant_user.role = role_update.role
-        tenant_db.commit()
+    tenant_db = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
+    try:
+        tenant_user = tenant_db.query(TenantUser).filter(TenantUser.id == user_id).first()
+        
+        if tenant_user:
+            tenant_user.role = role_update.role
+            tenant_db.commit()
+    finally:
+        tenant_db.close()
     
     return user
 
