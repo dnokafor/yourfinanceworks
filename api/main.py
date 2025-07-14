@@ -19,7 +19,8 @@ from routers import (
     crm,
     email,
     ai, # Add the new AI router
-    ai_config # Add the new AI config router
+    ai_config, # Add the new AI config router
+    super_admin # Add the new super admin router
 )
 from models.database import engine
 from models import models
@@ -82,6 +83,7 @@ app.add_middleware(TenantContextMiddleware)
 # Include routers with v1 API versioning
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(tenant.router, prefix="/api/v1")
+app.include_router(super_admin.router, prefix="/api/v1")  # Add super admin router
 app.include_router(clients.router, prefix="/api/v1")
 app.include_router(invoices.router, prefix="/api/v1")
 app.include_router(payments.router, prefix="/api/v1")

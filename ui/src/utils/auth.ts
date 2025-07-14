@@ -10,6 +10,7 @@ export interface User {
   first_name?: string;
   last_name?: string;
   tenant_id?: number;
+  is_superuser?: boolean;
 }
 
 export type UserRole = 'admin' | 'user' | 'viewer';

@@ -23,7 +23,8 @@ import {
   LogOut,
   Settings, 
   Users,
-  UserCheck
+  UserCheck,
+  ShieldCheck
 } from "lucide-react";
 import { API_BASE_URL, settingsApi } from "@/lib/api";
 import { isAdmin, getCurrentUserRole, getCurrentUser } from "@/utils/auth";
@@ -41,11 +42,13 @@ export function AppSidebar() {
   const user = getCurrentUser();
   const userRole = user?.role || 'user';
   const isAdminUser = userRole === 'admin';
+  const isSuperUser = user?.is_superuser || false;
 
   console.log('Sidebar: User check:', { 
     user, 
     userRole, 
     isAdminUser,
+    isSuperUser,
     shouldFetchSettings: isAdminUser 
   });
 
@@ -180,6 +183,12 @@ export function AppSidebar() {
       path: '/settings', 
       label: 'Settings', 
       icon: <Settings className="w-5 h-5" /> 
+    }] : []),
+    // Only show Super Admin for super users
+    ...(isSuperUser ? [{ 
+      path: '/super-admin', 
+      label: 'Super Admin', 
+      icon: <ShieldCheck className="w-5 h-5" /> 
     }] : [])
   ];
 

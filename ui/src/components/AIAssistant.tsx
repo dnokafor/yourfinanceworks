@@ -94,36 +94,40 @@ const EnhancedAIResponse = ({ text }: { text: string }) => {
 };
 
 const AIAssistant = React.forwardRef<HTMLDivElement>((props, ref) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>(
-    [{ id: 1, sender: 'ai', text: <EnhancedAIResponse text="Hello! I'm your AI Assistant. Look for the sleek gradient bot icon in the bottom right corner to chat with me anytime! 🤖✨" /> }]
-  );
-  const [input, setInput] = useState('');
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Auto-scroll to bottom when messages change
-  const scrollToBottom = () => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  // Check if user is authenticated (reactive)
+  // Check authentication and user role first
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  
+  const [user, setUser] = useState<any>(null);
+  const [isAdminUser, setIsAdminUser] = useState(false);
+
+  // Check authentication and user role
   useEffect(() => {
     const checkAuth = () => {
       const token = localStorage.getItem('token');
-      const user = localStorage.getItem('user');
-      const authStatus = !!(token && user);
-      console.log('AI Assistant: Authentication check', { token: !!token, user: !!user, authStatus });
+      const userStr = localStorage.getItem('user');
+      const authStatus = !!(token && userStr);
+      
+      let currentUser = null;
+      let adminStatus = false;
+      
+      if (authStatus && userStr) {
+        try {
+          currentUser = JSON.parse(userStr);
+          adminStatus = currentUser?.role === 'admin';
+        } catch (e) {
+          console.error('Error parsing user data:', e);
+        }
+      }
+      
       setIsAuthenticated(authStatus);
+      setUser(currentUser);
+      setIsAdminUser(adminStatus);
+      
+      console.log('AI Assistant: Authentication check', { 
+        token: !!token, 
+        user: !!currentUser, 
+        authStatus, 
+        adminStatus 
+      });
     };
     
     checkAuth();
@@ -145,45 +149,37 @@ const AIAssistant = React.forwardRef<HTMLDivElement>((props, ref) => {
     };
   }, []);
 
-  // Also check auth on every render for immediate detection
-  const currentAuth = (() => {
-    const token = localStorage.getItem('token');
-    const user = localStorage.getItem('user');
-    return !!(token && user);
-  })();
+  // Return the appropriate component based on authentication state
+  if (!isAuthenticated || !isAdminUser) {
+    return null;
+  }
+
+  return <AuthenticatedAIAssistant user={user} ref={ref} />;
+});
+
+// Separate component for authenticated admin users
+const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>((props, ref) => {
+  const { user } = props;
   
-  // Update authentication state if it changed
-  useEffect(() => {
-    if (currentAuth !== isAuthenticated) {
-      console.log('AI Assistant: Authentication state changed', { from: isAuthenticated, to: currentAuth });
-      setIsAuthenticated(currentAuth);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [messages, setMessages] = useState<Message[]>(
+    [{ id: 1, sender: 'ai', text: <EnhancedAIResponse text="Hello! I'm your AI Assistant. Look for the sleek gradient bot icon in the bottom right corner to chat with me anytime! 🤖✨" /> }]
+  );
+  const [input, setInput] = useState('');
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when messages change
+  const scrollToBottom = () => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [currentAuth, isAuthenticated]);
+  };
 
-  // Get current user data from localStorage
-  const user = getCurrentUser();
-  const userRole = user?.role || 'user';
-  const isAdminUser = userRole === 'admin';
-
-  console.log('AI Assistant: User check:', { 
-    isAuthenticated, 
-    user, 
-    userRole, 
-    isAdminUser,
-    shouldFetchSettings: isAuthenticated && isAdminUser 
-  });
-
-  // Don't render anything if not authenticated
-  if (!isAuthenticated) {
-    console.log('AI Assistant: Not rendering - not authenticated');
-    return null;
-  }
-
-  // Don't render anything if user is not admin
-  if (!isAdminUser) {
-    console.log('AI Assistant: Not rendering - user is not admin');
-    return null;
-  }
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   // Fetch user settings to check the enable_ai_assistant flag (only for admin users)
   const { data: settings, isLoading: settingsLoading, error: settingsError, refetch: refetchSettings } = useQuery({
@@ -202,7 +198,6 @@ const AIAssistant = React.forwardRef<HTMLDivElement>((props, ref) => {
     refetchOnWindowFocus: true, // Refetch when window gains focus
     refetchOnMount: true, // Always refetch on mount
     staleTime: 0, // Consider data immediately stale to ensure fresh data
-    enabled: isAuthenticated && isAdminUser, // Only run query when authenticated and user is admin
     retry: (failureCount, error) => {
       // Don't retry on authentication errors
       if (error.message.includes('403') || error.message.includes('Authentication failed')) {
@@ -212,14 +207,6 @@ const AIAssistant = React.forwardRef<HTMLDivElement>((props, ref) => {
       return failureCount < 3;
     },
   });
-
-  // Force refetch settings when authentication state changes to true
-  useEffect(() => {
-    if (isAuthenticated) {
-      console.log('AI Assistant: Authentication detected, forcing settings refetch');
-      refetchSettings();
-    }
-  }, [isAuthenticated, refetchSettings]);
 
   // Add effect to log settings changes for debugging
   useEffect(() => {
@@ -235,7 +222,7 @@ const AIAssistant = React.forwardRef<HTMLDivElement>((props, ref) => {
   const { data: aiConfigs, isLoading: aiConfigsLoading } = useQuery({
     queryKey: ['ai-configs'],
     queryFn: () => api.get('/ai-config/'),
-    enabled: isAuthenticated && !!(settings && (settings as any).enable_ai_assistant), // Only fetch if authenticated and AI assistant is enabled
+    enabled: !!(settings && (settings as any).enable_ai_assistant), // Only fetch if AI assistant is enabled
     retry: (failureCount, error) => {
       // Don't retry on authentication errors
       if (error.message.includes('403') || error.message.includes('Authentication failed')) {
@@ -248,52 +235,58 @@ const AIAssistant = React.forwardRef<HTMLDivElement>((props, ref) => {
 
   // Handle authentication errors
   useEffect(() => {
-    if (settingsError && (settingsError.message.includes('403') || settingsError.message.includes('Authentication failed'))) {
-      console.log('AI Assistant: Authentication error detected, clearing auth state');
-      // Clear authentication state to trigger re-authentication
-      setIsAuthenticated(false);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+    if (settingsError) {
+      console.error('AI Assistant: Settings error:', settingsError);
+      
+      // Check if it's an authentication error
+      if (settingsError.message.includes('403') || settingsError.message.includes('Authentication failed')) {
+        console.log('AI Assistant: Authentication error detected, user might need to re-login');
+        // Optionally clear localStorage and redirect to login
+        // localStorage.removeItem('token');
+        // localStorage.removeItem('user');
+        // window.location.href = '/login';
+      }
     }
   }, [settingsError]);
 
-  console.log('AI Assistant: Component state', {
-    isAuthenticated,
-    settings,
-    settingsLoading,
-    settingsError,
-    aiConfigs,
-    aiConfigsLoading,
-    componentWillRender: isAuthenticated && !settingsLoading
-  });
+  // Don't render if AI assistant is not enabled
+  if (!settings || !(settings as any).enable_ai_assistant) {
+    return null;
+  }
 
-  const isAIAssistantEnabled = isAdminUser && settings && (settings as any).enable_ai_assistant;
-  const defaultAIConfig = aiConfigs && Array.isArray(aiConfigs) ? 
-    (aiConfigs as any[]).find((config: any) => config.is_default && config.is_active) : 
-    undefined;
+  // Don't render if still loading critical data
+  if (settingsLoading) {
+    return null;
+  }
 
   // Enhanced debug logging
   console.log('AI Assistant Debug:', { 
     settings, 
     settingsLoading, 
     settingsError, 
-    isAIAssistantEnabled,
+    isAIAssistantEnabled: !!(settings && (settings as any).enable_ai_assistant),
     aiConfigs,
     aiConfigsLoading,
-    defaultAIConfig,
-    shouldRender: !settingsLoading && isAIAssistantEnabled 
+    defaultAIConfig: aiConfigs && Array.isArray(aiConfigs) ? 
+      (aiConfigs as any[]).find((config: any) => config.is_default && config.is_active) : 
+      undefined,
+    shouldRender: !settingsLoading && !!(settings && (settings as any).enable_ai_assistant) 
   });
 
   // CRITICAL: Add detailed logging for disabled state
   console.log('AI Assistant Render Decision:', {
-    isAuthenticated,
     settingsLoading,
     settingsError: !!settingsError,
     settings: settings,
-    isAIAssistantEnabled,
+    isAIAssistantEnabled: !!(settings && (settings as any).enable_ai_assistant),
     rawSettingsValue: settings ? (settings as any).enable_ai_assistant : 'no settings',
-    willRender: isAuthenticated && !settingsLoading && isAIAssistantEnabled
+    willRender: !settingsLoading && !!(settings && (settings as any).enable_ai_assistant)
   });
+
+  const isAIAssistantEnabled = !!(settings && (settings as any).enable_ai_assistant);
+  const defaultAIConfig = aiConfigs && Array.isArray(aiConfigs) ? 
+    (aiConfigs as any[]).find((config: any) => config.is_default && config.is_active) : 
+    undefined;
 
   // Don't render if loading or AI assistant is disabled
   if (settingsLoading) {

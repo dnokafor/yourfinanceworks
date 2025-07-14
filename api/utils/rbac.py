@@ -56,6 +56,24 @@ def require_admin(user: Union[User, MasterUser], action: str = "perform this act
     require_roles(user, ["admin"], action)
 
 
+def require_superuser(user: Union[User, MasterUser], action: str = "perform this action") -> None:
+    """
+    Check if a user is a superuser (for cross-tenant operations).
+    
+    Args:
+        user: The current user (User or MasterUser)
+        action: Description of the action being performed (for error message)
+    
+    Raises:
+        HTTPException: 403 Forbidden if user is not a superuser
+    """
+    if not user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Only superusers can {action}. Current user is not a superuser."
+        )
+
+
 def can_user_perform_action(user: Union[User, MasterUser], required_roles: List[str]) -> bool:
     """
     Check if a user can perform an action without raising an exception.
@@ -77,4 +95,8 @@ def is_admin(user: Union[User, MasterUser]) -> bool:
 
 def is_viewer(user: Union[User, MasterUser]) -> bool:
     """Check if a user is a viewer."""
-    return user.role == "viewer" 
+    return user.role == "viewer"
+
+def is_superuser(user: Union[User, MasterUser]) -> bool:
+    """Check if a user is a superuser."""
+    return user.is_superuser
