@@ -5,7 +5,8 @@ A modern, multi-tenant invoice management system built with FastAPI and React, w
 ## 🚀 Features
 
 ### Core Functionality
-- **Multi-tenant Architecture** - Isolated data per tenant/organization
+- **Multi-tenant Architecture** - Isolated data per tenant/organization with database-per-tenant design
+- **Super User System** - Complete super user management for cross-tenant operations
 - **Client Management** - Add, edit, and manage customer information with CRM capabilities
 - **Smart Invoice Creation** - Generate professional invoices with automatic numbering and intelligent status management
 - **Advanced Invoice Editing** - Individual item updates with immutable paid invoice protection
@@ -66,6 +67,18 @@ A modern, multi-tenant invoice management system built with FastAPI and React, w
 - **Google SSO** - Optional Google OAuth integration
 - **Tenant Isolation** - Complete data separation between organizations
 
+### 🏢 Super User System
+- **Cross-Tenant Management** - Super users can manage all tenants from a single interface
+- **Tenant CRUD Operations** - Create, read, update, and delete tenant organizations
+- **User Management Across Tenants** - View and manage users from all tenant databases
+- **Database Operations** - Health checks, backup, restore, and database recreation
+- **Tenant Statistics** - Real-time analytics for each tenant (users, clients, invoices, payments)
+- **Master Database Architecture** - Central database for tenant metadata and super user information
+- **Database Per Tenant Model** - Each tenant gets its own isolated database for maximum security
+- **Super Admin Dashboard** - Comprehensive web interface with tabs for different management functions
+- **Automatic Database Recovery** - Middleware automatically creates missing tenant databases
+- **Database Troubleshooting Tools** - Scripts and tools for diagnosing and fixing database issues
+
 ### Technical Features
 - **RESTful API** - Clean, documented API endpoints with consistent data structures
 - **AI Integration (MCP)** - Enhanced Model Context Protocol server with dynamic authentication and comprehensive tool integration
@@ -76,6 +89,35 @@ A modern, multi-tenant invoice management system built with FastAPI and React, w
 - **Database Migrations** - Automated schema management
 
 ## 🆕 Recent Major Updates & Improvements
+
+### 🏢 Super User System & Multi-Tenant Architecture
+- **✅ Complete Super User Implementation** - Full super user system for managing multiple tenants
+- **✅ Database Per Tenant Architecture** - Each tenant gets its own isolated database (e.g., `tenant_1`, `tenant_2`)
+- **✅ Master Database for Tenant Management** - Central database for tenant metadata and super user information
+- **✅ Super Admin Dashboard** - Comprehensive web interface for super users to manage all tenants
+- **✅ Cross-Tenant User Management** - CRUD operations for users across all tenants
+- **✅ Tenant Statistics & Analytics** - Real-time statistics for each tenant (users, clients, invoices, payments)
+- **✅ Database Operations** - Health checks, backup, restore, and database recreation tools
+- **✅ Enhanced RBAC** - Role-based access control with super user permissions
+- **✅ Super User Authentication** - Authentication that doesn't require tenant context
+- **✅ Tenant CRUD Operations** - Create, read, update, and delete tenant organizations
+
+### 🛠️ Database Management & Troubleshooting
+- **✅ Automatic Database Recovery** - Middleware automatically detects and creates missing tenant databases
+- **✅ Database Fix Scripts** - Comprehensive scripts for checking and fixing database issues
+- **✅ Docker Integration** - Shell scripts for running database fixes in containerized environments
+- **✅ Database Health Monitoring** - Real-time health checks for all tenant databases
+- **✅ Missing Database Detection** - Automatic detection of missing tenant databases with recovery options
+- **✅ Troubleshooting Documentation** - Complete guide for database-related issues
+- **✅ Database Recreation Tools** - Safe recreation of tenant databases with data preservation options
+
+### 🔧 Technical Improvements & Bug Fixes
+- **✅ React Hooks Violations Fixed** - Resolved "hooks order changed" errors in SuperAdmin and AIAssistant components
+- **✅ Proxy Configuration Fix** - Fixed Docker service naming issue between UI and API services
+- **✅ Component Architecture Enhancement** - Improved component structure to prevent conditional hook calls
+- **✅ Enhanced Error Handling** - Better error messages and recovery mechanisms
+- **✅ Service Discovery** - Fixed service communication issues in Docker environment
+- **✅ Authentication Flow Improvements** - Better handling of authentication states and redirects
 
 ### 🤖 Enhanced AI Assistant with MCP Integration
 - **✅ Dynamic Authentication** - AI assistant uses current user's JWT token instead of hardcoded credentials
@@ -164,10 +206,12 @@ A modern, multi-tenant invoice management system built with FastAPI and React, w
 
 ### Backend (FastAPI)
 - **Framework**: FastAPI with Python 3.11
-- **Database**: SQLite with SQLAlchemy ORM
-- **Authentication**: JWT with fastapi-users
+- **Database**: Multi-tenant PostgreSQL with database-per-tenant architecture
+- **Master Database**: Central PostgreSQL database for tenant metadata and super users
+- **Authentication**: JWT with enhanced role-based access control
+- **Multi-tenancy**: Automatic tenant database management with middleware
 - **Documentation**: Auto-generated OpenAPI/Swagger docs
-- **Deployment**: Docker containerized
+- **Deployment**: Docker containerized with PostgreSQL, Redis, and API services
 
 ### Frontend (React Web)
 - **Framework**: React 18 with TypeScript
@@ -187,9 +231,13 @@ A modern, multi-tenant invoice management system built with FastAPI and React, w
 - **Platforms**: iOS, Android, Web
 
 ### Infrastructure
-- **Orchestration**: Docker Compose
-- **Database**: Persistent SQLite with volume mounting
-- **Networking**: Internal Docker network for service communication
+- **Orchestration**: Docker Compose with multi-service setup
+- **Master Database**: PostgreSQL for tenant metadata and super users
+- **Tenant Databases**: Isolated PostgreSQL databases per tenant
+- **Caching**: Redis for session management and caching
+- **Networking**: Internal Docker network for secure service communication
+- **Health Checks**: Comprehensive health monitoring for all services
+- **Backup System**: Automated backup and restore capabilities
 
 ## 📱 Mobile App Setup
 
@@ -263,6 +311,78 @@ The AI assistant provides intelligent business insights using your actual data. 
 4. **Test Configuration** - Verify your AI setup works correctly
 
 The AI assistant automatically detects the type of query and uses the appropriate tool (MCP for business data, LLM for general questions).
+
+## 🏢 Super User System Usage
+
+The super user system provides comprehensive management capabilities for multi-tenant environments.
+
+### Creating a Super User
+
+Use the provided script to create a super user:
+
+```bash
+# Run in the API container
+docker-compose exec api python scripts/create_super_user.py
+
+# Or manually run the script
+cd api
+python scripts/create_super_user.py
+```
+
+### Super Admin Dashboard
+
+Access the super admin dashboard at `/super-admin` (requires super user login):
+
+#### 📊 Overview Tab
+- **System Statistics** - Total tenants, users, invoices, and payments across all tenants
+- **Tenant Health** - Real-time health status of all tenant databases
+- **Quick Actions** - Common administrative tasks
+
+#### 🏢 Tenants Tab
+- **Tenant Management** - Create, edit, and delete tenant organizations
+- **Tenant Statistics** - Individual tenant metrics and analytics
+- **Database Operations** - Health checks and database management
+
+#### 👥 Users Tab
+- **Cross-Tenant User View** - See users from all tenant databases
+- **User Management** - Create users for specific tenants
+- **Role Management** - Assign roles and permissions
+
+#### 🗄️ Database Tab
+- **Database Health Monitoring** - Real-time status of all databases
+- **Database Operations** - Create, backup, and restore tenant databases
+- **Troubleshooting Tools** - Fix missing or corrupted databases
+
+### Database Management Tools
+
+#### Fix Missing Tenant Databases
+
+```bash
+# Check for missing databases
+docker-compose exec api python scripts/fix_missing_tenant_databases.py check
+
+# List all databases
+docker-compose exec api python scripts/fix_missing_tenant_databases.py list
+
+# Recreate missing databases
+docker-compose exec api python scripts/fix_missing_tenant_databases.py recreate
+
+# Or use the shell script
+./api/scripts/run_fix_missing_databases.sh
+```
+
+#### Database Health Monitoring
+
+The system includes automatic database health monitoring:
+- **Middleware Detection** - Automatically detects missing tenant databases
+- **Auto-Recovery** - Creates missing databases on-the-fly
+- **Health Endpoints** - API endpoints for database status checks
+- **Logging** - Comprehensive logging of database operations
+
+### Troubleshooting
+
+For database-related issues, see the comprehensive troubleshooting guide:
+- [Database Troubleshooting Guide](api/docs/TROUBLESHOOTING_MISSING_TENANT_DATABASES.md)
 
 ## 📧 Email Invoice Delivery
 
@@ -367,7 +487,7 @@ POST /api/v1/email/send-invoice
 ### Docker Deployment
 
 ```bash
-# Start all services
+# Start all services (PostgreSQL, Redis, API, UI)
 docker-compose up -d
 
 # View logs
@@ -375,6 +495,15 @@ docker-compose logs -f
 
 # Stop services
 docker-compose down
+
+# Create a super user (after services are running)
+docker-compose exec api python scripts/create_super_user.py
+
+# Access the application
+# - Web UI: http://localhost:8080
+# - API: http://localhost:8000
+# - API Docs: http://localhost:8000/docs
+# - Super Admin: http://localhost:8080/super-admin
 ```
 
 ## 📚 Documentation
@@ -383,6 +512,8 @@ docker-compose down
 - [Mobile App Guide](mobile/README.md) - Mobile app setup and usage
 - [Backend API](api/README.md) - Backend development guide
 - [Frontend Guide](ui/README.md) - Frontend development guide
+- [Database Troubleshooting](api/docs/TROUBLESHOOTING_MISSING_TENANT_DATABASES.md) - Database troubleshooting guide
+- [Super User System](api/docs/SUPER_USER_SYSTEM.md) - Super user system documentation
 
 ## 🤝 Contributing
 
