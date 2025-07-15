@@ -599,12 +599,28 @@ const Settings = () => {
       const result = await aiConfigApi.testAIConfig(id);
       if (result.success) {
         toast.success("AI configuration test successful!");
+        // Refresh AI configs to show updated tested status
+        const configs = await aiConfigApi.getAIConfigs();
+        setAiConfigs(configs);
       } else {
         toast.error(`AI configuration test failed: ${result.message}`);
       }
     } catch (error) {
       console.error("Failed to test AI config:", error);
       toast.error("Failed to test AI configuration");
+    }
+  };
+
+  const handleMarkAsTested = async (id: number) => {
+    try {
+      await aiConfigApi.markAsTested(id);
+      toast.success("AI configuration marked as tested!");
+      // Refresh AI configs to show updated tested status
+      const configs = await aiConfigApi.getAIConfigs();
+      setAiConfigs(configs);
+    } catch (error) {
+      console.error("Failed to mark AI config as tested:", error);
+      toast.error("Failed to mark AI configuration as tested");
     }
   };
 
@@ -617,6 +633,7 @@ const Settings = () => {
       model_name: config.model_name,
       is_active: config.is_active,
       is_default: config.is_default,
+      tested: config.tested,
     });
     setShowAIConfigDialog(true);
   };
@@ -630,6 +647,7 @@ const Settings = () => {
       model_name: "gpt-4",
       is_active: true,
       is_default: false,
+      tested: false,
     });
     setShowAIConfigDialog(true);
   };
@@ -1152,6 +1170,11 @@ const Settings = () => {
                               {config.is_default && (
                                 <Badge variant="outline">Default</Badge>
                               )}
+                              {config.tested && (
+                                <Badge variant="secondary" className="bg-green-100 text-green-800">
+                                  Tested
+                                </Badge>
+                              )}
                             </div>
                             <p className="text-sm text-muted-foreground">
                               Model: {config.model_name}
@@ -1166,6 +1189,15 @@ const Settings = () => {
                             >
                               Test
                             </Button>
+                            {!config.tested && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleMarkAsTested(config.id)}
+                              >
+                                Mark Tested
+                              </Button>
+                            )}
                             <Button
                               variant="outline"
                               size="sm"
@@ -1750,6 +1782,15 @@ const Settings = () => {
                     onCheckedChange={(checked) => handleAIConfigToggleChange('is_default', checked)}
                   />
                   <Label htmlFor="is_default">Default Provider</Label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="tested"
+                    checked={newAIConfig.tested}
+                    onCheckedChange={(checked) => handleAIConfigToggleChange('tested', checked)}
+                  />
+                  <Label htmlFor="tested">Mark as Tested</Label>
                 </div>
               </div>
             </div>

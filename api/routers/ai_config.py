@@ -178,6 +178,10 @@ def test_ai_config(
         # Make the test call
         response = completion(**kwargs)
         
+        # Mark as tested if successful
+        db_config.tested = True
+        db.commit()
+        
         return {
             "success": True,
             "message": "Configuration test successful",
@@ -188,4 +192,25 @@ def test_ai_config(
         return {
             "success": False,
             "message": f"Configuration test failed: {str(e)}"
-        } 
+        }
+
+@router.post("/mark-tested/{config_id}")
+def mark_config_as_tested(
+    config_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Manually mark an AI configuration as tested"""
+    # Only tenant admins can mark configs as tested
+    require_admin(current_user, "mark AI configurations as tested")
+    
+    # No tenant_id filtering needed since we're in the tenant's database
+    db_config = db.query(AIConfigModel).filter(AIConfigModel.id == config_id).first()
+    
+    if not db_config:
+        raise HTTPException(status_code=404, detail="AI configuration not found")
+    
+    db_config.tested = True
+    db.commit()
+    
+    return {"message": "AI configuration marked as tested successfully"} 

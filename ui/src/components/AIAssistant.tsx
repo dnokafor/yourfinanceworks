@@ -539,7 +539,7 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
         // Check if we have a default AI configuration
         if (!defaultAIConfig) {
           console.log('AI Assistant: No default AI config found:', { aiConfigs, defaultAIConfig });
-          const errorMessage = "No AI configuration found. Please configure an AI provider in Settings > AI Configuration.";
+          const errorMessage = "No AI configuration found. Please configure an AI provider in Settings > AI Provider Configurations.";
           setMessages((prev) => [...prev.slice(0, -1), { id: prev.length, sender: 'ai', text: errorMessage }]);
           return;
         }

@@ -216,6 +216,7 @@ class AIConfig(Base):
     model_name = Column(String, nullable=False)  # e.g., "gpt-4", "llama2"
     is_active = Column(Boolean, default=True)
     is_default = Column(Boolean, default=False)  # Only one default per tenant
+    tested = Column(Boolean, default=False)  # Track if configuration has been successfully tested
     created_at = Column(DateTime, default=datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
 

@@ -111,6 +111,7 @@ export interface AIConfig {
   model_name: string;
   is_active: boolean;
   is_default: boolean;
+  tested: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -122,6 +123,7 @@ export interface AIConfigCreate {
   model_name: string;
   is_active?: boolean;
   is_default?: boolean;
+  tested?: boolean;
 }
 
 export interface AIConfigUpdate {
@@ -131,6 +133,7 @@ export interface AIConfigUpdate {
   model_name?: string;
   is_active?: boolean;
   is_default?: boolean;
+  tested?: boolean;
 }
 
 // Discount rule types
@@ -820,6 +823,10 @@ export const aiConfigApi = {
     }),
   testAIConfig: (id: number) => 
     apiRequest<{success: boolean, message: string, response?: string}>(`/ai-config/test/${id}`),
+  markAsTested: (id: number) =>
+    apiRequest<{message: string}>(`/ai-config/mark-tested/${id}`, {
+      method: 'POST',
+    }),
 };
 
 // AI Assistant API methods

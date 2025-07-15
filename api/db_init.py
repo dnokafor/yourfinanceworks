@@ -24,6 +24,21 @@ if make_url(SQLALCHEMY_DATABASE_URL).get_backend_name() == "sqlite":
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
 
+def run_migrations():
+    """Run all necessary migrations"""
+    try:
+        logger.info("Running database migrations...")
+        
+        # Import and run the tested field migration for all tenants
+        from scripts.migrate_ai_config_tested_all_tenants import add_tested_field_to_all_tenant_databases
+        add_tested_field_to_all_tenant_databases()
+        
+        logger.info("Database migrations completed successfully")
+    except Exception as e:
+        logger.error(f"Error running migrations: {str(e)}")
+        # Don't raise the exception - migrations are optional for initial setup
+        logger.warning("Continuing with database initialization despite migration errors")
+
 def init_db():
     # Create database engine
     if make_url(SQLALCHEMY_DATABASE_URL).get_backend_name() == "sqlite":
@@ -128,6 +143,7 @@ def init_db():
                 reference_number="REF-001",
                 notes="Sample payment",
                 invoice_id=sample_invoice.id,
+                tenant_id=sample_invoice.tenant_id,
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc)
             )
@@ -167,6 +183,10 @@ def init_db():
         raise e
     finally:
         db.close()
+    
+    # Run comprehensive migrations after initial setup
+    import subprocess
+    subprocess.run(["python", "scripts/run_all_migrations.py"], check=False)
     
     logger.info("Database initialized successfully with sample data.")
 

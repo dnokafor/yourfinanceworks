@@ -16,7 +16,6 @@ services:
     volumes:
       - postgres_master_data:/var/lib/postgresql/data
       - ./api/scripts/init-master-postgres.sql:/docker-entrypoint-initdb.d/init-master-postgres.sql
-      - ./api/scripts/create-multiple-databases.sh:/docker-entrypoint-initdb.d/create-multiple-databases.sh
     networks:
       - invoice_app_network
     restart: unless-stopped
@@ -25,18 +24,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  # Redis for caching and session management (optional)
-  redis:
-    image: redis:7-alpine
-    container_name: invoice_app_redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - invoice_app_network
-    restart: unless-stopped
 
   # API service with multi-tenant support
   api:
@@ -47,13 +34,10 @@ services:
     environment:
       # Master database for tenant management
       - DATABASE_URL=postgresql://postgres:password@postgres-master:5432/invoice_master
-      - REDIS_URL=redis://redis:6379
-      
       # JWT settings
       - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=30
-      
       # Multi-tenant configuration
       - MULTITENANT_MODE=database_per_tenant
       - TENANT_DATABASE_PREFIX=tenant_
@@ -61,7 +45,6 @@ services:
       - MASTER_DATABASE_PORT=5432
       - MASTER_DATABASE_USER=postgres
       - MASTER_DATABASE_PASSWORD=password
-      
       # Other settings
       - DEBUG=${DEBUG:-False}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -70,8 +53,6 @@ services:
     depends_on:
       postgres-master:
         condition: service_healthy
-      redis:
-        condition: service_started
     networks:
       - invoice_app_network
     restart: unless-stopped
@@ -79,11 +60,18 @@ services:
       - ./api:/app
       - /app/__pycache__
       - /app/venv
+      - ./wait-for-it.sh:/wait-for-it.sh
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+    command: >
+      sh -c "/wait-for-it.sh postgres-master:5432 -- \
+        echo 'Initializing database and running migrations...' && \
+        python db_init.py && \
+        echo 'Starting API server...' && \
+        uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
 
   # UI service
   ui:
@@ -96,10 +84,16 @@ services:
     environment:
       - VITE_API_URL=http://localhost:8000/api/v1
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     networks:
       - invoice_app_network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # Ollama AI service
   ollama:
@@ -134,7 +128,6 @@ services:
 
 volumes:
   postgres_master_data:
-  redis_data:
   ollama_data:
 
 networks:

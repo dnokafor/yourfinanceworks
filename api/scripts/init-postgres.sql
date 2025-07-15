@@ -15,4 +15,24 @@ BEGIN
     NEW.updated_at = CURRENT_TIMESTAMP;
     RETURN NEW;
 END;
-$$ language 'plpgsql'; 
+$$ language 'plpgsql';
+
+-- Create AI configs table if it doesn't exist (for new tenant databases)
+CREATE TABLE IF NOT EXISTS ai_configs (
+    id SERIAL PRIMARY KEY,
+    provider_name VARCHAR NOT NULL,
+    provider_url VARCHAR,
+    api_key VARCHAR,
+    model_name VARCHAR NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    is_default BOOLEAN DEFAULT FALSE,
+    tested BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indexes for ai_configs table
+CREATE INDEX IF NOT EXISTS idx_ai_configs_provider_name ON ai_configs (provider_name);
+CREATE INDEX IF NOT EXISTS idx_ai_configs_is_active ON ai_configs (is_active);
+CREATE INDEX IF NOT EXISTS idx_ai_configs_is_default ON ai_configs (is_default);
+CREATE INDEX IF NOT EXISTS idx_ai_configs_tested ON ai_configs (tested); 

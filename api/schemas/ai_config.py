@@ -9,6 +9,7 @@ class AIConfigBase(BaseModel):
     model_name: str
     is_active: bool = True
     is_default: bool = False
+    tested: bool = False
 
 class AIConfigCreate(AIConfigBase):
     pass
@@ -20,6 +21,7 @@ class AIConfigUpdate(BaseModel):
     model_name: Optional[str] = None
     is_active: Optional[bool] = None
     is_default: Optional[bool] = None
+    tested: Optional[bool] = None
 
 class AIConfig(AIConfigBase):
     id: int
