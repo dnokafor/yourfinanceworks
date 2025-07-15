@@ -16,8 +16,8 @@ import { CurrencySelector } from "@/components/ui/currency-selector";
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Invalid email address").optional(),
-  phone: z.string().min(1, "Phone number is required"),
-  address: z.string().min(1, "Address is required"),
+  phone: z.string().optional(),
+  address: z.string().optional(),
   preferred_currency: z.string().optional(),
 });
 

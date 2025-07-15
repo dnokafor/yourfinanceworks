@@ -74,11 +74,9 @@ async def catch_exceptions_middleware(request: Request, call_next):
             content={"detail": f"Internal server error: {str(e)}"}
         )
 
-
-
-# Add tenant context middleware
-from middleware.tenant_context_middleware import TenantContextMiddleware
-app.add_middleware(TenantContextMiddleware)
+# Add tenant context middleware (function-based)
+from middleware.tenant_context_middleware import tenant_context_middleware
+app.middleware('http')(tenant_context_middleware)
 
 # Include routers with v1 API versioning
 app.include_router(auth.router, prefix="/api/v1")

@@ -1279,22 +1279,6 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
                   onChange={(e) => setNewClientForm({ ...newClientForm, email: e.target.value })}
                 />
               </div>
-              <div>
-                <Label htmlFor="phone">Phone</Label>
-                <Input
-                  id="phone"
-                  value={newClientForm.phone}
-                  onChange={(e) => setNewClientForm({ ...newClientForm, phone: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="address">Address</Label>
-                <Input
-                  id="address"
-                  value={newClientForm.address}
-                  onChange={(e) => setNewClientForm({ ...newClientForm, address: e.target.value })}
-                />
-              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowNewClientDialog(false)}>
@@ -2177,22 +2161,6 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
                 type="email"
                 value={newClientForm.email}
                 onChange={(e) => setNewClientForm({ ...newClientForm, email: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                value={newClientForm.phone}
-                onChange={(e) => setNewClientForm({ ...newClientForm, phone: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="address">Address</Label>
-              <Input
-                id="address"
-                value={newClientForm.address}
-                onChange={(e) => setNewClientForm({ ...newClientForm, address: e.target.value })}
               />
             </div>
           </div>

@@ -1,13 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+import tempfile
+import os
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
+import logging
+from datetime import datetime
 
 from models.database import get_db, get_master_db
 from models.models import Tenant, MasterUser
 from schemas.tenant import TenantCreate, TenantUpdate, Tenant as TenantSchema
 from routers.auth import get_current_user
 from services.currency_service import CurrencyService
+from utils.rbac import require_admin
 
 router = APIRouter(prefix="/tenants", tags=["tenants"])
 
@@ -199,3 +204,65 @@ def delete_tenant(
     master_db.delete(tenant)
     master_db.commit()
     return {"message": "Tenant deleted successfully"} 
+
+@router.post("/import-sql", response_model=None)
+def import_sql_to_tenant(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    master_db: Session = Depends(get_master_db),
+    current_user: MasterUser = Depends(get_current_user),
+    dry_run: bool = Query(False, description="If true, only validate the SQL file without executing")
+):
+    require_admin(current_user)
+    # Limit file size (e.g., 5MB)
+    file.file.seek(0, 2)  # Seek to end
+    file_size = file.file.tell()
+    file.file.seek(0)
+    if file_size > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="SQL file too large (max 5MB)")
+
+    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        tmp.write(file.file.read())
+        sql_path = tmp.name
+
+    try:
+        with open(sql_path, 'r') as sql_file:
+            sql_commands = sql_file.read()
+
+        # Basic forbidden statement filtering
+        forbidden = ["drop ", "alter ", "truncate ", "create ", "replace ", "grant ", "revoke ", "set "]
+        for word in forbidden:
+            if word in sql_commands.lower():
+                raise HTTPException(status_code=400, detail=f"Forbidden SQL statement detected: {word.strip()}")
+
+        # Only allow certain statement types
+        allowed = ("insert ", "update ", "delete ", "copy ", "select ")
+        statements = [s.strip() for s in sql_commands.split(';') if s.strip()]
+        if len(statements) > 1000:
+            raise HTTPException(status_code=400, detail="Too many SQL statements (max 1000)")
+        for stmt in statements:
+            if not stmt.lower().startswith(allowed):
+                raise HTTPException(status_code=400, detail=f"Only INSERT, UPDATE, DELETE, COPY, SELECT statements are allowed. Offending statement: {stmt[:40]}")
+
+        # Dry-run mode: just validate
+        if dry_run:
+            return {"message": "SQL file validated successfully (dry run)", "statements": len(statements)}
+
+        # Execute all statements in a transaction
+        try:
+            with db.begin_nested():  # Ensures rollback on any error
+                for idx, stmt in enumerate(statements):
+                    db.execute(stmt)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            return {"error": f"SQL import failed at statement {idx+1}: {e}", "statement": statements[idx][:100]}
+
+        # Audit log
+        logging.info(f"[SQL IMPORT] user={current_user.email} tenant_id={current_user.tenant_id} file={file.filename} time={datetime.utcnow().isoformat()}")
+
+        return {"message": "SQL import completed successfully", "statements": len(statements)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Import failed: {e}")
+    finally:
+        os.remove(sql_path) 

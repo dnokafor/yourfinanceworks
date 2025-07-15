@@ -71,6 +71,8 @@ class TenantDatabaseManager:
                     result = conn.execute(text(f"SELECT 1 FROM pg_database WHERE datname = '{db_name}'"))
                     if result.fetchone():
                         logger.info(f"Database {db_name} already exists, dropping to recreate with correct schema")
+                        # Terminate connections before dropping
+                        self.terminate_db_connections(db_name)
                         # Drop existing database
                         conn.execute(text(f"DROP DATABASE {db_name}"))
                         logger.info(f"Dropped existing database {db_name}")
@@ -109,6 +111,8 @@ class TenantDatabaseManager:
                 del self.tenant_engines[tenant_key]
                 del self.tenant_sessions[tenant_key]
             
+            # Terminate connections before dropping
+            self.terminate_db_connections(db_name)
             # Drop and recreate the database
             with self.master_engine.connect() as conn:
                 conn.execute(text("COMMIT"))
@@ -226,6 +230,8 @@ class TenantDatabaseManager:
                 del self.tenant_engines[tenant_key]
                 del self.tenant_sessions[tenant_key]
             
+            # Terminate connections before dropping
+            self.terminate_db_connections(db_name)
             # Drop the database
             with self.master_engine.connect() as conn:
                 conn.execute(text("COMMIT"))
@@ -279,6 +285,19 @@ class TenantDatabaseManager:
         self.tenant_sessions.clear()
         
         logger.info("All database connections closed")
+
+    def terminate_db_connections(self, db_name):
+        """Terminate all connections to a specific database except the current one."""
+        try:
+            with self.master_engine.connect() as conn:
+                conn.execute(text(f"""
+                    SELECT pg_terminate_backend(pid)
+                    FROM pg_stat_activity
+                    WHERE datname = '{db_name}' AND pid <> pg_backend_pid();
+                """))
+                logger.info(f"Terminated all connections to database {db_name}")
+        except Exception as e:
+            logger.warning(f"Failed to terminate connections for {db_name}: {e}")
 
 # Global instance
 tenant_db_manager = TenantDatabaseManager() 
