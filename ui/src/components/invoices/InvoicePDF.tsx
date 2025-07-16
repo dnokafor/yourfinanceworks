@@ -180,6 +180,18 @@ export const InvoicePDF = ({ invoice, companyName }: InvoicePDFProps) => (
         <Text style={styles.value}>{invoice.client_email}</Text>
       </View>
 
+      {invoice.custom_fields && Object.keys(invoice.custom_fields).length > 0 && (
+        <View style={styles.section}>
+          <Text style={[styles.label, { marginBottom: 5 }]}>Custom Fields:</Text>
+          {Object.entries(invoice.custom_fields).map(([key, value]) => (
+            <View key={key} style={styles.row}>
+              <Text style={styles.label}>{key}:</Text>
+              <Text style={styles.value}>{String(value)}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
       <View style={styles.table}>
         <View style={styles.tableHeader}>
           <Text style={[styles.tableCell, styles.col1]}>Description</Text>

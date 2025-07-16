@@ -83,6 +83,7 @@ class Invoice(Base):
     discount_type = Column(String, default="percentage", nullable=False)  # percentage or fixed
     discount_value = Column(Float, default=0.0, nullable=False)  # percentage or fixed amount
     subtotal = Column(Float, nullable=False)  # Amount before discount
+    custom_fields = Column(JSON, nullable=True)
     
     # Soft delete fields for recycle bin functionality
     is_deleted = Column(Boolean, default=False, nullable=False)

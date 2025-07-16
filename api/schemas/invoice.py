@@ -36,6 +36,7 @@ class InvoiceBase(BaseModel):
     discount_type: Optional[str] = Field("percentage", description="Type of discount: percentage or fixed")
     discount_value: Optional[float] = Field(0.0, description="Discount value (percentage or fixed amount)")
     subtotal: Optional[float] = Field(None, description="Subtotal before discount")
+    custom_fields: Optional[Dict[str, Any]] = None
 
 class InvoiceCreate(InvoiceBase):
     items: List[InvoiceItemCreate]
@@ -53,6 +54,7 @@ class InvoiceUpdate(BaseModel):
     discount_type: Optional[str] = Field(None, description="Type of discount: percentage or fixed")
     discount_value: Optional[float] = Field(None, description="Discount value (percentage or fixed amount)")
     subtotal: Optional[float] = Field(None, description="Subtotal before discount")
+    custom_fields: Optional[Dict[str, Any]] = None
 
 class Invoice(InvoiceBase):
     id: int
@@ -60,6 +62,7 @@ class Invoice(InvoiceBase):
     created_at: datetime
     updated_at: datetime
     items: List[InvoiceItem] = []
+    custom_fields: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True
@@ -70,7 +73,14 @@ class Invoice(InvoiceBase):
 class InvoiceWithClient(Invoice):
     client_name: str
     total_paid: float = 0.0
-    items: List[InvoiceItem] = [] 
+    items: List[InvoiceItem] = []
+    custom_fields: Optional[Dict[str, Any]] = Field(default=None, description="Custom fields for the invoice")
+
+    class Config:
+        from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat() if v else None
+        }
 
 class InvoiceHistoryBase(BaseModel):
     action: str
@@ -98,6 +108,7 @@ class DeletedInvoice(Invoice):
     deleted_at: Optional[datetime]
     deleted_by: Optional[int]
     deleted_by_username: Optional[str] = None  # Username of who deleted it
+    custom_fields: Optional[Dict[str, Any]] = None
 
 class RecycleBinResponse(BaseModel):
     """Response schema for recycle bin operations"""

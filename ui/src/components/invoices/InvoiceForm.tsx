@@ -44,6 +44,11 @@ const formatStatus = (status: string) => {
   ).join(' ');
 };
 
+const customFieldSchema = z.object({
+  key: z.string().min(1, "Field name is required"),
+  value: z.string().optional(),
+});
+
 const formSchema = z.object({
   client: z.string().min(1, "Client is required"),
   invoiceNumber: z.string().min(1, "Invoice number is required"),
@@ -58,6 +63,11 @@ const formSchema = z.object({
   recurringFrequency: z.string().optional(),
   discountType: z.enum(["percentage", "fixed", "rule"] as const).default("percentage"),
   discountValue: z.number().min(0, "Discount value cannot be negative").default(0),
+  customFields: z.array(customFieldSchema)
+    .refine((fields) => {
+      const keys = fields.map(f => f.key.trim()).filter(Boolean);
+      return new Set(keys).size === keys.length;
+    }, { message: "Custom field names must be unique" })
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -90,6 +100,7 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
     email: "",
     phone: "",
     address: "",
+    preferred_currency: "",
   });
   const [settings, setSettings] = useState<Settings | null>(null);
   const [updateHistory, setUpdateHistory] = useState<any[]>([]);
@@ -110,6 +121,35 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
   const [currenciesLoaded, setCurrenciesLoaded] = useState(false);
   const [selectedHistoryEntry, setSelectedHistoryEntry] = useState<any>(null);
   const [showHistoryDetailsModal, setShowHistoryDetailsModal] = useState(false);
+  // Custom fields state for UI
+  const [customFields, setCustomFields] = useState<{ key: string; value: string }[]>(() => {
+    if (invoice?.custom_fields && typeof invoice.custom_fields === 'object') {
+      return Object.entries(invoice.custom_fields).map(([key, value]) => ({ key: key || '', value: value !== undefined && value !== null ? String(value) : '' }));
+    }
+    return [];
+  });
+
+  // Update customFields when invoice changes
+  useEffect(() => {
+    console.log("[DEBUG] customFields useEffect triggered");
+    console.log("[DEBUG] invoice:", invoice);
+    console.log("[DEBUG] invoice?.custom_fields:", invoice?.custom_fields);
+    console.log("[DEBUG] typeof invoice?.custom_fields:", typeof invoice?.custom_fields);
+    console.log("[DEBUG] invoice keys:", invoice ? Object.keys(invoice) : "no invoice");
+    console.log("[DEBUG] Full invoice object:", JSON.stringify(invoice, null, 2));
+    
+    if (invoice?.custom_fields && typeof invoice.custom_fields === 'object') {
+      const newCustomFields = Object.entries(invoice.custom_fields).map(([key, value]) => ({ 
+        key: key || '', 
+        value: value !== undefined && value !== null ? String(value) : '' 
+      }));
+      setCustomFields(newCustomFields);
+      console.log("[DEBUG] Updated customFields from invoice:", newCustomFields);
+    } else {
+      setCustomFields([]);
+      console.log("[DEBUG] Reset customFields to empty array");
+    }
+  }, [invoice]);
 
   // Handle opening the history details modal
   const handleOpenHistoryDetails = (entry: any) => {
@@ -310,6 +350,7 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
         email: "",
         phone: "",
         address: "",
+        preferred_currency: "",
       });
       toast.success("Client created successfully!");
     } catch (error) {
@@ -366,6 +407,7 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
       recurringFrequency: invoice?.recurring_frequency || "monthly",
       discountType: "percentage", // Will be overridden by form reset logic if discount rule is found
       discountValue: invoice?.discount_value || 0,
+      customFields: customFields,
     },
   });
 
@@ -823,6 +865,7 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
   };
 
   const onSubmit = async (data: FormValues) => {
+    console.log("onSubmit called", { isEdit, data });
     setSubmitting(true);
     try {
       // Update preview before submitting
@@ -898,7 +941,14 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
             })),
             is_recurring: data.isRecurring,
             recurring_frequency: data.recurringFrequency,
+            custom_fields: (data.customFields || []).reduce((acc, { key, value }) => {
+              if (key.trim()) acc[key.trim()] = value;
+              return acc;
+            }, {}),
           };
+          
+          console.log("Custom fields from form data:", data.customFields);
+          console.log("Custom fields being sent in updateData:", updateData.custom_fields);
           
           console.log("Saving invoice with discount data:", {
             formDiscountType: data.discountType,
@@ -1190,6 +1240,11 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
 
         // Prepare request payload for new invoice
         const selectedClient = clients.find(c => c.id.toString() === data.client);
+        // Convert customFields array to object
+        const customFieldsObj = (data.customFields || []).reduce((acc, { key, value }) => {
+          if (key.trim()) acc[key.trim()] = value;
+          return acc;
+        }, {} as Record<string, string>);
         const invoiceData = {
           number: data.invoiceNumber,
           client_id: Number(data.client),
@@ -1213,7 +1268,9 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
           })),
           is_recurring: data.isRecurring,
           recurring_frequency: data.recurringFrequency,
+          custom_fields: Object.keys(customFieldsObj).length > 0 ? customFieldsObj : undefined,
         };
+        console.log("Invoice data being sent:", invoiceData);
         
         // Create new invoice
         await invoiceApi.createInvoice(invoiceData);
@@ -1233,6 +1290,11 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
       form.setValue('currency', invoice.currency);
     }
   }, [currenciesLoaded, invoice, form]);
+
+  // Keep customFields state in sync with form
+  useEffect(() => {
+    form.setValue("customFields", customFields);
+  }, [customFields]);
 
   if (loading) {
     return (
@@ -1277,6 +1339,30 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
                   type="email"
                   value={newClientForm.email}
                   onChange={(e) => setNewClientForm({ ...newClientForm, email: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="phone">Phone</Label>
+                <Input
+                  id="phone"
+                  value={newClientForm.phone || ''}
+                  onChange={(e) => setNewClientForm({ ...newClientForm, phone: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="address">Address</Label>
+                <Input
+                  id="address"
+                  value={newClientForm.address || ''}
+                  onChange={(e) => setNewClientForm({ ...newClientForm, address: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="preferred_currency">Preferred Currency (Optional)</Label>
+                <CurrencySelector
+                  value={newClientForm.preferred_currency || ''}
+                  onValueChange={(val) => setNewClientForm({ ...newClientForm, preferred_currency: val })}
+                  placeholder="Select preferred currency"
                 />
               </div>
             </div>
@@ -2041,6 +2127,59 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
                     )}
                   />
 
+                  <div className="space-y-4">
+                    <div className="font-semibold">Custom Fields (Optional)</div>
+                    {form.watch("customFields").map((field, idx) => (
+                      <div key={idx} className="flex gap-2 items-center">
+                        <Input
+                          placeholder="Field Name"
+                          value={field.key}
+                          onChange={e => {
+                            const updated = form.getValues("customFields").map((f, i) => i === idx ? { key: e.target.value, value: f.value ?? '' } : { key: f.key ?? '', value: f.value ?? '' });
+                            setCustomFields(updated);
+                          }}
+                          className="w-1/3"
+                        />
+                        <Input
+                          placeholder="Field Value"
+                          value={field.value}
+                          onChange={e => {
+                            const updated = form.getValues("customFields").map((f, i) => i === idx ? { key: f.key ?? '', value: e.target.value } : { key: f.key ?? '', value: f.value ?? '' });
+                            setCustomFields(updated);
+                          }}
+                          className="w-1/2"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => {
+                            setCustomFields(
+                              form.getValues("customFields")
+                                .filter((_, i) => i !== idx)
+                                .map(f => ({ key: typeof f.key === 'string' ? f.key : '', value: typeof f.value === 'string' ? f.value : '' }))
+                            );
+                          }}
+                        >
+                          <Trash className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setCustomFields([
+                        ...form.getValues("customFields").map(f => ({ key: typeof f.key === 'string' ? f.key : '', value: typeof f.value === 'string' ? f.value : '' })),
+                        { key: '', value: '' }
+                      ])}
+                      className="mt-2"
+                    >
+                      <Plus className="w-4 h-4 mr-2" /> Add Field
+                    </Button>
+                    {form.formState.errors.customFields && (
+                      <div className="text-red-500 text-sm mt-1">{form.formState.errors.customFields.message as string}</div>
+                    )}
+                  </div>
+
                   <div className="flex justify-end gap-4">
                     <Button
                       type="submit"
@@ -2161,6 +2300,30 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
                 type="email"
                 value={newClientForm.email}
                 onChange={(e) => setNewClientForm({ ...newClientForm, email: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="phone">Phone</Label>
+              <Input
+                id="phone"
+                value={newClientForm.phone || ''}
+                onChange={(e) => setNewClientForm({ ...newClientForm, phone: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="address">Address</Label>
+              <Input
+                id="address"
+                value={newClientForm.address || ''}
+                onChange={(e) => setNewClientForm({ ...newClientForm, address: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="preferred_currency">Preferred Currency (Optional)</Label>
+              <CurrencySelector
+                value={newClientForm.preferred_currency || ''}
+                onValueChange={(val) => setNewClientForm({ ...newClientForm, preferred_currency: val })}
+                placeholder="Select preferred currency"
               />
             </div>
           </div>

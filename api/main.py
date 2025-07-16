@@ -28,7 +28,7 @@ from models import models
 from db_init import init_db
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO)  # Ensure INFO logs are shown
 logger = logging.getLogger(__name__)
 
 # Initialize database (create tables and populate initial data)

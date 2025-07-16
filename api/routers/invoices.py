@@ -35,6 +35,7 @@ def create_invoice(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    logger.info("Invoice create endpoint called")
     # Check if user has permission to create invoices
     require_non_viewer(current_user, "create invoices")
     
@@ -63,6 +64,7 @@ def create_invoice(
             )
         
         # No tenant_id needed since each tenant has its own database
+        logger.info(f"[DEBUG] Received custom_fields: {invoice.custom_fields}")
         db_invoice = Invoice(
             number=invoice_number,
             amount=float(invoice.amount),
@@ -77,10 +79,12 @@ def create_invoice(
             recurring_frequency=invoice.recurring_frequency,
             discount_type=invoice.discount_type or "percentage",
             discount_value=float(invoice.discount_value or 0),
-            subtotal=float(invoice.subtotal or invoice.amount)
+            subtotal=float(invoice.subtotal or invoice.amount),
+            custom_fields=invoice.custom_fields
         )
         db.add(db_invoice)
         db.flush()  # Get the invoice ID
+        logger.info(f"[DEBUG] Saved custom_fields in DB: {db_invoice.custom_fields}")
         
         # Create invoice items
         for item_data in invoice.items:
@@ -446,6 +450,9 @@ def read_invoice(
 
         invoice, client_name, total_paid = invoice_tuple
         
+        logger.info(f"[DEBUG] Invoice from DB - custom_fields: {invoice.custom_fields}")
+        logger.info(f"[DEBUG] Invoice from DB - type of custom_fields: {type(invoice.custom_fields)}")
+        
         # Get invoice items
         items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).all()
         items_data = [
@@ -480,8 +487,12 @@ def read_invoice(
             "discount_type": invoice.discount_type,
             "discount_value": float(invoice.discount_value) if invoice.discount_value else 0,
             "subtotal": float(invoice.subtotal) if invoice.subtotal else float(invoice.amount),
+            "custom_fields": invoice.custom_fields,
             "items": items_data
         }
+        logger.info(f"[DEBUG] Final invoice_dict response - custom_fields: {invoice_dict.get('custom_fields')}")
+        logger.info(f"[DEBUG] Final invoice_dict response - custom_fields type: {type(invoice_dict.get('custom_fields'))}")
+        logger.info(f"[DEBUG] Final invoice_dict response - all keys: {list(invoice_dict.keys())}")
         return invoice_dict
     except HTTPException:
         raise
@@ -500,6 +511,8 @@ def update_invoice(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    logger.info("Invoice update endpoint called")
+    logger.info(f"[DEBUG] Received custom_fields in update: {invoice.custom_fields}")
     # Check if user has permission to update invoices
     require_non_viewer(current_user, "update invoices")
     
@@ -524,9 +537,11 @@ def update_invoice(
         old_discount_type = db_invoice.discount_type
         old_amount = db_invoice.amount
         old_notes = db_invoice.notes
+        old_custom_fields = db_invoice.custom_fields
 
         # Update invoice fields
         update_data = invoice.dict(exclude_unset=True)
+        logger.info(f"[DEBUG] Update data received: {update_data}")
         for key, value in update_data.items():
             if key != "items":
                 if key == 'amount':
@@ -539,6 +554,8 @@ def update_invoice(
                             detail=f"Invalid currency code: {value}"
                         )
                 setattr(db_invoice, key, value)
+        
+        logger.info(f"[DEBUG] After setting fields, custom_fields in DB: {db_invoice.custom_fields}")
         
         # Handle items update if provided
         if invoice.items is not None:
@@ -607,6 +624,9 @@ def update_invoice(
                 changes.append("Notes removed")
             else:
                 changes.append("Notes updated")
+        if invoice.custom_fields is not None and old_custom_fields != invoice.custom_fields:
+            changes.append("Custom fields updated")
+            logger.info(f"[DEBUG] Custom fields changed from {old_custom_fields} to {invoice.custom_fields}")
         
         # Only create history entry if there are actual changes
         if changes:
@@ -634,6 +654,7 @@ def update_invoice(
             db_invoice.updated_at = datetime.now(timezone.utc)
             db.commit()
             db.refresh(db_invoice)
+            logger.info(f"[DEBUG] Saved custom_fields in DB (update): {db_invoice.custom_fields}")
             
             # Get updated items to include in response
             items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).all()

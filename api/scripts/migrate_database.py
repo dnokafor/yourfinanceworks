@@ -5,6 +5,8 @@ Database migration script to add tenant support and missing columns
 import sqlite3
 import os
 from datetime import datetime
+from sqlalchemy import create_engine, text
+from models.database import SQLALCHEMY_DATABASE_URL
 
 def migrate_database():
     """Migrate the database to add tenant support"""
@@ -206,6 +208,39 @@ def create_new_database():
         conn.commit()
         conn.close()
         print("Basic database structure created")
+
+def migrate_database():
+    """Add discount fields and custom_fields to invoices table (PostgreSQL only)"""
+    engine = create_engine(SQLALCHEMY_DATABASE_URL)
+    with engine.connect() as conn:
+        # Helper to check if a column exists in Postgres
+        def column_exists(table, column):
+            result = conn.execute(text(f"""
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name=:table AND column_name=:column
+            """), {"table": table, "column": column})
+            return result.scalar() is not None
+
+        # Add discount_type column if missing
+        if not column_exists('invoices', 'discount_type'):
+            print("Adding discount_type column...")
+            conn.execute(text("ALTER TABLE invoices ADD COLUMN discount_type TEXT DEFAULT 'percentage' NOT NULL"))
+        # Add discount_value column if missing
+        if not column_exists('invoices', 'discount_value'):
+            print("Adding discount_value column...")
+            conn.execute(text("ALTER TABLE invoices ADD COLUMN discount_value REAL DEFAULT 0.0 NOT NULL"))
+        # Add subtotal column if missing
+        if not column_exists('invoices', 'subtotal'):
+            print("Adding subtotal column...")
+            conn.execute(text("ALTER TABLE invoices ADD COLUMN subtotal REAL"))
+            print("Initializing subtotal for existing invoices...")
+            conn.execute(text("UPDATE invoices SET subtotal = amount WHERE subtotal IS NULL"))
+        # Add custom_fields column if missing
+        if not column_exists('invoices', 'custom_fields'):
+            print("Adding custom_fields column...")
+            conn.execute(text("ALTER TABLE invoices ADD COLUMN custom_fields JSON"))
+        conn.commit()
+        print("Migration completed successfully!")
 
 if __name__ == "__main__":
     migrate_database() 

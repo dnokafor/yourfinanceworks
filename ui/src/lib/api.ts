@@ -58,6 +58,7 @@ export interface Invoice {
   discount_type?: string;
   discount_value?: number;
   subtotal?: number;
+  custom_fields?: Record<string, any>;
 }
 
 export interface Payment {
@@ -477,6 +478,7 @@ export const invoiceApi = {
         discount_type: apiResponse.discount_type,
         discount_value: apiResponse.discount_value,
         subtotal: apiResponse.subtotal,
+        custom_fields: apiResponse.custom_fields,
       };
       
       console.log("Mapped invoice object:", invoice);

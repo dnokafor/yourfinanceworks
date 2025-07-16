@@ -192,6 +192,7 @@ class Invoice(Base):
     discount_type = Column(String, default="percentage", nullable=False)  # percentage or fixed
     discount_value = Column(Float, default=0.0, nullable=False)  # percentage or fixed amount
     subtotal = Column(Float, nullable=False)  # Amount before discount
+    custom_fields = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
