@@ -721,7 +721,12 @@
     "searchUsersPlaceholder": "Buscar usuarios...",
     "loadingUsers": "Cargando usuarios...",
     "noUsersFound": "No se encontraron usuarios",
-    "enterPasswordForUserPlaceholder": "Ingresa la contraseña para el usuario"
+    "enterPasswordForUserPlaceholder": "Ingresa la contraseña para el usuario",
+    "pending": "Pendiente",
+    "accepted": "Aceptado",
+    "expired": "Expirado",
+    "loadingInvites": "Cargando invitaciones...",
+    "activateUser": "Activar Usuario"
   },
   "errors": {
     "network_error": "Error de red. Por favor verifica tu conexión.",

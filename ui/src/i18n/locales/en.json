@@ -708,7 +708,12 @@
     "searchUsersPlaceholder": "Search users...",
     "loadingUsers": "Loading users...",
     "noUsersFound": "No users found",
-    "enterPasswordForUserPlaceholder": "Enter password for user"
+    "enterPasswordForUserPlaceholder": "Enter password for user",
+    "pending": "Pending",
+    "accepted": "Accepted",
+    "expired": "Expired",
+    "loadingInvites": "Loading invites...",
+    "activateUser": "Activate User"
   },
   "errors": {
     "network_error": "Network error. Please check your connection.",

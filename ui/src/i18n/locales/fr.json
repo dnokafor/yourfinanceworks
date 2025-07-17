@@ -719,7 +719,12 @@
     "searchUsersPlaceholder": "Rechercher des utilisateurs...",
     "loadingUsers": "Chargement des utilisateurs...",
     "noUsersFound": "Aucun utilisateur trouvé",
-    "enterPasswordForUserPlaceholder": "Entrez le mot de passe pour l'utilisateur"
+    "enterPasswordForUserPlaceholder": "Entrez le mot de passe pour l'utilisateur",
+    "pending": "En attente",
+    "accepted": "Accepté",
+    "expired": "Expiré",
+    "loadingInvites": "Chargement des invitations...",
+    "activateUser": "Activer l'utilisateur"
   },
   "errors": {
     "network_error": "Erreur réseau. Veuillez vérifier votre connexion.",
