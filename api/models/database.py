@@ -5,6 +5,8 @@ from contextvars import ContextVar
 import os
 import logging
 from fastapi import HTTPException
+from pydantic import ValidationError
+from fastapi.exceptions import RequestValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -73,9 +75,22 @@ def get_db():
             finally:
                 db.close()
         except Exception as e:
+            import re
+            from sqlalchemy.exc import StatementError, DataError, IntegrityError
             logger.error(f"Failed to connect to tenant database for tenant {tenant_id}: {e}")
-            
-            # Try to create the tenant database if it doesn't exist
+            # Robust safeguard: Only attempt to create tenant DB for connection/operational errors, not validation errors
+            if isinstance(e, (ValidationError, RequestValidationError, StatementError, DataError, IntegrityError)):
+                logger.error(f"Validation or schema error encountered, not attempting to recreate tenant DB: {e}")
+                raise
+            if isinstance(e, HTTPException) and getattr(e, 'status_code', None) == 422:
+                logger.error(f"HTTP 422 Unprocessable Entity (likely validation error), not attempting to recreate tenant DB: {e}")
+                raise
+            # Regex to catch any error message that hints at validation/schema issues
+            error_str = str(e).lower()
+            if re.search(r"(validation|pydantic|schema|statement|integrity|data) error|field required|missing|unprocessable entity", error_str):
+                logger.error(f"Validation-related error (regex caught), not attempting to recreate tenant DB: {e}")
+                raise
+            # Try to create the tenant database if it doesn't exist (for connection errors only)
             try:
                 logger.info(f"Attempting to create missing tenant database for tenant {tenant_id}")
                 

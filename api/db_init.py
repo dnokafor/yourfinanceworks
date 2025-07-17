@@ -30,21 +30,28 @@ if make_url(SQLALCHEMY_DATABASE_URL).get_backend_name() == "sqlite":
         cursor.close()
 
 def sync_users_to_tenant_db(tenant_id: int):
-    """Sync users from master database to tenant database"""
+    """Sync only admin users from master database to tenant database"""
     try:
-        logger.info(f"Syncing users to tenant database {tenant_id}")
+        logger.info(f"Syncing admin users to tenant database {tenant_id}")
         
         # Get master database session
         master_db = next(get_master_db())
         
         try:
-            # Get all users for this tenant from master database
+            # Get only admin users for this tenant from master database
+            # Only the first user (tenant admin) should be in both master and tenant databases
             from models.models import Tenant, MasterUser
-            master_users = master_db.query(MasterUser).filter(MasterUser.tenant_id == tenant_id).all()
+            master_users = master_db.query(MasterUser).filter(
+                MasterUser.tenant_id == tenant_id
+            ).order_by(MasterUser.id).all()
             
             if not master_users:
                 logger.info(f"No users found for tenant {tenant_id}")
                 return
+            
+            # Only sync the first user (tenant admin) - others should only be in tenant DB
+            admin_user = master_users[0]  # First user is the tenant admin
+            logger.info(f"Syncing admin user {admin_user.email} to tenant database {tenant_id}")
             
             # Set tenant context
             set_tenant_context(tenant_id)
@@ -54,46 +61,43 @@ def sync_users_to_tenant_db(tenant_id: int):
             tenant_db = tenant_session()
             
             try:
-                # Sync each user
-                for master_user in master_users:
-                    # Check if user already exists in tenant database
-                    existing_user = tenant_db.query(TenantUser).filter(TenantUser.id == master_user.id).first()
+                # Check if admin user already exists in tenant database
+                existing_user = tenant_db.query(TenantUser).filter(TenantUser.email == admin_user.email).first()
+                
+                if not existing_user:
+                    # Create admin user in tenant database
+                    tenant_user = TenantUser(
+                        email=admin_user.email,
+                        hashed_password=admin_user.hashed_password,
+                        first_name=admin_user.first_name,
+                        last_name=admin_user.last_name,
+                        role=admin_user.role,
+                        is_active=admin_user.is_active,
+                        is_superuser=admin_user.is_superuser,
+                        is_verified=admin_user.is_verified,
+                        google_id=admin_user.google_id,
+                        created_at=admin_user.created_at,
+                        updated_at=admin_user.updated_at
+                    )
                     
-                    if not existing_user:
-                        # Create user in tenant database
-                        tenant_user = TenantUser(
-                            id=master_user.id,  # Use same ID as master user
-                            email=master_user.email,
-                            hashed_password=master_user.hashed_password,
-                            first_name=master_user.first_name,
-                            last_name=master_user.last_name,
-                            role=master_user.role,
-                            is_active=master_user.is_active,
-                            is_superuser=master_user.is_superuser,
-                            is_verified=master_user.is_verified,
-                            google_id=master_user.google_id,
-                            created_at=master_user.created_at,
-                            updated_at=master_user.updated_at
-                        )
-                        
-                        tenant_db.add(tenant_user)
-                        logger.info(f"Created user {master_user.email} in tenant database {tenant_id}")
-                    else:
-                        # Update existing user if needed
-                        existing_user.email = master_user.email
-                        existing_user.hashed_password = master_user.hashed_password
-                        existing_user.first_name = master_user.first_name
-                        existing_user.last_name = master_user.last_name
-                        existing_user.role = master_user.role
-                        existing_user.is_active = master_user.is_active
-                        existing_user.is_superuser = master_user.is_superuser
-                        existing_user.is_verified = master_user.is_verified
-                        existing_user.google_id = master_user.google_id
-                        existing_user.updated_at = datetime.now(timezone.utc)
-                        logger.info(f"Updated user {master_user.email} in tenant database {tenant_id}")
+                    tenant_db.add(tenant_user)
+                    logger.info(f"Created admin user {admin_user.email} in tenant database {tenant_id}")
+                else:
+                    # Update existing admin user if needed
+                    existing_user.email = admin_user.email
+                    existing_user.hashed_password = admin_user.hashed_password
+                    existing_user.first_name = admin_user.first_name
+                    existing_user.last_name = admin_user.last_name
+                    existing_user.role = admin_user.role
+                    existing_user.is_active = admin_user.is_active
+                    existing_user.is_superuser = admin_user.is_superuser
+                    existing_user.is_verified = admin_user.is_verified
+                    existing_user.google_id = admin_user.google_id
+                    existing_user.updated_at = datetime.now(timezone.utc)
+                    logger.info(f"Updated admin user {admin_user.email} in tenant database {tenant_id}")
                 
                 tenant_db.commit()
-                logger.info(f"Successfully synced {len(master_users)} users to tenant database {tenant_id}")
+                logger.info(f"Successfully synced admin user to tenant database {tenant_id}")
                 
             finally:
                 tenant_db.close()
@@ -102,7 +106,7 @@ def sync_users_to_tenant_db(tenant_id: int):
             master_db.close()
             
     except Exception as e:
-        logger.error(f"Error syncing users to tenant database {tenant_id}: {str(e)}")
+        logger.error(f"Error syncing admin user to tenant database {tenant_id}: {str(e)}")
         raise e
 
 def run_migrations():
@@ -162,7 +166,7 @@ def init_db():
             TenantBase.metadata.create_all(bind=tenant_engine)
             print(f"Tables created for tenant {tenant.id}")
             # Verify if audit_logs table exists
-            from sqlalchemy.inspect import inspect
+            from sqlalchemy import inspect
             inspector = inspect(tenant_engine)
             if 'audit_logs' in inspector.get_table_names():
                 logger.info(f"audit_logs table successfully created for tenant {tenant.id}")

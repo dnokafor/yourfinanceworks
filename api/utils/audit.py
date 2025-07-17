@@ -3,6 +3,18 @@ from models.models_per_tenant import AuditLog
 from typing import Optional, Dict, Any
 from datetime import datetime
 
+# Helper to convert all datetime objects in a dict/list to ISO strings
+def convert_datetimes(obj):
+    if isinstance(obj, dict):
+        return {k: convert_datetimes(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_datetimes(i) for i in obj]
+    elif isinstance(obj, datetime):
+        return obj.isoformat()
+    else:
+        return obj
+
+
 def log_audit_event(
     db: Session,
     user_id: int,
@@ -17,6 +29,9 @@ def log_audit_event(
     status: str = "success",
     error_message: Optional[str] = None,
 ):
+    # Ensure details is JSON serializable
+    if details is not None:
+        details = convert_datetimes(details)
     audit_log = AuditLog(
         user_id=user_id,
         user_email=user_email,

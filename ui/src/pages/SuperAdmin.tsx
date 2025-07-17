@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { useTranslation } from "react-i18next";
+import { superAdminApi } from '../lib/api';
 
 interface Tenant {
   id: number;
@@ -72,6 +73,8 @@ const SuperAdminDashboard: React.FC = () => {
 
 // Separate component for the main dashboard content
 const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => string }> = ({ user, t }) => {
+  // All hooks at the top!
+  const { user: currentUser } = useAuth();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [databases, setDatabases] = useState<DatabaseStatus[]>([]);
@@ -83,21 +86,8 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
   const [showCreateTenant, setShowCreateTenant] = useState(false);
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
-  const [createTenantForm, setCreateTenantForm] = useState({
-    name: '',
-    email: '',
-    default_currency: 'USD'
-  });
-  const [createUserForm, setCreateUserForm] = useState({
-    email: '',
-    first_name: '',
-    last_name: '',
-    role: 'user',
-    password: '',
-    tenant_id: ''
-  });
-
-  // Add state for promote form
+  const [createTenantForm, setCreateTenantForm] = useState({ name: '', email: '', default_currency: 'USD' });
+  const [createUserForm, setCreateUserForm] = useState({ email: '', first_name: '', last_name: '', role: 'user', password: '', tenant_id: '' });
   const [promoteEmail, setPromoteEmail] = useState('');
   const [promoteLoading, setPromoteLoading] = useState(false);
   const [promoteError, setPromoteError] = useState<string | null>(null);
@@ -114,7 +104,7 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
 
   // Add state for recreate database confirmation
   const [dbToRecreate, setDbToRecreate] = useState<DatabaseStatus | null>(null);
-
+  
   const fetchTenants = async () => {
     try {
       const response = await fetch('/api/v1/super-admin/tenants', {
@@ -769,6 +759,25 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
                             <Button size="sm" variant="outline" onClick={() => handleDeleteUser(user)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
+                            {user.is_superuser && currentUser && user.email !== currentUser.email && superUsers > 1 && (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={async () => {
+                                  if (window.confirm(t('superAdmin.confirm_remove_super_admin'))) {
+                                    try {
+                                      await superAdminApi.demoteSuperAdmin(user.email);
+                                      toast.success(t('superAdmin.remove_super_admin_success'));
+                                      fetchUsers();
+                                    } catch (err: any) {
+                                      toast.error(err?.message || t('superAdmin.remove_super_admin_failed'));
+                                    }
+                                  }
+                                }}
+                              >
+                                {t('superAdmin.remove_super_admin_button')}
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>

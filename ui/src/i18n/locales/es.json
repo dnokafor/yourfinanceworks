@@ -313,7 +313,14 @@
     "select_status": "Selecciona el estado",
     "you_can_increase_or_decrease_paid_amount_here": "Puedes aumentar o disminuir el monto pagado aquí.",
     "for_decreases_the_system_will_automatically_remove_modify_the_most_recent_payments": "Para disminuciones, el sistema eliminará/modificará automáticamente los pagos más recientes.",
-    "for_complex_payment_management_use_the_Payments_section": "Para una gestión de pagos más compleja, usa la sección de Pagos."
+    "for_complex_payment_management_use_the_Payments_section": "Para una gestión de pagos más compleja, usa la sección de Pagos.",
+    "update_history": "Historial de Actualizaciones",
+    "loading_history": "Cargando historial...",
+    "update": "Actualizar",
+    "by": "por {{user}}",
+    "amount": "Monto",
+    "view_details": "Ver Detalles",
+    "no_update_history_available": "No hay historial de actualizaciones disponible"
   },
   "clients": {
     "title": "Clientes",
@@ -612,16 +619,7 @@
     "preferred_currency": "Moneda Preferida (Opcional)",
     "cancel": "Cancelar",
     "add_client": "Agregar Cliente",
-    "update_history": "Historial de Actualizaciones",
-    "loading_history": "Cargando historial...",
-    "update": "Actualizar",
-    "invoice_created": "Factura Creada",
-    "by": "por {{user}}",
-    "amount": "Monto",
-    "view_details": "Ver Detalles",
-    "no_update_history_available": "No hay historial de actualizaciones disponible",
     "client": "Cliente",
-    "invoice_number": "Número de Factura",
     "ai_assistant_enabled": "El Asistente de IA está habilitado.",
     "ai_assistant_disabled": "El Asistente de IA está deshabilitado.",
     "import_and_replace_data": "Importar y reemplazar datos",
@@ -660,7 +658,10 @@
     "ai_config_marked_as_tested": "¡Configuración de IA marcada como probada!",
     "failed_to_test_ai_config": "No se pudo probar la configuración de IA.",
     "logo_uploaded_successfully": "¡Logo subido exitosamente!",
-    "failed_to_upload_logo": "No se pudo subir el logo."
+    "failed_to_upload_logo": "No se pudo subir el logo.",
+    "choose_file": "Elegir archivo",
+    "no_file_selected": "Ningún archivo seleccionado",
+    "failed_to_save_ai_assistant_setting": "No se pudo guardar la configuración del Asistente de IA."
   },
   "users": {
     "title": "Usuarios",
@@ -1120,7 +1121,11 @@
     "delete_user_confirmation_text": "¿Estás seguro de que deseas eliminar el usuario {{userEmail}}?",
     "recreate_database_title": "Recrear Base de Datos",
     "recreate_database_confirmation_text": "¿Estás seguro de que deseas recrear la base de datos para el inquilino {{tenantName}}? Esto ELIMINARÁ TODOS LOS DATOS para este inquilino.",
-    "recreate_button": "Recrear"
+    "recreate_button": "Recrear",
+    "remove_super_admin_button": "Quitar Super Admin",
+    "confirm_remove_super_admin": "¿Está seguro de que desea quitar a este usuario de los Super Admins?",
+    "remove_super_admin_success": "El usuario ha sido quitado de los Super Admins.",
+    "remove_super_admin_failed": "No se pudo quitar al usuario de los Super Admins."
   },
   "aiAssistant": {
     "title": "Asistente de Facturas IA",

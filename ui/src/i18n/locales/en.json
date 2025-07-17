@@ -313,7 +313,14 @@
     "select_status": "Select status",
     "you_can_increase_or_decrease_paid_amount_here": "You can increase or decrease the paid amount here.",
     "for_decreases_the_system_will_automatically_remove_modify_the_most_recent_payments": "For decreases, the system will automatically remove/modify the most recent payments.",
-    "for_complex_payment_management_use_the_Payments_section": "For complex payment management, use the Payments section."
+    "for_complex_payment_management_use_the_Payments_section": "For complex payment management, use the Payments section.",
+    "update_history": "Update History",
+    "loading_history": "Loading history...",
+    "update": "Update",
+    "by": "by {{user}}",
+    "amount": "Amount",
+    "view_details": "View Details",
+    "no_update_history_available": "No update history available"
   },
   "clients": {
     "title": "Clients",
@@ -647,7 +654,10 @@
     "ai_config_marked_as_tested": "AI configuration marked as tested!",
     "failed_to_test_ai_config": "Failed to test AI configuration.",
     "logo_uploaded_successfully": "Logo uploaded successfully!",
-    "failed_to_upload_logo": "Failed to upload logo."
+    "failed_to_upload_logo": "Failed to upload logo.",
+    "choose_file": "Choose file",
+    "no_file_selected": "No file selected",
+    "failed_to_save_ai_assistant_setting": "Failed to save AI Assistant setting."
   },
   "users": {
     "title": "Users",
@@ -1107,7 +1117,11 @@
     "delete_user_confirmation_text": "Are you sure you want to delete user {{userEmail}}?",
     "recreate_database_title": "Recreate Database",
     "recreate_database_confirmation_text": "Are you sure you want to recreate the database for tenant {{tenantName}}? This will DELETE ALL DATA for this tenant.",
-    "recreate_button": "Recreate"
+    "recreate_button": "Recreate",
+    "remove_super_admin_button": "Remove Super Admin",
+    "confirm_remove_super_admin": "Are you sure you want to remove this user from Super Admins?",
+    "remove_super_admin_success": "User has been removed from Super Admins.",
+    "remove_super_admin_failed": "Failed to remove user from Super Admins."
   },
   "aiAssistant": {
     "title": "Invoice AI Assistant",

@@ -24,7 +24,7 @@ def enable_ai_assistant():
         with engine.connect() as connection:
             # Update all tenants to enable AI assistant
             result = connection.execute(text("""
-                UPDATE tenants 
+                UPDATE settings 
                 SET enable_ai_assistant = TRUE 
                 WHERE enable_ai_assistant IS NULL OR enable_ai_assistant = FALSE
             """))

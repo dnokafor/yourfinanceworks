@@ -259,8 +259,11 @@ export async function apiRequest<T>(
   config: { isLogin?: boolean } = {}
 ): Promise<T> {
   try {
-    // Get JWT token from AsyncStorage
+    // Get JWT token and user from AsyncStorage
     const token = await AsyncStorage.getItem(TOKEN_KEY);
+    const userData = await AsyncStorage.getItem(USER_KEY);
+    const user = userData ? JSON.parse(userData) : null;
+    const tenantId = user?.tenant_id;
     
     const requestUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
     console.log(`Making API request to ${requestUrl}`, options);
@@ -270,6 +273,7 @@ export async function apiRequest<T>(
       headers: {
         'Content-Type': 'application/json',
         ...(token && { 'Authorization': `Bearer ${token}` }),
+        ...(tenantId && { 'X-Tenant-ID': tenantId }),
         ...options.headers,
       },
     });
@@ -369,12 +373,16 @@ class ApiService {
     config: { isLogin?: boolean } = {}
   ): Promise<T> {
     const token = await this.getToken();
+    const userData = await AsyncStorage.getItem(USER_KEY);
+    const user = userData ? JSON.parse(userData) : null;
+    const tenantId = user?.tenant_id;
     const url = `${this.baseURL}${endpoint}`;
 
     const requestOptions: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
         ...(token && { Authorization: `Bearer ${token}` }),
+        ...(tenantId && { 'X-Tenant-ID': tenantId }),
         ...options.headers,
       },
       ...options,

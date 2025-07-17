@@ -206,7 +206,11 @@ export interface InvoiceHistoryCreate {
 }
 
 // Generic API request function with error handling
-export async function apiRequest<T>(url: string, options: RequestInit = {}, config: { isLogin?: boolean } = {}): Promise<T> {
+export async function apiRequest<T>(
+  url: string,
+  options: RequestInit = {},
+  config: { isLogin?: boolean; skipTenant?: boolean } = {}
+): Promise<T> {
   try {
     // Get JWT token from localStorage
     const token = localStorage.getItem('token');
@@ -226,14 +230,28 @@ export async function apiRequest<T>(url: string, options: RequestInit = {}, conf
     
     const requestUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
     console.log(`Making API request to ${requestUrl}`, options);
+    let extraHeaders: Record<string, string> = {};
+    if (options.headers) {
+      if (options.headers instanceof Headers) {
+        // Convert Headers instance to plain object
+        options.headers.forEach((value, key) => {
+          extraHeaders[key] = value;
+        });
+      } else if (typeof options.headers === 'object' && !Array.isArray(options.headers)) {
+        extraHeaders = options.headers as Record<string, string>;
+      }
+    }
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...extraHeaders,
+    };
+    if (!config.skipTenant && tenantId) {
+      headers['X-Tenant-ID'] = tenantId;
+    }
     const response = await fetch(requestUrl, {
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-        ...(tenantId && { 'X-Tenant-ID': tenantId }),
-        ...options.headers,
-      },
+      headers,
     });
 
     console.log('API Response status:', response.status);
@@ -808,11 +826,12 @@ export const discountRulesApi = {
     }),
   calculateDiscount: (subtotal: number) => {
     console.log("Sending discount calculation request:", {
-      url: `/discount-rules/calculate?subtotal=${subtotal}`,
+      url: `/discount-rules/calculate`,
       subtotal: subtotal
     });
-    return apiRequest<DiscountCalculation>(`/discount-rules/calculate?subtotal=${subtotal}`, {
+    return apiRequest<DiscountCalculation>(`/discount-rules/calculate`, {
       method: 'POST',
+      body: JSON.stringify({ subtotal: subtotal, currency: "USD" }),
     });
   },
 };
@@ -860,4 +879,13 @@ export const api = {
   post: <T>(url: string, data?: any, config?: { isLogin?: boolean }) => apiRequest<T>(url, { method: 'POST', body: JSON.stringify(data) }, config),
   put: <T>(url: string, data?: any, config?: { isLogin?: boolean }) => apiRequest<T>(url, { method: 'PUT', body: JSON.stringify(data) }, config),
   delete: <T>(url: string, config?: { isLogin?: boolean }) => apiRequest<T>(url, { method: 'DELETE' }, config),
+}; 
+
+export const superAdminApi = {
+  demoteSuperAdmin: async (email: string) => {
+    return apiRequest<{ message: string }>("/super-admin/demote", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }, { skipTenant: true });
+  },
 }; 

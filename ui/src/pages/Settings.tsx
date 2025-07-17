@@ -892,14 +892,29 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="logo">{t('settings.company_logo')}</Label>
                   <div className="space-y-4">
-                    <Input 
-                      id="logo" 
-                      name="logo" 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={handleLogoFileChange}
-                      disabled={uploadingLogo}
-                    />
+                    {/* Custom File Picker */}
+                    <div className="flex items-center space-x-4">
+                      <input
+                        id="logo-upload"
+                        name="logo"
+                        type="file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        onChange={handleLogoFileChange}
+                        disabled={uploadingLogo}
+                      />
+                      <Button
+                        type="button"
+                        onClick={() => document.getElementById('logo-upload')?.click()}
+                        disabled={uploadingLogo}
+                        size="sm"
+                      >
+                        {t('settings.choose_file')}
+                      </Button>
+                      <span className="text-sm text-muted-foreground">
+                        {logoFile ? logoFile.name : t('settings.no_file_selected')}
+                      </span>
+                    </div>
                     <p className="text-sm text-muted-foreground">{t('settings.recommended_size')}</p>
                     
                     {/* Logo Preview */}

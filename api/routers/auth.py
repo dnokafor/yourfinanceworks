@@ -8,6 +8,8 @@ import os
 import secrets
 import hashlib
 from sqlalchemy import func
+import logging
+import traceback
 
 from models.database import get_db, get_master_db
 from models.models import User, Tenant, MasterUser, Invite, PasswordResetToken, Settings  # Add PasswordResetToken, Settings import
@@ -162,9 +164,12 @@ def send_invite_email(email: str, invite_url: str, inviter_name: str, tenant_nam
 
 @router.post("/register", response_model=Token)
 async def register(user: UserCreate, db: Session = Depends(get_master_db)):
+    logger = logging.getLogger("registration")
+    logger.info(f"Starting registration for {user.email}")
     # Check if user already exists
     db_user = db.query(MasterUser).filter(MasterUser.email == user.email).first()
     if db_user:
+        logger.warning(f"Email already registered: {user.email}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
@@ -183,6 +188,7 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
         tenant_address = getattr(user, 'organization_address', None) or getattr(user, 'address', None)
 
         # Create tenant
+        logger.info(f"Creating new tenant for {user.email} with name {tenant_name}")
         db_tenant = Tenant(
             name=tenant_name,
             email=user.email,
@@ -193,11 +199,14 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
         db.commit()
         db.refresh(db_tenant)
         tenant_id = db_tenant.id
+        logger.info(f"Created tenant {tenant_id} for {user.email}")
 
         # Create tenant database
         from services.tenant_database_manager import tenant_db_manager
         success = tenant_db_manager.create_tenant_database(tenant_id, tenant_name)
+        logger.info(f"Tenant DB creation for {tenant_id}: {success}")
         if not success:
+            logger.error(f"Failed to create tenant database for {tenant_id}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to create tenant database"
@@ -215,12 +224,14 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
             )
         tenant_id = user.tenant_id
         user_role = user.role or "user"
+        logger.info(f"Using existing tenant {tenant_id} for {user.email}")
 
     # Check if this is the first user in the system
     user_count = db.query(MasterUser).count()
     is_first_user = user_count == 0
 
     # Create user in master database
+    logger.info(f"Creating user in master DB: {user.email}")
     hashed_password = get_password_hash(user.password)
     db_user = MasterUser(
         email=user.email,
@@ -237,12 +248,14 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+    logger.info(f"Created user {db_user.id} in master DB for {user.email}")
 
     # Also create user in tenant database
     from models.database import set_tenant_context
     set_tenant_context(tenant_id)
     
     try:
+        logger.info(f"Creating user in tenant DB {tenant_id} for {user.email}")
         tenant_session = tenant_db_manager.get_tenant_session(tenant_id)
         tenant_db = tenant_session()
         
@@ -265,10 +278,13 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
             
             tenant_db.add(tenant_user)
             tenant_db.commit()
+            logger.info(f"Created user {tenant_user.id} in tenant DB {tenant_id} for {user.email}")
             
         finally:
             tenant_db.close()
     except Exception as e:
+        logger.error(f"Failed to create tenant user for {user.email} in tenant DB {tenant_id}: {str(e)}")
+        logger.error(traceback.format_exc())
         # If tenant user creation fails, rollback master user creation
         db.delete(db_user)
         db.commit()
@@ -492,45 +508,101 @@ async def accept_invite(
     if existing_user:
         raise HTTPException(status_code=400, detail="User already exists")
     
-    # Create user in master database
     hashed_password = get_password_hash(invite_data.password)
-    user = MasterUser(
-        email=invite.email,
-        hashed_password=hashed_password,
-        first_name=invite_data.first_name or invite.first_name,
-        last_name=invite_data.last_name or invite.last_name,
-        role=invite.role,
-        tenant_id=invite.tenant_id,
-        is_verified=True
-    )
     
-    db.add(user)
-    
-    # Create user in tenant database
-    set_tenant_context(invite.tenant_id)
-    tenant_db = tenant_db_manager.get_tenant_session(invite.tenant_id)()
-    
-    try:
-        tenant_user = TenantUser(
+    # If user role is admin, create in both master and tenant databases
+    # Otherwise, create only in tenant database
+    if invite.role == "admin":
+        # Create admin user in master database
+        master_user = MasterUser(
             email=invite.email,
             hashed_password=hashed_password,
             first_name=invite_data.first_name or invite.first_name,
             last_name=invite_data.last_name or invite.last_name,
             role=invite.role,
-            is_verified=True
+            tenant_id=invite.tenant_id,
+            is_verified=True,
+            is_superuser=False  # Tenant admin, not super admin
         )
         
-        tenant_db.add(tenant_user)
-        tenant_db.commit()
-    finally:
-        tenant_db.close()
+        db.add(master_user)
+        db.commit()
+        db.refresh(master_user)
+        
+        # Create admin user in tenant database with same ID
+        set_tenant_context(invite.tenant_id)
+        tenant_db = tenant_db_manager.get_tenant_session(invite.tenant_id)()
+        
+        try:
+            tenant_user = TenantUser(
+                id=master_user.id,  # Use same ID as master user
+                email=invite.email,
+                hashed_password=hashed_password,
+                first_name=invite_data.first_name or invite.first_name,
+                last_name=invite_data.last_name or invite.last_name,
+                role=invite.role,
+                is_verified=True,
+                is_superuser=False
+            )
+            
+            tenant_db.add(tenant_user)
+            tenant_db.commit()
+            tenant_db.refresh(tenant_user)
+            
+            # Use master user for response
+            user = master_user
+            
+        except Exception as e:
+            # If tenant user creation fails, rollback master user creation
+            db.delete(master_user)
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to create tenant admin user: {str(e)}"
+            )
+        finally:
+            tenant_db.close()
+    else:
+        # For regular users, create only in tenant database
+        set_tenant_context(invite.tenant_id)
+        tenant_db = tenant_db_manager.get_tenant_session(invite.tenant_id)()
+        
+        try:
+            tenant_user = TenantUser(
+                email=invite.email,
+                hashed_password=hashed_password,
+                first_name=invite_data.first_name or invite.first_name,
+                last_name=invite_data.last_name or invite.last_name,
+                role=invite.role,
+                is_verified=True
+            )
+            
+            tenant_db.add(tenant_user)
+            tenant_db.commit()
+            tenant_db.refresh(tenant_user)
+            
+            # Create a temporary user object for response (matching UserList schema)
+            user = type('User', (), {
+                'id': tenant_user.id,
+                'email': tenant_user.email,
+                'first_name': tenant_user.first_name,
+                'last_name': tenant_user.last_name,
+                'role': tenant_user.role,
+                'is_active': tenant_user.is_active,
+                'is_superuser': tenant_user.is_superuser,
+                'is_verified': tenant_user.is_verified,
+                'created_at': tenant_user.created_at,
+                'tenant_id': invite.tenant_id  # For response compatibility
+            })()
+            
+        finally:
+            tenant_db.close()
     
     # Mark invite as accepted
     invite.is_accepted = True
     invite.accepted_at = datetime.now(timezone.utc)
     
     db.commit()
-    db.refresh(user)
     
     # Generate access token
     access_token = create_access_token(data={"sub": user.email})
@@ -539,15 +611,17 @@ async def accept_invite(
 
 @router.get("/users", response_model=List[UserList])
 async def list_users(
-    db: Session = Depends(get_master_db),
+    db: Session = Depends(get_db),  # Use tenant database instead of master
     current_user: MasterUser = Depends(get_current_user)
 ):
     """List all users in the organization (admin only)"""
     require_admin(current_user, "view users")
     
-    users = db.query(MasterUser).filter(
-        MasterUser.tenant_id == current_user.tenant_id
-    ).all()
+    # Import tenant User model
+    from models.models_per_tenant import User as TenantUser
+    
+    # Get users from tenant database (this is where all users should be)
+    users = db.query(TenantUser).all()
     
     return users
 
@@ -625,49 +699,126 @@ async def admin_activate_user(
     if existing_user:
         raise HTTPException(status_code=400, detail="User already exists")
     
-    # Create user in master database
     hashed_password = get_password_hash(activation_data.password)
-    user = MasterUser(
-        email=invite.email,
-        hashed_password=hashed_password,
-        first_name=activation_data.first_name or invite.first_name,
-        last_name=activation_data.last_name or invite.last_name,
-        role=invite.role,
-        tenant_id=invite.tenant_id,
-        is_verified=True
-    )
-    
-    db.add(user)
     
     # Mark invite as accepted
     invite.is_accepted = True
     invite.accepted_at = datetime.now(timezone.utc)
     
-    # Commit master database changes first
+    # Commit invite changes
     db.commit()
-    db.refresh(user)
     
-    # Create user in tenant database
-    set_tenant_context(invite.tenant_id)
-    tenant_db = tenant_db_manager.get_tenant_session(invite.tenant_id)()
-    
-    # Check if user already exists in tenant database
-    existing_tenant_user = tenant_db.query(TenantUser).filter(
-        TenantUser.email == invite.email
-    ).first()
-    
-    if not existing_tenant_user:
-        tenant_user = TenantUser(
+    # If user role is admin, create in both master and tenant databases
+    # Otherwise, create only in tenant database
+    if invite.role == "admin":
+        # Create admin user in master database
+        master_user = MasterUser(
             email=invite.email,
             hashed_password=hashed_password,
             first_name=activation_data.first_name or invite.first_name,
             last_name=activation_data.last_name or invite.last_name,
             role=invite.role,
-            is_verified=True
+            tenant_id=invite.tenant_id,
+            is_verified=True,
+            is_superuser=False  # Tenant admin, not super admin
         )
         
-        tenant_db.add(tenant_user)
-        tenant_db.commit()
+        db.add(master_user)
+        db.commit()
+        db.refresh(master_user)
+        
+        # Create admin user in tenant database with same ID
+        set_tenant_context(invite.tenant_id)
+        tenant_db = tenant_db_manager.get_tenant_session(invite.tenant_id)()
+        
+        try:
+            # Check if user already exists in tenant database
+            existing_tenant_user = tenant_db.query(TenantUser).filter(
+                TenantUser.email == invite.email
+            ).first()
+            
+            if not existing_tenant_user:
+                tenant_user = TenantUser(
+                    id=master_user.id,  # Use same ID as master user
+                    email=invite.email,
+                    hashed_password=hashed_password,
+                    first_name=activation_data.first_name or invite.first_name,
+                    last_name=activation_data.last_name or invite.last_name,
+                    role=invite.role,
+                    is_verified=True,
+                    is_superuser=False
+                )
+                
+                tenant_db.add(tenant_user)
+                tenant_db.commit()
+            
+            # Use master user for response
+            user = master_user
+            
+        except Exception as e:
+            # If tenant user creation fails, rollback master user creation
+            db.delete(master_user)
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to create tenant admin user: {str(e)}"
+            )
+        finally:
+            tenant_db.close()
+    else:
+        # For regular users, create only in tenant database
+        set_tenant_context(invite.tenant_id)
+        tenant_db = tenant_db_manager.get_tenant_session(invite.tenant_id)()
+        
+        try:
+            # Check if user already exists in tenant database
+            existing_tenant_user = tenant_db.query(TenantUser).filter(
+                TenantUser.email == invite.email
+            ).first()
+            
+            if not existing_tenant_user:
+                tenant_user = TenantUser(
+                    email=invite.email,
+                    hashed_password=hashed_password,
+                    first_name=activation_data.first_name or invite.first_name,
+                    last_name=activation_data.last_name or invite.last_name,
+                    role=invite.role,
+                    is_verified=True
+                )
+                
+                tenant_db.add(tenant_user)
+                tenant_db.commit()
+                tenant_db.refresh(tenant_user)
+                
+                # Create a temporary user object for response (matching UserList schema)
+                user = type('User', (), {
+                    'id': tenant_user.id,
+                    'email': tenant_user.email,
+                    'first_name': tenant_user.first_name,
+                    'last_name': tenant_user.last_name,
+                    'role': tenant_user.role,
+                    'is_active': tenant_user.is_active,
+                    'is_superuser': tenant_user.is_superuser,
+                    'is_verified': tenant_user.is_verified,
+                    'created_at': tenant_user.created_at,
+                    'tenant_id': invite.tenant_id  # For response compatibility
+                })()
+            else:
+                # Return existing user
+                user = type('User', (), {
+                    'id': existing_tenant_user.id,
+                    'email': existing_tenant_user.email,
+                    'first_name': existing_tenant_user.first_name,
+                    'last_name': existing_tenant_user.last_name,
+                    'role': existing_tenant_user.role,
+                    'is_active': existing_tenant_user.is_active,
+                    'is_superuser': existing_tenant_user.is_superuser,
+                    'is_verified': existing_tenant_user.is_verified,
+                    'created_at': existing_tenant_user.created_at,
+                    'tenant_id': invite.tenant_id  # For response compatibility
+                })()
+        finally:
+            tenant_db.close()
     
     return user
 

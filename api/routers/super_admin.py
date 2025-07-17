@@ -564,3 +564,36 @@ async def promote_to_super_admin(
     user.role = 'admin'
     master_db.commit()
     return {"message": f"User '{request.email}' has been promoted to super admin."} 
+
+@router.post("/demote", response_model=Dict[str, str])
+async def demote_super_admin(
+    request: PromoteUserRequest,  # Accept email in request body
+    master_db: Session = Depends(get_master_db),
+    current_user: MasterUser = Depends(require_super_admin)
+):
+    """Demote a super admin to regular admin by email (super admin only)"""
+    user = master_db.query(MasterUser).filter(MasterUser.email == request.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User with email '{request.email}' not found")
+    if not user.is_superuser:
+        return {"message": f"User '{request.email}' is not a super admin."}
+    # Prevent demoting the last super admin
+    super_admin_count = master_db.query(MasterUser).filter(MasterUser.is_superuser == True).count()
+    if super_admin_count <= 1:
+        raise HTTPException(status_code=400, detail="Cannot demote the last remaining super admin.")
+    user.is_superuser = False
+    master_db.commit()
+    # Also update in tenant DB if user exists there
+    try:
+        tenant_id = user.tenant_id
+        from services.tenant_database_manager import tenant_db_manager
+        from models.models_per_tenant import User as TenantUser
+        tenant_session = tenant_db_manager.get_tenant_session(tenant_id)()
+        tenant_user = tenant_session.query(TenantUser).filter(TenantUser.email == request.email).first()
+        if tenant_user:
+            tenant_user.is_superuser = False
+            tenant_session.commit()
+        tenant_session.close()
+    except Exception as e:
+        pass  # Ignore tenant DB errors
+    return {"message": f"User '{request.email}' has been demoted from super admin."} 

@@ -335,3 +335,25 @@ class AIConfig(Base):
     
     # Relationships
     tenant = relationship("Tenant", back_populates="ai_configs") 
+
+# --- AuditLog for master DB ---
+from sqlalchemy import Integer, String, DateTime, JSON, Column
+from datetime import datetime, timezone
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, nullable=True)  # Optional: link to tenant if relevant
+    user_id = Column(Integer, nullable=False)
+    user_email = Column(String, nullable=False)
+    action = Column(String, nullable=False)
+    resource_type = Column(String, nullable=False)
+    resource_id = Column(String, nullable=True)
+    resource_name = Column(String, nullable=True)
+    details = Column(JSON, nullable=True)
+    ip_address = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
+    status = Column(String, default="success", nullable=False)
+    error_message = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)) 

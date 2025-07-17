@@ -65,10 +65,10 @@ export default function AuditLogPage() {
   };
 
   // Extract unique values for dropdowns
-  const actions = useMemo(() => Array.from(new Set(logs.map(l => l.action).filter(Boolean))), [logs]);
-  const statuses = useMemo(() => Array.from(new Set(logs.map(l => l.status).filter(Boolean))), [logs]);
+  const actions = useMemo(() => Array.from(new Set(logs.map(l => toCamelCase(l.action)).filter(Boolean))), [logs]);
+  const statuses = useMemo(() => Array.from(new Set(logs.map(l => toCamelCase(l.status)).filter(Boolean))), [logs]);
   const users = useMemo(() => Array.from(new Set(logs.map(l => l.user_email).filter(Boolean))), [logs]);
-  const resourceTypes = useMemo(() => Array.from(new Set(logs.map(l => l.resource_type).filter(Boolean))), [logs]);
+  const resourceTypes = useMemo(() => Array.from(new Set(logs.map(l => toCamelCase(l.resource_type)).filter(Boolean))), [logs]);
 
   // Filtering logic
   const filteredLogs = logs.filter(log => {
@@ -79,10 +79,10 @@ export default function AuditLogPage() {
       (log.resource_name && log.resource_name.toLowerCase().includes(search.toLowerCase())) ||
       (log.details && JSON.stringify(log.details).toLowerCase().includes(search.toLowerCase()))
     )) return false;
-    if (action && log.action !== action) return false;
-    if (status && log.status !== status) return false;
+    if (action && toCamelCase(log.action) !== action) return false;
+    if (status && toCamelCase(log.status) !== status) return false;
     if (userEmail && log.user_email !== userEmail) return false;
-    if (resourceType && log.resource_type !== resourceType) return false;
+    if (resourceType && toCamelCase(log.resource_type) !== resourceType) return false;
     if (startDate && new Date(log.created_at) < startDate) return false;
     if (endDate && new Date(log.created_at) > endDate) return false;
     return true;
@@ -97,6 +97,17 @@ export default function AuditLogPage() {
     setStartDate(null);
     setEndDate(null);
   };
+
+  // Helper to convert resource_type to camelCase
+  function toCamelCase(str: string) {
+    if (!str) return '';
+    // If the string is all lowercase or all uppercase and has no underscores, capitalize only the first letter and lowercase the rest
+    if (/^[a-z]+$/.test(str) || /^[A-Z]+$/.test(str)) {
+      return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+    }
+    // Otherwise, convert snake_case to camelCase
+    return str.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+  }
 
   return (
     <AppLayout>
@@ -116,7 +127,7 @@ export default function AuditLogPage() {
             <SelectContent>
               <SelectItem value="all">{t('auditLog.filters.all_actions') || 'All Actions'}</SelectItem>
               {actions.map(a => (
-                <SelectItem key={a} value={a}>{a}</SelectItem>
+                <SelectItem key={a} value={a}>{toCamelCase(a)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -127,7 +138,7 @@ export default function AuditLogPage() {
             <SelectContent>
               <SelectItem value="all">{t('auditLog.filters.all_statuses') || 'All Statuses'}</SelectItem>
               {statuses.map(s => (
-                <SelectItem key={s} value={s}>{s}</SelectItem>
+                <SelectItem key={s} value={s}>{toCamelCase(s)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -149,7 +160,7 @@ export default function AuditLogPage() {
             <SelectContent>
               <SelectItem value="all">{t('auditLog.filters.all_resources') || 'All Resources'}</SelectItem>
               {resourceTypes.map(r => (
-                <SelectItem key={r} value={r}>{r}</SelectItem>
+                <SelectItem key={r} value={r}>{toCamelCase(r)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -199,11 +210,11 @@ export default function AuditLogPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>ID</TableHead>
-                <TableHead>User</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Resource</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Date</TableHead>
+                <TableHead>{t('auditLog.filters.user') || 'User'}</TableHead>
+                <TableHead>{t('auditLog.filters.action') || 'Action'}</TableHead>
+                <TableHead>{t('auditLog.filters.resource_type') || 'Resource Type'}</TableHead>
+                <TableHead>{t('auditLog.filters.status') || 'Status'}</TableHead>
+                <TableHead>{t('auditLog.filters.date') || 'Date'}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -211,9 +222,9 @@ export default function AuditLogPage() {
                 <TableRow key={log.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedLog(log)}>
                   <TableCell>{log.id}</TableCell>
                   <TableCell>{log.user_email}</TableCell>
-                  <TableCell>{log.action}</TableCell>
-                  <TableCell>{log.resource_type} {log.resource_id}</TableCell>
-                  <TableCell>{log.status}</TableCell>
+                  <TableCell>{toCamelCase(log.action)}</TableCell>
+                  <TableCell>{toCamelCase(log.resource_type)}</TableCell>
+                  <TableCell>{toCamelCase(log.status)}</TableCell>
                   <TableCell>{new Date(log.created_at).toLocaleString()}</TableCell>
                 </TableRow>
               ))}

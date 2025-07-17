@@ -121,12 +121,8 @@ const AIAssistant = React.forwardRef<HTMLDivElement>((props, ref) => {
       setUser(currentUser);
       setIsAdminUser(adminStatus);
       
-      console.log('AI Assistant: Authentication check', { 
-        token: !!token, 
-        user: !!currentUser, 
-        authStatus, 
-        adminStatus 
-      });
+      // Removed frequent debug log
+      // console.log('AI Assistant: Authentication check', { token: !!token, user: !!currentUser, authStatus, adminStatus });
     };
     
     checkAuth();
@@ -139,12 +135,12 @@ const AIAssistant = React.forwardRef<HTMLDivElement>((props, ref) => {
     // Listen for storage events (from other tabs)
     window.addEventListener('storage', handleStorageChange);
     
-    // Also check periodically for immediate login detection
-    const interval = setInterval(checkAuth, 1000);
+    // Removed setInterval for less frequent checks
+    // const interval = setInterval(checkAuth, 1000);
     
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      clearInterval(interval);
+      // clearInterval(interval);
     };
   }, []);
 
