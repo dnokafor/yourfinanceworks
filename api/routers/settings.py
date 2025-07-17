@@ -95,9 +95,21 @@ async def update_settings(
     master_db.commit()
     master_db.refresh(tenant)
     
-    # Log audit event
+    # Log audit event in master DB
     log_audit_event(
         db=master_db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="UPDATE",
+        resource_type="settings",
+        resource_id=str(tenant.id),
+        resource_name=f"Setting: {tenant.name}",
+        details=settings,
+        status="success"
+    )
+    # Log audit event in tenant DB as well
+    log_audit_event(
+        db=db,
         user_id=current_user.id,
         user_email=current_user.email,
         action="UPDATE",
