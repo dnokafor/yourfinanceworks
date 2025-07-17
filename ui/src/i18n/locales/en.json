@@ -161,7 +161,9 @@
     },
     "errors": {
       "load_failed": "Failed to load dashboard data"
-    }
+    },
+    "startCreatingInvoices": "Start creating invoices to track your business",
+    "paymentMethodsDistribution": "Payment Methods Distribution"
   },
   "invoices": {
     "title": "Invoices",
@@ -657,7 +659,8 @@
     "failed_to_upload_logo": "Failed to upload logo.",
     "choose_file": "Choose file",
     "no_file_selected": "No file selected",
-    "failed_to_save_ai_assistant_setting": "Failed to save AI Assistant setting."
+    "failed_to_save_ai_assistant_setting": "Failed to save AI Assistant setting.",
+    "no_ai_config_found": "No AI configuration found. Please configure an AI provider in Settings > AI Provider Configurations."
   },
   "users": {
     "title": "Users",
@@ -1146,7 +1149,10 @@
     "totalRevenue": "Total Revenue:",
     "outstanding": "Outstanding:",
     "clientsWithBalance": "Clients with Balance",
-    "recentInvoices": "Recent Invoices"
+    "recentInvoices": "Recent Invoices",
+    "invoicePatternAnalysis": "Invoice Pattern Analysis",
+    "recommendations": "Recommendations",
+    "review_business_processes": "Review your invoicing and payment collection processes"
   },
   "currency_manager": {
     "custom_currencies": "Custom Currencies",
@@ -1202,6 +1208,7 @@
     },
     "reload": "Reload",
     "filters": {
+      "date": "Date",
       "action": "Action",
       "status": "Status",
       "user": "User",

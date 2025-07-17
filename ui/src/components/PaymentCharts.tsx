@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TrendingUp, DollarSign, Calendar, CreditCard } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface PaymentChartData {
   timeline: Array<{ date: string; amount: number }>;
@@ -23,6 +24,7 @@ interface PaymentChartsProps {
 }
 
 const PaymentCharts: React.FC<PaymentChartsProps> = ({ chartData, payments }) => {
+  const { t } = useTranslation();
   // Ensure payments is an array
   const paymentsArray = Array.isArray(payments) ? payments : [];
   
@@ -139,7 +141,7 @@ const PaymentCharts: React.FC<PaymentChartsProps> = ({ chartData, payments }) =>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <CreditCard className="h-5 w-5" />
-            Payment Methods Distribution
+            {t('dashboard.paymentMethodsDistribution')}
           </CardTitle>
         </CardHeader>
         <CardContent>

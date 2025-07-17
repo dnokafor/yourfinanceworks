@@ -6,10 +6,12 @@ import { Loader2 } from "lucide-react";
 import { invoiceApi, Invoice } from "@/lib/api";
 import { toast } from "sonner";
 import { CurrencyDisplay } from "@/components/ui/currency-display";
+import { useTranslation } from "react-i18next";
 
 export function RecentInvoices() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const { t } = useTranslation();
 
   useEffect(() => {
     const fetchInvoices = async () => {
@@ -88,7 +90,7 @@ export function RecentInvoices() {
                 console.log('[DEBUG] No invoices to render, invoices array is empty'),
                 <TableRow>
                   <TableCell colSpan={4} className="text-center py-6">
-                    No invoices found
+                    {t('dashboard.startCreatingInvoices')}
                   </TableCell>
                 </TableRow>
               )}

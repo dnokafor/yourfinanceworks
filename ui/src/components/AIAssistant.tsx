@@ -320,12 +320,22 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
     const typingMessage: Message = { id: messages.length + 2, sender: 'ai', text: <EnhancedAIResponse text={t('aiAssistant.thinking')} /> };
     setMessages((prev) => [...prev, typingMessage]);
 
+    // Get translated quick action texts (lowercase)
+    const analyzePatternsText = t('aiAssistant.analyzePatterns').toLowerCase();
+    const suggestActionsText = t('aiAssistant.suggestActions').toLowerCase();
+    const paymentChartsText = t('aiAssistant.paymentCharts').toLowerCase();
+
     try {
       // Check for specific patterns that should use dedicated endpoints
       const lowerText = textToSend.toLowerCase();
       console.log('AI Assistant: Processing message:', { textToSend, lowerText });
       
-      if (lowerText.includes('analyze') && lowerText.includes('pattern')) {
+      // Analyze Patterns: match translated or English keywords
+      if (
+        lowerText === analyzePatternsText ||
+        lowerText.includes(analyzePatternsText) ||
+        (lowerText.includes('analyze') && lowerText.includes('pattern'))
+      ) {
         // Use the analyze-patterns endpoint (MCP-like functionality)
         console.log('AI Assistant: Using analyze-patterns endpoint');
         try {
@@ -351,7 +361,7 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
               <div className="space-y-4">
                 <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg border border-blue-200">
                   <h3 className="text-lg font-bold text-blue-900 mb-3 flex items-center">
-                    📊 Invoice Pattern Analysis
+                    📊 {t('aiAssistant.invoicePatternAnalysis')}
                   </h3>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -426,7 +436,11 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
           });
           throw error;
         }
-      } else if (lowerText.includes('suggest') && lowerText.includes('action')) {
+      } else if (
+        lowerText === suggestActionsText ||
+        lowerText.includes(suggestActionsText) ||
+        (lowerText.includes('suggest') && lowerText.includes('action'))
+      ) {
         // Use the suggest-actions endpoint (MCP-like functionality)
         console.log('AI Assistant: Using suggest-actions endpoint');
         try {
@@ -495,7 +509,11 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
           console.error('AI Assistant: Error calling suggest-actions:', error);
           throw error;
         }
-      } else if (lowerText.includes('payment') || lowerText.includes('payments')) {
+      } else if (
+        lowerText === paymentChartsText ||
+        lowerText.includes(paymentChartsText) ||
+        lowerText.includes('payment') || lowerText.includes('payments')
+      ) {
         // Handle payment data display with charts
         console.log('AI Assistant: Using payments endpoint with charts');
         try {
@@ -535,7 +553,7 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
         // Check if we have a default AI configuration
         if (!defaultAIConfig) {
           console.log('AI Assistant: No default AI config found:', { aiConfigs, defaultAIConfig });
-          const errorMessage = "No AI configuration found. Please configure an AI provider in Settings > AI Provider Configurations.";
+          const errorMessage = t('settings.no_ai_config_found');
           setMessages((prev) => [...prev.slice(0, -1), { id: prev.length, sender: 'ai', text: errorMessage }]);
           return;
         }
@@ -668,7 +686,7 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
                   <Button
                     variant="outline"
                     className="rounded-xl bg-gradient-to-r from-green-100 to-blue-100 text-green-700 font-semibold shadow hover:from-green-200 hover:to-blue-200"
-                    onClick={() => handleQuickAction(t('aiAssistant.showPaymentCharts'))}
+                    onClick={() => handleQuickAction(t('aiAssistant.paymentCharts'))}
                   >
                     {t('aiAssistant.paymentCharts')}
                   </Button>

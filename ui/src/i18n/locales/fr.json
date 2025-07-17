@@ -161,7 +161,9 @@
     },
     "errors": {
       "load_failed": "Échec du chargement des données du tableau de bord"
-    }
+    },
+    "startCreatingInvoices": "Commencez à créer des factures pour suivre votre activité",
+    "paymentMethodsDistribution": "Répartition des modes de paiement"
   },
   "invoices": {
     "title": "Factures",
@@ -659,7 +661,8 @@
     "failed_to_upload_logo": "Échec du téléchargement du logo.",
     "choose_file": "Choisir un fichier",
     "no_file_selected": "Aucun fichier sélectionné",
-    "failed_to_save_ai_assistant_setting": "Échec de l'enregistrement du paramètre de l'Assistant IA."
+    "failed_to_save_ai_assistant_setting": "Échec de l'enregistrement du paramètre de l'Assistant IA.",
+    "no_ai_config_found": "Aucune configuration IA trouvée. Veuillez configurer un fournisseur d'IA dans Paramètres > Configurations du fournisseur IA."
   },
   "users": {
     "title": "Utilisateurs",
@@ -1148,7 +1151,10 @@
     "totalRevenue": "Revenus totaux :",
     "outstanding": "En attente :",
     "clientsWithBalance": "Clients avec solde",
-    "recentInvoices": "Factures récentes"
+    "recentInvoices": "Factures récentes",
+    "invoicePatternAnalysis": "Analyse des modèles de factures",
+    "recommendations": "Recommandations",
+    "review_business_processes": "Examinez vos processus de facturation et de recouvrement des paiements"
   },
   "currency_manager": {
     "custom_currencies": "Devises personnalisées",
@@ -1204,6 +1210,7 @@
     },
     "reload": "Recharger",
     "filters": {
+      "date": "Date",
       "action": "Action",
       "status": "Statut",
       "user": "Utilisateur",
