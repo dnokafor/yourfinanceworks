@@ -664,7 +664,9 @@
     "choose_file": "Elegir archivo",
     "no_file_selected": "Ningún archivo seleccionado",
     "failed_to_save_ai_assistant_setting": "No se pudo guardar la configuración del Asistente de IA.",
-    "no_ai_config_found": "No se encontró configuración de IA. Por favor configura un proveedor de IA en Configuración > Configuraciones de Proveedor de IA."
+    "no_ai_config_found": "No se encontró configuración de IA. Por favor configura un proveedor de IA en Configuración > Configuraciones de Proveedor de IA.",
+    "data_management": "Gestión de Datos",
+    "data_management_description": "Respalda, exporta y restaura todos los datos de tu organización de forma segura."
   },
   "users": {
     "title": "Usuarios",
@@ -730,7 +732,11 @@
     "accepted": "Aceptado",
     "expired": "Expirado",
     "loadingInvites": "Cargando invitaciones...",
-    "activateUser": "Activar Usuario"
+    "activateUser": "Activar Usuario",
+    "cancel": "Cancelar",
+    "confirmCancelInvite": "¿Estás seguro de que quieres cancelar la invitación para {{email}}?",
+    "inviteCancelled": "¡Invitación cancelada exitosamente!",
+    "failedToCancelInvite": "Error al cancelar la invitación"
   },
   "errors": {
     "network_error": "Error de red. Por favor verifica tu conexión.",

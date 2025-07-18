@@ -477,10 +477,10 @@
       "rule_inactive": "Inactive",
       "ai_config": "AI Configuration",
       "email": "Email Settings",
-      "export": "Data Management",
-      "data_management": "Data Management",
-      "data_management_description": "Backup, export, and restore all your organization’s data securely."
+      "export": "Data Management"
     },
+    "data_management": "Data Management",
+    "data_management_description": "Backup, export, and restore all your organization’s data securely.",
     "currency_management": "Currency Management",
     "ai_configuration": "AI Configuration",
     "ai_provider_configurations": "AI Provider Configurations",
@@ -726,7 +726,11 @@
     "accepted": "Accepted",
     "expired": "Expired",
     "loadingInvites": "Loading invites...",
-    "activateUser": "Activate User"
+    "activateUser": "Activate User",
+    "cancel": "Cancel",
+    "confirmCancelInvite": "Are you sure you want to cancel the invite for {{email}}?",
+    "inviteCancelled": "Invite cancelled successfully!",
+    "failedToCancelInvite": "Failed to cancel invite"
   },
   "errors": {
     "network_error": "Network error. Please check your connection.",

@@ -3,7 +3,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm, HT
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List
+from typing import Optional, List, Dict
 import os
 import secrets
 import hashlib
@@ -21,7 +21,7 @@ from models.models_per_tenant import User as TenantUser
 from services.tenant_database_manager import tenant_db_manager
 from middleware.tenant_context_middleware import set_tenant_context
 from utils.rbac import require_admin
-from utils.audit import log_audit_event
+from utils.audit import log_audit_event, log_audit_event_master
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -438,6 +438,38 @@ async def invite_user(
     
     send_invite_email(invite_data.email, invite_url, inviter_name, tenant_name)
     
+    # Log audit event in master database
+    log_audit_event_master(
+        db=db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="CREATE",
+        resource_type="invite",
+        resource_id=str(invite.id),
+        resource_name=f"Invite for {invite.email}",
+        details=invite_data.dict(),
+        tenant_id=current_user.tenant_id,
+        status="success"
+    )
+    
+    # Log audit event in tenant database as well
+    set_tenant_context(current_user.tenant_id)
+    tenant_db = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
+    try:
+        log_audit_event(
+            db=tenant_db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="CREATE",
+            resource_type="invite",
+            resource_id=str(invite.id),
+            resource_name=f"Invite for {invite.email}",
+            details=invite_data.dict(),
+            status="success"
+        )
+    finally:
+        tenant_db.close()
+    
     # Manually construct response to handle invited_by field
     invite_response = InviteRead(
         id=invite.id,
@@ -483,6 +515,84 @@ async def list_invites(
         result.append(InviteRead(**invite_dict))
     
     return result
+
+@router.delete("/invites/{invite_id}", response_model=Dict[str, str])
+async def cancel_invite(
+    invite_id: int,
+    db: Session = Depends(get_master_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Cancel a pending invite (admin only)"""
+    # Check if current user is admin
+    require_admin(current_user, "cancel invites")
+    
+    # Find the invite
+    invite = db.query(Invite).filter(
+        Invite.id == invite_id,
+        Invite.tenant_id == current_user.tenant_id,
+        Invite.is_accepted == False
+    ).first()
+    
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invite not found or already accepted")
+    
+    # Check if invite is expired
+    if invite.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Cannot cancel an expired invite")
+    
+    # Store invite details for audit logging
+    invite_email = invite.email
+    invite_role = invite.role
+    
+    # Delete the invite
+    db.delete(invite)
+    db.commit()
+    
+    # Log audit event in master database
+    log_audit_event_master(
+        db=db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="DELETE",
+        resource_type="invite",
+        resource_id=str(invite_id),
+        resource_name=f"Invite for {invite_email}",
+        details={
+            "cancelled_invite_id": invite_id,
+            "cancelled_email": invite_email,
+            "cancelled_role": invite_role,
+            "cancelled_by": current_user.email,
+            "cancelled_at": datetime.now(timezone.utc).isoformat()
+        },
+        tenant_id=current_user.tenant_id,
+        status="success"
+    )
+    
+    # Log audit event in tenant database as well
+    set_tenant_context(current_user.tenant_id)
+    tenant_db = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
+    try:
+        log_audit_event(
+            db=tenant_db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="DELETE",
+            resource_type="invite",
+            resource_id=str(invite_id),
+            resource_name=f"Invite for {invite_email}",
+            details={
+                "cancelled_invite_id": invite_id,
+                "cancelled_email": invite_email,
+                "cancelled_role": invite_role,
+                "cancelled_by": current_user.email,
+                "cancelled_at": datetime.now(timezone.utc).isoformat()
+            },
+            status="success"
+        )
+    finally:
+        tenant_db.close()
+    
+    return {"message": f"Invite for {invite_email} has been cancelled"}
 
 @router.post("/accept-invite", response_model=Token)
 async def accept_invite(
@@ -604,6 +714,48 @@ async def accept_invite(
     
     db.commit()
     
+    # Log audit event in master database for invite acceptance
+    log_audit_event_master(
+        db=db,
+        user_id=0,  # No specific user ID since this is self-registration
+        user_email=invite.email,
+        action="ACCEPT",
+        resource_type="invite",
+        resource_id=str(invite.id),
+        resource_name=f"Invite accepted by {invite.email}",
+        details={
+            "invite_id": invite.id,
+            "accepted_email": invite.email,
+            "role": invite.role,
+            "accepted_at": datetime.now(timezone.utc).isoformat()
+        },
+        tenant_id=invite.tenant_id,
+        status="success"
+    )
+    
+    # Log audit event in tenant database as well
+    set_tenant_context(invite.tenant_id)
+    tenant_db = tenant_db_manager.get_tenant_session(invite.tenant_id)()
+    try:
+        log_audit_event(
+            db=tenant_db,
+            user_id=0,  # No specific user ID since this is self-registration
+            user_email=invite.email,
+            action="ACCEPT",
+            resource_type="invite",
+            resource_id=str(invite.id),
+            resource_name=f"Invite accepted by {invite.email}",
+            details={
+                "invite_id": invite.id,
+                "accepted_email": invite.email,
+                "role": invite.role,
+                "accepted_at": datetime.now(timezone.utc).isoformat()
+            },
+            status="success"
+        )
+    finally:
+        tenant_db.close()
+    
     # Generate access token
     access_token = create_access_token(data={"sub": user.email})
     
@@ -647,6 +799,9 @@ async def update_user_role(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
+    # Store old role for audit logging
+    old_role = user.role
+    
     # Update role in master database
     user.role = role_update.role
     db.commit()
@@ -661,6 +816,50 @@ async def update_user_role(
         if tenant_user:
             tenant_user.role = role_update.role
             tenant_db.commit()
+    finally:
+        tenant_db.close()
+    
+    # Log audit event in master database
+    log_audit_event_master(
+        db=db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="UPDATE",
+        resource_type="user_role",
+        resource_id=str(user_id),
+        resource_name=f"Role update for {user.email}",
+        details={
+            "updated_user_id": user_id,
+            "updated_user_email": user.email,
+            "old_role": old_role,
+            "new_role": role_update.role,
+            "updated_by": current_user.email
+        },
+        tenant_id=current_user.tenant_id,
+        status="success"
+    )
+    
+    # Log audit event in tenant database as well
+    set_tenant_context(current_user.tenant_id)
+    tenant_db = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
+    try:
+        log_audit_event(
+            db=tenant_db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="UPDATE",
+            resource_type="user_role",
+            resource_id=str(user_id),
+            resource_name=f"Role update for {user.email}",
+            details={
+                "updated_user_id": user_id,
+                "updated_user_email": user.email,
+                "old_role": old_role,
+                "new_role": role_update.role,
+                "updated_by": current_user.email
+            },
+            status="success"
+        )
     finally:
         tenant_db.close()
     
@@ -819,6 +1018,48 @@ async def admin_activate_user(
                 })()
         finally:
             tenant_db.close()
+    
+    # Log audit event in master database
+    log_audit_event_master(
+        db=db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="ACTIVATE",
+        resource_type="user",
+        resource_id=str(user.id) if hasattr(user, 'id') else None,
+        resource_name=f"User {invite.email}",
+        details={
+            "invite_id": invite.id,
+            "activated_email": invite.email,
+            "role": invite.role,
+            "activation_data": activation_data.dict()
+        },
+        tenant_id=current_user.tenant_id,
+        status="success"
+    )
+    
+    # Log audit event in tenant database as well
+    set_tenant_context(current_user.tenant_id)
+    tenant_db = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
+    try:
+        log_audit_event(
+            db=tenant_db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="ACTIVATE",
+            resource_type="user",
+            resource_id=str(user.id) if hasattr(user, 'id') else None,
+            resource_name=f"User {invite.email}",
+            details={
+                "invite_id": invite.id,
+                "activated_email": invite.email,
+                "role": invite.role,
+                "activation_data": activation_data.dict()
+            },
+            status="success"
+        )
+    finally:
+        tenant_db.close()
     
     return user
 

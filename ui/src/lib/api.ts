@@ -285,12 +285,31 @@ export async function apiRequest<T>(
         throw new Error('Authentication failed. Please log in again.');
       }
       
-      // Handle 403 (forbidden) errors without logging out
+      // Handle 403 (forbidden) errors - could be permission or tenant context issues
       if (response.status === 403) {
-        // User is authenticated but lacks permissions - don't log out
-        console.log('403 Forbidden - User lacks permissions for this resource');
-        // Just throw the error without auto-logout
-        throw new Error(errorData.detail || 'Access denied. You do not have permission to access this resource.');
+        // Check if it's a tenant context error
+        if (errorData.detail && errorData.detail.includes('Tenant context required')) {
+          // This is a session/tenant context issue - log out the user
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          toast.error('Session expired. Please log in again.');
+          window.location.replace('/login');
+          throw new Error('Session expired. Please log in again.');
+        } else {
+          // User is authenticated but lacks permissions - don't log out
+          console.log('403 Forbidden - User lacks permissions for this resource');
+          throw new Error(errorData.detail || 'Access denied. You do not have permission to access this resource.');
+        }
+      }
+
+      // Handle 400 errors that might be tenant context issues
+      if (response.status === 400 && errorData.detail && errorData.detail.includes('Tenant context required')) {
+        // This is a session/tenant context issue - log out the user
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        toast.error('Session expired. Please log in again.');
+        window.location.replace('/login');
+        throw new Error('Session expired. Please log in again.');
       }
 
       // Better handle validation errors (422)

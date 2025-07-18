@@ -59,8 +59,9 @@ def get_db():
     if tenant_id is None:
         # Instead of falling back, raise an error
         logger.error("No tenant context found, refusing to use master database for tenant-specific endpoint")
+        logger.error("This usually indicates a session expiry or missing authentication token")
         raise HTTPException(
-            status_code=400,
+            status_code=401,
             detail="Tenant context required for this operation. Please ensure you are sending the correct tenant information."
         )
     else:

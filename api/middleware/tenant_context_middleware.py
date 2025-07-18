@@ -37,9 +37,10 @@ async def tenant_context_middleware(request: Request, call_next):
                             # Cross-check header_tenant_id if present
                             if header_tenant_id and str(header_tenant_id) != str(user.tenant_id):
                                 logger.warning(f"Tenant ID header mismatch: header={header_tenant_id}, user={user.tenant_id}")
+                                logger.warning(f"User email: {email}, User tenant_id: {user.tenant_id}")
                                 return JSONResponse(
-                                    status_code=status.HTTP_403_FORBIDDEN,
-                                    content={"detail": "Tenant ID in header does not match authenticated user's tenant."}
+                                    status_code=status.HTTP_401_UNAUTHORIZED,
+                                    content={"detail": "Tenant context required for this operation. Please ensure you are sending the correct tenant information."}
                                 )
                             # Check if tenant database exists before setting context
                             try:

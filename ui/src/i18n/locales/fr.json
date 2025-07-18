@@ -728,7 +728,11 @@
     "accepted": "Accepté",
     "expired": "Expiré",
     "loadingInvites": "Chargement des invitations...",
-    "activateUser": "Activer l'utilisateur"
+    "activateUser": "Activer l'utilisateur",
+    "cancel": "Annuler",
+    "confirmCancelInvite": "Êtes-vous sûr de vouloir annuler l'invitation pour {{email}}?",
+    "inviteCancelled": "Invitation annulée avec succès!",
+    "failedToCancelInvite": "Échec de l'annulation de l'invitation"
   },
   "errors": {
     "network_error": "Erreur réseau. Veuillez vérifier votre connexion.",

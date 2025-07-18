@@ -396,9 +396,27 @@ class ApiService {
         
         // Handle authentication errors
         if (!config.isLogin && (response.status === 401 || response.status === 403)) {
+          // Check if it's a tenant context error
+          if (errorData.detail && errorData.detail.includes('Tenant context required')) {
+            await this.removeToken();
+            await this.removeUser();
+            throw new Error('Session expired. Please log in again.');
+          } else if (response.status === 401) {
+            // 401 Unauthorized - token is invalid/expired
+            await this.removeToken();
+            await this.removeUser();
+            throw new Error('Authentication failed. Please log in again.');
+          } else {
+            // 403 Forbidden - user lacks permissions
+            throw new Error(errorData.detail || 'Access denied. You do not have permission to access this resource.');
+          }
+        }
+
+        // Handle 400 errors that might be tenant context issues
+        if (response.status === 400 && errorData.detail && errorData.detail.includes('Tenant context required')) {
           await this.removeToken();
           await this.removeUser();
-          throw new Error('Authentication failed. Please log in again.');
+          throw new Error('Session expired. Please log in again.');
         }
 
         throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);

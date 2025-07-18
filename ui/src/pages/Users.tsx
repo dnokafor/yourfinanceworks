@@ -81,6 +81,7 @@ export default function UsersPage() {
     last_name: "",
   });
   const [activating, setActivating] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
   // Get current user id from localStorage
@@ -213,6 +214,24 @@ export default function UsersPage() {
     }
   };
 
+  const handleCancelInvite = async (inviteId: number, inviteEmail: string) => {
+    if (!confirm(t('users.confirmCancelInvite', { email: inviteEmail }))) {
+      return;
+    }
+    
+    setCancelling(true);
+    try {
+      await api.delete(`/auth/invites/${inviteId}`);
+      toast.success(t('users.inviteCancelled'));
+      fetchInvites();
+    } catch (err: any) {
+      console.error("Failed to cancel invite:", err);
+      toast.error(err?.response?.data?.detail || t('users.failedToCancelInvite'));
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   // Filter users by search query
   const filteredUsers = users.filter(user =>
     user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -333,13 +352,23 @@ export default function UsersPage() {
                           <TableCell>{new Date(invite.expires_at).toLocaleString()}</TableCell>
                           <TableCell>
                             {status === t('users.pending') && (
-                              <Button
-                                onClick={() => openActivationDialog(invite)}
-                                size="sm"
-                                className="bg-green-600 hover:bg-green-700"
-                              >
-                                {t('users.activate')}
-                              </Button>
+                              <div className="flex gap-2">
+                                <Button
+                                  onClick={() => openActivationDialog(invite)}
+                                  size="sm"
+                                  className="bg-green-600 hover:bg-green-700"
+                                >
+                                  {t('users.activate')}
+                                </Button>
+                                <Button
+                                  onClick={() => handleCancelInvite(invite.id, invite.email)}
+                                  size="sm"
+                                  variant="destructive"
+                                  disabled={cancelling}
+                                >
+                                  {cancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : t('users.cancel')}
+                                </Button>
+                              </div>
                             )}
                           </TableCell>
                         </TableRow>
