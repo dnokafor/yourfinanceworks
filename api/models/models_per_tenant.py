@@ -238,4 +238,13 @@ class AuditLog(Base):
     error_message = Column(String, nullable=True)  # Error message if status is error
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
+class AIChatHistory(Base):
+    __tablename__ = "ai_chat_history"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    tenant_id = Column(Integer, nullable=True)  # If multitenant
+    message = Column(Text, nullable=False)
+    sender = Column(String, nullable=False)  # 'user' or 'ai'
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
  

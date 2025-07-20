@@ -368,14 +368,15 @@ export async function apiRequest<T>(
 
 // Helper to get i18n error message from backend error code
 export function getErrorMessage(error: any, t: (key: string) => string): string {
-  if (error?.response?.data?.detail) {
-    const code = error.response.data.detail;
+  // Check if the error message is a known error code
+  if (error?.message) {
+    const code = error.message;
     // Try to map to i18n error code
     const i18nMsg = t(`errors.${code}`);
     if (i18nMsg && i18nMsg !== `errors.${code}`) {
       return i18nMsg;
     }
-    // Fallback to code if not found
+    // Fallback to the original error message if no translation is found
     return code;
   }
   // Fallback to generic error

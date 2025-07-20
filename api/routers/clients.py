@@ -352,6 +352,18 @@ async def delete_client(
         # Now delete the client
         db.delete(db_client)
         db.commit()
+        # Audit log for client delete
+        log_audit_event(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="DELETE",
+            resource_type="client",
+            resource_id=str(client_id),
+            resource_name=db_client.name,
+            details={"message": "Client deleted"},
+            status="success"
+        )
     except HTTPException:
         raise
     except Exception as e:

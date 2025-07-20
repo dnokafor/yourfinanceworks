@@ -228,10 +228,12 @@ class Settings(Base):
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
     
-    key = Column(String, index=True)  # Removed unique constraint for multi-tenancy
-    value = Column(JSON)
+    key = Column(String, nullable=False)  # Removed unique constraint for multi-tenancy
+    value = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    # Add retention days for AI chat history (default 7, max 30)
+    ai_chat_history_retention_days = Column(Integer, default=7)
     
     # Relationships
     tenant = relationship("Tenant", back_populates="settings")

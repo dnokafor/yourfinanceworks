@@ -303,6 +303,19 @@ async def empty_recycle_bin(
             db.delete(invoice)
         
         db.commit()
+
+        # Audit log for empty recycle bin
+        log_audit_event(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="EMPTY_RECYCLE_BIN",
+            resource_type="invoice",
+            resource_id=None,
+            resource_name=None,
+            details={"message": f"Recycle bin emptied, {count} invoices permanently deleted."},
+            status="success"
+        )
         
         return {
             "message": f"Recycle bin emptied successfully. {count} invoices permanently deleted.",
@@ -364,6 +377,19 @@ async def restore_invoice(
         db.add(history_entry)
         
         db.commit()
+
+        # Audit log for restore
+        log_audit_event(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="RESTORE",
+            resource_type="invoice",
+            resource_id=str(invoice_id),
+            resource_name=f"Invoice {db_invoice.number}",
+            details={"message": "Invoice restored from recycle bin"},
+            status="success"
+        )
         
         return RecycleBinResponse(
             message="Invoice restored successfully",
@@ -424,6 +450,19 @@ async def permanently_delete_invoice(
         # Now permanently delete the invoice (this will cascade to related records)
         db.delete(db_invoice)
         db.commit()
+
+        # Audit log for permanent delete
+        log_audit_event(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="PERMANENT_DELETE",
+            resource_type="invoice",
+            resource_id=str(invoice_id),
+            resource_name=f"Invoice {db_invoice.number}",
+            details={"message": "Invoice permanently deleted"},
+            status="success"
+        )
         
         return RecycleBinResponse(
             message="Invoice permanently deleted",
@@ -679,6 +718,19 @@ async def update_invoice(
             db.commit()
             db.refresh(db_invoice)
             logger.info(f"[DEBUG] Saved custom_fields in DB (update): {db_invoice.custom_fields}")
+
+            # Add audit log for invoice update
+            log_audit_event(
+                db=db,
+                user_id=current_user.id,
+                user_email=current_user.email,
+                action="UPDATE",
+                resource_type="invoice",
+                resource_id=str(db_invoice.id),
+                resource_name=f"Invoice {db_invoice.number}",
+                details={"changes": changes},
+                status="success"
+            )
             
             # Get updated items to include in response
             items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).all()
@@ -784,6 +836,19 @@ async def delete_invoice(
         db.add(history_entry)
         
         db.commit()
+
+        # Audit log for soft delete
+        log_audit_event(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="DELETE",
+            resource_type="invoice",
+            resource_id=str(invoice_id),
+            resource_name=f"Invoice {db_invoice.number}",
+            details={"message": "Invoice moved to recycle bin"},
+            status="success"
+        )
         
         return RecycleBinResponse(
             message="Invoice moved to recycle bin successfully",

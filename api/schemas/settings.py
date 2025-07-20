@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime
 
 class CompanyInfo(BaseModel):
     name: str
@@ -17,11 +18,21 @@ class InvoiceSettings(BaseModel):
     send_copy: bool = True
     auto_reminders: bool = True
 
+class SettingsBase(BaseModel):
+    tenant_id: int
+    key: str
+    value: Optional[dict] = None
+    ai_chat_history_retention_days: Optional[int] = 7
+
 class Settings(SettingsBase):
     id: int
+    created_at: datetime
+    updated_at: datetime
     enable_ai_assistant: bool = False
     company_info: CompanyInfo
     invoice_settings: InvoiceSettings
+    class Config:
+        orm_mode = True
 
 class SettingsUpdate(BaseModel):
     company_info: Optional[CompanyInfo] = None

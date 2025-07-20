@@ -165,6 +165,7 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
   const [input, setInput] = useState('');
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
 
   // Auto-scroll to bottom when messages change
   const scrollToBottom = () => {
@@ -307,6 +308,32 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
   }
 
   console.log('AI Assistant: Rendering component - all checks passed');
+
+  // Fetch chat history when chat is opened
+  useEffect(() => {
+    if (isOpen && !historyLoaded) {
+      (async () => {
+        try {
+          const history = await api.get('/ai/chat/history');
+          if (Array.isArray(history) && history.length > 0) {
+            setMessages([
+              ...history.map((msg: any, idx: number) => ({
+                id: idx + 1,
+                sender: msg.sender,
+                text: msg.sender === 'ai' ? <EnhancedAIResponse text={msg.message} /> : msg.message
+              }))
+            ]);
+          }
+        } catch (e) {
+          console.error('Failed to load AI chat history:', e);
+        } finally {
+          setHistoryLoaded(true);
+        }
+      })();
+    }
+    // Reset loaded flag when closed
+    if (!isOpen) setHistoryLoaded(false);
+  }, [isOpen, historyLoaded]);
 
   const handleSendMessage = async (messageText?: string) => {
     const textToSend = messageText || input.trim();
@@ -644,6 +671,15 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
                     </Button>
                   </div>
                 </div>
+                {/* Retention notice */}
+                {(() => {
+                  const s = settings as any;
+                  return s && typeof s.ai_chat_history_retention_days === 'number' ? (
+                    <div className="px-6 pt-2 pb-1 text-xs text-muted-foreground text-center">
+                      {t('aiAssistant.chatHistoryRetentionNotice', { days: s.ai_chat_history_retention_days })}
+                    </div>
+                  ) : null;
+                })()}
                 <ScrollArea ref={scrollAreaRef} className="flex-grow px-6 py-4 overflow-y-auto relative z-20">
                   <div className="flex flex-col space-y-4">
                     {messages.map((msg) => (

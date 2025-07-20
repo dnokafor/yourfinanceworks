@@ -355,6 +355,18 @@ async def update_payment(
         db_payment.updated_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(db_payment)
+        # Audit log for payment update
+        log_audit_event(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="UPDATE",
+            resource_type="payment",
+            resource_id=str(payment_id),
+            resource_name=f"Payment for Invoice #{db_payment.invoice_id}",
+            details=payment.dict(exclude_unset=True),
+            status="success"
+        )
         return db_payment
     except HTTPException:
         raise
@@ -385,6 +397,18 @@ async def delete_payment(
         
         db.delete(db_payment)
         db.commit()
+        # Audit log for payment delete
+        log_audit_event(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="DELETE",
+            resource_type="payment",
+            resource_id=str(payment_id),
+            resource_name=f"Payment for Invoice #{db_payment.invoice_id}",
+            details={"message": "Payment deleted"},
+            status="success"
+        )
         return None
     except HTTPException:
         raise

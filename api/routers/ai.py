@@ -8,13 +8,15 @@ import httpx
 
 from models.database import get_db
 from routers.auth import get_current_user
-from models.models_per_tenant import User, Invoice, Client, AIConfig
-from models.models import Tenant
+from models.models_per_tenant import User, Invoice, Client, AIConfig, AIChatHistory
+from models.models import Tenant, Settings
+from schemas.settings import Settings as SettingsSchema
 from constants.recommendation_codes import (
     CONSIDER_STRICTER_PAYMENT_TERMS,
     REVIEW_PAYMENT_TERMS_SLOW_CLIENTS,
     START_CREATING_INVOICES,
 )
+from models.database import get_master_db
 
 router = APIRouter(
     prefix="/ai",
@@ -992,3 +994,57 @@ This comprehensive statistical analysis was performed using your actual invoice 
             "success": False,
             "error": f"Failed to get AI response: {str(e)}"
         }
+
+@router.post("/chat/message")
+def save_ai_chat_message(
+    message: str,
+    sender: str,  # 'user' or 'ai'
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Get tenant_id if available
+    tenant_id = getattr(current_user, 'tenant_id', None)
+    chat_message = AIChatHistory(
+        user_id=current_user.id,
+        tenant_id=tenant_id,
+        message=message,
+        sender=sender,
+        created_at=datetime.now(timezone.utc)
+    )
+    db.add(chat_message)
+    db.commit()
+    db.refresh(chat_message)
+    return {"success": True, "id": chat_message.id}
+
+@router.get("/chat/history")
+def get_ai_chat_history(
+    db: Session = Depends(get_db),
+    master_db: Session = Depends(get_master_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Get tenant_id if available
+    tenant_id = getattr(current_user, 'tenant_id', None)
+    # Get retention days from settings (default 7, max 30)
+    settings = master_db.query(Settings).filter(Settings.tenant_id == tenant_id).first()
+    retention_days = 7
+    if settings and hasattr(settings, 'ai_chat_history_retention_days'):
+        retention_days = min(max(settings.ai_chat_history_retention_days or 7, 1), 30)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    history = db.query(AIChatHistory).filter(
+        AIChatHistory.user_id == current_user.id,
+        (AIChatHistory.tenant_id == tenant_id) if tenant_id is not None else True,
+        AIChatHistory.created_at >= cutoff
+    ).order_by(AIChatHistory.created_at.asc()).all()
+    # Purge old messages
+    db.query(AIChatHistory).filter(
+        AIChatHistory.user_id == current_user.id,
+        (AIChatHistory.tenant_id == tenant_id) if tenant_id is not None else True,
+        AIChatHistory.created_at < cutoff
+    ).delete()
+    db.commit()
+    return [{
+        "id": msg.id,
+        "message": msg.message,
+        "sender": msg.sender,
+        "created_at": msg.created_at.isoformat()
+    } for msg in history]
