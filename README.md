@@ -325,6 +325,7 @@ The AI assistant automatically detects the type of query and uses the appropriat
 ## 🏢 Super User System Usage
 
 The super user system provides comprehensive management capabilities for multi-tenant environments.
+The first signed up user becomes Super User automatically or you can use the below script to create one.
 
 ### Creating a Super User
 
