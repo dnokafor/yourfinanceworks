@@ -65,7 +65,8 @@ class InvoicePDFGenerator:
         client_data: Dict[str, Any],
         company_data: Dict[str, Any],
         items: List[Dict[str, Any]] = None,
-        db: Session = None
+        db: Session = None,
+        show_discount: bool = False
     ) -> bytes:
         """Generate a PDF invoice and return as bytes"""
         try:
@@ -99,7 +100,15 @@ class InvoicePDFGenerator:
             
             # Invoice items table
             if items:
-                story.extend(self._build_items_table(items, invoice_data.get('currency', 'USD'), db))
+                story.extend(self._build_items_table(
+                    items,
+                    invoice_data.get('currency', 'USD'),
+                    db,
+                    show_discount,
+                    invoice_data.get('subtotal', 0),
+                    invoice_data.get('discount_type'),
+                    invoice_data.get('discount_value', 0)
+                ))
             else:
                 # Create a simple items table if no items provided
                 story.extend(self._build_simple_total(invoice_data, db))
@@ -107,7 +116,7 @@ class InvoicePDFGenerator:
             story.append(Spacer(1, 20))
             
             # Total and payment info
-            story.extend(self._build_totals(invoice_data, db))
+            story.extend(self._build_totals(invoice_data, db, show_discount=show_discount))
             story.append(Spacer(1, 30))
             
             # Notes
@@ -204,7 +213,7 @@ class InvoicePDFGenerator:
         
         return elements
     
-    def _build_items_table(self, items: List[Dict[str, Any]], currency_code: str, db: Session) -> List:
+    def _build_items_table(self, items: List[Dict[str, Any]], currency_code: str, db: Session, show_discount: bool, invoice_subtotal: float, discount_type: str, discount_value: float) -> List:
         """Build items table"""
         elements = []
         
@@ -213,11 +222,35 @@ class InvoicePDFGenerator:
         
         # Table rows
         for item in items:
+            display_price = item.get('price', 0)
+            display_amount = item.get('amount', 0)
+
+            logger.info(f"[_build_items_table] show_discount: {show_discount}, discount_value: {discount_value}, invoice_subtotal: {invoice_subtotal}")
+            logger.info(f"[_build_items_table] item_original_price: {item.get('price', 0)}, item_quantity: {item.get('quantity', 1)}")
+
+            if not show_discount and discount_value > 0 and invoice_subtotal > 0:
+                # Calculate the actual discount amount
+                if discount_type == "percentage":
+                    actual_discount_amount = (invoice_subtotal * discount_value) / 100
+                else: # fixed
+                    actual_discount_amount = min(discount_value, invoice_subtotal)
+                
+                # Calculate the discount factor
+                discount_factor = (invoice_subtotal - actual_discount_amount) / invoice_subtotal
+                
+                # Apply prorated discount to individual item price
+                display_price = item.get('price', 0) * discount_factor
+                # Recalculate display_amount based on the prorated price and quantity
+                display_amount = display_price * item.get('quantity', 1)
+                logger.info(f"[_build_items_table] Proration applied: actual_discount_amount={actual_discount_amount}, discount_factor={discount_factor}, display_price={display_price}, display_amount={display_amount}")
+            else:
+                logger.info(f"[_build_items_table] Proration skipped. show_discount={show_discount}, discount_value={discount_value}, invoice_subtotal={invoice_subtotal}")
+
             table_data.append([
                 item.get('description', ''),
                 str(item.get('quantity', 1)),
-                self._format_currency(item.get('price', 0), currency_code, db),
-                self._format_currency(item.get('amount', 0), currency_code, db)
+                self._format_currency(display_price, currency_code, db),
+                self._format_currency(display_amount, currency_code, db)
             ])
         
         # Create table
@@ -244,7 +277,7 @@ class InvoicePDFGenerator:
         
         return elements
     
-    def _build_simple_total(self, invoice_data: Dict[str, Any], db: Session) -> List:
+    def _build_simple_total(self, invoice_data: Dict[str, Any], db: Session, show_discount: bool = False) -> List:
         """Build simple total section when no items are provided"""
         elements = []
         
@@ -253,9 +286,20 @@ class InvoicePDFGenerator:
         # Simple service/total line
         table_data = [
             ['Description', 'Amount'],
-            ['Services/Products', self._format_currency(invoice_data.get('amount', 0), currency_code, db)]
         ]
-        
+
+        if show_discount and invoice_data.get('discount_value', 0) > 0:
+            table_data.append(['Services/Products (Subtotal)', self._format_currency(invoice_data.get('subtotal', 0), currency_code, db)])
+            discount_display = f"-"
+            if invoice_data.get('discount_type') == "percentage":
+                discount_display += f"{invoice_data.get('discount_value', 0):.2f}%"
+            else:
+                discount_display += self._format_currency(invoice_data.get('discount_value', 0), currency_code, db)
+            table_data.append(['Discount', discount_display])
+            table_data.append(['Total', self._format_currency(invoice_data.get('amount', 0), currency_code, db)])
+        else:
+            table_data.append(['Services/Products', self._format_currency(invoice_data.get('amount', 0), currency_code, db)])
+
         simple_table = Table(table_data, colWidths=[4*inch, 2*inch])
         simple_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
@@ -277,19 +321,33 @@ class InvoicePDFGenerator:
         
         return elements
     
-    def _build_totals(self, invoice_data: Dict[str, Any], db: Session) -> List:
+    def _build_totals(self, invoice_data: Dict[str, Any], db: Session, show_discount: bool = False) -> List:
         """Build totals section"""
         elements = []
         
-        amount = invoice_data.get('amount', 0)
+        subtotal = invoice_data.get('subtotal', 0)
+        discount_type = invoice_data.get('discount_type')
+        discount_value = invoice_data.get('discount_value', 0)
+        amount = invoice_data.get('amount', 0) # This is the final amount after discount
         paid_amount = invoice_data.get('paid_amount', 0)
         balance_due = amount - paid_amount
         currency_code = invoice_data.get('currency', 'USD')
         
         # Totals table
-        totals_data = [
-            ['Subtotal:', self._format_currency(amount, currency_code, db)],
-        ]
+        totals_data = []
+
+        if show_discount and (discount_value > 0):
+            totals_data.append(['Subtotal:', self._format_currency(subtotal, currency_code, db)])
+            discount_display = f"-"
+            if discount_type == "percentage":
+                discount_display += f"{discount_value:.2f}%"
+            else:
+                discount_display += self._format_currency(discount_value, currency_code, db)
+            totals_data.append(['Discount:', discount_display])
+            totals_data.append(['Total:', self._format_currency(amount, currency_code, db)])
+        else:
+            # If discount is not shown, the 'amount' is already the discounted price
+            totals_data.append(['Subtotal:', self._format_currency(amount, currency_code, db)])
         
         if paid_amount > 0:
             totals_data.append(['Paid Amount:', self._format_currency(paid_amount, currency_code, db)])
@@ -379,8 +437,9 @@ def generate_invoice_pdf(
     client_data: Dict[str, Any],
     company_data: Dict[str, Any],
     items: List[Dict[str, Any]] = None,
-    db: Session = None
+    db: Session = None,
+    show_discount: bool = False
 ) -> bytes:
     """Convenience function to generate invoice PDF"""
     generator = InvoicePDFGenerator()
-    return generator.generate_invoice_pdf(invoice_data, client_data, company_data, items, db) 
+    return generator.generate_invoice_pdf(invoice_data, client_data, company_data, items, db, show_discount) 

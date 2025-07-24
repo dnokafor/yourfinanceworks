@@ -69,7 +69,7 @@ async def send_invoice_email(
     """Send an invoice via email"""
     try:
         # Get invoice
-        invoice = db.query(Invoice).filter(
+        invoice = db.query(Invoice).options(joinedload(Invoice.items)).filter(
             Invoice.id == request.invoice_id,
             Invoice.tenant_id == current_user.tenant_id
         ).first()
@@ -102,9 +102,13 @@ async def send_invoice_email(
             'date': invoice.created_at.strftime('%Y-%m-%d') if invoice.created_at else '',
             'due_date': invoice.due_date.strftime('%Y-%m-%d') if invoice.due_date else '',
             'amount': float(invoice.amount),
+            'subtotal': float(invoice.subtotal) if invoice.subtotal else float(invoice.amount),
+            'discount_type': invoice.discount_type,
+            'discount_value': float(invoice.discount_value) if invoice.discount_value else 0,
             'paid_amount': 0,  # Calculate from payments if needed
             'status': invoice.status,
-            'notes': invoice.notes or ''
+            'notes': invoice.notes or '',
+            'items': [item.dict() for item in invoice.items] if invoice.items else [] # Ensure items are included
         }
         
         # Prepare client data
@@ -139,7 +143,9 @@ async def send_invoice_email(
                     invoice_data=invoice_data,
                     client_data=client_data,
                     company_data=company_data,
-                    db=db
+                    items=invoice.items, # Pass items to PDF generator
+                    db=db,
+                    show_discount=request.show_discount_in_pdf
                 )
             except Exception as e:
                 logger.error(f"Failed to generate PDF: {str(e)}")

@@ -73,6 +73,7 @@ class SendInvoiceEmailRequest(BaseModel):
     to_name: Optional[str] = Field(None, description="Override recipient name")
     subject: Optional[str] = Field(None, description="Override email subject")
     include_pdf: bool = Field(default=True, description="Whether to include PDF attachment")
+    show_discount_in_pdf: bool = Field(default=False, description="Whether to show discount details in the PDF preview")
     cc_emails: Optional[List[EmailStr]] = Field(None, description="CC recipients")
     bcc_emails: Optional[List[EmailStr]] = Field(None, description="BCC recipients")
     custom_message: Optional[str] = Field(None, description="Custom message to include in email")

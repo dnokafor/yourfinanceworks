@@ -87,11 +87,25 @@ async def create_invoice(
             updated_at=datetime.now(timezone.utc),
             is_recurring=invoice.is_recurring,
             recurring_frequency=invoice.recurring_frequency,
-            discount_type=invoice.discount_type or "percentage",
-            discount_value=float(invoice.discount_value or 0),
-            subtotal=float(invoice.subtotal or invoice.amount),
             custom_fields=invoice.custom_fields
         )
+        
+        # Calculate subtotal from items
+        calculated_subtotal = sum(float(item_data.quantity) * float(item_data.price) for item_data in invoice.items)
+        db_invoice.subtotal = calculated_subtotal
+
+        # Apply discount if provided
+        db_invoice.discount_type = invoice.discount_type or "percentage"
+        db_invoice.discount_value = float(invoice.discount_value or 0)
+
+        if db_invoice.discount_value > 0:
+            if db_invoice.discount_type == "percentage":
+                discount_amount = (calculated_subtotal * db_invoice.discount_value) / 100
+            else: # fixed
+                discount_amount = db_invoice.discount_value
+            db_invoice.amount = calculated_subtotal - discount_amount
+        else:
+            db_invoice.amount = calculated_subtotal
         db.add(db_invoice)
         db.flush()  # Get the invoice ID
         logger.info(f"[DEBUG] Saved custom_fields in DB: {db_invoice.custom_fields}")
@@ -205,7 +219,8 @@ async def read_invoices(
                 "recurring_frequency": invoice.recurring_frequency,
                 "discount_type": invoice.discount_type,
                 "discount_value": float(invoice.discount_value) if invoice.discount_value else 0,
-                "subtotal": float(invoice.subtotal) if invoice.subtotal else float(invoice.amount)
+                "subtotal": float(invoice.subtotal) if invoice.subtotal else float(invoice.amount),
+                "custom_fields": invoice.custom_fields if invoice.custom_fields is not None else {}
             }
             result.append(invoice_dict)
 
@@ -550,7 +565,7 @@ async def read_invoice(
             "discount_type": invoice.discount_type,
             "discount_value": float(invoice.discount_value) if invoice.discount_value else 0,
             "subtotal": float(invoice.subtotal) if invoice.subtotal else float(invoice.amount),
-            "custom_fields": invoice.custom_fields,
+            "custom_fields": invoice.custom_fields if invoice.custom_fields is not None else {},
             "items": items_data
         }
         logger.info(f"[DEBUG] Final invoice_dict response - custom_fields: {invoice_dict.get('custom_fields')}")
@@ -714,6 +729,23 @@ async def update_invoice(
                 }
             )
             db.add(history_entry)
+            # Recalculate subtotal and amount based on updated items and discount
+            recalculated_subtotal = sum(item.quantity * item.price for item in db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).all())
+            db_invoice.subtotal = recalculated_subtotal
+
+            # Apply discount if provided in update or use existing
+            db_invoice.discount_type = invoice.discount_type or db_invoice.discount_type or "percentage"
+            db_invoice.discount_value = float(invoice.discount_value) if invoice.discount_value is not None else float(db_invoice.discount_value or 0)
+
+            if db_invoice.discount_value > 0:
+                if db_invoice.discount_type == "percentage":
+                    discount_amount = (recalculated_subtotal * db_invoice.discount_value) / 100
+                else: # fixed
+                    discount_amount = db_invoice.discount_value
+                db_invoice.amount = recalculated_subtotal - discount_amount
+            else:
+                db_invoice.amount = recalculated_subtotal
+
             db_invoice.updated_at = datetime.now(timezone.utc)
             db.commit()
             db.refresh(db_invoice)

@@ -16,24 +16,24 @@ ALGORITHM = "HS256"
 # Function-based middleware for tenant context
 async def tenant_context_middleware(request: Request, call_next):
     clear_tenant_context()
-    logger.info(f"Request received: {request.method} {request.url}")
+    logger.debug(f"Request received: {request.method} {request.url}")
     try:
         # Extract tenant context from authentication token
         try:
             authorization = request.headers.get("Authorization")
             header_tenant_id = request.headers.get("X-Tenant-ID")
             if authorization and authorization.startswith("Bearer "):
-                logger.info("Authorization header found.")
+                logger.debug("Authorization header found.")
                 token = authorization.split(" ")[1]
                 payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
                 email = payload.get("sub")
                 if email:
-                    logger.info(f"Decoded email from token: {email}")
+                    logger.debug(f"Decoded email from token: {email}")
                     master_db = next(get_master_db())
                     try:
                         user = master_db.query(MasterUser).filter(MasterUser.email == email).first()
                         if user and user.tenant_id:
-                            logger.info(f"User found: {user.email}, Tenant ID: {user.tenant_id}")
+                            logger.debug(f"User found: {user.email}, Tenant ID: {user.tenant_id}")
                             # Cross-check header_tenant_id if present
                             if header_tenant_id and str(header_tenant_id) != str(user.tenant_id):
                                 logger.warning(f"Tenant ID header mismatch: header={header_tenant_id}, user={user.tenant_id}")
@@ -49,7 +49,7 @@ async def tenant_context_middleware(request: Request, call_next):
                                 tenant_session.execute(text("SELECT 1"))
                                 tenant_session.close()
                                 set_tenant_context(user.tenant_id)
-                                logger.info(f"Successfully set tenant context to {user.tenant_id} for user {email}")
+                                logger.debug(f"Successfully set tenant context to {user.tenant_id} for user {email}")
                             except Exception as e:
                                 logger.warning(f"Tenant database for tenant {user.tenant_id} does not exist or is inaccessible: {e}")
                                 # Try to create the tenant database
@@ -68,11 +68,11 @@ async def tenant_context_middleware(request: Request, call_next):
                             logger.info(f"User not found or tenant_id missing for email: {email}")
                     finally:
                         master_db.close()
-                        logger.info(f"Master DB session closed.")
+                        logger.debug(f"Master DB session closed.")
                 else:
-                    logger.info("Email not found in JWT payload.")
+                    logger.debug("Email not found in JWT payload.")
             else:
-                logger.info("Authorization header not found or does not start with 'Bearer '.")
+                logger.debug("Authorization header not found or does not start with 'Bearer '.")
         except jwt.InvalidTokenError:
             logger.debug("Invalid JWT token")
         except Exception as e:

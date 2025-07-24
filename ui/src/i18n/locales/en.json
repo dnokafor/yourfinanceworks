@@ -323,7 +323,9 @@
     "by": "by {{user}}",
     "amount": "Amount",
     "view_details": "View Details",
-    "no_update_history_available": "No update history available"
+    "no_update_history_available": "No update history available",
+    "show_discount_in_pdf": "Show Discount in PDF",
+    "if_checked_discount_details_will_be_visible_in_the_pdf_preview_and_download": "If checked, discount details will be visible in the PDF preview and download."
   },
   "clients": {
     "title": "Clients",

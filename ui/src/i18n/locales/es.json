@@ -324,7 +324,9 @@
     "by": "por {{user}}",
     "amount": "Monto",
     "view_details": "Ver Detalles",
-    "no_update_history_available": "No hay historial de actualizaciones disponible"
+    "no_update_history_available": "No hay historial de actualizaciones disponible",
+    "show_discount_in_pdf": "Mostrar Descuento en PDF",
+    "if_checked_discount_details_will_be_visible_in_the_pdf_preview_and_download": "Si está marcado, los detalles del descuento serán visibles en la vista previa y descarga del PDF."
   },
   "clients": {
     "title": "Clientes",

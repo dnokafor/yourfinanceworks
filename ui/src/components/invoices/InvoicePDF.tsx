@@ -145,9 +145,10 @@ const styles = StyleSheet.create({
 interface InvoicePDFProps {
   invoice: Invoice;
   companyName: string;
+  showDiscount: boolean;
 }
 
-export const InvoicePDF = ({ invoice, companyName }: InvoicePDFProps) => (
+export const InvoicePDF = ({ invoice, companyName, showDiscount }: InvoicePDFProps) => (
   <Document>
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
@@ -199,21 +200,54 @@ export const InvoicePDF = ({ invoice, companyName }: InvoicePDFProps) => (
           <Text style={[styles.tableCell, styles.col3]}>Price</Text>
           <Text style={[styles.tableCell, styles.col4]}>Amount</Text>
         </View>
-        {invoice.items.map((item, index) => (
-          <View key={index} style={styles.tableRow}>
-            <Text style={[styles.tableCell, styles.col1]}>{item.description}</Text>
-            <Text style={[styles.tableCell, styles.col2]}>{item.quantity}</Text>
-            <Text style={[styles.tableCell, styles.col3]}>{formatCurrency(item.price, invoice.currency)}</Text>
-            <Text style={[styles.tableCell, styles.col4]}>{formatCurrency(item.amount, invoice.currency)}</Text>
-          </View>
-        ))}
+        {invoice.items.map((item, index) => {
+          let displayPrice = item.price;
+          let displayAmount = item.amount;
+
+          if (!showDiscount && invoice.discount_value > 0 && invoice.subtotal > 0) {
+            const actualDiscountAmount = invoice.discount_type === "percentage"
+              ? (invoice.subtotal * invoice.discount_value) / 100
+              : Math.min(invoice.discount_value, invoice.subtotal);
+            
+            const discountFactor = (invoice.subtotal - actualDiscountAmount) / invoice.subtotal;
+            
+            displayPrice = item.price * discountFactor;
+            displayAmount = item.amount * discountFactor;
+          }
+
+          return (
+            <View key={index} style={styles.tableRow}>
+              <Text style={[styles.tableCell, styles.col1]}>{item.description}</Text>
+              <Text style={[styles.tableCell, styles.col2]}>{item.quantity}</Text>
+              <Text style={[styles.tableCell, styles.col3]}>{formatCurrency(displayPrice, invoice.currency)}</Text>
+              <Text style={[styles.tableCell, styles.col4]}>{formatCurrency(displayAmount, invoice.currency)}</Text>
+            </View>
+          );
+        })}
       </View>
 
       <View style={styles.total}>
-        <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>Subtotal:</Text>
-          <Text style={styles.totalValue}>{formatCurrency(invoice.amount, invoice.currency)}</Text>
-        </View>
+        {showDiscount && invoice.discount_value > 0 ? (
+          <>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Subtotal:</Text>
+              <Text style={styles.totalValue}>{formatCurrency(invoice.subtotal || 0, invoice.currency)}</Text>
+            </View>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Discount ({invoice.discount_type === 'percentage' ? `${invoice.discount_value}%` : formatCurrency(invoice.discount_value || 0, invoice.currency)}):</Text>
+              <Text style={styles.totalValue}>- {formatCurrency((invoice.subtotal || 0) - invoice.amount, invoice.currency)}</Text>
+            </View>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Total:</Text>
+              <Text style={styles.totalValue}>{formatCurrency(invoice.amount, invoice.currency)}</Text>
+            </View>
+          </>
+        ) : (
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Subtotal:</Text>
+            <Text style={styles.totalValue}>{formatCurrency(invoice.amount, invoice.currency)}</Text>
+          </View>
+        )}
         {invoice.paid_amount > 0 && (
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Paid Amount:</Text>

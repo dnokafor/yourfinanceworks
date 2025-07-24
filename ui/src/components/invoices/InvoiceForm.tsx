@@ -8,7 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { useTranslation } from "react-i18next";
 
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -28,6 +28,7 @@ import { apiRequest } from "@/lib/api";
 import { CurrencyDisplay } from "@/components/ui/currency-display";
 import { InvoiceHistoryDetailsModal } from "./InvoiceHistoryDetailsModal";
 import { getErrorMessage } from '@/lib/api';
+import { Checkbox } from "@/components/ui/checkbox";
 
 const invoiceItemSchema = z.object({
   description: z.string().min(1, "Description is required"),
@@ -69,7 +70,8 @@ const formSchema = z.object({
     .refine((fields) => {
       const keys = fields.map(f => f.key.trim()).filter(Boolean);
       return new Set(keys).size === keys.length;
-    }, { message: "Custom field names must be unique" })
+    }, { message: "Custom field names must be unique" }),
+  showDiscountInPdf: z.boolean().optional().default(false),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -642,7 +644,7 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
         notes: value.notes || previewInvoice?.notes || '',
         currency: value.currency || previewInvoice?.currency || 'USD',
         items: itemsWithAmount,
-        subtotal: itemsWithAmount.reduce((sum, item) => sum + item.amount, 0),
+        subtotal: itemsWithAmount.reduce((sum, item) => sum + item.amount, 0), // Subtotal is always pre-discount
         discount_type: value.discountType || previewInvoice?.discount_type || "percentage",
         discount_value: Number(value.discountValue) || previewInvoice?.discount_value || 0,
         amount: (() => {
@@ -852,6 +854,7 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
         body: JSON.stringify({
           invoice_id: invoice.id,
           include_pdf: true,
+          show_discount_in_pdf: form.getValues("showDiscountInPdf"), // Pass the new field value
         }),
       });
       
@@ -2065,12 +2068,12 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
                     {/* Summary Section */}
                     <div className="bg-gray-50 p-4 rounded-lg space-y-2">
                       <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">{t('invoices.subtotal')}:</span>
+                        <span className="text-sm text-gray-600">Subtotal:</span>
                         <span className="font-medium">${calculateSubtotal().toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-600">
-                          {t('invoices.discount')}: {t('invoices.discount_type', { type: t('invoices.discount_type', { type: form.watch("discountType") }) })} {t('invoices.discount_value', { value: form.watch("discountValue") })}
+                          Discount: {t('invoices.discount_type', { type: t('invoices.discount_type', { type: form.watch("discountType") }) })} {t('invoices.discount_value', { value: form.watch("discountValue") })}
                         </span>
                         <span className="font-medium text-red-600">${(() => {
                           const discountType = form.watch("discountType");
@@ -2092,10 +2095,33 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
                         })()}</span>
                       </div>
                       <div className="border-t pt-2 flex justify-between">
-                        <span className="font-semibold">{t('invoices.total')}:</span>
+                        <span className="font-semibold">Total:</span>
                         <span className="font-bold text-lg">${calculateTotal().toFixed(2)}</span>
                       </div>
                     </div>
+
+                    <FormField
+                      control={form.control}
+                      name="showDiscountInPdf"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 shadow">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel>
+                              {t('invoices.show_discount_in_pdf')}
+                            </FormLabel>
+                            <FormDescription>
+                              {t('invoices.if_checked_discount_details_will_be_visible_in_the_pdf_preview_and_download')}
+                            </FormDescription>
+                          </div>
+                        </FormItem>
+                      )}
+                    />
                   </div>
 
                   <FormField
@@ -2189,6 +2215,7 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
                           <InvoicePDF 
                             invoice={previewInvoice} 
                             companyName={settings.company_info?.name || "Your Company"} 
+                            showDiscount={form.watch("showDiscountInPdf")}
                           />
                         } 
                         fileName={`invoice-${previewInvoice.number}.pdf`}

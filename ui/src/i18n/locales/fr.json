@@ -325,7 +325,9 @@
     "by": "par {{user}}",
     "amount": "Montant",
     "view_details": "Voir les détails",
-    "no_update_history_available": "Aucun historique de mise à jour disponible"
+    "no_update_history_available": "Aucun historique de mise à jour disponible",
+    "show_discount_in_pdf": "Afficher la remise dans le PDF",
+    "if_checked_discount_details_will_be_visible_in_the_pdf_preview_and_download": "Si coché, les détails de la remise seront visibles dans l'aperçu et le téléchargement du PDF."
   },
   "clients": {
     "title": "Clients",
