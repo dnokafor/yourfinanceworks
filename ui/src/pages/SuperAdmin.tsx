@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { useTranslation } from "react-i18next";
-import { superAdminApi } from '../lib/api';
+import { superAdminApi, apiRequest } from '../lib/api';
 
 interface Tenant {
   id: number;
@@ -107,13 +107,7 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
   
   const fetchTenants = async () => {
     try {
-      const response = await fetch('/api/v1/super-admin/tenants', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      if (!response.ok) throw new Error('Failed to fetch tenants');
-      const data = await response.json();
+      const data = await apiRequest<Tenant[]>('/super-admin/tenants', {}, { skipTenant: true });
       setTenants(data);
     } catch (err) {
       setError('Failed to fetch tenants');
@@ -122,13 +116,7 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('/api/v1/super-admin/users', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      if (!response.ok) throw new Error('Failed to fetch users');
-      const data = await response.json();
+      const data = await apiRequest<User[]>('/super-admin/users', {}, { skipTenant: true });
       setUsers(data);
     } catch (err) {
       setError('Failed to fetch users');
@@ -137,13 +125,7 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
 
   const fetchDatabaseOverview = async () => {
     try {
-      const response = await fetch('/api/v1/super-admin/database/overview', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      if (!response.ok) throw new Error('Failed to fetch database overview');
-      const data = await response.json();
+      const data = await apiRequest<{ databases: DatabaseStatus[] }>('/super-admin/database/overview', {}, { skipTenant: true });
       setDatabases(data.databases || []);
     } catch (err) {
       setError('Failed to fetch database overview');
@@ -152,16 +134,10 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
 
   const handleCreateTenant = async () => {
     try {
-      const response = await fetch('/api/v1/super-admin/tenants', {
+      await apiRequest('/super-admin/tenants', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
         body: JSON.stringify(createTenantForm)
-      });
-      
-      if (!response.ok) throw new Error('Failed to create tenant');
+      }, { skipTenant: true });
       
       setShowCreateTenant(false);
       setCreateTenantForm({ name: '', email: '', default_currency: 'USD' });
@@ -173,16 +149,10 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
 
   const handleCreateUser = async () => {
     try {
-      const response = await fetch(`/api/v1/super-admin/users?tenant_id=${createUserForm.tenant_id}`, {
+      await apiRequest(`/super-admin/users?tenant_id=${createUserForm.tenant_id}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
         body: JSON.stringify(createUserForm)
-      });
-      
-      if (!response.ok) throw new Error('Failed to create user');
+      }, { skipTenant: true });
       
       setShowCreateUser(false);
       setCreateUserForm({ email: '', first_name: '', last_name: '', role: 'user', password: '', tenant_id: '' });
@@ -199,13 +169,9 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
   const confirmDeleteTenant = async () => {
     if (!tenantToDelete) return;
     try {
-      const response = await fetch(`/api/v1/super-admin/tenants/${tenantToDelete.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      if (!response.ok) throw new Error('Failed to delete tenant');
+      await apiRequest(`/super-admin/tenants/${tenantToDelete.id}`, {
+        method: 'DELETE'
+      }, { skipTenant: true });
       toast.success('Tenant deleted successfully');
       setTenantToDelete(null);
       // Remove tenant from state
@@ -226,13 +192,9 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
   const confirmDeleteUser = async () => {
     if (!userToDelete) return;
     try {
-      const response = await fetch(`/api/v1/super-admin/users/${userToDelete.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      if (!response.ok) throw new Error('Failed to delete user');
+      await apiRequest(`/super-admin/users/${userToDelete.id}`, {
+        method: 'DELETE'
+      }, { skipTenant: true });
       toast.success('User deleted successfully');
       setUserToDelete(null);
       fetchUsers();
@@ -248,13 +210,9 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
   const confirmRecreateDatabase = async () => {
     if (!dbToRecreate) return;
     try {
-      const response = await fetch(`/api/v1/super-admin/tenants/${dbToRecreate.tenant_id}/database/recreate`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      if (!response.ok) throw new Error('Failed to recreate database');
+      await apiRequest(`/super-admin/tenants/${dbToRecreate.tenant_id}/database/recreate`, {
+        method: 'POST'
+      }, { skipTenant: true });
       toast.success('Database recreated successfully');
       setDbToRecreate(null);
       fetchDatabaseOverview();
