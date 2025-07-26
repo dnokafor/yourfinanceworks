@@ -190,6 +190,15 @@ def init_db():
                 except Exception as e:
                     logger.error(f"Error adding 'show_discount_in_pdf' column to 'invoices' table for tenant {tenant.id}: {e}")
 
+            # Add email_notification_settings table if it doesn't exist
+            if 'email_notification_settings' not in inspector.get_table_names():
+                try:
+                    from models.models_per_tenant import EmailNotificationSettings
+                    EmailNotificationSettings.__table__.create(tenant_engine)
+                    logger.info(f"Created email_notification_settings table for tenant {tenant.id}")
+                except Exception as e:
+                    logger.error(f"Error creating email_notification_settings table for tenant {tenant.id}: {e}")
+            
             # Verify if audit_logs table exists
             if 'audit_logs' in inspector.get_table_names():
                 logger.info(f"audit_logs table successfully created for tenant {tenant.id}")

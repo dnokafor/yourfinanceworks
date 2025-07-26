@@ -325,19 +325,16 @@ export async function apiRequest<T>(
           }).join('; ');
           
           console.error('Validation error:', errorMessages);
-          toast.error(`Validation error: ${errorMessages}`);
           throw new Error(`Validation error: ${errorMessages}`);
         } else {
           // Handle other error detail formats
           console.error('API error:', errorData.detail);
-          toast.error(String(errorData.detail));
           throw new Error(String(errorData.detail));
         }
       }
 
       // Handle other errors
       const errorMessage = errorData.detail || `Error: ${response.status} ${response.statusText}`;
-      toast.error(errorMessage);
       throw new Error(errorMessage);
     }
 
@@ -361,8 +358,8 @@ export async function apiRequest<T>(
     return responseData;
   } catch (error) {
     console.error('API request failed:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    toast.error(`Request failed: ${errorMessage}`);
+    // const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    // toast.error(`Request failed: ${errorMessage}`);
     throw error;
   }
 }

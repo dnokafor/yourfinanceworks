@@ -657,7 +657,9 @@
     "choose_file": "Choose file",
     "no_file_selected": "No file selected",
     "failed_to_save_ai_assistant_setting": "Failed to save AI Assistant setting.",
-    "no_ai_config_found": "No AI configuration found. Please configure an AI provider in Settings > AI Provider Configurations."
+    "no_ai_config_found": "No AI configuration found. Please configure an AI provider in Settings > AI Provider Configurations.",
+    "notification_settings_saved_successfully": "Notification settings saved successfully",
+    "test_notification_sent_successfully": "Test notification sent successfully"
   },
   "users": {
     "title": "Users",

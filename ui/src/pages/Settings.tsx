@@ -107,6 +107,32 @@ const Settings = () => {
   });
   const [profileSaving, setProfileSaving] = useState(false);
 
+  // Notification settings state
+  const [notificationSettings, setNotificationSettings] = useState({
+    user_created: false,
+    user_updated: false,
+    user_deleted: false,
+    user_login: false,
+    client_created: true,
+    client_updated: false,
+    client_deleted: true,
+    invoice_created: true,
+    invoice_updated: false,
+    invoice_deleted: true,
+    invoice_sent: true,
+    invoice_paid: true,
+    invoice_overdue: true,
+    payment_created: true,
+    payment_updated: false,
+    payment_deleted: true,
+    settings_updated: false,
+    notification_email: "",
+    daily_summary: false,
+    weekly_summary: false,
+  });
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const [savingNotifications, setSavingNotifications] = useState(false);
+
   // Fetch settings when component mounts
   useEffect(() => {
     const fetchSettings = async () => {
@@ -142,27 +168,19 @@ const Settings = () => {
 
         // Try to fetch email settings
         try {
-          const emailConfig = await fetch('/email/config', {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            },
+          const emailData = await api.get('/email/config');
+          setEmailSettings({
+            provider: emailData.provider || emailSettings.provider,
+            from_name: emailData.from_name || emailSettings.from_name,
+            from_email: emailData.from_email || emailSettings.from_email,
+            enabled: emailData.enabled ?? emailSettings.enabled,
+            aws_access_key_id: emailData.aws_access_key_id || emailSettings.aws_access_key_id,
+            aws_secret_access_key: emailData.aws_secret_access_key || emailSettings.aws_secret_access_key,
+            aws_region: emailData.aws_region || emailSettings.aws_region,
+            azure_connection_string: emailData.azure_connection_string || emailSettings.azure_connection_string,
+            mailgun_api_key: emailData.mailgun_api_key || emailSettings.mailgun_api_key,
+            mailgun_domain: emailData.mailgun_domain || emailSettings.mailgun_domain,
           });
-          
-          if (emailConfig.ok) {
-            const emailData = await emailConfig.json();
-            setEmailSettings({
-              provider: emailData.provider || emailSettings.provider,
-              from_name: emailData.from_name || emailSettings.from_name,
-              from_email: emailData.from_email || emailSettings.from_email,
-              enabled: emailData.enabled ?? emailSettings.enabled,
-              aws_access_key_id: emailData.aws_access_key_id || emailSettings.aws_access_key_id,
-              aws_secret_access_key: emailData.aws_secret_access_key || emailSettings.aws_secret_access_key,
-              aws_region: emailData.aws_region || emailSettings.aws_region,
-              azure_connection_string: emailData.azure_connection_string || emailSettings.azure_connection_string,
-              mailgun_api_key: emailData.mailgun_api_key || emailSettings.mailgun_api_key,
-              mailgun_domain: emailData.mailgun_domain || emailSettings.mailgun_domain,
-            });
-          }
         } catch (error) {
           console.log("Email settings not configured yet");
         }
@@ -189,6 +207,38 @@ const Settings = () => {
           toast.error(t('settings.failed_to_load_ai_configurations'));
         } finally {
           setLoadingAiConfigs(false);
+        }
+        
+        // Fetch notification settings
+        try {
+          setLoadingNotifications(true);
+          const notifData = await api.get('/notifications/settings');
+          setNotificationSettings({
+            user_created: notifData.user_created || false,
+            user_updated: notifData.user_updated || false,
+            user_deleted: notifData.user_deleted || false,
+            user_login: notifData.user_login || false,
+            client_created: notifData.client_created || true,
+            client_updated: notifData.client_updated || false,
+            client_deleted: notifData.client_deleted || true,
+            invoice_created: notifData.invoice_created || true,
+            invoice_updated: notifData.invoice_updated || false,
+            invoice_deleted: notifData.invoice_deleted || true,
+            invoice_sent: notifData.invoice_sent || true,
+            invoice_paid: notifData.invoice_paid || true,
+            invoice_overdue: notifData.invoice_overdue || true,
+            payment_created: notifData.payment_created || true,
+            payment_updated: notifData.payment_updated || false,
+            payment_deleted: notifData.payment_deleted || true,
+            settings_updated: notifData.settings_updated || false,
+            notification_email: notifData.notification_email || "",
+            daily_summary: notifData.daily_summary || false,
+            weekly_summary: notifData.weekly_summary || false,
+          });
+        } catch (error) {
+          console.error("Failed to fetch notification settings:", error);
+        } finally {
+          setLoadingNotifications(false);
         }
       } catch (error) {
         console.error("Failed to fetch settings:", error);
@@ -234,23 +284,14 @@ const Settings = () => {
     if (!testEmail) return;
 
     try {
-      const response = await fetch('/email/test', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({ test_email: testEmail }),
-      });
-
-      const result = await response.json();
+      const result = await api.post('/email/test', { test_email: testEmail });
       if (result.success) {
         toast.success(t('settings.test_email_sent_successfully'));
       } else {
         toast.error(t('settings.failed_to_send_test_email', { message: result.message }));
       }
     } catch (error) {
-      toast.error(t('settings.failed_to_send_test_email'));
+      toast.error(getErrorMessage(error, t));
     }
   };
 
@@ -323,14 +364,7 @@ const Settings = () => {
       
       // Save email settings separately
       try {
-        await fetch('/email/config', {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
-          body: JSON.stringify(emailSettings),
-        });
+        await api.put('/email/config', emailSettings);
       } catch (error) {
         console.log("Failed to save email settings:", error);
       }
@@ -689,11 +723,10 @@ const Settings = () => {
       const formData = new FormData();
       formData.append('file', logoFile);
 
-      const token = localStorage.getItem('token');
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'}/settings/upload-logo`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
         body: formData,
       });
@@ -762,6 +795,38 @@ const Settings = () => {
     }
   };
 
+  // Notification settings handlers
+  const handleNotificationToggle = (setting: string, checked: boolean) => {
+    setNotificationSettings(prev => ({ ...prev, [setting]: checked }));
+  };
+
+  const handleNotificationEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNotificationSettings(prev => ({ ...prev, notification_email: e.target.value }));
+  };
+
+  const handleSaveNotifications = async () => {
+    setSavingNotifications(true);
+    try {
+      const response = await api.put('/notifications/settings', notificationSettings);
+      toast.success(t('settings.notification_settings_saved_successfully'));
+    } catch (error) {
+      console.error('Failed to save notification settings:', error);
+      toast.error(getErrorMessage(error, t));
+    } finally {
+      setSavingNotifications(false);
+    }
+  };
+
+  const handleTestNotification = async () => {
+    try {
+      await api.post('/notifications/test');
+      toast.success(t('settings.test_notification_sent_successfully'));
+    } catch (error) {
+      console.error('Failed to send test notification:', error);
+      toast.error(getErrorMessage(error, t));
+    }
+  };
+
   if (loading) {
     return (
       <AppLayout>
@@ -782,13 +847,14 @@ const Settings = () => {
         </div>
 
         <Tabs defaultValue="company" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
             <TabsTrigger value="company" className="text-xs md:text-sm">{t('settings.tabs.company')}</TabsTrigger>
             <TabsTrigger value="invoices" className="text-xs md:text-sm">{t('settings.tabs.invoices')}</TabsTrigger>
             <TabsTrigger value="currencies" className="text-xs md:text-sm">{t('settings.tabs.currencies')}</TabsTrigger>
             <TabsTrigger value="discount-rules" className="text-xs md:text-sm">{t('settings.tabs.discount_rules')}</TabsTrigger>
             <TabsTrigger value="ai-config" className="text-xs md:text-sm">{t('settings.tabs.ai_config')}</TabsTrigger>
             <TabsTrigger value="email" className="text-xs md:text-sm">{t('settings.tabs.email')}</TabsTrigger>
+            <TabsTrigger value="notifications" className="text-xs md:text-sm">Notifications</TabsTrigger>
             <TabsTrigger value="export" className="text-xs md:text-sm">{t('settings.tabs.export')}</TabsTrigger>
           </TabsList>
           
@@ -1236,6 +1302,275 @@ const Settings = () => {
                     </div>
                   )}
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="notifications" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Email Notifications</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Configure which operations trigger email notifications
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {loadingNotifications ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                    <span className="text-sm text-muted-foreground">Loading notification settings...</span>
+                  </div>
+                ) : (
+                  <>
+                    {/* Custom notification email */}
+                    <div className="space-y-2">
+                      <Label htmlFor="notification_email">Notification Email (Optional)</Label>
+                      <Input
+                        id="notification_email"
+                        type="email"
+                        value={notificationSettings.notification_email}
+                        onChange={handleNotificationEmailChange}
+                        placeholder="Leave empty to use your account email"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        If specified, notifications will be sent to this email instead of your account email
+                      </p>
+                    </div>
+
+                    {/* User Operations */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold">User Operations</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>User Created</Label>
+                            <p className="text-sm text-muted-foreground">When a new user is added</p>
+                          </div>
+                          <Switch
+                            checked={notificationSettings.user_created}
+                            onCheckedChange={(checked) => handleNotificationToggle('user_created', checked)}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>User Updated</Label>
+                            <p className="text-sm text-muted-foreground">When user info is modified</p>
+                          </div>
+                          <Switch
+                            checked={notificationSettings.user_updated}
+                            onCheckedChange={(checked) => handleNotificationToggle('user_updated', checked)}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>User Deleted</Label>
+                            <p className="text-sm text-muted-foreground">When a user is removed</p>
+                          </div>
+                          <Switch
+                            checked={notificationSettings.user_deleted}
+                            onCheckedChange={(checked) => handleNotificationToggle('user_deleted', checked)}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>User Login</Label>
+                            <p className="text-sm text-muted-foreground">When a user logs in</p>
+                          </div>
+                          <Switch
+                            checked={notificationSettings.user_login}
+                            onCheckedChange={(checked) => handleNotificationToggle('user_login', checked)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Client Operations */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold">Client Operations</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>Client Created</Label>
+                            <p className="text-sm text-muted-foreground">When a new client is added</p>
+                          </div>
+                          <Switch
+                            checked={notificationSettings.client_created}
+                            onCheckedChange={(checked) => handleNotificationToggle('client_created', checked)}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>Client Updated</Label>
+                            <p className="text-sm text-muted-foreground">When client info is modified</p>
+                          </div>
+                          <Switch
+                            checked={notificationSettings.client_updated}
+                            onCheckedChange={(checked) => handleNotificationToggle('client_updated', checked)}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>Client Deleted</Label>
+                            <p className="text-sm text-muted-foreground">When a client is removed</p>
+                          </div>
+                          <Switch
+                            checked={notificationSettings.client_deleted}
+                            onCheckedChange={(checked) => handleNotificationToggle('client_deleted', checked)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Invoice Operations */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold">Invoice Operations</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>Invoice Created</Label>
+                            <p className="text-sm text-muted-foreground">When a new invoice is created</p>
+                          </div>
+                          <Switch
+                            checked={notificationSettings.invoice_created}
+                            onCheckedChange={(checked) => handleNotificationToggle('invoice_created', checked)}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>Invoice Updated</Label>
+                            <p className="text-sm text-muted-foreground">When invoice is modified</p>
+                          </div>
+                          <Switch
+                            checked={notificationSettings.invoice_updated}
+                            onCheckedChange={(checked) => handleNotificationToggle('invoice_updated', checked)}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>Invoice Deleted</Label>
+                            <p className="text-sm text-muted-foreground">When an invoice is deleted</p>
+                          </div>
+                          <Switch
+                            checked={notificationSettings.invoice_deleted}
+                            onCheckedChange={(checked) => handleNotificationToggle('invoice_deleted', checked)}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>Invoice Sent</Label>
+                            <p className="text-sm text-muted-foreground">When invoice is sent to client</p>
+                          </div>
+                          <Switch
+                            checked={notificationSettings.invoice_sent}
+                            onCheckedChange={(checked) => handleNotificationToggle('invoice_sent', checked)}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>Invoice Paid</Label>
+                            <p className="text-sm text-muted-foreground">When invoice is marked as paid</p>
+                          </div>
+                          <Switch
+                            checked={notificationSettings.invoice_paid}
+                            onCheckedChange={(checked) => handleNotificationToggle('invoice_paid', checked)}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>Invoice Overdue</Label>
+                            <p className="text-sm text-muted-foreground">When invoice becomes overdue</p>
+                          </div>
+                          <Switch
+                            checked={notificationSettings.invoice_overdue}
+                            onCheckedChange={(checked) => handleNotificationToggle('invoice_overdue', checked)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Payment Operations */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold">Payment Operations</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>Payment Created</Label>
+                            <p className="text-sm text-muted-foreground">When a payment is recorded</p>
+                          </div>
+                          <Switch
+                            checked={notificationSettings.payment_created}
+                            onCheckedChange={(checked) => handleNotificationToggle('payment_created', checked)}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>Payment Updated</Label>
+                            <p className="text-sm text-muted-foreground">When payment is modified</p>
+                          </div>
+                          <Switch
+                            checked={notificationSettings.payment_updated}
+                            onCheckedChange={(checked) => handleNotificationToggle('payment_updated', checked)}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>Payment Deleted</Label>
+                            <p className="text-sm text-muted-foreground">When a payment is removed</p>
+                          </div>
+                          <Switch
+                            checked={notificationSettings.payment_deleted}
+                            onCheckedChange={(checked) => handleNotificationToggle('payment_deleted', checked)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Summary Notifications */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold">Summary Notifications</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>Daily Summary</Label>
+                            <p className="text-sm text-muted-foreground">Daily activity summary</p>
+                          </div>
+                          <Switch
+                            checked={notificationSettings.daily_summary}
+                            onCheckedChange={(checked) => handleNotificationToggle('daily_summary', checked)}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>Weekly Summary</Label>
+                            <p className="text-sm text-muted-foreground">Weekly activity summary</p>
+                          </div>
+                          <Switch
+                            checked={notificationSettings.weekly_summary}
+                            onCheckedChange={(checked) => handleNotificationToggle('weekly_summary', checked)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex justify-between pt-4 border-t">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleTestNotification}
+                      >
+                        Send Test Notification
+                      </Button>
+                      <Button
+                        onClick={handleSaveNotifications}
+                        disabled={savingNotifications}
+                      >
+                        {savingNotifications && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Save Notification Settings
+                      </Button>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

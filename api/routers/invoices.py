@@ -141,6 +141,13 @@ async def create_invoice(
         db.commit()
         db.refresh(db_invoice)
         
+        # Send notification
+        try:
+            from utils.notifications import notify_invoice_created
+            notify_invoice_created(db, db_invoice, current_user.id)
+        except Exception as e:
+            logger.warning(f"Failed to send invoice creation notification: {str(e)}")
+        
         # Log audit event
         log_audit_event(
             db=db,
