@@ -770,7 +770,6 @@ async def accept_invite(
 
 @router.get("/users", response_model=List[UserList])
 async def list_users(
-    db: Session = Depends(get_db),  # Use tenant database instead of master
     current_user: MasterUser = Depends(get_current_user)
 ):
     """List all users in the organization (admin only)"""
@@ -779,10 +778,17 @@ async def list_users(
     # Import tenant User model
     from models.models_per_tenant import User as TenantUser
     
-    # Get users from tenant database (this is where all users should be)
-    users = db.query(TenantUser).all()
+    # Manually set tenant context and get tenant database
+    set_tenant_context(current_user.tenant_id)
+    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
+    db = tenant_session()
     
-    return users
+    try:
+        # Get users from tenant database
+        users = db.query(TenantUser).all()
+        return users
+    finally:
+        db.close()
 
 @router.put("/users/{user_id}/role", response_model=UserList)
 async def update_user_role(

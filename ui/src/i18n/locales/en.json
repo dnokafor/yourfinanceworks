@@ -362,6 +362,7 @@
       "email": "Email",
       "phone": "Phone",
       "address": "Address",
+      "preferred_currency": "Preferred Currency",
       "total_paid": "Total Paid",
       "outstanding_balance": "Outstanding Balance",
       "actions": "Actions"

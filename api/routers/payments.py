@@ -8,10 +8,12 @@ import traceback
 from datetime import datetime, date, timezone
 from collections import defaultdict
 
-from models.database import get_db
+from models.database import get_db, set_tenant_context
 from models.models_per_tenant import Invoice, Client, User
+from models.models import MasterUser
 from schemas.payment import PaymentCreate, PaymentUpdate, Payment as PaymentSchema, PaymentWithInvoice
 from routers.auth import get_current_user
+from services.tenant_database_manager import tenant_db_manager
 from services.currency_service import CurrencyService
 from utils.audit import log_audit_event
 from constants.error_codes import FAILED_TO_CREATE_PAYMENT, FAILED_TO_FETCH_PAYMENTS
@@ -113,9 +115,12 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 async def read_payments(
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
+    # Manually set tenant context and get tenant database
+    set_tenant_context(current_user.tenant_id)
+    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
+    db = tenant_session()
     try:
         # Get payments with invoice and client information using ORM
         payments = db.query(
@@ -168,6 +173,8 @@ async def read_payments(
             status_code=500,
             detail=FAILED_TO_FETCH_PAYMENTS
         )
+    finally:
+        db.close()
 
 @router.get("/{payment_id}", response_model=PaymentWithInvoice)
 async def read_payment(

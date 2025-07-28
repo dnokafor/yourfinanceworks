@@ -107,6 +107,7 @@ const Clients = () => {
                     <TableHead>{t('clients.table.email')}</TableHead>
                     <TableHead>{t('clients.table.phone')}</TableHead>
                     <TableHead className="hidden md:table-cell">{t('clients.table.address')}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{t('clients.table.preferred_currency')}</TableHead>
                     <TableHead className="text-right">{t('clients.table.total_paid')}</TableHead>
                     <TableHead className="text-right">{t('clients.table.outstanding_balance')}</TableHead>
                     <TableHead className="w-[100px]">{t('clients.table.actions')}</TableHead>
@@ -115,7 +116,7 @@ const Clients = () => {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="h-24 text-center">
+                      <TableCell colSpan={7} className="h-24 text-center">
                         <div className="flex justify-center items-center">
                           <Loader2 className="h-6 w-6 animate-spin mr-2" />
                           {t('clients.loading')}
@@ -129,6 +130,7 @@ const Clients = () => {
                         <TableCell>{client.email}</TableCell>
                         <TableCell>{client.phone}</TableCell>
                         <TableCell className="hidden md:table-cell">{client.address}</TableCell>
+                        <TableCell className="hidden lg:table-cell">{client.preferred_currency || 'USD'}</TableCell>
                         <TableCell className="text-right font-medium">
                           ${client.paid_amount.toFixed(2)}
                         </TableCell>
@@ -161,7 +163,7 @@ const Clients = () => {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={6} className="h-24 text-center">
+                      <TableCell colSpan={7} className="h-24 text-center">
                         {t('clients.no_clients')}
                       </TableCell>
                     </TableRow>

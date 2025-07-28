@@ -6,17 +6,17 @@ from datetime import datetime, timedelta, timezone
 import asyncio
 import httpx
 
-from models.database import get_db
+from models.database import get_master_db, set_tenant_context
 from routers.auth import get_current_user
-from models.models_per_tenant import User, Invoice, Client, AIConfig, AIChatHistory
-from models.models import Tenant, Settings
+from models.models import MasterUser, Tenant, Settings
+from models.models_per_tenant import Invoice, Client, AIConfig, AIChatHistory
 from schemas.settings import Settings as SettingsSchema
+from services.tenant_database_manager import tenant_db_manager
 from constants.recommendation_codes import (
     CONSIDER_STRICTER_PAYMENT_TERMS,
     REVIEW_PAYMENT_TERMS_SLOW_CLIENTS,
     START_CREATING_INVOICES,
 )
-from models.database import get_master_db
 
 router = APIRouter(
     prefix="/ai",
@@ -27,14 +27,18 @@ router = APIRouter(
 
 @router.get("/analyze-patterns", summary="Analyze invoice patterns and trends")
 async def analyze_patterns(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: MasterUser = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
     Analyzes historical invoice data to identify patterns, trends,
     and key metrics such as total invoices, paid/unpaid status,
     revenue, and client payment behavior.
     """
+    # Manually set tenant context and get tenant database
+    set_tenant_context(current_user.tenant_id)
+    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
+    db = tenant_session()
+    
     try:
         # Get all invoices (no tenant_id filtering needed since we're in the tenant's database)
         invoices = db.query(Invoice).all()
@@ -122,17 +126,22 @@ async def analyze_patterns(
             "success": False,
             "error": str(e)
         }
+    finally:
+        db.close()
 
 @router.get("/suggest-actions", summary="Suggest actionable items based on invoice analysis")
 async def suggest_actions(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: MasterUser = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
-    Provides actionable recommendations and suggestions based on the
-    analysis of invoice patterns, such as sending reminders for overdue
-    invoices or reviewing payment terms for slow-paying clients.
+    Analyzes invoice data and suggests actionable items
+    such as follow-up on overdue invoices, adjust payment terms, etc.
     """
+    # Manually set tenant context and get tenant database
+    set_tenant_context(current_user.tenant_id)
+    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
+    db = tenant_session()
+    
     try:
         # Get overdue invoices
         # No tenant_id filtering needed since we're in the tenant's database
@@ -206,14 +215,23 @@ async def suggest_actions(
             "success": False,
             "error": str(e)
         }
+    finally:
+        db.close()
 
 @router.post("/chat")
 async def ai_chat(
     message: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    config_id: int,
+    current_user: MasterUser = Depends(get_current_user)
 ):
-    """Chat with AI using configured provider and MCP tools"""
+    """
+    Chat with AI assistant using specified configuration
+    """
+    # Manually set tenant context and get tenant database
+    set_tenant_context(current_user.tenant_id)
+    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
+    db = tenant_session()
+    
     try:
         # Get AI configuration
         # No tenant_id filtering needed since we're in the tenant's database
@@ -994,33 +1012,43 @@ This comprehensive statistical analysis was performed using your actual invoice 
             "success": False,
             "error": f"Failed to get AI response: {str(e)}"
         }
+    finally:
+        db.close()
 
 @router.post("/chat/message")
 def save_ai_chat_message(
     message: str,
     sender: str,  # 'user' or 'ai'
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_master_db),
+    current_user: MasterUser = Depends(get_current_user)
 ):
     # Get tenant_id if available
     tenant_id = getattr(current_user, 'tenant_id', None)
-    chat_message = AIChatHistory(
-        user_id=current_user.id,
-        tenant_id=tenant_id,
-        message=message,
-        sender=sender,
-        created_at=datetime.now(timezone.utc)
-    )
-    db.add(chat_message)
-    db.commit()
-    db.refresh(chat_message)
-    return {"success": True, "id": chat_message.id}
+    # Manually set tenant context and get tenant database
+    set_tenant_context(tenant_id)
+    tenant_session = tenant_db_manager.get_tenant_session(tenant_id)
+    db = tenant_session()
+
+    try:
+        chat_message = AIChatHistory(
+            user_id=current_user.id,
+            tenant_id=tenant_id,
+            message=message,
+            sender=sender,
+            created_at=datetime.now(timezone.utc)
+        )
+        db.add(chat_message)
+        db.commit()
+        db.refresh(chat_message)
+        return {"success": True, "id": chat_message.id}
+    finally:
+        db.close()
 
 @router.get("/chat/history")
 def get_ai_chat_history(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_master_db),
     master_db: Session = Depends(get_master_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     # Get tenant_id if available
     tenant_id = getattr(current_user, 'tenant_id', None)
@@ -1030,21 +1058,30 @@ def get_ai_chat_history(
     if settings and hasattr(settings, 'ai_chat_history_retention_days'):
         retention_days = min(max(settings.ai_chat_history_retention_days or 7, 1), 30)
     cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
-    history = db.query(AIChatHistory).filter(
-        AIChatHistory.user_id == current_user.id,
-        (AIChatHistory.tenant_id == tenant_id) if tenant_id is not None else True,
-        AIChatHistory.created_at >= cutoff
-    ).order_by(AIChatHistory.created_at.asc()).all()
-    # Purge old messages
-    db.query(AIChatHistory).filter(
-        AIChatHistory.user_id == current_user.id,
-        (AIChatHistory.tenant_id == tenant_id) if tenant_id is not None else True,
-        AIChatHistory.created_at < cutoff
-    ).delete()
-    db.commit()
-    return [{
-        "id": msg.id,
-        "message": msg.message,
-        "sender": msg.sender,
-        "created_at": msg.created_at.isoformat()
-    } for msg in history]
+
+    # Manually set tenant context and get tenant database
+    set_tenant_context(tenant_id)
+    tenant_session = tenant_db_manager.get_tenant_session(tenant_id)
+    db = tenant_session()
+
+    try:
+        history = db.query(AIChatHistory).filter(
+            AIChatHistory.user_id == current_user.id,
+            (AIChatHistory.tenant_id == tenant_id) if tenant_id is not None else True,
+            AIChatHistory.created_at >= cutoff
+        ).order_by(AIChatHistory.created_at.asc()).all()
+        # Purge old messages
+        db.query(AIChatHistory).filter(
+            AIChatHistory.user_id == current_user.id,
+            (AIChatHistory.tenant_id == tenant_id) if tenant_id is not None else True,
+            AIChatHistory.created_at < cutoff
+        ).delete()
+        db.commit()
+        return [{
+            "id": msg.id,
+            "message": msg.message,
+            "sender": msg.sender,
+            "created_at": msg.created_at.isoformat()
+        } for msg in history]
+    finally:
+        db.close()

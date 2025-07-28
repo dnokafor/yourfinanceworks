@@ -561,9 +561,17 @@ const Settings = () => {
       
       console.log('AI Assistant: Toggle saved successfully, updating cache...');
       
-      // Invalidate and refetch settings cache immediately
+      // Force immediate cache update
+      await queryClient.resetQueries({ queryKey: ['settings'] });
       await queryClient.invalidateQueries({ queryKey: ['settings'] });
       await queryClient.refetchQueries({ queryKey: ['settings'] });
+      
+      // Force re-render of all components using settings
+      await queryClient.invalidateQueries();
+      
+      // Dispatch custom event to notify AI assistant component
+      window.dispatchEvent(new CustomEvent('ai-assistant-toggle', { detail: { enabled: checked } }));
+      window.dispatchEvent(new StorageEvent('storage', { key: 'ai_assistant_enabled', newValue: checked.toString() }));
       
       if (checked) {
         // AI Assistant was enabled
@@ -2241,13 +2249,13 @@ const Settings = () => {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="currency">{t('settings.currency')}</Label>
-                <CurrencySelector
-                  value={newDiscountRule.currency || "USD"}
-                  onValueChange={(value) => setNewDiscountRule(prev => ({ ...prev, currency: value }))}
-                  placeholder={t('settings.currency_placeholder')}
-                />
-              </div>
+                          <Label htmlFor="currency">{t('settings.currency')}</Label>
+                          <CurrencySelector
+                            value={newDiscountRule.currency || "USD"}
+                            onValueChange={(value) => setNewDiscountRule(prev => ({ ...prev, currency: value }))}
+                            includeInactive={true}
+                          />
+                        </div>
               
               <div className="flex items-center space-x-2">
                 <Switch

@@ -1,19 +1,34 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Send, Bot, Maximize2, Minimize2, Sparkles, MessageCircle, X } from 'lucide-react';
+import { MessageCircle, Send, User, Bot, Maximize2, Minimize2, TrendingUp, ExternalLink, Sparkles, X, Zap, CheckCircle, AlertCircle, Clock, Activity, Users, DollarSign, Calendar, BarChart3, Lightbulb, Target, Star, Loader } from 'lucide-react';
+import { api } from '@/lib/api';
 import { useQuery } from '@tanstack/react-query';
-import { api, aiApi } from '@/lib/api'; // Import both api and aiApi
+import { cn } from '@/lib/utils';
 import PaymentCharts from './PaymentCharts';
 import { useTranslation } from 'react-i18next';
+import { useToast } from '@/components/ui/use-toast';
 
 interface Message {
   id: number;
   sender: 'user' | 'ai';
   text: string | React.ReactNode;
+}
+
+interface ApiCall {
+  id: string;
+  method: string;
+  url: string;
+  status: string;
+  duration: number;
+  timestamp: string;
+  error?: string;
 }
 
 // Styled AI Response Component
@@ -97,6 +112,7 @@ const AIAssistant = React.forwardRef<HTMLDivElement>((props, ref) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [isAdminUser, setIsAdminUser] = useState(false);
+  const [authInitialized, setAuthInitialized] = useState(false);
 
   // Check authentication and user role
   useEffect(() => {
@@ -114,41 +130,115 @@ const AIAssistant = React.forwardRef<HTMLDivElement>((props, ref) => {
           adminStatus = currentUser?.role === 'admin';
         } catch (e) {
           console.error('Error parsing user data:', e);
+          // If user data is corrupted, consider user as logged out
+          setIsAuthenticated(false);
+          setUser(null);
+          setIsAdminUser(false);
+          setAuthInitialized(true);
+          return;
         }
       }
       
       setIsAuthenticated(authStatus);
       setUser(currentUser);
       setIsAdminUser(adminStatus);
+      setAuthInitialized(true);
       
-      // Removed frequent debug log
-      // console.log('AI Assistant: Authentication check', { token: !!token, user: !!currentUser, authStatus, adminStatus });
+      console.log('AI Assistant: Auth status update', { 
+        hasToken: !!token, 
+        hasUser: !!currentUser, 
+        authStatus, 
+        adminStatus,
+        shouldShow: authStatus && adminStatus 
+      });
     };
     
     checkAuth();
     
     // Check authentication on localStorage changes
-    const handleStorageChange = () => {
+    const handleStorageChange = (e: StorageEvent) => {
+      // If token is removed, immediately hide AI assistant
+      if (e.key === 'token' && !e.newValue) {
+        console.log('AI Assistant: Token removed, hiding assistant');
+        setIsAuthenticated(false);
+        setUser(null);
+        setIsAdminUser(false);
+        return;
+      }
+      // If user data is removed, hide assistant
+      if (e.key === 'user' && !e.newValue) {
+        console.log('AI Assistant: User data removed, hiding assistant');
+        setIsAuthenticated(false);
+        setUser(null);
+        setIsAdminUser(false);
+        return;
+      }
+      // If token or user is added (login), immediately check auth
+      if ((e.key === 'token' && e.newValue) || (e.key === 'user' && e.newValue)) {
+        console.log('AI Assistant: Login detected, checking auth');
+        setTimeout(checkAuth, 100); // Small delay to ensure both token and user are set
+        return;
+      }
       checkAuth();
     };
     
     // Listen for storage events (from other tabs)
     window.addEventListener('storage', handleStorageChange);
     
-    // Removed setInterval for less frequent checks
-    // const interval = setInterval(checkAuth, 1000);
+    // Listen for logout events
+    const handleLogout = () => {
+      console.log('AI Assistant: Logout event received, hiding assistant');
+      setIsAuthenticated(false);
+      setUser(null);
+      setIsAdminUser(false);
+    };
+    
+    window.addEventListener('user-logout', handleLogout);
+    
+    // Check auth every 1 second for immediate logout detection
+    const authInterval = setInterval(() => {
+      const token = localStorage.getItem('token');
+      const userStr = localStorage.getItem('user');
+      
+      // If either token or user data is missing, hide the assistant
+      if (!token || !userStr) {
+        if (isAuthenticated) { // Only log if state changes
+          console.log('AI Assistant: Auth check interval - hiding due to missing credentials');
+          setIsAuthenticated(false);
+          setUser(null);
+          setIsAdminUser(false);
+        }
+      } else if (!isAuthenticated) {
+        // If credentials exist but we think user is not authenticated, recheck
+        console.log('AI Assistant: Auth check interval - credentials found, rechecking auth');
+        checkAuth();
+      }
+    }, 1000);
     
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      // clearInterval(interval);
+      window.removeEventListener('user-logout', handleLogout);
+      clearInterval(authInterval);
     };
-  }, []);
+  }, []); // Keep empty dependency array but remove stale closure issue
 
-  // Return the appropriate component based on authentication state
-  if (!isAuthenticated || !isAdminUser) {
+  // Don't render anything until auth is initialized
+  if (!authInitialized) {
     return null;
   }
 
+  // Return the appropriate component based on authentication state
+  if (!isAuthenticated || !isAdminUser) {
+    console.log('AI Assistant: Not rendering - auth check failed', { 
+      isAuthenticated, 
+      isAdminUser,
+      authInitialized,
+      reason: !isAuthenticated ? 'not authenticated' : 'not admin user'
+    });
+    return null;
+  }
+
+  console.log('AI Assistant: Rendering for authenticated admin user');
   return <AuthenticatedAIAssistant user={user} ref={ref} />;
 });
 
@@ -190,19 +280,21 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
         console.log('AI Assistant: Stopping refetch due to authentication error');
         return false;
       }
-      return 5000; // Refetch every 5 seconds if no auth error
+      // Only refetch if AI assistant is not explicitly disabled
+      const currentSettings = query.state.data;
+      return currentSettings && !(currentSettings as any)?.enable_ai_assistant ? false : 30000;
     },
-    refetchOnWindowFocus: true, // Refetch when window gains focus
-    refetchOnMount: true, // Always refetch on mount
-    staleTime: 0, // Consider data immediately stale to ensure fresh data
     retry: (failureCount, error) => {
-      // Don't retry on authentication errors
       if (error.message.includes('403') || error.message.includes('Authentication failed')) {
         console.log('AI Assistant: Not retrying due to authentication error');
         return false;
       }
       return failureCount < 3;
     },
+    // Improve resilience during login
+    staleTime: 5 * 60 * 1000, // 5 minutes - keep data fresh but not too aggressive
+    refetchOnWindowFocus: false, // Don't refetch on every window focus
+    refetchOnMount: true, // Always refetch on mount for fresh data
   });
 
   // Add effect to log settings changes for debugging
@@ -219,44 +311,86 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
   const { data: aiConfigs, isLoading: aiConfigsLoading } = useQuery({
     queryKey: ['ai-configs'],
     queryFn: () => api.get('/ai-config/'),
-    enabled: !!(settings && (settings as any).enable_ai_assistant), // Only fetch if AI assistant is enabled
+    enabled: !settingsLoading && !!(settings && (settings as any).enable_ai_assistant),
     retry: (failureCount, error) => {
-      // Don't retry on authentication errors
       if (error.message.includes('403') || error.message.includes('Authentication failed')) {
-        console.log('AI Assistant: Not retrying AI configs due to authentication error');
+        console.log('AI Configs: Not retrying due to authentication error');
         return false;
       }
       return failureCount < 3;
     },
   });
 
-  // Handle authentication errors
+  // Fetch chat history when chat is opened
   useEffect(() => {
-    if (settingsError) {
-      console.error('AI Assistant: Settings error:', settingsError);
-      
-      // Check if it's an authentication error
-      if (settingsError.message.includes('403') || settingsError.message.includes('Authentication failed')) {
-        console.log('AI Assistant: Authentication error detected, user might need to re-login');
-        // Optionally clear localStorage and redirect to login
-        // localStorage.removeItem('token');
-        // localStorage.removeItem('user');
-        // window.location.href = '/login';
-      }
+    if (isOpen && !historyLoaded && !settingsLoading && settings && (settings as any).enable_ai_assistant) {
+      (async () => {
+        try {
+          const history = await api.get('/ai/chat/history');
+          if (Array.isArray(history) && history.length > 0) {
+            setMessages([
+              ...history.map((msg: any, idx: number) => ({
+                id: idx + 1,
+                sender: msg.sender,
+                text: msg.sender === 'ai' ? <EnhancedAIResponse text={msg.message} /> : msg.message
+              }))
+            ]);
+          }
+        } catch (e) {
+          console.error('Failed to load AI chat history:', e);
+        } finally {
+          setHistoryLoaded(true);
+        }
+      })();
     }
-  }, [settingsError]);
+  }, [isOpen, historyLoaded, settingsLoading, settings]);
 
-  // Don't render if AI assistant is not enabled
-  if (!settings || !(settings as any).enable_ai_assistant) {
-    return null;
-  }
+  // Rest of the component hooks...
+  const [recentMessages, setRecentMessages] = useState<Message[]>([]);
+  const [isStreamingVisible, setIsStreamingVisible] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const lastSuccessfulSubmissionRef = useRef<string>('');
 
-  // Don't render if still loading critical data
-  if (settingsLoading) {
-    return null;
-  }
+  const [apiCallHistory, setApiCallHistory] = useState<ApiCall[]>([]);
+  const [isThinking, setIsThinking] = useState(false);
 
-  // Enhanced debug logging
+  const addApiCall = useCallback((apiCall: ApiCall) => {
+    setApiCallHistory(prev => [...prev, { ...apiCall, id: Date.now().toString() }]);
+  }, []);
+
+  const { toast } = useToast();
+
+  // Effects for keyboard shortcuts etc.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+        setIsFullscreen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isOpen]);
+
+  const { data: suggestedActions } = useQuery({
+    queryKey: ['ai-suggested-actions'],
+    queryFn: async () => {
+      try {
+        return await api.get('/ai/suggest-actions');
+      } catch (error) {
+        console.error('Failed to fetch suggested actions:', error);
+        return [];
+      }
+    },
+    enabled: !settingsLoading && !!(settings && (settings as any).enable_ai_assistant),
+    retry: false,
+  });
+
+  // Conditional rendering checks - moved to the end after all hooks
   console.log('AI Assistant Debug:', { 
     settings, 
     settingsLoading, 
@@ -285,15 +419,35 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
     (aiConfigs as any[]).find((config: any) => config.is_default && config.is_active) : 
     undefined;
 
-  // Don't render if loading or AI assistant is disabled
+  // Handle different states more gracefully
   if (settingsLoading) {
-    console.log('AI Assistant: Not rendering because settings are loading');
-    return null;
+    console.log('AI Assistant: Settings loading, showing minimal UI');
+    // Don't hide completely while loading - show a minimal button that's disabled
+    return (
+      <div className="fixed bottom-4 right-4 z-50">
+        <Button
+          variant="secondary"
+          size="icon"
+          className="h-12 w-12 rounded-full shadow-lg opacity-50 cursor-not-allowed"
+          disabled
+        >
+          <MessageCircle className="h-6 w-6" />
+        </Button>
+      </div>
+    );
   }
 
-  // If there's an error fetching settings, default to showing the AI assistant
+  // If there's a persistent error (not just temporary auth issues), default to hiding
   if (settingsError) {
-    console.log('AI Assistant: Error fetching settings, defaulting to show:', settingsError);
+    const errorMessage = settingsError.message || '';
+    // Only hide for persistent errors, not temporary auth issues
+    if (errorMessage.includes('Network Error') || errorMessage.includes('500')) {
+      console.log('AI Assistant: Network/server error, hiding assistant:', settingsError);
+      return null;
+    } else {
+      console.log('AI Assistant: Auth error but defaulting to show (will be handled by queries):', settingsError);
+      // For auth errors, let the component try to render and individual queries will handle auth
+    }
   }
 
   // Check if AI assistant should be shown
@@ -308,32 +462,6 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
   }
 
   console.log('AI Assistant: Rendering component - all checks passed');
-
-  // Fetch chat history when chat is opened
-  useEffect(() => {
-    if (isOpen && !historyLoaded) {
-      (async () => {
-        try {
-          const history = await api.get('/ai/chat/history');
-          if (Array.isArray(history) && history.length > 0) {
-            setMessages([
-              ...history.map((msg: any, idx: number) => ({
-                id: idx + 1,
-                sender: msg.sender,
-                text: msg.sender === 'ai' ? <EnhancedAIResponse text={msg.message} /> : msg.message
-              }))
-            ]);
-          }
-        } catch (e) {
-          console.error('Failed to load AI chat history:', e);
-        } finally {
-          setHistoryLoaded(true);
-        }
-      })();
-    }
-    // Reset loaded flag when closed
-    if (!isOpen) setHistoryLoaded(false);
-  }, [isOpen, historyLoaded]);
 
   const handleSendMessage = async (messageText?: string) => {
     const textToSend = messageText || input.trim();
@@ -366,7 +494,7 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
         // Use the analyze-patterns endpoint (MCP-like functionality)
         console.log('AI Assistant: Using analyze-patterns endpoint');
         try {
-          const response = await aiApi.analyzePatterns();
+          const response = await api.get('/ai/analyze-patterns') as any;
           console.log('AI Assistant: Analyze patterns response:', response);
           console.log('AI Assistant: Response success:', response.success);
           console.log('AI Assistant: Response data:', response.data);
@@ -468,10 +596,10 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
         lowerText.includes(suggestActionsText) ||
         (lowerText.includes('suggest') && lowerText.includes('action'))
       ) {
-        // Use the suggest-actions endpoint (MCP-like functionality)
+        // Use the suggest-actions endpoint
         console.log('AI Assistant: Using suggest-actions endpoint');
         try {
-          const response = await aiApi.suggestActions();
+          const response = await api.get('/ai/suggest-actions') as any;
           console.log('AI Assistant: Suggest actions response:', response);
           
           if (response.success) {
@@ -585,7 +713,10 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
           return;
         }
         
-        const response = await aiApi.chat(textToSend, defaultAIConfig.id);
+        const response = await api.post('/ai/chat', {
+          message: textToSend,
+          config_id: defaultAIConfig.id
+        }) as any;
 
         if (response.success) {
           const aiResponse = response.data.response || response.data.message || "I'm sorry, I couldn't generate a response.";

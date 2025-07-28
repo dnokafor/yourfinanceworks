@@ -3,14 +3,16 @@ from sqlalchemy.orm import Session
 from typing import List
 import logging
 
-from models.database import get_db
+from models.database import get_db, get_master_db, set_tenant_context
 from models.models_per_tenant import EmailNotificationSettings, User
+from models.models import MasterUser
 from schemas.email_notifications import (
     EmailNotificationSettings as EmailNotificationSettingsSchema,
     EmailNotificationSettingsCreate,
     EmailNotificationSettingsUpdate
 )
 from routers.auth import get_current_user
+from services.tenant_database_manager import tenant_db_manager
 from utils.audit import log_audit_event
 
 logger = logging.getLogger(__name__)
@@ -19,18 +21,39 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 @router.get("/settings", response_model=EmailNotificationSettingsSchema)
 async def get_notification_settings(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Get current user's notification settings"""
+    # Manually set tenant context and get tenant database
+    set_tenant_context(current_user.tenant_id)
+    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
+    db = tenant_session()
+    
     try:
+        # Find or create the tenant user by email
+        tenant_user = db.query(User).filter(User.email == current_user.email).first()
+        if not tenant_user:
+            # Create user in tenant database
+            tenant_user = User(
+                email=current_user.email,
+                hashed_password=current_user.hashed_password,
+                is_active=current_user.is_active,
+                is_superuser=current_user.is_superuser,
+                role=current_user.role,
+                first_name=current_user.first_name,
+                last_name=current_user.last_name
+            )
+            db.add(tenant_user)
+            db.commit()
+            db.refresh(tenant_user)
+        
         settings = db.query(EmailNotificationSettings).filter(
-            EmailNotificationSettings.user_id == current_user.id
+            EmailNotificationSettings.user_id == tenant_user.id
         ).first()
         
         if not settings:
             # Create default settings
-            settings = EmailNotificationSettings(user_id=current_user.id)
+            settings = EmailNotificationSettings(user_id=tenant_user.id)
             db.add(settings)
             db.commit()
             db.refresh(settings)
@@ -42,6 +65,8 @@ async def get_notification_settings(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get notification settings"
         )
+    finally:
+        db.close()
 
 @router.put("/settings", response_model=EmailNotificationSettingsSchema)
 async def update_notification_settings(

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, text
@@ -13,7 +13,7 @@ from PIL import Image
 import io
 from fastapi.concurrency import run_in_threadpool
 
-from models.database import get_db, get_master_db
+from models.database import get_db, get_master_db, set_tenant_context
 from models.models_per_tenant import User, Client, Invoice, Settings, ClientNote, InvoiceItem
 from routers.payments import Payment
 from models.models import Tenant, MasterUser
@@ -22,6 +22,7 @@ from utils.invoice import generate_invoice_number
 from utils.rbac import require_admin
 from utils.audit import log_audit_event
 from constants.error_codes import FAILED_TO_IMPORT_DATA
+from services.tenant_database_manager import tenant_db_manager
 
 logger = logging.getLogger(__name__)
 
@@ -29,44 +30,47 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 
 @router.get("/")
 async def get_settings(
-    db: Session = Depends(get_db),
-    master_db: Session = Depends(get_master_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Get tenant settings (using tenant info as settings)"""
     # Only admins can view settings
     require_admin(current_user, "view settings")
     
+    # Manually get master database
+    master_db = next(get_master_db())
     
-    tenant = master_db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found")
     
-    # Return tenant info formatted as settings
-    return {
-        "company_info": {
-            "name": tenant.name,
-            "email": tenant.email or "",
-            "phone": tenant.phone or "",
-            "address": tenant.address or "",
-            "tax_id": tenant.tax_id or "",
-            "logo": tenant.company_logo_url or ""
-        },
-        "invoice_settings": {
-            "prefix": "INV-",
-            "next_number": "0001",
-            "terms": "Payment due within 30 days from the date of invoice.\nLate payments are subject to a 1.5% monthly finance charge.",
-            "notes": "Thank you for your business!",
-            "send_copy": True,
-            "auto_reminders": True
-        },
-        "enable_ai_assistant": tenant.enable_ai_assistant or False
-    }
+    try:
+        tenant = master_db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+        if not tenant:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        
+        # Return tenant info formatted as settings
+        return {
+            "company_info": {
+                "name": tenant.name,
+                "email": tenant.email or "",
+                "phone": tenant.phone or "",
+                "address": tenant.address or "",
+                "tax_id": tenant.tax_id or "",
+                "logo": tenant.company_logo_url or ""
+            },
+            "invoice_settings": {
+                "prefix": "INV-",
+                "next_number": "0001",
+                "terms": "Payment due within 30 days from the date of invoice.\nLate payments are subject to a 1.5% monthly finance charge.",
+                "notes": "Thank you for your business!",
+                "send_copy": True,
+                "auto_reminders": True
+            },
+            "enable_ai_assistant": tenant.enable_ai_assistant or False
+        }
+    finally:
+        master_db.close()
 
 @router.put("/")
 async def update_settings(
     settings: Dict[str, Any],
-    db: Session = Depends(get_db),
     master_db: Session = Depends(get_master_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
@@ -108,25 +112,33 @@ async def update_settings(
         details=settings,
         status="success"
     )
+    
     # Log audit event in tenant DB as well
-    log_audit_event(
-        db=db,
-        user_id=current_user.id,
-        user_email=current_user.email,
-        action="UPDATE",
-        resource_type="settings",
-        resource_id=str(tenant.id),
-        resource_name=f"Setting: {tenant.name}",
-        details=settings,
-        status="success"
-    )
+    # Manually set tenant context and get tenant database
+    set_tenant_context(current_user.tenant_id)
+    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
+    tenant_db = tenant_session()
+    
+    try:
+        log_audit_event(
+            db=tenant_db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="UPDATE",
+            resource_type="settings",
+            resource_id=str(tenant.id),
+            resource_name=f"Setting: {tenant.name}",
+            details=settings,
+            status="success"
+        )
+    finally:
+        tenant_db.close()
 
     return {"message": "Settings updated successfully"}
 
 @router.get("/export-data")
 async def export_tenant_data(
     current_user: MasterUser = Depends(get_current_user),
-    db: Session = Depends(get_db),
     master_db: Session = Depends(get_master_db)
 ):
     """Export tenant data to a real SQLite file"""
@@ -138,6 +150,11 @@ async def export_tenant_data(
         Base as TenantBase, User, Client, ClientNote, Invoice, Payment, Settings, DiscountRule, SupportedCurrency, CurrencyRate, InvoiceItem, InvoiceHistory, AIConfig
     )
     import atexit
+
+    # Manually set tenant context and get tenant database
+    set_tenant_context(current_user.tenant_id)
+    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
+    db = tenant_session()
 
     # Create a temporary SQLite file
     temp_dir = tempfile.mkdtemp()
@@ -205,6 +222,8 @@ async def export_tenant_data(
         shutil.rmtree(temp_dir, ignore_errors=True)
         logger.error(f"Error exporting tenant data to SQLite: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error exporting data: {str(e)}")
+    finally:
+        db.close()  # Close tenant database session
 
 @router.post("/import-data")
 async def import_tenant_data(

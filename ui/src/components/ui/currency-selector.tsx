@@ -20,16 +20,10 @@ interface CurrencySelectorProps {
   disabled?: boolean;
   className?: string;
   onCurrenciesLoaded?: () => void;
-  includeInactive?: boolean; // Add this prop to include inactive currencies
 }
 
-// Fallback currencies that will always be available
 const FALLBACK_CURRENCIES: Currency[] = [
   { id: 1, code: 'USD', name: 'US Dollar', symbol: '$', decimal_places: 2, is_active: true },
-  // { id: 2, code: 'EUR', name: 'Euro', symbol: '€', decimal_places: 2, is_active: true },
-  // { id: 3, code: 'GBP', name: 'British Pound', symbol: '£', decimal_places: 2, is_active: true },
-  // { id: 4, code: 'CAD', name: 'Canadian Dollar', symbol: 'C$', decimal_places: 2, is_active: true },
-  // { id: 6, code: 'JPY', name: 'Japanese Yen', symbol: '¥', decimal_places: 0, is_active: true }
 ];
 
 export function CurrencySelector({
@@ -40,77 +34,35 @@ export function CurrencySelector({
   disabled = false,
   className = "",
   onCurrenciesLoaded,
-  includeInactive = false // Default to false for new invoices
 }: CurrencySelectorProps) {
   const [currencies, setCurrencies] = useState<Currency[]>(FALLBACK_CURRENCIES);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [usingFallback, setUsingFallback] = useState(false);
 
   useEffect(() => {
-    fetchCurrencies();
-  }, []);
-
-  const fetchCurrencies = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        console.log('No auth token, using fallback currencies');
-        setUsingFallback(true);
-        setError(null);
+    const fetchCurrencies = async () => {
+      setLoading(true);
+      try {
+        const data = await currencyApi.getSupportedCurrencies();
+        if (data.currencies && data.currencies.length > 0) {
+          setCurrencies(data.currencies);
+        } else {
+          setError('No currencies available from API.');
+        }
+      } catch (err) {
+        setError('API unavailable - using default currencies');
+      } finally {
         setLoading(false);
-        return;
+        if (onCurrenciesLoaded) {
+          onCurrenciesLoaded();
+        }
       }
+    };
 
-      console.log('Fetching currencies from API...');
-      const data = await currencyApi.getSupportedCurrencies();
+    fetchCurrencies();
+  }, [onCurrenciesLoaded]);
 
-      console.log('Currency API response:', data);
-      
-      if (data.currencies && data.currencies.length > 0) {
-        let apiCurrencies = data.currencies;
-        
-        console.log('All currencies from API:', apiCurrencies.map(c => ({ code: c.code, is_active: c.is_active })));
-        
-        // Filter API currencies to only include active ones
-        apiCurrencies = (apiCurrencies || []).filter((c: Currency) => c.is_active);
-        
-        console.log('Active currencies after filtering:', apiCurrencies.map(c => ({ code: c.code, is_active: c.is_active })));
-        
-        // Use only active fallback currencies
-        const fallbacksToUse = (FALLBACK_CURRENCIES || []).filter(c => c.is_active);
-
-        // Combine API currencies with filtered fallback currencies, avoiding duplicates
-        const combinedCurrencies = [
-          ...apiCurrencies,
-          ...fallbacksToUse.filter(fb => !apiCurrencies.some(apiC => apiC.code === fb.code))
-        ];
-        
-        console.log('Final combined currencies:', combinedCurrencies.map(c => ({ code: c.code, is_active: c.is_active })));
-        
-        setCurrencies(combinedCurrencies);
-        setUsingFallback(false);
-        setError(null);
-        console.log('Successfully loaded currencies from API and fallbacks');
-      } else {
-        console.log('API returned empty currencies, using fallback');
-        // If API returns empty or fails, use only active fallback currencies
-        setCurrencies((FALLBACK_CURRENCIES || []).filter(c => c.is_active));
-        setUsingFallback(true);
-        setError(null);
-      }
-    } catch (err) {
-      console.error('Error fetching currencies:', err);
-      setError(`API unavailable - using default currencies`);
-      setUsingFallback(true);
-      console.log('Using fallback currencies due to error');
-    } finally {
-      setLoading(false);
-      if (typeof onCurrenciesLoaded === 'function') {
-        onCurrenciesLoaded();
-      }
-    }
-  };
+  const activeCurrencies = currencies.filter(c => c.is_active);
 
   const formatCurrency = (currency: Currency) => {
     return `${currency.code} - ${currency.name} (${currency.symbol})`;
@@ -135,18 +87,13 @@ export function CurrencySelector({
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
-          {currencies.map((currency) => (
+          {activeCurrencies.map((currency) => (
             <SelectItem key={currency.code} value={currency.code}>
               {formatCurrency(currency)}
             </SelectItem>
           ))}
         </SelectContent>
       </Select>
-      {usingFallback && !error && (
-        <div className="text-xs text-muted-foreground mt-1">
-          Using default currencies
-        </div>
-      )}
       {error && (
         <div className="text-xs text-yellow-600 mt-1">
           {error}
@@ -156,4 +103,4 @@ export function CurrencySelector({
   );
 }
 
-export default CurrencySelector; 
+export default CurrencySelector;

@@ -9,11 +9,13 @@ from decimal import Decimal
 from fastapi.responses import StreamingResponse
 from utils.pdf_generator import generate_invoice_pdf
 
-from models.database import get_db
+from models.database import get_db, set_tenant_context
 from models.models_per_tenant import Invoice, Client, User, InvoiceItem, DiscountRule
+from models.models import MasterUser
 from routers.payments import Payment
 from schemas.invoice import InvoiceCreate, InvoiceUpdate, Invoice as InvoiceSchema, InvoiceWithClient, InvoiceHistory, InvoiceHistoryCreate, RecycleBinResponse, DeletedInvoice, RestoreInvoiceRequest
 from routers.auth import get_current_user
+from services.tenant_database_manager import tenant_db_manager
 from services.currency_service import CurrencyService
 from utils.invoice import generate_invoice_number
 from utils.rbac import require_non_viewer, require_admin
@@ -179,9 +181,12 @@ async def read_invoices(
     skip: int = 0,
     limit: int = 100,
     status_filter: Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
+    # Manually set tenant context and get tenant database
+    set_tenant_context(current_user.tenant_id)
+    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
+    db = tenant_session()
     try:
         # Build base query (exclude soft-deleted invoices)
         # No tenant_id filtering needed since we're in the tenant's database
@@ -238,6 +243,8 @@ async def read_invoices(
             status_code=500,
             detail=f"Failed to fetch invoices: {str(e)}"
         )
+    finally:
+        db.close()
 
 # Recycle Bin Endpoints (must come before /{invoice_id} route)
 

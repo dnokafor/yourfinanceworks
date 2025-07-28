@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -41,9 +41,24 @@ export function ClientForm({ client, isEdit = false }: ClientFormProps) {
       email: client?.email || "",
       phone: client?.phone || "",
       address: client?.address || "",
-      preferred_currency: client?.preferred_currency || "",
+      preferred_currency: client?.preferred_currency || "USD",
     },
   });
+  
+
+  
+  // Reset form when client data changes (only for edit mode)
+  useEffect(() => {
+    if (isEdit && client) {
+      form.reset({
+        name: client.name || "",
+        email: client.email || "",
+        phone: client.phone || "",
+        address: client.address || "",
+        preferred_currency: client.preferred_currency || "USD",
+      });
+    }
+  }, [client, form, isEdit]);
 
   const onSubmit = async (data: FormValues) => {
     setSubmitting(true);
@@ -174,7 +189,8 @@ export function ClientForm({ client, isEdit = false }: ClientFormProps) {
                   <FormLabel>{t('clientForm.preferredCurrency')}</FormLabel>
                   <FormControl>
                     <CurrencySelector
-                      value={field.value}
+                      key={client?.id || 'new'}
+                      value={field.value || client?.preferred_currency || 'USD'}
                       onValueChange={field.onChange}
                       placeholder={t('clientForm.selectPreferredCurrency')}
                     />

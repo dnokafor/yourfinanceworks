@@ -16,6 +16,7 @@ export default defineConfig({
     port: 8080,
     host: true,
     allowedHosts: ['localhost', '127.0.0.1', '0.0.0.0', 'monster-humane-currently.ngrok-free.app'],
+    hmr: false,
   },
   test: {
     globals: true,

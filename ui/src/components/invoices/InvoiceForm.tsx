@@ -104,7 +104,7 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
     email: "",
     phone: "",
     address: "",
-    preferred_currency: "",
+    preferred_currency: "USD",
   });
   const [settings, setSettings] = useState<Settings | null>(null);
   const [updateHistory, setUpdateHistory] = useState<any[]>([]);
@@ -257,6 +257,10 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
           clientApi.getClients(),
           discountRulesApi.getDiscountRules()
         ]);
+        console.log("Clients data loaded:", clientsData);
+        clientsData.forEach(client => {
+          console.log(`Client ${client.name}: preferred_currency=${client.preferred_currency}`);
+        });
         setClients(clientsData);
         setAvailableDiscountRules(discountRulesData);
         
@@ -335,6 +339,18 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
     }
   }, [invoice]);
 
+  const resetNewClientForm = () => {
+    setNewClientForm({
+      name: "",
+      email: "",
+      phone: "",
+      address: "",
+      preferred_currency: "USD",
+    });
+  };
+
+
+
   const handleCreateClient = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -351,13 +367,7 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
       setClients([...clients, newClient]);
       form.setValue("client", newClient.id.toString());
       setShowNewClientDialog(false);
-      setNewClientForm({
-        name: "",
-        email: "",
-        phone: "",
-        address: "",
-        preferred_currency: "",
-      });
+      resetNewClientForm();
       toast.success("Client created successfully!");
     } catch (error) {
       console.error("Failed to create client:", error);
@@ -1328,7 +1338,12 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
           </Button>
         </div>
 
-        <Dialog open={showNewClientDialog} onOpenChange={setShowNewClientDialog}>
+        <Dialog open={showNewClientDialog} onOpenChange={(open) => {
+          setShowNewClientDialog(open);
+          if (!open) {
+            resetNewClientForm();
+          }
+        }}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>{t('invoices.add_new_client')}</DialogTitle>
@@ -1370,14 +1385,17 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
               <div>
                 <Label htmlFor="preferred_currency">{t('invoices.preferred_currency')}</Label>
                 <CurrencySelector
-                  value={newClientForm.preferred_currency || ''}
+                  value={newClientForm.preferred_currency || 'USD'}
                   onValueChange={(val) => setNewClientForm({ ...newClientForm, preferred_currency: val })}
                   placeholder={t('invoices.select_preferred_currency')}
                 />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowNewClientDialog(false)}>
+              <Button variant="outline" onClick={() => {
+                setShowNewClientDialog(false);
+                resetNewClientForm();
+              }}>
                 {t('invoices.cancel')}
               </Button>
               <Button onClick={handleCreateClient}>{t('invoices.add_client')}</Button>
@@ -1487,8 +1505,16 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
                                 field.onChange(value);
                                 // Set currency to client's preferred currency when client is selected
                                 const selectedClient = clients.find(c => c.id.toString() === value);
+                                console.log("Client selected:", value);
+                                console.log("Selected client data:", selectedClient);
+                                console.log("Client preferred currency:", selectedClient?.preferred_currency);
+                                console.log("Is edit mode:", isEdit);
                                 if (selectedClient?.preferred_currency && !isEdit) {
+                                  console.log("Setting currency to:", selectedClient.preferred_currency);
                                   form.setValue("currency", selectedClient.preferred_currency);
+                                  console.log("Form currency after setValue:", form.getValues("currency"));
+                                } else {
+                                  console.log("Not setting currency - preferred_currency:", selectedClient?.preferred_currency, "isEdit:", isEdit);
                                 }
                               }}
                               defaultValue={field.value}
@@ -1539,21 +1565,26 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
                     <FormField
                       control={form.control}
                       name="currency"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('invoices.currency')}</FormLabel>
-                          <FormControl>
-                            <CurrencySelector
-                              value={field.value}
-                              onValueChange={field.onChange}
-                              placeholder={t('invoices.select_currency')}
-                              disabled={isInvoicePaid}
-                              onCurrenciesLoaded={() => setCurrenciesLoaded(true)}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+                      render={({ field }) => {
+                        console.log("Currency field render - value:", field.value);
+                        return (
+                          <FormItem>
+                            <FormLabel>{t('invoices.currency')}</FormLabel>
+                            <FormControl>
+                              <CurrencySelector
+                                value={field.value}
+                                onValueChange={(value) => {
+                                  console.log("Currency changed to:", value);
+                                  field.onChange(value);
+                                }}
+                                placeholder="Select currency"
+                                disabled={isInvoicePaid}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        );
+                      }}
                     />
 
                     <FormField
@@ -2302,7 +2333,12 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showNewClientDialog} onOpenChange={setShowNewClientDialog}>
+      <Dialog open={showNewClientDialog} onOpenChange={(open) => {
+        setShowNewClientDialog(open);
+        if (!open) {
+          resetNewClientForm();
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t('invoices.add_new_client')}</DialogTitle>
@@ -2344,14 +2380,17 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
             <div>
               <Label htmlFor="preferred_currency">{t('invoices.preferred_currency')}</Label>
               <CurrencySelector
-                value={newClientForm.preferred_currency || ''}
+                value={newClientForm.preferred_currency || 'USD'}
                 onValueChange={(val) => setNewClientForm({ ...newClientForm, preferred_currency: val })}
                 placeholder={t('invoices.select_preferred_currency')}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewClientDialog(false)}>
+            <Button variant="outline" onClick={() => {
+              setShowNewClientDialog(false);
+              resetNewClientForm();
+            }}>
               {t('invoices.cancel')}
             </Button>
             <Button onClick={handleCreateClient}>{t('invoices.add_client')}</Button>

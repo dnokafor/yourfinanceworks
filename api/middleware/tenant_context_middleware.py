@@ -23,8 +23,29 @@ async def tenant_context_middleware(request: Request, call_next):
         logger.info(f"Skipping tenant context for Slack endpoint: {request.url.path}")
         return await call_next(request)
     
-    # Also skip for health endpoints and auth endpoints
-    if request.url.path in ["/health", "/", "/docs", "/openapi.json"] or request.url.path.startswith("/api/v1/auth/"):
+    # Skip tenant context for specific endpoints that don't need it or handle it manually
+    skip_tenant_paths = [
+        "/health", "/", "/docs", "/openapi.json",
+        "/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/me",
+        "/api/v1/auth/check-email-availability", "/api/v1/auth/request-password-reset",
+        "/api/v1/auth/reset-password"
+    ]
+    
+    # Also skip for endpoints that handle tenant context manually
+    if (request.url.path in skip_tenant_paths or
+        request.url.path.startswith("/api/v1/audit-logs") or 
+        request.url.path.startswith("/api/v1/clients") or
+        request.url.path.startswith("/api/v1/notifications") or
+        request.url.path.startswith("/api/v1/email") or
+        request.url.path.startswith("/api/v1/discount-rules") or
+        request.url.path.startswith("/api/v1/ai-config") or
+        request.url.path.startswith("/api/v1/settings") or
+        request.url.path.startswith("/api/v1/invoices") or
+        request.url.path.startswith("/api/v1/payments") or
+        request.url.path.startswith("/api/v1/dashboard") or
+        request.url.path.startswith("/api/v1/currencies") or
+        request.url.path.startswith("/api/v1/crm") or
+        request.url.path.startswith("/api/v1/ai")):
         return await call_next(request)
     
     try:

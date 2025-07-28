@@ -4,7 +4,10 @@ from typing import Dict, Any, List
 import logging
 
 from models.database import get_db
-from models.models import Invoice, Client, User, Tenant, Settings
+from models.models import Tenant, MasterUser
+from models.models_per_tenant import Invoice, Client, User, Settings
+from services.tenant_database_manager import tenant_db_manager
+from models.database import set_tenant_context
 from schemas.email import (
     SendInvoiceEmailRequest, EmailResponse, EmailTestRequest,
     EmailConfig, EmailConfigValidationResponse, EmailDeliveryStatus
@@ -19,16 +22,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/email", tags=["email"])
 
 def get_email_service(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ) -> EmailService:
     """Get configured email service for the current tenant"""
     
-    # Get email configuration from settings
-    email_settings = db.query(Settings).filter(
-        Settings.tenant_id == current_user.tenant_id,
-        Settings.key == "email_config"
-    ).first()
+    # Manually set tenant context and get tenant database
+    set_tenant_context(current_user.tenant_id)
+    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
+    db = tenant_session()
+    
+    try:
+        # Get email configuration from settings
+        email_settings = db.query(Settings).filter(
+            Settings.key == "email_config"
+        ).first()
+    finally:
+        db.close()
     
     if not email_settings or not email_settings.value:
         raise HTTPException(
@@ -252,21 +261,30 @@ async def validate_email_configuration(
 
 @router.get("/config", response_model=EmailConfig)
 async def get_email_configuration(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Get current email configuration"""
     
-    # Get email configuration from settings
-    email_settings = db.query(Settings).filter(
-        Settings.tenant_id == current_user.tenant_id,
-        Settings.key == "email_config"
-    ).first()
+    # Manually set tenant context and get tenant database
+    set_tenant_context(current_user.tenant_id)
+    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
+    db = tenant_session()
+    
+    try:
+        # Get email configuration from settings
+        email_settings = db.query(Settings).filter(
+            Settings.key == "email_config"
+        ).first()
+    finally:
+        db.close()
     
     if not email_settings or not email_settings.value:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Email configuration not found for this tenant"
+        # Return default configuration
+        return EmailConfig(
+            provider="aws_ses",
+            enabled=False,
+            from_name="Your Company",
+            from_email="noreply@example.com"
         )
     
     config_data = email_settings.value
@@ -310,7 +328,6 @@ async def update_email_configuration(
         
         # Save or update configuration
         email_settings = db.query(Settings).filter(
-            Settings.tenant_id == current_user.tenant_id,
             Settings.key == "email_config"
         ).first()
         
@@ -320,7 +337,6 @@ async def update_email_configuration(
             email_settings.value = config_data
         else:
             email_settings = Settings(
-                tenant_id=current_user.tenant_id,
                 key="email_config",
                 value=config_data
             )
@@ -350,7 +366,6 @@ async def delete_email_configuration(
     """Delete email configuration"""
     try:
         email_settings = db.query(Settings).filter(
-            Settings.tenant_id == current_user.tenant_id,
             Settings.key == "email_config"
         ).first()
         

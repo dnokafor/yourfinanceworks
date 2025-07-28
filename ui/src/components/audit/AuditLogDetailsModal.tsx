@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -61,6 +61,9 @@ export function AuditLogDetailsModal({ isOpen, onClose, auditLog }: AuditLogDeta
             <span>{getActionIcon(auditLog.action)}</span>
             {t('auditLog.details.title') || 'Audit Log Details'}
           </DialogTitle>
+          <DialogDescription>
+            View detailed information about this audit log entry
+          </DialogDescription>
         </DialogHeader>
         
         <ScrollArea className="max-h-[60vh]">
@@ -163,8 +166,8 @@ export function AuditLogDetailsModal({ isOpen, onClose, auditLog }: AuditLogDeta
                 <label className="text-sm font-medium text-muted-foreground">
                   {t('auditLog.details.error_message') || 'Error Message'}
                 </label>
-                <div className="mt-1 p-3 bg-red-50 border border-red-200 rounded-md">
-                  <p className="text-sm text-red-800">{auditLog.error_message}</p>
+                <div className="mt-1 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+                  <p className="text-sm text-red-800 dark:text-red-200">{auditLog.error_message}</p>
                 </div>
               </div>
             )}
@@ -175,8 +178,8 @@ export function AuditLogDetailsModal({ isOpen, onClose, auditLog }: AuditLogDeta
                 <label className="text-sm font-medium text-muted-foreground">
                   {t('auditLog.details.details') || 'Details'}
                 </label>
-                <div className="mt-1 p-3 bg-gray-50 border rounded-md">
-                  <pre className="text-xs overflow-auto">
+                <div className="mt-1 p-3 bg-gray-50 dark:bg-gray-800 border dark:border-gray-700 rounded-md">
+                  <pre className="text-xs overflow-auto dark:text-gray-200">
                     {JSON.stringify(auditLog.details, null, 2)}
                   </pre>
                   <Button

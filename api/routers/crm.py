@@ -4,10 +4,12 @@ from typing import List
 from datetime import datetime, timezone
 from fastapi import status
 
-from models.database import get_db
-from models.models_per_tenant import ClientNote, User, Client
+from models.database import get_master_db, set_tenant_context
+from models.models import MasterUser
+from models.models_per_tenant import ClientNote, Client
 from schemas.crm import ClientNoteCreate, ClientNote as ClientNoteSchema
 from routers.auth import get_current_user
+from services.tenant_database_manager import tenant_db_manager
 
 router = APIRouter(prefix="/crm", tags=["crm"])
 
@@ -15,89 +17,117 @@ router = APIRouter(prefix="/crm", tags=["crm"])
 async def create_client_note(
     client_id: int,
     note: ClientNoteCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
-    # Check if client exists
-    db_client = db.query(Client).filter(Client.id == client_id).first()
-    if not db_client:
-        raise HTTPException(status_code=404, detail="Client not found")
+    # Manually set tenant context and get tenant database
+    set_tenant_context(current_user.tenant_id)
+    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
+    db = tenant_session()
+    
+    try:
+        # Check if client exists
+        db_client = db.query(Client).filter(Client.id == client_id).first()
+        if not db_client:
+            raise HTTPException(status_code=404, detail="Client not found")
 
-    db_note = ClientNote(
-        **note.dict(),
-        client_id=client_id,
-        user_id=current_user.id,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc)
-    )
-    db.add(db_note)
-    db.commit()
-    db.refresh(db_note)
-    return db_note
+        db_note = ClientNote(
+            **note.dict(),
+            client_id=client_id,
+            user_id=current_user.id,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
+        )
+        db.add(db_note)
+        db.commit()
+        db.refresh(db_note)
+        return db_note
+    finally:
+        db.close()
 
 @router.put("/clients/{client_id}/notes/{note_id}", response_model=ClientNoteSchema)
 async def update_client_note(
     client_id: int,
     note_id: int,
     note: ClientNoteCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: MasterUser = Depends(get_current_user)
 ):
-    # Check if client exists
-    db_client = db.query(Client).filter(Client.id == client_id).first()
-    if not db_client:
-        raise HTTPException(status_code=404, detail="Client not found")
-
-    # Check if note exists and belongs to the client
-    db_note = db.query(ClientNote).filter(
-        ClientNote.id == note_id,
-        ClientNote.client_id == client_id
-    ).first()
-    if not db_note:
-        raise HTTPException(status_code=404, detail="Note not found")
-
-    # Update the note
-    db_note.note = note.note
-    db_note.updated_at = datetime.now(timezone.utc)
+    # Manually set tenant context and get tenant database
+    set_tenant_context(current_user.tenant_id)
+    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
+    db = tenant_session()
     
-    db.commit()
-    db.refresh(db_note)
-    return db_note
+    try:
+        # Check if client exists
+        db_client = db.query(Client).filter(Client.id == client_id).first()
+        if not db_client:
+            raise HTTPException(status_code=404, detail="Client not found")
+
+        # Check if note exists and belongs to the client
+        db_note = db.query(ClientNote).filter(
+            ClientNote.id == note_id,
+            ClientNote.client_id == client_id
+        ).first()
+        if not db_note:
+            raise HTTPException(status_code=404, detail="Note not found")
+
+        # Update the note
+        db_note.note = note.note
+        db_note.updated_at = datetime.now(timezone.utc)
+        
+        db.commit()
+        db.refresh(db_note)
+        return db_note
+    finally:
+        db.close()
 
 @router.delete("/clients/{client_id}/notes/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_client_note(
     client_id: int,
     note_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: MasterUser = Depends(get_current_user)
 ):
-    # Check if client exists
-    db_client = db.query(Client).filter(Client.id == client_id).first()
-    if not db_client:
-        raise HTTPException(status_code=404, detail="Client not found")
+    # Manually set tenant context and get tenant database
+    set_tenant_context(current_user.tenant_id)
+    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
+    db = tenant_session()
+    
+    try:
+        # Check if client exists
+        db_client = db.query(Client).filter(Client.id == client_id).first()
+        if not db_client:
+            raise HTTPException(status_code=404, detail="Client not found")
 
-    # Check if note exists and belongs to the client
-    db_note = db.query(ClientNote).filter(
-        ClientNote.id == note_id,
-        ClientNote.client_id == client_id
-    ).first()
-    if not db_note:
-        raise HTTPException(status_code=404, detail="Note not found")
+        # Check if note exists and belongs to the client
+        db_note = db.query(ClientNote).filter(
+            ClientNote.id == note_id,
+            ClientNote.client_id == client_id
+        ).first()
+        if not db_note:
+            raise HTTPException(status_code=404, detail="Note not found")
 
-    # Delete the note
-    db.delete(db_note)
-    db.commit()
+        # Delete the note
+        db.delete(db_note)
+        db.commit()
+    finally:
+        db.close()
 
 @router.get("/clients/{client_id}/notes", response_model=List[ClientNoteSchema])
 async def get_client_notes(
     client_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: MasterUser = Depends(get_current_user)
 ):
-    # Check if client exists
-    db_client = db.query(Client).filter(Client.id == client_id).first()
-    if not db_client:
-        raise HTTPException(status_code=404, detail="Client not found")
+    # Manually set tenant context and get tenant database
+    set_tenant_context(current_user.tenant_id)
+    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
+    db = tenant_session()
+    
+    try:
+        # Check if client exists
+        db_client = db.query(Client).filter(Client.id == client_id).first()
+        if not db_client:
+            raise HTTPException(status_code=404, detail="Client not found")
 
-    notes = db.query(ClientNote).filter(ClientNote.client_id == client_id).all()
-    return notes
+        notes = db.query(ClientNote).filter(ClientNote.client_id == client_id).all()
+        return notes
+    finally:
+        db.close()
