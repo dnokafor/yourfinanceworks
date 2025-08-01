@@ -127,7 +127,7 @@ const AIAssistant = React.forwardRef<HTMLDivElement>((props, ref) => {
       if (authStatus && userStr) {
         try {
           currentUser = JSON.parse(userStr);
-          adminStatus = currentUser?.role === 'admin';
+          adminStatus = currentUser?.role === 'admin' || currentUser?.is_superuser === true;
         } catch (e) {
           console.error('Error parsing user data:', e);
           // If user data is corrupted, consider user as logged out

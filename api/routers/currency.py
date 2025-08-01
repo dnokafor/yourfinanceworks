@@ -18,7 +18,7 @@ from utils.rbac import require_admin
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/currencies", tags=["currencies"])
+router = APIRouter(prefix="/currency", tags=["currency"])
 
 # Exchange rate API configuration
 EXCHANGE_API_KEY = os.getenv("EXCHANGE_API_KEY")

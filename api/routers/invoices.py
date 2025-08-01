@@ -513,9 +513,12 @@ async def permanently_delete_invoice(
 @router.get("/{invoice_id}", response_model=InvoiceWithClient)
 async def read_invoice(
     invoice_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
+    # Manually set tenant context and get tenant database
+    set_tenant_context(current_user.tenant_id)
+    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
+    db = tenant_session()
     try:
         # Get invoice with client information and payment status
         # No tenant_id filtering needed since we're in the tenant's database
@@ -596,6 +599,8 @@ async def read_invoice(
             status_code=500,
             detail=FAILED_TO_FETCH_INVOICE
         )
+    finally:
+        db.close()
 
 @router.put("/{invoice_id}", response_model=InvoiceSchema)
 async def update_invoice(
