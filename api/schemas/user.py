@@ -1,5 +1,5 @@
-from pydantic import BaseModel, EmailStr
-from typing import Optional
+from pydantic import BaseModel, EmailStr, validator
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 class UserBase(BaseModel):
@@ -16,6 +16,12 @@ class UserCreate(UserBase):
     password: str
     tenant_id: Optional[int] = None  # Optional for signup flow
     organization_name: Optional[str] = None  # For creating new tenant during signup
+    
+    @validator('organization_name')
+    def validate_organization_name(cls, v):
+        if v is not None and len(v.strip()) < 2:
+            raise ValueError('Organization name must be at least 2 characters long')
+        return v.strip() if v else v
 
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
@@ -34,6 +40,7 @@ class UserRead(UserBase):
     google_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    organizations: Optional[List[Dict[str, Any]]] = []
 
     class Config:
         from_attributes = True

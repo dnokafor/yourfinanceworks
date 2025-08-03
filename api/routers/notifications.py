@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 import logging
 
-from models.database import get_db, get_master_db, set_tenant_context
+from models.database import get_db, get_master_db
 from models.models_per_tenant import EmailNotificationSettings, User
 from models.models import MasterUser
 from schemas.email_notifications import (
@@ -25,10 +25,6 @@ async def get_notification_settings(
 ):
     """Get current user's notification settings"""
     # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
     try:
         # Find or create the tenant user by email
         tenant_user = db.query(User).filter(User.email == current_user.email).first()
@@ -65,9 +61,7 @@ async def get_notification_settings(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get notification settings"
         )
-    finally:
-        db.close()
-
+    
 @router.put("/settings", response_model=EmailNotificationSettingsSchema)
 async def update_notification_settings(
     settings_update: EmailNotificationSettingsUpdate,

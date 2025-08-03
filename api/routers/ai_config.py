@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
-from models.database import get_master_db, set_tenant_context
+from models.database import get_master_db, get_db, set_tenant_context
 from routers.auth import get_current_user
 from models.models import MasterUser
 from models.models_per_tenant import AIConfig as AIConfigModel
@@ -18,20 +18,21 @@ router = APIRouter(
 
 @router.get("/", response_model=List[AIConfigSchema])
 async def get_ai_configs(
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Get all AI configurations for the current tenant"""
-    # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
     try:
         # No tenant_id filtering needed since we're in the tenant's database
         configs = db.query(AIConfigModel).all()
         return configs
-    finally:
-        db.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch AI configurations: {str(e)}"
+        )
 
 @router.post("/", response_model=AIConfigSchema)
 async def create_ai_config(
@@ -43,10 +44,6 @@ async def create_ai_config(
     require_admin(current_user, "create AI configurations")
     
     # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
     try:
         # If this is set as default, unset other defaults
         if config.is_default:
@@ -61,9 +58,14 @@ async def create_ai_config(
         db.commit()
         db.refresh(db_config)
         return db_config
-    finally:
-        db.close()
-
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create AI configuration: {str(e)}"
+        )
+    
 @router.put("/{config_id}", response_model=AIConfigSchema)
 async def update_ai_config(
     config_id: int,
@@ -75,10 +77,6 @@ async def update_ai_config(
     require_admin(current_user, "update AI configurations")
     
     # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
     try:
         # No tenant_id filtering needed since we're in the tenant's database
         db_config = db.query(AIConfigModel).filter(AIConfigModel.id == config_id).first()
@@ -102,8 +100,13 @@ async def update_ai_config(
         db.commit()
         db.refresh(db_config)
         return db_config
-    finally:
-        db.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update AI configuration: {str(e)}"
+        )
 
 @router.delete("/{config_id}")
 async def delete_ai_config(
@@ -115,10 +118,6 @@ async def delete_ai_config(
     require_admin(current_user, "delete AI configurations")
     
     # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
     try:
         # No tenant_id filtering needed since we're in the tenant's database
         db_config = db.query(AIConfigModel).filter(AIConfigModel.id == config_id).first()
@@ -129,8 +128,13 @@ async def delete_ai_config(
         db.delete(db_config)
         db.commit()
         return {"message": "AI configuration deleted successfully"}
-    finally:
-        db.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete AI configuration: {str(e)}"
+        )
 
 @router.get("/test/{config_id}")
 async def test_ai_config(
@@ -139,10 +143,6 @@ async def test_ai_config(
 ):
     """Test an AI configuration"""
     # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
     try:
         # No tenant_id filtering needed since we're in the tenant's database
         db_config = db.query(AIConfigModel).filter(AIConfigModel.id == config_id).first()
@@ -228,8 +228,13 @@ async def test_ai_config(
                 "success": False,
                 "message": f"Configuration test failed: {str(e)}"
             }
-    finally:
-        db.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to test AI configuration: {str(e)}"
+        )
 
 @router.post("/mark-tested/{config_id}")
 async def mark_config_as_tested(
@@ -241,10 +246,6 @@ async def mark_config_as_tested(
     require_admin(current_user, "mark AI configurations as tested")
     
     # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
     try:
         # No tenant_id filtering needed since we're in the tenant's database
         db_config = db.query(AIConfigModel).filter(AIConfigModel.id == config_id).first()
@@ -256,5 +257,10 @@ async def mark_config_as_tested(
         db.commit()
         
         return {"message": "AI configuration marked as tested successfully"}
-    finally:
-        db.close() 
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to mark AI configuration as tested: {str(e)}"
+        )

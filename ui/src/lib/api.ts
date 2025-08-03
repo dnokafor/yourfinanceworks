@@ -216,14 +216,23 @@ export async function apiRequest<T>(
   try {
     // Get JWT token from localStorage
     const token = localStorage.getItem('token');
-    // Get tenantId from localStorage.user if available
+    // Get tenantId from localStorage - check for selected tenant first, then fallback to user's default
     let tenantId: string | undefined = undefined;
     try {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        if (user && user.tenant_id) {
-          tenantId = String(user.tenant_id);
+      // First check if user has selected a specific tenant
+      const selectedTenantId = localStorage.getItem('selected_tenant_id');
+      if (selectedTenantId) {
+        tenantId = selectedTenantId;
+        console.log(`🔍 API Request: Using selected tenant ID: ${tenantId} for ${url}`);
+      } else {
+        // Fallback to user's default tenant
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          if (user && user.tenant_id) {
+            tenantId = String(user.tenant_id);
+            console.log(`🔍 API Request: Using user's default tenant ID: ${tenantId} for ${url}`);
+          }
         }
       }
     } catch (e) {
@@ -250,6 +259,18 @@ export async function apiRequest<T>(
     };
     if (!config.skipTenant && tenantId) {
       headers['X-Tenant-ID'] = tenantId;
+      console.log(`🔄 API Request: ${requestUrl} with X-Tenant-ID: ${tenantId}`);
+    } else if (!config.skipTenant) {
+      console.warn(`⚠️ No tenant ID available for request to ${requestUrl}`);
+      console.log('Debug info:', { 
+        selectedTenantId: localStorage.getItem('selected_tenant_id'),
+        userTenantId: (() => {
+          try {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            return user.tenant_id;
+          } catch { return 'parse error'; }
+        })()
+      });
     }
     const response = await fetch(requestUrl, {
       ...options,

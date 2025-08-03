@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from models.database import get_master_db
 from models.models import (
-    Tenant, MasterUser, User, Client, ClientNote, Invoice, Payment, Settings, CurrencyRate, DiscountRule, AIConfig
+    Tenant, MasterUser, User, Client, ClientNote, Invoice, Payment, Settings, CurrencyRate, DiscountRule, AIConfig, user_tenant_association
 )
 from models.models_per_tenant import User as TenantUser
 from schemas.user import UserCreate, UserUpdate, UserList, UserRoleUpdate
@@ -26,17 +26,27 @@ class PromoteUserRequest(BaseModel):
     email: str
 
 def require_super_admin(current_user: MasterUser = Depends(get_current_user)):
-    """Require that the current user is a superuser"""
+    """Require that the current user is a superuser in their primary tenant"""
     if not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Super admin access required"
         )
+    
+    # Check if user is in their primary tenant
+    from models.database import get_tenant_context
+    current_tenant_id = get_tenant_context()
+    if current_tenant_id and current_tenant_id != current_user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super admin access restricted to home organization"
+        )
+    
     return current_user
 
 # ========== TENANT MANAGEMENT ==========
 
-@router.get("/tenants", response_model=List[TenantSchema])
+@router.get("/tenants")
 async def get_tenants(
     skip: int = 0,
     limit: int = 100,
@@ -52,6 +62,10 @@ async def get_tenants(
         tenant_dict = tenant.__dict__.copy()
         # Remove SQLAlchemy internal attributes
         tenant_dict.pop('_sa_instance_state', None)
+        
+        # Map company_logo_url back to logo_url for schema compatibility
+        if 'company_logo_url' in tenant_dict:
+            tenant_dict['logo_url'] = tenant_dict.pop('company_logo_url')
         
         # Add user count
         user_count = master_db.query(MasterUser).filter(
@@ -122,7 +136,12 @@ async def create_tenant(
         )
     
     # Create tenant in master database
-    db_tenant = Tenant(**tenant.dict())
+    tenant_data = tenant.dict()
+    # Map logo_url to company_logo_url to match the model field
+    if 'logo_url' in tenant_data:
+        tenant_data['company_logo_url'] = tenant_data.pop('logo_url')
+    
+    db_tenant = Tenant(**tenant_data)
     master_db.add(db_tenant)
     master_db.commit()
     master_db.refresh(db_tenant)
@@ -138,27 +157,77 @@ async def create_tenant(
             detail="Failed to create tenant database"
         )
     
+    # Create a user with the tenant's email if provided
+    if db_tenant.email:
+        try:
+            # Check if user already exists
+            existing_user = master_db.query(MasterUser).filter(
+                MasterUser.email == db_tenant.email
+            ).first()
+            
+            if not existing_user:
+                # Create user in master database
+                hashed_password = get_password_hash("password123")  # Default password
+                master_user = MasterUser(
+                    email=db_tenant.email,
+                    hashed_password=hashed_password,
+                    first_name=db_tenant.name,
+                    last_name="Admin",
+                    role="admin",
+                    tenant_id=db_tenant.id,
+                    is_verified=True
+                )
+                
+                master_db.add(master_user)
+                master_db.commit()
+                master_db.refresh(master_user)
+                
+                # Create user in tenant database
+                tenant_session = tenant_db_manager.get_tenant_session(db_tenant.id)()
+                
+                tenant_user = TenantUser(
+                    id=master_user.id,
+                    email=db_tenant.email,
+                    hashed_password=hashed_password,
+                    first_name=db_tenant.name,
+                    last_name="Admin",
+                    role="admin",
+                    is_verified=True
+                )
+                
+                tenant_session.add(tenant_user)
+                tenant_session.commit()
+                tenant_session.close()
+        except Exception as e:
+            # Don't fail tenant creation if user creation fails
+            pass
+    
     return db_tenant
 
-@router.put("/tenants/{tenant_id}", response_model=TenantSchema)
+@router.put("/tenants/{tenant_id}")
 async def update_tenant(
     tenant_id: int,
-    tenant: TenantUpdate,
+    tenant_update: TenantUpdate,
     master_db: Session = Depends(get_master_db),
     current_user: MasterUser = Depends(require_super_admin)
 ):
     """Update any tenant's information"""
-    tenant = master_db.query(Tenant).filter(Tenant.id == tenant_id).first()
-    if not tenant:
+    db_tenant = master_db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not db_tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
     
     # Update tenant fields
-    for field, value in tenant.dict(exclude_unset=True).items():
-        setattr(tenant, field, value)
+    tenant_data = tenant_update.dict(exclude_unset=True)
+    # Map logo_url to company_logo_url to match the model field
+    if 'logo_url' in tenant_data:
+        tenant_data['company_logo_url'] = tenant_data.pop('logo_url')
+    
+    for field, value in tenant_data.items():
+        setattr(db_tenant, field, value)
     
     master_db.commit()
-    master_db.refresh(tenant)
-    return tenant
+    master_db.refresh(db_tenant)
+    return db_tenant
 
 @router.delete("/tenants/{tenant_id}")
 async def delete_tenant(
@@ -170,6 +239,13 @@ async def delete_tenant(
     tenant = master_db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    # Don't allow deleting your own tenant
+    if tenant_id == current_user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete your own tenant"
+        )
 
     # Manually delete all related data for this tenant
     master_db.query(MasterUser).filter(MasterUser.tenant_id == tenant_id).delete()
@@ -196,6 +272,30 @@ async def delete_tenant(
     master_db.commit()
 
     return {"message": f"Tenant {tenant.name} deleted successfully"}
+
+@router.patch("/tenants/{tenant_id}/toggle-status")
+async def toggle_tenant_status(
+    tenant_id: int,
+    master_db: Session = Depends(get_master_db),
+    current_user: MasterUser = Depends(require_super_admin)
+):
+    """Toggle tenant active/inactive status"""
+    tenant = master_db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    # Don't allow disabling your own tenant
+    if tenant_id == current_user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot disable your own tenant"
+        )
+    
+    tenant.is_active = not tenant.is_active
+    master_db.commit()
+    
+    status_text = "enabled" if tenant.is_active else "disabled"
+    return {"message": f"Tenant {tenant.name} {status_text} successfully"}
 
 # ========== CROSS-TENANT USER MANAGEMENT ==========
 
@@ -244,27 +344,49 @@ async def get_user(
     # Get tenant information
     tenant = master_db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
     
+    # Get user's tenant memberships
+    tenant_memberships = master_db.execute(
+        user_tenant_association.select().where(
+            user_tenant_association.c.user_id == user_id
+        )
+    ).fetchall()
+    
     user_dict = user.__dict__.copy()
     user_dict.pop('_sa_instance_state', None)
     user_dict['tenant_name'] = tenant.name if tenant else "Unknown"
+    user_dict['tenant_ids'] = [str(membership.tenant_id) for membership in tenant_memberships]
+    user_dict['primary_tenant_id'] = str(user.tenant_id)
     
     return user_dict
 
 @router.post("/users", response_model=Dict[str, Any])
 async def create_user(
-    user: UserCreate,
+    user_data: dict,
     master_db: Session = Depends(get_master_db),
     current_user: MasterUser = Depends(require_super_admin)
 ):
-    """Create a new user for a specific tenant"""
-    # Check if tenant exists
-    tenant = master_db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found")
+    """Create a new user for multiple tenants"""
+    # Validate required fields
+    required_fields = ['email', 'first_name', 'last_name', 'password', 'tenant_ids', 'primary_tenant_id']
+    for field in required_fields:
+        if field not in user_data:
+            raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
+    
+    tenant_ids = [int(tid) for tid in user_data['tenant_ids']]
+    primary_tenant_id = int(user_data['primary_tenant_id'])
+    
+    # Validate primary tenant is in tenant list
+    if primary_tenant_id not in tenant_ids:
+        raise HTTPException(status_code=400, detail="Primary tenant must be in selected tenants")
+    
+    # Check if tenants exist
+    tenants = master_db.query(Tenant).filter(Tenant.id.in_(tenant_ids)).all()
+    if len(tenants) != len(tenant_ids):
+        raise HTTPException(status_code=404, detail="One or more tenants not found")
     
     # Check if user already exists
     existing_user = master_db.query(MasterUser).filter(
-        MasterUser.email == user.email
+        MasterUser.email == user_data['email']
     ).first()
     if existing_user:
         raise HTTPException(
@@ -273,14 +395,14 @@ async def create_user(
         )
     
     # Create user in master database
-    hashed_password = get_password_hash(user.password)
+    hashed_password = get_password_hash(user_data['password'])
     master_user = MasterUser(
-        email=user.email,
+        email=user_data['email'],
         hashed_password=hashed_password,
-        first_name=user.first_name,
-        last_name=user.last_name,
-        role=user.role,
-        tenant_id=user.tenant_id,
+        first_name=user_data['first_name'],
+        last_name=user_data['last_name'],
+        role=user_data.get('role', 'user'),
+        tenant_id=int(user_data['primary_tenant_id']),
         is_verified=True
     )
     
@@ -288,49 +410,43 @@ async def create_user(
     master_db.commit()
     master_db.refresh(master_user)
     
-    # Create user in tenant database
-    try:
-        tenant_session = tenant_db_manager.get_tenant_session(user.tenant_id)()
-        
-        tenant_user = TenantUser(
-            id=master_user.id,  # Use same ID as master
-            email=user.email,
-            hashed_password=hashed_password,
-            first_name=user.first_name,
-            last_name=user.last_name,
-            role=user.role,
-            is_verified=True
+    # Add user to tenant memberships
+    for tenant_id in tenant_ids:
+        membership = master_db.execute(
+            user_tenant_association.insert().values(
+                user_id=master_user.id,
+                tenant_id=tenant_id,
+                role=user_data.get('role', 'user')
+            )
         )
         
-        tenant_session.add(tenant_user)
-        tenant_session.commit()
-        tenant_session.close()
-        
-    except Exception as e:
-        # Rollback master user creation if tenant user creation fails
-        master_db.delete(master_user)
-        master_db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=FAILED_TO_IMPORT_DATA
-        )
+        # Create user in each tenant database
+        try:
+            tenant_session = tenant_db_manager.get_tenant_session(tenant_id)()
+            
+            tenant_user = TenantUser(
+                id=master_user.id,
+                email=user_data['email'],
+                hashed_password=hashed_password,
+                first_name=user_data['first_name'],
+                last_name=user_data['last_name'],
+                role=user_data.get('role', 'user'),
+                is_verified=True
+            )
+            
+            tenant_session.add(tenant_user)
+            tenant_session.commit()
+            tenant_session.close()
+            
+        except Exception as e:
+            # Continue with other tenants if one fails
+            pass
+    
+    master_db.commit()
     
     user_dict = master_user.__dict__.copy()
     user_dict.pop('_sa_instance_state', None)
-    user_dict['tenant_name'] = tenant.name
-    
-    # Log audit event
-    log_audit_event(
-        db=master_db,
-        user_id=current_user.id,
-        user_email=current_user.email,
-        action="CREATE",
-        resource_type="user",
-        resource_id=str(master_user.id),
-        resource_name=f"{master_user.first_name} {master_user.last_name}",
-        details=user.dict(),
-        status="success"
-    )
+    user_dict['tenant_names'] = [t.name for t in tenants]
     
     return user_dict
 
@@ -371,38 +487,50 @@ async def update_user_role(
 @router.put("/users/{user_id}")
 async def update_user(
     user_id: int,
-    user_update: UserUpdate,
+    user_data: dict,
     master_db: Session = Depends(get_master_db),
     current_user: MasterUser = Depends(require_super_admin)
 ):
-    """Update a user's info (name, email, etc.) across all systems"""
+    """Update a user's info across all systems"""
     user = master_db.query(MasterUser).filter(MasterUser.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Update fields in master database
-    for field, value in user_update.dict(exclude_unset=True).items():
-        if field == "password":
-            user.hashed_password = get_password_hash(value)
-        elif hasattr(user, field):
-            setattr(user, field, value)
+    # Update basic fields in master database
+    basic_fields = ['first_name', 'last_name', 'email', 'role']
+    for field in basic_fields:
+        if field in user_data and user_data[field]:
+            setattr(user, field, user_data[field])
+    
+    if 'password' in user_data and user_data['password']:
+        user.hashed_password = get_password_hash(user_data['password'])
+    
+    if 'primary_tenant_id' in user_data:
+        user.tenant_id = int(user_data['primary_tenant_id'])
+    
+    # Handle tenant memberships if provided
+    if 'tenant_ids' in user_data:
+        tenant_ids = [int(tid) for tid in user_data['tenant_ids']]
+        
+        # Remove existing memberships
+        master_db.execute(
+            user_tenant_association.delete().where(
+                user_tenant_association.c.user_id == user_id
+            )
+        )
+        
+        # Add new memberships
+        for tenant_id in tenant_ids:
+            master_db.execute(
+                user_tenant_association.insert().values(
+                    user_id=user_id,
+                    tenant_id=tenant_id,
+                    role=user_data.get('role', 'user')
+                )
+            )
+    
     master_db.commit()
     master_db.refresh(user)
-
-    # Update fields in tenant database
-    try:
-        tenant_session = tenant_db_manager.get_tenant_session(user.tenant_id)()
-        tenant_user = tenant_session.query(TenantUser).filter(TenantUser.id == user_id).first()
-        if tenant_user:
-            for field, value in user_update.dict(exclude_unset=True).items():
-                if field == "password":
-                    tenant_user.hashed_password = get_password_hash(value)
-                elif hasattr(tenant_user, field):
-                    setattr(tenant_user, field, value)
-            tenant_session.commit()
-        tenant_session.close()
-    except Exception as e:
-        pass  # Continue even if tenant update fails
 
     return {"message": "User info updated successfully"}
 
@@ -457,6 +585,41 @@ async def delete_user(
     )
     
     return {"message": "User deleted successfully"}
+
+@router.patch("/users/{user_id}/toggle-status")
+async def toggle_user_status(
+    user_id: int,
+    master_db: Session = Depends(get_master_db),
+    current_user: MasterUser = Depends(require_super_admin)
+):
+    """Toggle user active/inactive status"""
+    user = master_db.query(MasterUser).filter(MasterUser.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Don't allow disabling yourself
+    if user.id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot disable yourself"
+        )
+    
+    user.is_active = not user.is_active
+    master_db.commit()
+    
+    # Update in tenant database too
+    try:
+        tenant_session = tenant_db_manager.get_tenant_session(user.tenant_id)()
+        tenant_user = tenant_session.query(TenantUser).filter(TenantUser.id == user_id).first()
+        if tenant_user:
+            tenant_user.is_active = user.is_active
+            tenant_session.commit()
+        tenant_session.close()
+    except Exception:
+        pass
+    
+    status_text = "enabled" if user.is_active else "disabled"
+    return {"message": f"User {user.email} {status_text} successfully"}
 
 # ========== DATABASE OPERATIONS ==========
 

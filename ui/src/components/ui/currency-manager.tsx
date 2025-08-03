@@ -60,7 +60,7 @@ export function CurrencyManager() {
     try {
       setLoading(true);
       const response = await currencyApi.getSupportedCurrencies();
-      setCurrencies(response.currencies || []);
+      setCurrencies(response || []);
     } catch (error) {
       console.error('Failed to fetch currencies:', error);
       toast.error(getErrorMessage(error, t));

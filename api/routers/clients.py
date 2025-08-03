@@ -6,7 +6,7 @@ import logging
 import traceback
 from datetime import datetime, timezone
 
-from models.database import get_db, get_master_db, set_tenant_context
+from models.database import get_db, get_master_db
 from models.models_per_tenant import Client, User, Invoice
 from models.models import MasterUser
 from routers.payments import Payment
@@ -27,12 +27,9 @@ router = APIRouter(prefix="/clients", tags=["clients"])
 async def read_clients(
     skip: int = 0,
     limit: int = 100,
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
-    # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
     try:
         # Get clients with their total invoice amounts, total paid amounts, and calculate outstanding balance
         # No tenant_id filtering needed since we're in the tenant's database
@@ -95,18 +92,13 @@ async def read_clients(
             status_code=500,
             detail=FAILED_TO_FETCH_CLIENTS
         )
-    finally:
-        db.close()
 
 @router.get("/{client_id}", response_model=ClientSchema)
 async def read_client(
     client_id: int,
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
-    # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
     try:
         # Get client with total paid amount
         # No tenant_id filtering needed since we're in the tenant's database
@@ -175,17 +167,16 @@ async def read_client(
             status_code=500,
             detail=FAILED_TO_FETCH_CLIENT
         )
-    finally:
-        db.close()
 
 @router.post("/", response_model=ClientSchema)
 async def create_client(
     client: ClientCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     # Check if user has permission to create clients
     require_non_viewer(current_user, "create clients")
+    
     try:
         # Check for existing client with same name and email to prevent duplicates
         existing_client = db.query(Client).filter(
@@ -218,7 +209,21 @@ async def create_client(
             details=client.dict(),
             status="success"
         )
-        return db_client
+        # Return client data as dict to avoid DetachedInstanceError
+        client_dict = {
+            "id": db_client.id,
+            "name": db_client.name,
+            "email": db_client.email,
+            "phone": db_client.phone,
+            "address": db_client.address,
+            "balance": db_client.balance,
+            "paid_amount": 0,
+            "outstanding_balance": 0,
+            "preferred_currency": db_client.preferred_currency,
+            "created_at": db_client.created_at.isoformat() if db_client.created_at else None,
+            "updated_at": db_client.updated_at.isoformat() if db_client.updated_at else None
+        }
+        return client_dict
     except HTTPException as e:
         log_audit_event(
             db=db,
@@ -258,15 +263,11 @@ async def create_client(
 async def update_client(
     client_id: int,
     client: ClientUpdate,
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     # Check if user has permission to update clients
     require_non_viewer(current_user, "update clients")
-    
-    # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
     
     try:
         # No tenant_id filtering needed since we're in the tenant's database
@@ -349,14 +350,12 @@ async def update_client(
             status_code=500,
             detail=FAILED_TO_UPDATE_CLIENT
         )
-    finally:
-        db.close()
 
 @router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_client(
     client_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     try:
         # Check if client exists

@@ -664,7 +664,9 @@
     "data_management": "Gestión de Datos",
     "data_management_description": "Respalda, exporta y restaura todos los datos de tu organización de forma segura.",
     "notification_settings_saved_successfully": "Configuración de notificaciones guardada exitosamente",
-    "test_notification_sent_successfully": "Notificación de prueba enviada exitosamente"
+    "test_notification_sent_successfully": "Notificación de prueba enviada exitosamente",
+    "loading_settings": "Cargando configuración...",
+    "profile_updated_successfully": "Perfil actualizado exitosamente"
   },
   "users": {
     "title": "Usuarios",

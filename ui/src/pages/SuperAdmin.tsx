@@ -16,6 +16,7 @@ import { AppSidebar } from '@/components/layout/AppSidebar';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { useTranslation } from "react-i18next";
 import { superAdminApi, apiRequest } from '../lib/api';
+import { CurrencySelector } from '@/components/ui/currency-selector';
 
 interface Tenant {
   id: number;
@@ -87,7 +88,7 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [createTenantForm, setCreateTenantForm] = useState({ name: '', email: '', default_currency: 'USD' });
-  const [createUserForm, setCreateUserForm] = useState({ email: '', first_name: '', last_name: '', role: 'user', password: '', tenant_id: '' });
+  const [createUserForm, setCreateUserForm] = useState({ email: '', first_name: '', last_name: '', role: 'user', password: '', tenant_ids: [], primary_tenant_id: '', tenant_roles: {} });
   const [promoteEmail, setPromoteEmail] = useState('');
   const [promoteLoading, setPromoteLoading] = useState(false);
   const [promoteError, setPromoteError] = useState<string | null>(null);
@@ -96,7 +97,7 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
   const [editTenant, setEditTenant] = useState<Tenant | null>(null);
   const [editTenantForm, setEditTenantForm] = useState({ name: '', email: '', default_currency: 'USD' });
   const [editUser, setEditUser] = useState<User | null>(null);
-  const [editUserForm, setEditUserForm] = useState({ first_name: '', last_name: '', email: '', role: 'user', password: '' });
+  const [editUserForm, setEditUserForm] = useState({ first_name: '', last_name: '', email: '', role: 'user', password: '', tenant_ids: [], primary_tenant_id: '', tenant_roles: {} });
 
   // --- Add state for delete confirmation dialogs ---
   const [tenantToDelete, setTenantToDelete] = useState<Tenant | null>(null);
@@ -141,24 +142,30 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
       
       setShowCreateTenant(false);
       setCreateTenantForm({ name: '', email: '', default_currency: 'USD' });
+      toast.success('Organization created successfully');
       fetchTenants();
-    } catch (err) {
-      setError('Failed to create tenant');
+      fetchUsers(); // Refresh users list to show the auto-created admin user
+      fetchDatabaseOverview(); // Refresh databases list to show the new tenant database
+    } catch (err: any) {
+      const errorMessage = err?.detail || err?.message || 'Failed to create organization';
+      toast.error(errorMessage);
     }
   };
 
   const handleCreateUser = async () => {
     try {
-      await apiRequest(`/super-admin/users?tenant_id=${createUserForm.tenant_id}`, {
+      await apiRequest('/super-admin/users', {
         method: 'POST',
         body: JSON.stringify(createUserForm)
       }, { skipTenant: true });
       
       setShowCreateUser(false);
-      setCreateUserForm({ email: '', first_name: '', last_name: '', role: 'user', password: '', tenant_id: '' });
+      setCreateUserForm({ email: '', first_name: '', last_name: '', role: 'user', password: '', tenant_ids: [], primary_tenant_id: '', tenant_roles: {} });
+      toast.success('User created successfully');
       fetchUsers();
-    } catch (err) {
-      setError('Failed to create user');
+    } catch (err: any) {
+      const errorMessage = err?.detail || err?.message || 'Failed to create user';
+      toast.error(errorMessage);
     }
   };
 
@@ -289,15 +296,37 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
   };
 
   // --- Edit User Handler ---
-  const handleEditUser = (user: User) => {
-    setEditUser(user);
-    setEditUserForm({
-      first_name: user.first_name,
-      last_name: user.last_name,
-      email: user.email,
-      role: user.role,
-      password: ''
-    });
+  const handleEditUser = async (user: User) => {
+    try {
+      // Fetch detailed user info including tenant memberships
+      const userDetails = await apiRequest(`/super-admin/users/${user.id}`, {}, { skipTenant: true });
+      
+      setEditUser(user);
+      setEditUserForm({
+        first_name: userDetails.first_name,
+        last_name: userDetails.last_name,
+        email: userDetails.email,
+        role: userDetails.role,
+        password: '',
+        tenant_ids: userDetails.tenant_ids || [userDetails.tenant_id.toString()],
+        primary_tenant_id: userDetails.primary_tenant_id || userDetails.tenant_id.toString(),
+        tenant_roles: userDetails.tenant_roles || {}
+      });
+    } catch (err) {
+      toast.error('Failed to load user details');
+      // Fallback to basic user info
+      setEditUser(user);
+      setEditUserForm({
+        first_name: user.first_name,
+        last_name: user.last_name,
+        email: user.email,
+        role: user.role,
+        password: '',
+        tenant_ids: [user.tenant_id.toString()],
+        primary_tenant_id: user.tenant_id.toString(),
+        tenant_roles: { [user.tenant_id.toString()]: user.role }
+      });
+    }
   };
   const handleUpdateUser = async () => {
     if (!editUser) return;
@@ -418,12 +447,12 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">{t('superAdmin.total_tenants_label')}</p>
+                  <p className="text-sm text-gray-600">Total Organizations</p>
                   <p className="text-2xl font-bold">{tenants.length}</p>
                 </div>
                 <Building className="h-8 w-8 text-blue-500" />
               </div>
-              <p className="text-sm text-gray-500 mt-2">{activeTenants} {t('superAdmin.active_tenants')}</p>
+              <p className="text-sm text-gray-500 mt-2">{activeTenants} Active</p>
             </CardContent>
           </Card>
           
@@ -475,7 +504,7 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
         {/* Main Content */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="tenants">{t('superAdmin.tenants_tab')}</TabsTrigger>
+            <TabsTrigger value="tenants">Organizations</TabsTrigger>
             <TabsTrigger value="users">{t('superAdmin.users_tab')}</TabsTrigger>
             <TabsTrigger value="databases">{t('superAdmin.databases_tab')}</TabsTrigger>
           </TabsList>
@@ -484,17 +513,17 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
             <Card>
               <CardHeader>
                 <div className="flex justify-between items-center">
-                  <CardTitle>{t('superAdmin.tenants_management_title')}</CardTitle>
+                  <CardTitle>Organization Management</CardTitle>
                   <Dialog open={showCreateTenant} onOpenChange={setShowCreateTenant}>
                     <DialogTrigger asChild>
                       <Button>
                         <Building className="h-4 w-4 mr-2" />
-                        {t('superAdmin.create_tenant_button')}
+                        Create Organization
                       </Button>
                     </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
-                        <DialogTitle>{t('superAdmin.create_new_tenant_title')}</DialogTitle>
+                        <DialogTitle>Create New Organization</DialogTitle>
                       </DialogHeader>
                       <div className="space-y-4">
                         <div>
@@ -518,19 +547,13 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
                         </div>
                         <div>
                           <Label htmlFor="tenant-currency">{t('superAdmin.default_currency_label')}</Label>
-                          <Select value={createTenantForm.default_currency} onValueChange={(value) => setCreateTenantForm(prev => ({ ...prev, default_currency: value }))}>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="USD">{t('superAdmin.currency_usd')}</SelectItem>
-                              <SelectItem value="EUR">{t('superAdmin.currency_eur')}</SelectItem>
-                              <SelectItem value="GBP">{t('superAdmin.currency_gbp')}</SelectItem>
-                              <SelectItem value="JPY">{t('superAdmin.currency_jpy')}</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <CurrencySelector
+                            value={createTenantForm.default_currency}
+                            onValueChange={(value) => setCreateTenantForm(prev => ({ ...prev, default_currency: value }))}
+                            placeholder={t('superAdmin.select_currency')}
+                          />
                         </div>
-                        <Button onClick={handleCreateTenant} className="w-full">{t('superAdmin.create_tenant_button')}</Button>
+                        <Button onClick={handleCreateTenant} className="w-full">Create Organization</Button>
                       </div>
                     </DialogContent>
                   </Dialog>
@@ -542,11 +565,11 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
                     <TableRow>
                       <TableHead>{t('superAdmin.name_header')}</TableHead>
                       <TableHead>{t('superAdmin.email_header')}</TableHead>
-                      <TableHead>{t('superAdmin.users_header')}</TableHead>
-                      <TableHead>{t('superAdmin.currency_header')}</TableHead>
-                      <TableHead>{t('superAdmin.status_header')}</TableHead>
-                      <TableHead>{t('superAdmin.created_at_header')}</TableHead>
-                      <TableHead>{t('superAdmin.actions_header')}</TableHead>
+                      <TableHead>Users</TableHead>
+                      <TableHead>Currency</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Created At</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -561,7 +584,7 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
                           <TableCell>{tenant.default_currency}</TableCell>
                           <TableCell>
                             <Badge variant={tenant.is_active ? "default" : "secondary"}>
-                              {tenant.is_active ? t('superAdmin.active_status') : t('superAdmin.inactive_status')}
+                              {tenant.is_active ? 'Active' : 'Inactive'}
                             </Badge>
                           </TableCell>
                           <TableCell>{new Date(tenant.created_at).toLocaleDateString()}</TableCell>
@@ -570,9 +593,30 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
                               <Button size="sm" variant="outline" onClick={() => handleEditTenant(tenant)}>
                                 <Edit className="h-4 w-4" />
                               </Button>
-                              <Button size="sm" variant="outline" onClick={() => handleDeleteTenant(tenant)}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              {currentUser && tenant.id !== currentUser.tenant_id && (
+                                <Button 
+                                  size="sm" 
+                                  variant={tenant.is_active ? "destructive" : "default"}
+                                  onClick={async () => {
+                                    try {
+                                      await apiRequest(`/super-admin/tenants/${tenant.id}/toggle-status`, {
+                                        method: 'PATCH'
+                                      }, { skipTenant: true });
+                                      toast.success(`Organization ${tenant.is_active ? 'disabled' : 'enabled'} successfully`);
+                                      fetchTenants();
+                                    } catch (err) {
+                                      toast.error('Failed to toggle organization status');
+                                    }
+                                  }}
+                                >
+                                  {tenant.is_active ? 'Disable' : 'Enable'}
+                                </Button>
+                              )}
+                              {currentUser && tenant.id !== currentUser.tenant_id && (
+                                <Button size="sm" variant="outline" onClick={() => handleDeleteTenant(tenant)}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -631,13 +675,73 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
                           </div>
                         </div>
                         <div>
-                          <Label htmlFor="user-tenant">{t('superAdmin.tenant_label')}</Label>
-                          <Select value={createUserForm.tenant_id} onValueChange={(value) => setCreateUserForm(prev => ({ ...prev, tenant_id: value }))}>
+                          <Label>Organizations & Roles</Label>
+                          <div className="space-y-2 max-h-48 overflow-y-auto border rounded p-2">
+                            {tenants.map(tenant => {
+                              const tenantId = tenant.id.toString();
+                              const isSelected = createUserForm.tenant_ids.includes(tenantId);
+                              return (
+                                <div key={tenant.id} className="flex items-center justify-between space-x-2 p-2 rounded">
+                                  <label className="flex items-center space-x-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={(e) => {
+                                        setCreateUserForm(prev => {
+                                          if (e.target.checked) {
+                                            return {
+                                              ...prev,
+                                              tenant_ids: [...prev.tenant_ids, tenantId],
+                                              primary_tenant_id: prev.primary_tenant_id || tenantId,
+                                              tenant_roles: { ...prev.tenant_roles, [tenantId]: 'user' }
+                                            };
+                                          } else {
+                                            const newTenantIds = prev.tenant_ids.filter(id => id !== tenantId);
+                                            const newTenantRoles = { ...prev.tenant_roles };
+                                            delete newTenantRoles[tenantId];
+                                            return {
+                                              ...prev,
+                                              tenant_ids: newTenantIds,
+                                              primary_tenant_id: prev.primary_tenant_id === tenantId ? newTenantIds[0] || '' : prev.primary_tenant_id,
+                                              tenant_roles: newTenantRoles
+                                            };
+                                          }
+                                        });
+                                      }}
+                                    />
+                                    <span className="text-sm">{tenant.name}</span>
+                                  </label>
+                                  {isSelected && (
+                                    <Select 
+                                      value={createUserForm.tenant_roles[tenantId] || 'user'} 
+                                      onValueChange={(value) => setCreateUserForm(prev => ({
+                                        ...prev,
+                                        tenant_roles: { ...prev.tenant_roles, [tenantId]: value }
+                                      }))}
+                                    >
+                                      <SelectTrigger className="w-24">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="admin">Admin</SelectItem>
+                                        <SelectItem value="user">User</SelectItem>
+                                        <SelectItem value="viewer">Viewer</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div>
+                          <Label htmlFor="primary-tenant">Primary Organization</Label>
+                          <Select value={createUserForm.primary_tenant_id} onValueChange={(value) => setCreateUserForm(prev => ({ ...prev, primary_tenant_id: value }))}>
                             <SelectTrigger>
-                              <SelectValue placeholder={t('superAdmin.select_tenant_placeholder')} />
+                              <SelectValue placeholder="Select primary organization" />
                             </SelectTrigger>
                             <SelectContent>
-                              {tenants.map(tenant => (
+                              {tenants.filter(t => createUserForm.tenant_ids.includes(t.id.toString())).map(tenant => (
                                 <SelectItem key={tenant.id} value={tenant.id.toString()}>
                                   {tenant.name}
                                 </SelectItem>
@@ -645,19 +749,7 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
                             </SelectContent>
                           </Select>
                         </div>
-                        <div>
-                          <Label htmlFor="user-role">{t('superAdmin.role_label')}</Label>
-                          <Select value={createUserForm.role} onValueChange={(value) => setCreateUserForm(prev => ({ ...prev, role: value }))}>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="admin">{t('superAdmin.role_admin')}</SelectItem>
-                              <SelectItem value="user">{t('superAdmin.role_user')}</SelectItem>
-                              <SelectItem value="viewer">{t('superAdmin.role_viewer')}</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
+
                         <div>
                           <Label htmlFor="user-password">{t('superAdmin.password_label')}</Label>
                           <Input
@@ -678,17 +770,28 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>{t('superAdmin.name_header')}</TableHead>
-                      <TableHead>{t('superAdmin.email_header')}</TableHead>
-                      <TableHead>{t('superAdmin.tenant_header')}</TableHead>
-                      <TableHead>{t('superAdmin.role_header')}</TableHead>
-                      <TableHead>{t('superAdmin.status_header')}</TableHead>
-                      <TableHead>{t('superAdmin.created_at_header')}</TableHead>
-                      <TableHead>{t('superAdmin.actions_header')}</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Organization</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Created At</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {users.map((user) => (
+                    {users
+                      .slice()
+                      .sort((a, b) => {
+                        // Current user first
+                        if (currentUser && a.id === currentUser.id) return -1;
+                        if (currentUser && b.id === currentUser.id) return 1;
+                        // Then sort by name
+                        const aName = `${a.first_name} ${a.last_name}`.trim();
+                        const bName = `${b.first_name} ${b.last_name}`.trim();
+                        return aName.localeCompare(bName);
+                      })
+                      .map((user) => (
                       <TableRow key={user.id}>
                         <TableCell className="font-medium">
                           {user.first_name} {user.last_name}
@@ -714,9 +817,30 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
                             <Button size="sm" variant="outline" onClick={() => handleEditUser(user)}>
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button size="sm" variant="outline" onClick={() => handleDeleteUser(user)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {currentUser && user.id !== currentUser.id && (
+                              <Button 
+                                size="sm" 
+                                variant={user.is_active ? "destructive" : "default"}
+                                onClick={async () => {
+                                  try {
+                                    await apiRequest(`/super-admin/users/${user.id}/toggle-status`, {
+                                      method: 'PATCH'
+                                    }, { skipTenant: true });
+                                    toast.success(`User ${user.is_active ? 'disabled' : 'enabled'} successfully`);
+                                    fetchUsers();
+                                  } catch (err) {
+                                    toast.error('Failed to toggle user status');
+                                  }
+                                }}
+                              >
+                                {user.is_active ? 'Disable' : 'Enable'}
+                              </Button>
+                            )}
+                            {currentUser && user.id !== currentUser.id && (
+                              <Button size="sm" variant="outline" onClick={() => handleDeleteUser(user)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                             {user.is_superuser && currentUser && user.email !== currentUser.email && superUsers > 1 && (
                               <Button
                                 variant="destructive"
@@ -797,7 +921,7 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
       <Dialog open={!!editTenant} onOpenChange={open => { if (!open) setEditTenant(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t('superAdmin.edit_tenant_title')}</DialogTitle>
+            <DialogTitle>Edit Organization</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
@@ -810,19 +934,13 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
             </div>
             <div>
               <Label htmlFor="edit-tenant-currency">{t('superAdmin.default_currency_label')}</Label>
-              <Select value={editTenantForm.default_currency} onValueChange={value => setEditTenantForm(prev => ({ ...prev, default_currency: value }))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="USD">{t('superAdmin.currency_usd')}</SelectItem>
-                  <SelectItem value="EUR">{t('superAdmin.currency_eur')}</SelectItem>
-                  <SelectItem value="GBP">{t('superAdmin.currency_gbp')}</SelectItem>
-                  <SelectItem value="JPY">{t('superAdmin.currency_jpy')}</SelectItem>
-                </SelectContent>
-              </Select>
+              <CurrencySelector
+                value={editTenantForm.default_currency}
+                onValueChange={value => setEditTenantForm(prev => ({ ...prev, default_currency: value }))}
+                placeholder={t('superAdmin.select_currency')}
+              />
             </div>
-            <Button onClick={handleUpdateTenant} className="w-full">{t('superAdmin.update_tenant_button')}</Button>
+            <Button onClick={handleUpdateTenant} className="w-full">Update Organization</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -862,6 +980,83 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
             <div>
               <Label htmlFor="edit-user-password">{t('superAdmin.password_label_edit')}</Label>
               <Input id="edit-user-password" type="password" value={editUserForm.password} onChange={e => setEditUserForm(prev => ({ ...prev, password: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Organizations & Roles</Label>
+              <div className="space-y-2 max-h-48 overflow-y-auto border rounded p-2">
+                {tenants.map(tenant => {
+                  const isOwnOrg = editUser && tenant.id === editUser.tenant_id;
+                  const tenantId = tenant.id.toString();
+                  const isSelected = editUserForm.tenant_ids.includes(tenantId);
+                  return (
+                    <div key={tenant.id} className={`flex items-center justify-between space-x-2 ${isOwnOrg ? 'bg-gray-50' : ''} p-2 rounded`}>
+                      <label className={`flex items-center space-x-2 ${isOwnOrg ? 'text-gray-600' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          disabled={isOwnOrg}
+                          onChange={(e) => {
+                            setEditUserForm(prev => {
+                              if (e.target.checked) {
+                                return {
+                                  ...prev,
+                                  tenant_ids: [...prev.tenant_ids, tenantId],
+                                  primary_tenant_id: prev.primary_tenant_id || tenantId,
+                                  tenant_roles: { ...prev.tenant_roles, [tenantId]: 'user' }
+                                };
+                              } else {
+                                const newTenantIds = prev.tenant_ids.filter(id => id !== tenantId);
+                                const newTenantRoles = { ...prev.tenant_roles };
+                                delete newTenantRoles[tenantId];
+                                return {
+                                  ...prev,
+                                  tenant_ids: newTenantIds,
+                                  primary_tenant_id: prev.primary_tenant_id === tenantId ? newTenantIds[0] || '' : prev.primary_tenant_id,
+                                  tenant_roles: newTenantRoles
+                                };
+                              }
+                            });
+                          }}
+                        />
+                        <span className="text-sm">{tenant.name}{isOwnOrg ? ' (Primary)' : ''}</span>
+                      </label>
+                      {isSelected && (
+                        <Select 
+                          value={editUserForm.tenant_roles[tenantId] || 'user'} 
+                          onValueChange={(value) => setEditUserForm(prev => ({
+                            ...prev,
+                            tenant_roles: { ...prev.tenant_roles, [tenantId]: value }
+                          }))}
+                        >
+                          <SelectTrigger className="w-24">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="admin">Admin</SelectItem>
+                            <SelectItem value="user">User</SelectItem>
+                            <SelectItem value="viewer">Viewer</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="edit-primary-tenant">Primary Organization</Label>
+              <Select value={editUserForm.primary_tenant_id} onValueChange={(value) => setEditUserForm(prev => ({ ...prev, primary_tenant_id: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select primary organization" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tenants.filter(t => editUserForm.tenant_ids.includes(t.id.toString())).map(tenant => (
+                    <SelectItem key={tenant.id} value={tenant.id.toString()}>
+                      {tenant.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <Button onClick={handleUpdateUser} className="w-full">{t('superAdmin.update_user_button')}</Button>
           </div>

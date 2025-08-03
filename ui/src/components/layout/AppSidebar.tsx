@@ -31,10 +31,12 @@ import {
   Moon,
   Sun
 } from "lucide-react";
-import { API_BASE_URL, settingsApi } from "@/lib/api";
+import { API_BASE_URL, settingsApi, apiRequest } from "@/lib/api";
 import { isAdmin, getCurrentUserRole, getCurrentUser } from "@/utils/auth";
 import { createSettingsQueryOptions } from "@/utils/query";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { Building } from 'lucide-react';
+import { toast } from 'sonner';
 
 export function AppSidebar() {
   const location = useLocation();
@@ -71,13 +73,35 @@ export function AppSidebar() {
   const user = getCurrentUser();
   const userRole = user?.role || 'user';
   const isAdminUser = userRole === 'admin';
-  const isSuperUser = user?.is_superuser || false;
-
+  const [isSuperUser, setIsSuperUser] = useState(false);
+  
+  // Organization switching state
+  const [userOrganizations, setUserOrganizations] = useState([]);
+  const [currentOrgId, setCurrentOrgId] = useState(user?.tenant_id?.toString() || '');
+  const [isSwitchingOrg, setIsSwitchingOrg] = useState(false);
+  
+  // Check super admin status via API
+  useEffect(() => {
+    const checkSuperAdminStatus = async () => {
+      if (!user?.is_superuser) {
+        setIsSuperUser(false);
+        return;
+      }
+      
+      const isInPrimaryTenant = currentOrgId === user?.tenant_id?.toString();
+      setIsSuperUser(user.is_superuser && isInPrimaryTenant);
+    };
+    
+    checkSuperAdminStatus();
+  }, [currentOrgId, user?.is_superuser, user?.tenant_id]);
+  
   console.log('Sidebar: User check:', { 
     user, 
     userRole, 
     isAdminUser,
     isSuperUser,
+    currentOrgId,
+    primaryTenant: user?.tenant_id?.toString(),
     shouldFetchSettings: isAdminUser 
   });
 
@@ -105,7 +129,16 @@ export function AppSidebar() {
     },
   });
 
-  const companyName = settings?.company_info?.name || 'InvoiceApp';
+  // Get company name from current organization or settings
+  const companyName = (() => {
+    if (userOrganizations.length > 0) {
+      const currentOrg = userOrganizations.find(org => org.id.toString() === currentOrgId);
+      if (currentOrg) {
+        return currentOrg.name;
+      }
+    }
+    return settings?.company_info?.name || 'InvoiceApp';
+  })();
 
   // Debug logging
   useEffect(() => {
@@ -114,9 +147,130 @@ export function AppSidebar() {
       settings: settings?.company_info,
       settingsFull: settings,
       forceUpdate,
+      userOrganizations: userOrganizations.length,
+      currentOrgId,
+      selectedTenantId: localStorage.getItem('selected_tenant_id'),
       timestamp: new Date().toISOString()
     });
-  }, [settings, companyName, forceUpdate]);
+  }, [settings, companyName, forceUpdate, userOrganizations, currentOrgId]);
+  
+  // Fetch user's organizations
+  useEffect(() => {
+    const fetchUserOrganizations = async () => {
+      if (!user?.id) {
+        console.log('No user ID available, skipping organization fetch');
+        return;
+      }
+      
+      console.log('🏢 Fetching organizations for user:', user.email);
+      
+      try {
+        const response = await apiRequest('/auth/me', {}, { skipTenant: true });
+        console.log('📋 User organizations response:', response);
+        
+        if (response.organizations && response.organizations.length > 0) {
+          console.log(`✅ User has access to ${response.organizations.length} organizations:`, response.organizations);
+          setUserOrganizations(response.organizations);
+          
+          // Use selected tenant from localStorage or default to user's primary tenant
+          let selectedTenantId = localStorage.getItem('selected_tenant_id');
+          console.log('🔍 Selected tenant from localStorage:', selectedTenantId);
+          
+          // If no selected tenant, default to user's primary tenant
+          if (!selectedTenantId) {
+            selectedTenantId = user.tenant_id?.toString();
+            console.log('🏠 Using user primary tenant:', selectedTenantId);
+          } else {
+            // Verify user has access to the selected tenant
+            const hasAccess = response.organizations.some(org => org.id.toString() === selectedTenantId);
+            if (!hasAccess) {
+              console.warn(`⚠️ User doesn't have access to tenant ${selectedTenantId}, resetting to primary tenant`);
+              localStorage.removeItem('selected_tenant_id');
+              selectedTenantId = user.tenant_id?.toString();
+            } else {
+              console.log('✅ User has access to selected tenant:', selectedTenantId);
+            }
+          }
+          
+          console.log(`🎯 Setting current org ID to: ${selectedTenantId}`);
+          setCurrentOrgId(selectedTenantId || user.tenant_id?.toString() || '');
+          
+          // Store the selected tenant if not already stored
+          if (selectedTenantId && !localStorage.getItem('selected_tenant_id')) {
+            localStorage.setItem('selected_tenant_id', selectedTenantId);
+            console.log('💾 Stored selected tenant ID:', selectedTenantId);
+          }
+        } else {
+          console.log('⚠️ No organizations found in response, using fallback');
+          // Fallback to single organization and clear invalid tenant ID
+          localStorage.removeItem('selected_tenant_id');
+          const currentOrg = {
+            id: user.tenant_id,
+            name: settings?.company_info?.name || 'Current Organization'
+          };
+          setUserOrganizations([currentOrg]);
+          setCurrentOrgId(user.tenant_id?.toString() || '');
+          console.log('🔄 Set fallback organization:', currentOrg);
+        }
+      } catch (err) {
+        console.error('❌ Failed to fetch user organizations:', err);
+        // Fallback to single organization and clear invalid tenant ID
+        localStorage.removeItem('selected_tenant_id');
+        const currentOrg = {
+          id: user.tenant_id,
+          name: settings?.company_info?.name || 'Current Organization'
+        };
+        setUserOrganizations([currentOrg]);
+        setCurrentOrgId(user.tenant_id?.toString() || '');
+        console.log('🔄 Set error fallback organization:', currentOrg);
+      }
+    };
+    
+    fetchUserOrganizations();
+  }, [user?.id, user?.tenant_id, settings?.company_info?.name]);
+  
+  const handleOrganizationSwitch = async (orgId: string) => {
+    if (orgId === currentOrgId) return;
+    
+    const selectedOrg = userOrganizations.find(org => org.id.toString() === orgId);
+    const orgName = selectedOrg?.name || `Organization ${orgId}`;
+    
+    console.log(`🔄 Switching organization from ${currentOrgId} to ${orgId} (${orgName})`);
+    setIsSwitchingOrg(true);
+    
+    try {
+      // Show loading toast
+      toast.loading(`Switching to ${orgName}...`, { id: 'org-switch' });
+      
+      // Store the selected organization
+      localStorage.setItem('selected_tenant_id', orgId);
+      console.log(`✅ Stored selected_tenant_id: ${orgId}`);
+      
+      // Store the selected organization
+      localStorage.setItem('selected_tenant_id', orgId);
+      localStorage.removeItem('react-query-offline-cache');
+      console.log(`✅ Stored selected_tenant_id: ${orgId}`);
+      
+      // Clear all cached data and force reload
+      queryClient.clear();
+      queryClient.invalidateQueries();
+      sessionStorage.clear();
+      console.log('🗑️ Cleared all caches');
+      
+      // Show success toast
+      toast.success(`Switched to ${orgName}`, { id: 'org-switch' });
+      
+      // Reload page
+      setTimeout(() => {
+        window.location.reload();
+      }, 100);
+    } catch (error) {
+      console.error('❌ Error during organization switch:', error);
+      toast.error('Failed to switch organization', { id: 'org-switch' });
+      setIsSwitchingOrg(false);
+    }
+  };
+
 
   // Also try a direct approach - listen for localStorage changes
   useEffect(() => {
@@ -213,14 +367,14 @@ export function AppSidebar() {
   ];
 
   const settingsMenuItems = [
-    // Only show Settings for admin users
-    ...(isAdminUser ? [{ 
+    // Only show Settings for admin users in their owned organization
+    ...(isAdminUser && (currentOrgId === user?.tenant_id?.toString() || currentOrgId === user?.tenant_id) ? [{ 
       path: '/settings', 
       label: t('navigation.settings'), 
       icon: <Settings className="w-5 h-5" /> 
     }] : []),
-    // Only show Super Admin for super users
-    ...(isSuperUser ? [{ 
+    // Only show Super Admin for super users in their primary tenant
+    ...(user?.is_superuser && (currentOrgId === user?.tenant_id?.toString() || currentOrgId === user?.tenant_id) ? [{ 
       path: '/super-admin', 
       label: t('navigation.super_admin'), 
       icon: <ShieldCheck className="w-5 h-5" /> 
@@ -240,6 +394,44 @@ export function AppSidebar() {
           </div>
         </SidebarHeader>
         <SidebarContent className="pt-6">
+          {/* Organization Selector */}
+          {userOrganizations.length > 0 && (
+            <div className="px-3 mb-4">
+              <div className="text-xs text-sidebar-foreground/60 mb-2">
+                Organization {userOrganizations.length > 1 ? `(${userOrganizations.length} available)` : ''}
+              </div>
+              <Select value={currentOrgId} onValueChange={handleOrganizationSwitch} disabled={isSwitchingOrg}>
+                <SelectTrigger className="w-full bg-sidebar border-sidebar-border text-sidebar-foreground">
+                  <div className="flex items-center gap-2">
+                    <Building className="w-4 h-4" />
+                    {isSwitchingOrg ? (
+                      <span className="text-sm">Switching...</span>
+                    ) : (
+                      <SelectValue placeholder="Select organization" />
+                    )}
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  {userOrganizations.sort((a, b) => a.name.localeCompare(b.name)).map((org) => (
+                    <SelectItem key={org.id} value={org.id.toString()}>
+                      <div className="flex items-center justify-between w-full">
+                        <span>
+                          {org.name}
+                          {org.id === user?.tenant_id && (
+                            <span className="text-xs text-blue-500 ml-1">(Home)</span>
+                          )}
+                        </span>
+                        {org.id.toString() === currentOrgId && (
+                          <span className="text-xs text-green-500 ml-2">✓</span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          
           <SidebarMenu>
             {mainMenuItems.map((item) => (
               <SidebarMenuItem key={item.path}>

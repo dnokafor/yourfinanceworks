@@ -177,6 +177,10 @@ class TenantDatabaseManager:
             {"code": "JPY", "name": "Japanese Yen", "symbol": "¥", "decimal_places": 0},
             {"code": "CAD", "name": "Canadian Dollar", "symbol": "C$", "decimal_places": 2},
             {"code": "AUD", "name": "Australian Dollar", "symbol": "A$", "decimal_places": 2},
+            {"code": "CHF", "name": "Swiss Franc", "symbol": "CHF", "decimal_places": 2},
+            {"code": "CNY", "name": "Chinese Yuan", "symbol": "¥", "decimal_places": 2},
+            {"code": "INR", "name": "Indian Rupee", "symbol": "₹", "decimal_places": 2},
+            {"code": "BRL", "name": "Brazilian Real", "symbol": "R$", "decimal_places": 2},
         ]
         
         for currency_data in default_currencies:

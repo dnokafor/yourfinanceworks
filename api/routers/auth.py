@@ -11,6 +11,8 @@ from sqlalchemy import func
 import logging
 import traceback
 
+logger = logging.getLogger(__name__)
+
 from models.database import get_db, get_master_db
 from models.models import User, Tenant, MasterUser, Invite, PasswordResetToken, Settings  # Add PasswordResetToken, Settings import
 from schemas.user import UserCreate, UserLogin, Token, UserRead, UserUpdate, InviteCreate, InviteRead, InviteAccept, UserList, UserRoleUpdate, AdminActivateUser
@@ -150,6 +152,43 @@ def get_current_user(
     user = db.query(MasterUser).filter(MasterUser.email == email).first()
     if user is None:
         raise credentials_exception
+    
+    # Check if we have a tenant context and if the user's role should be updated from tenant database
+    from models.database import get_tenant_context
+    current_tenant_id = get_tenant_context()
+    
+    if current_tenant_id and current_tenant_id != user.tenant_id:
+        # User is accessing a different tenant, get their role from that tenant's database
+        try:
+            tenant_session = tenant_db_manager.get_tenant_session(current_tenant_id)
+            tenant_db = tenant_session()
+            try:
+                tenant_user = tenant_db.query(TenantUser).filter(TenantUser.id == user.id).first()
+                if tenant_user:
+                    # Create a copy of the master user with the tenant-specific role
+                    user_copy = MasterUser(
+                        id=user.id,
+                        email=user.email,
+                        hashed_password=user.hashed_password,
+                        first_name=user.first_name,
+                        last_name=user.last_name,
+                        role=tenant_user.role,  # Use role from tenant database
+                        tenant_id=current_tenant_id,  # Use current tenant context
+                        is_active=user.is_active,
+                        is_superuser=user.is_superuser,
+                        is_verified=user.is_verified,
+                        theme=user.theme,
+                        google_id=user.google_id,
+                        created_at=user.created_at,
+                        updated_at=user.updated_at
+                    )
+                    return user_copy
+            finally:
+                tenant_db.close()
+        except Exception as e:
+            logger.warning(f"Failed to get tenant-specific role for user {email} in tenant {current_tenant_id}: {e}")
+            # Fall back to master user if tenant lookup fails
+    
     return user
 
 def generate_invite_token() -> str:
@@ -243,7 +282,7 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
         role="admin" if is_first_user else user_role,
         is_active=user.is_active,
         is_superuser=is_first_user or user.is_superuser,
-        is_verified=user.is_verified
+        is_verified=True  # Auto-verify new users during registration
     )
 
     db.add(db_user)
@@ -259,7 +298,6 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
         logger.info(f"Creating user in tenant DB {tenant_id} for {user.email}")
         tenant_session = tenant_db_manager.get_tenant_session(tenant_id)
         tenant_db = tenant_session()
-        
         try:
             # Import the tenant-specific User model (without tenant_id column)
             # from models.models_per_tenant import User as TenantUser
@@ -274,7 +312,7 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
                 role=user_role,
                 is_active=user.is_active,
                 is_superuser=user.is_superuser,
-                is_verified=user.is_verified
+                is_verified=True  # Auto-verify new users during registration
             )
             
             tenant_db.add(tenant_user)
@@ -326,7 +364,15 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_master_db
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=INACTIVE_USER
+            detail="Your account has been disabled. Please contact your administrator."
+        )
+    
+    # Check if tenant is active
+    tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+    if not tenant or not tenant.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Your organization has been disabled. Please contact support."
         )
 
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -341,8 +387,35 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_master_db
     }
 
 @router.get("/me", response_model=UserRead)
-async def read_users_me(current_user: MasterUser = Depends(get_current_user)):
-    return UserRead.from_orm(current_user)
+async def read_users_me(current_user: MasterUser = Depends(get_current_user), db: Session = Depends(get_master_db)):
+    # Get user's organizations
+    from sqlalchemy.orm import joinedload
+    from models.models import user_tenant_association
+    
+    # Get tenant memberships from association table
+    tenant_memberships = db.execute(
+        user_tenant_association.select().where(
+            user_tenant_association.c.user_id == current_user.id
+        )
+    ).fetchall()
+    
+    # Get all tenant IDs user has access to (including primary tenant)
+    tenant_ids = [membership.tenant_id for membership in tenant_memberships]
+    if current_user.tenant_id and current_user.tenant_id not in tenant_ids:
+        tenant_ids.append(current_user.tenant_id)
+    
+    # Get tenant details
+    organizations = []
+    if tenant_ids:
+        tenants = db.query(Tenant).filter(Tenant.id.in_(tenant_ids)).all()
+        organizations = [{'id': t.id, 'name': t.name} for t in tenants]
+    
+    # Create response with organizations
+    user_data = UserRead.from_orm(current_user)
+    user_dict = user_data.dict()
+    user_dict['organizations'] = organizations
+    
+    return user_dict
 
 @router.put("/me", response_model=UserRead)
 async def update_current_user(
@@ -371,9 +444,7 @@ async def update_current_user(
     # Also update in tenant DB
     from models.database import set_tenant_context
     from services.tenant_database_manager import tenant_db_manager
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    tenant_db = tenant_session()
+    tenant_db = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
     try:
         tenant_user = tenant_db.query(TenantUser).filter(TenantUser.id == current_user.id).first()
         if tenant_user:
@@ -460,7 +531,6 @@ async def invite_user(
     )
     
     # Log audit event in tenant database as well
-    set_tenant_context(current_user.tenant_id)
     tenant_db = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
     try:
         log_audit_event(
@@ -576,7 +646,6 @@ async def cancel_invite(
     )
     
     # Log audit event in tenant database as well
-    set_tenant_context(current_user.tenant_id)
     tenant_db = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
     try:
         log_audit_event(
@@ -770,25 +839,42 @@ async def accept_invite(
 
 @router.get("/users", response_model=List[UserList])
 async def list_users(
-    current_user: MasterUser = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user),
+    master_db: Session = Depends(get_master_db)
 ):
-    """List all users in the organization (admin only)"""
+    """List all users who have access to the current organization (admin only)"""
     require_admin(current_user, "view users")
     
-    # Import tenant User model
-    from models.models_per_tenant import User as TenantUser
+    from models.database import get_tenant_context
+    current_tenant_id = get_tenant_context() or current_user.tenant_id
     
-    # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
+    # Get all users who have access to this tenant via association table
+    from models.models import user_tenant_association
     
-    try:
-        # Get users from tenant database
-        users = db.query(TenantUser).all()
+    # Get user IDs that have access to this tenant
+    user_tenant_memberships = master_db.execute(
+        user_tenant_association.select().where(
+            user_tenant_association.c.tenant_id == current_tenant_id
+        )
+    ).fetchall()
+    
+    user_ids = [membership.user_id for membership in user_tenant_memberships]
+    
+    # Also include users whose primary tenant is this tenant
+    primary_users = master_db.query(MasterUser).filter(
+        MasterUser.tenant_id == current_tenant_id
+    ).all()
+    
+    for user in primary_users:
+        if user.id not in user_ids:
+            user_ids.append(user.id)
+    
+    # Get all users with access to this tenant
+    if user_ids:
+        users = master_db.query(MasterUser).filter(MasterUser.id.in_(user_ids)).all()
         return users
-    finally:
-        db.close()
+    else:
+        return []
 
 @router.put("/users/{user_id}/role", response_model=UserList)
 async def update_user_role(
@@ -820,9 +906,7 @@ async def update_user_role(
     db.commit()
     db.refresh(user)
     
-    # Update role in tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_db = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
+    # Update role in tenant database    tenant_db = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
     try:
         tenant_user = tenant_db.query(TenantUser).filter(TenantUser.id == user_id).first()
         
@@ -853,7 +937,6 @@ async def update_user_role(
     )
     
     # Log audit event in tenant database as well
-    set_tenant_context(current_user.tenant_id)
     tenant_db = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
     try:
         log_audit_event(
@@ -1052,7 +1135,6 @@ async def admin_activate_user(
     )
     
     # Log audit event in tenant database as well
-    set_tenant_context(current_user.tenant_id)
     tenant_db = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
     try:
         log_audit_event(
@@ -1231,7 +1313,6 @@ async def reset_password(
         
         tenant_session = tenant_db_manager.get_tenant_session(user.tenant_id)
         tenant_db = tenant_session()
-        
         try:
             tenant_user = tenant_db.query(TenantUser).filter(TenantUser.id == user.id).first()
             if tenant_user:

@@ -1416,7 +1416,7 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
               <div className="w-full lg:w-80 order-2 lg:order-1">
                 <div className="mb-4">
                   <h3 className="text-lg font-semibold mb-3">{t('invoices.update_history')}</h3>
-                  <div className="space-y-3 max-h-96 overflow-y-auto bg-gray-50 p-4 rounded-lg border">
+                  <div className="space-y-3 max-h-96 overflow-y-auto bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border">
                     {loadingHistory ? (
                       <div className="flex items-center justify-center py-8">
                         <Loader2 className="h-6 w-6 animate-spin mr-2" />
@@ -2107,7 +2107,7 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
                     )}
 
                     {/* Summary Section */}
-                    <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                    <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg space-y-2">
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-600">Subtotal:</span>
                         <span className="font-medium">${calculateSubtotal().toFixed(2)}</span>
@@ -2383,6 +2383,7 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
                 value={newClientForm.preferred_currency || 'USD'}
                 onValueChange={(val) => setNewClientForm({ ...newClientForm, preferred_currency: val })}
                 placeholder={t('invoices.select_preferred_currency')}
+                onCurrenciesLoaded={() => setCurrenciesLoaded(true)}
               />
             </div>
           </div>

@@ -34,11 +34,6 @@ async def analyze_patterns(
     and key metrics such as total invoices, paid/unpaid status,
     revenue, and client payment behavior.
     """
-    # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
     try:
         # Get all invoices (no tenant_id filtering needed since we're in the tenant's database)
         invoices = db.query(Invoice).all()
@@ -126,9 +121,7 @@ async def analyze_patterns(
             "success": False,
             "error": str(e)
         }
-    finally:
-        db.close()
-
+    
 @router.get("/suggest-actions", summary="Suggest actionable items based on invoice analysis")
 async def suggest_actions(
     current_user: MasterUser = Depends(get_current_user)
@@ -138,10 +131,6 @@ async def suggest_actions(
     such as follow-up on overdue invoices, adjust payment terms, etc.
     """
     # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
     try:
         # Get overdue invoices
         # No tenant_id filtering needed since we're in the tenant's database
@@ -215,9 +204,7 @@ async def suggest_actions(
             "success": False,
             "error": str(e)
         }
-    finally:
-        db.close()
-
+    
 @router.post("/chat")
 async def ai_chat(
     message: str,
@@ -228,10 +215,6 @@ async def ai_chat(
     Chat with AI assistant using specified configuration
     """
     # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
     try:
         # Get AI configuration
         # No tenant_id filtering needed since we're in the tenant's database
@@ -1012,9 +995,7 @@ This comprehensive statistical analysis was performed using your actual invoice 
             "success": False,
             "error": f"Failed to get AI response: {str(e)}"
         }
-    finally:
-        db.close()
-
+    
 @router.post("/chat/message")
 def save_ai_chat_message(
     message: str,
@@ -1027,8 +1008,6 @@ def save_ai_chat_message(
     # Manually set tenant context and get tenant database
     set_tenant_context(tenant_id)
     tenant_session = tenant_db_manager.get_tenant_session(tenant_id)
-    db = tenant_session()
-
     try:
         chat_message = AIChatHistory(
             user_id=current_user.id,
@@ -1041,9 +1020,14 @@ def save_ai_chat_message(
         db.commit()
         db.refresh(chat_message)
         return {"success": True, "id": chat_message.id}
-    finally:
-        db.close()
-
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to save AI chat message: {str(e)}"
+        )
+    
 @router.get("/chat/history")
 def get_ai_chat_history(
     db: Session = Depends(get_master_db),
@@ -1062,8 +1046,6 @@ def get_ai_chat_history(
     # Manually set tenant context and get tenant database
     set_tenant_context(tenant_id)
     tenant_session = tenant_db_manager.get_tenant_session(tenant_id)
-    db = tenant_session()
-
     try:
         history = db.query(AIChatHistory).filter(
             AIChatHistory.user_id == current_user.id,
@@ -1083,5 +1065,10 @@ def get_ai_chat_history(
             "sender": msg.sender,
             "created_at": msg.created_at.isoformat()
         } for msg in history]
-    finally:
-        db.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get AI chat history: {str(e)}"
+        )

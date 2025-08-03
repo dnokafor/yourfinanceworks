@@ -660,7 +660,9 @@
     "failed_to_save_ai_assistant_setting": "Failed to save AI Assistant setting.",
     "no_ai_config_found": "No AI configuration found. Please configure an AI provider in Settings > AI Provider Configurations.",
     "notification_settings_saved_successfully": "Notification settings saved successfully",
-    "test_notification_sent_successfully": "Test notification sent successfully"
+    "test_notification_sent_successfully": "Test notification sent successfully",
+    "loading_settings": "Loading settings...",
+    "profile_updated_successfully": "Profile updated successfully"
   },
   "users": {
     "title": "Users",

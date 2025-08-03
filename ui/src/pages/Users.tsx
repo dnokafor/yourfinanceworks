@@ -126,6 +126,22 @@ export default function UsersPage() {
     fetchInvites();
   }, []);
 
+  // Refetch data when tenant changes
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'selected_tenant_id') {
+        fetchUsers();
+        fetchInvites();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
+
   const handleInviteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setInviteForm((prev) => ({ ...prev, [name]: value }));

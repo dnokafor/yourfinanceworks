@@ -29,6 +29,46 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [tenantName, setTenantName] = useState('');
   const [userName, setUserName] = useState('');
+  const [currentTenantId, setCurrentTenantId] = useState<string | null>(null);
+
+  // Get current tenant ID to trigger refetch when organization switches
+  const getCurrentTenantId = () => {
+    try {
+      const selectedTenantId = localStorage.getItem('selected_tenant_id');
+      if (selectedTenantId) {
+        return selectedTenantId;
+      }
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        return user?.tenant_id?.toString();
+      }
+    } catch (e) {
+      console.error('Error getting tenant ID:', e);
+    }
+    return null;
+  };
+  
+  // Update tenant ID when it changes
+  useEffect(() => {
+    const updateTenantId = () => {
+      const tenantId = getCurrentTenantId();
+      if (tenantId !== currentTenantId) {
+        console.log(`🔄 Dashboard: Tenant ID changed from ${currentTenantId} to ${tenantId}`);
+        setCurrentTenantId(tenantId);
+      }
+    };
+    
+    updateTenantId();
+    
+    // Listen for storage changes
+    const handleStorageChange = () => {
+      updateTenantId();
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [currentTenantId]);
 
   // Helper function to format multiple currencies as string
   const formatMultiCurrencyString = (currencyAmounts: Record<string, number>) => {
@@ -114,7 +154,7 @@ const Dashboard = () => {
     fetchDashboardStats();
     loadUserInfo();
     fetchTenantName();
-  }, []);
+  }, [currentTenantId]); // Add tenant ID as dependency
 
   return (
     <AppLayout>

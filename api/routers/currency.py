@@ -8,7 +8,7 @@ import json
 import os
 import logging
 
-from models.database import get_master_db, set_tenant_context
+from models.database import get_master_db, get_db, set_tenant_context
 from models.models import MasterUser
 from models.models_per_tenant import SupportedCurrency, CurrencyRate
 from schemas.currency import SupportedCurrency as SupportedCurrencySchema, CurrencyRate as CurrencyRateSchema, CurrencyConversion
@@ -29,14 +29,10 @@ FIXER_API_KEY = os.getenv("FIXER_API_KEY")
 @router.get("/supported", response_model=List[SupportedCurrencySchema])
 async def get_supported_currencies(
     active_only: bool = True,
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Get list of supported currencies"""
-    # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
     try:
         query = db.query(SupportedCurrency)
         
@@ -45,21 +41,22 @@ async def get_supported_currencies(
         
         currencies = query.order_by(SupportedCurrency.code).all()
         return currencies
-    finally:
-        db.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch supported currencies: {str(e)}"
+        )
 
 @router.get("/rates", response_model=List[CurrencyRateSchema])
 async def get_currency_rates(
     from_currency: Optional[str] = None,
     to_currency: Optional[str] = None,
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Get currency exchange rates"""
-    # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
     try:
         query = db.query(CurrencyRate)
         
@@ -91,20 +88,21 @@ async def get_currency_rates(
                 unique_rates[pair_key] = rate
         
         return list(unique_rates.values())
-    finally:
-        db.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch currency rates: {str(e)}"
+        )
 
 @router.post("/rates", response_model=CurrencyRateSchema)
 async def create_or_update_exchange_rate(
     rate_data: CurrencyRateSchema,
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Create or update an exchange rate"""
-    # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
     try:
         # Validate currency codes
         if not db.query(SupportedCurrency).filter(SupportedCurrency.code == rate_data.from_currency.upper()).first():
@@ -162,21 +160,15 @@ async def create_or_update_exchange_rate(
             status_code=500,
             detail="Failed to create/update exchange rate"
         )
-    finally:
-        db.close()
 
 @router.put("/rates/{rate_id}", response_model=CurrencyRateSchema)
 async def update_exchange_rate(
     rate_id: int,
     rate_update: CurrencyRateSchema,
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Update a specific exchange rate"""
-    # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
     try:
         from models.models_per_tenant import CurrencyRate as CurrencyRateModel
         
@@ -217,8 +209,6 @@ async def update_exchange_rate(
             status_code=500,
             detail="Failed to update exchange rate"
         )
-    finally:
-        db.close()
 
 @router.post("/convert", response_model=CurrencyConversion)
 async def convert_currency(
@@ -226,14 +216,10 @@ async def convert_currency(
     from_currency: str = "USD",
     to_currency: str = "USD",
     conversion_date: Optional[datetime] = None, # Use datetime for date comparison
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Convert amount from one currency to another"""
-    # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
     try:
         if amount <= 0:
             raise HTTPException(
@@ -301,20 +287,14 @@ async def convert_currency(
             status_code=500,
             detail="Failed to convert currency"
         )
-    finally:
-        db.close()
 
 @router.delete("/rates/{rate_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_exchange_rate(
     rate_id: int,
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Delete an exchange rate"""
-    # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
     try:
         from models.models_per_tenant import CurrencyRate as CurrencyRateModel
         
@@ -338,21 +318,15 @@ async def delete_exchange_rate(
         raise HTTPException(
             status_code=500,
             detail="Failed to delete exchange rate"
-        ) 
-    finally:
-        db.close()
-
+        )
+        
 @router.post("/custom", response_model=SupportedCurrencySchema)
 async def create_custom_currency(
     currency_data: SupportedCurrencySchema,
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Create a custom currency"""
-    # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
     try:
         from models.models_per_tenant import SupportedCurrency as SupportedCurrencyModel
         
@@ -396,21 +370,15 @@ async def create_custom_currency(
             status_code=500,
             detail="Failed to create custom currency"
         )
-    finally:
-        db.close()
-
+    
 @router.put("/custom/{currency_id}", response_model=SupportedCurrencySchema)
 async def update_custom_currency(
     currency_id: int,
     currency_update: SupportedCurrencySchema,
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Update a custom currency"""
-    # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
     try:
         from models.models_per_tenant import SupportedCurrency as SupportedCurrencyModel
         
@@ -457,20 +425,14 @@ async def update_custom_currency(
             status_code=500,
             detail="Failed to update custom currency"
         )
-    finally:
-        db.close()
-
+    
 @router.delete("/custom/{currency_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_custom_currency(
     currency_id: int,
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Delete a custom currency"""
-    # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
     try:
         from models.models_per_tenant import SupportedCurrency as SupportedCurrencyModel
         
@@ -507,6 +469,6 @@ async def delete_custom_currency(
         raise HTTPException(
             status_code=500,
             detail="Failed to delete custom currency"
-        ) 
+        )
     finally:
         db.close() 

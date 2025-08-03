@@ -8,7 +8,7 @@ import traceback
 from datetime import datetime, date, timezone
 from collections import defaultdict
 
-from models.database import get_db, set_tenant_context
+from models.database import get_db
 from models.models_per_tenant import Invoice, Client, User
 from models.models import MasterUser
 from schemas.payment import PaymentCreate, PaymentUpdate, Payment as PaymentSchema, PaymentWithInvoice
@@ -115,12 +115,10 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 async def read_payments(
     skip: int = 0,
     limit: int = 100,
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
     try:
         # Get payments with invoice and client information using ORM
         payments = db.query(
@@ -173,15 +171,14 @@ async def read_payments(
             status_code=500,
             detail=FAILED_TO_FETCH_PAYMENTS
         )
-    finally:
-        db.close()
 
 @router.get("/{payment_id}", response_model=PaymentWithInvoice)
 async def read_payment(
     payment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
+    # Manually set tenant context and get tenant database
     try:
         # Get payment with invoice and client information
         payment_tuple = db.query(
@@ -238,8 +235,9 @@ async def read_payment(
 async def create_payment(
     payment: PaymentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
+    # Manually set tenant context and get tenant database
     try:
         # Get the invoice to determine currency
         invoice = db.query(Invoice).filter(
@@ -329,8 +327,9 @@ async def update_payment(
     payment_id: int,
     payment: PaymentUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
+    # Manually set tenant context and get tenant database
     try:
         db_payment = db.query(Payment).filter(
             Payment.id == payment_id
@@ -390,8 +389,9 @@ async def update_payment(
 async def delete_payment(
     payment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
+    # Manually set tenant context and get tenant database
     try:
         db_payment = db.query(Payment).filter(
             Payment.id == payment_id
@@ -426,4 +426,6 @@ async def delete_payment(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to delete payment: {str(e)}"
-        ) 
+        )
+    finally:
+        db.close() 

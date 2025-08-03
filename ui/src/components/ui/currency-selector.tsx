@@ -44,8 +44,8 @@ export function CurrencySelector({
       setLoading(true);
       try {
         const data = await currencyApi.getSupportedCurrencies();
-        if (data.currencies && data.currencies.length > 0) {
-          setCurrencies(data.currencies);
+        if (data && data.length > 0) {
+          setCurrencies(data);
         } else {
           setError('No currencies available from API.');
         }

@@ -6,6 +6,18 @@ from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
 
+# Association table for many-to-many relationship between users and tenants
+user_tenant_association = Table(
+    'user_tenant_memberships',
+    Base.metadata,
+    Column('user_id', Integer, ForeignKey('master_users.id'), primary_key=True),
+    Column('tenant_id', Integer, ForeignKey('tenants.id'), primary_key=True),
+    Column('role', String, default='user', nullable=False),
+    Column('is_active', Boolean, default=True, nullable=False),
+    Column('created_at', DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)),
+    Column('updated_at', DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+)
+
 # User model for master database (tenant management)
 class MasterUser(Base):
     __tablename__ = "master_users"
@@ -18,7 +30,7 @@ class MasterUser(Base):
     is_verified = Column(Boolean, default=False, nullable=False)
     theme = Column(String, default="system")
     
-    # Tenant relationship
+    # Tenant relationship (keeping for backward compatibility)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
     
     # User role within tenant
@@ -34,6 +46,7 @@ class MasterUser(Base):
     
     # Relationships
     tenant = relationship("Tenant")
+    tenants = relationship("Tenant", secondary=user_tenant_association, back_populates="members")
     password_reset_tokens = relationship("PasswordResetToken", back_populates="user", cascade="all, delete-orphan")
 
 class Invite(Base):
@@ -100,6 +113,7 @@ class Tenant(Base):
     
     # Relationships
     users = relationship("User", back_populates="tenant")
+    members = relationship("MasterUser", secondary=user_tenant_association, back_populates="tenants")
     clients = relationship("Client", back_populates="tenant")
     invoices = relationship("Invoice", back_populates="tenant")
     payments = relationship("Payment", back_populates="tenant")

@@ -9,7 +9,7 @@ from decimal import Decimal
 from fastapi.responses import StreamingResponse
 from utils.pdf_generator import generate_invoice_pdf
 
-from models.database import get_db, set_tenant_context
+from models.database import get_db
 from models.models_per_tenant import Invoice, Client, User, InvoiceItem, DiscountRule
 from models.models import MasterUser
 from routers.payments import Payment
@@ -39,7 +39,7 @@ def make_aware(dt):
 async def create_invoice(
     invoice: InvoiceCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     logger.info("Invoice create endpoint called")
     # Check if user has permission to create invoices
@@ -181,12 +181,9 @@ async def read_invoices(
     skip: int = 0,
     limit: int = 100,
     status_filter: Optional[str] = None,
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
-    # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
     try:
         # Build base query (exclude soft-deleted invoices)
         # No tenant_id filtering needed since we're in the tenant's database
@@ -242,18 +239,14 @@ async def read_invoices(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to fetch invoices: {str(e)}"
-        )
-    finally:
-        db.close()
-
-# Recycle Bin Endpoints (must come before /{invoice_id} route)
+        )# Recycle Bin Endpoints (must come before /{invoice_id} route)
 
 @router.get("/recycle-bin", response_model=List[DeletedInvoice])
 async def get_deleted_invoices(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Get all deleted invoices in the recycle bin"""
     try:
@@ -302,7 +295,7 @@ async def get_deleted_invoices(
 @router.post("/recycle-bin/empty", response_model=dict)
 async def empty_recycle_bin(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Empty the entire recycle bin (admin only)"""
     try:
@@ -367,7 +360,7 @@ async def restore_invoice(
     invoice_id: int,
     restore_request: RestoreInvoiceRequest = RestoreInvoiceRequest(),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Restore an invoice from the recycle bin"""
     try:
@@ -441,7 +434,7 @@ async def restore_invoice(
 async def permanently_delete_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Permanently delete an invoice from the recycle bin"""
     try:
@@ -513,12 +506,9 @@ async def permanently_delete_invoice(
 @router.get("/{invoice_id}", response_model=InvoiceWithClient)
 async def read_invoice(
     invoice_id: int,
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
-    # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
     try:
         # Get invoice with client information and payment status
         # No tenant_id filtering needed since we're in the tenant's database
@@ -599,15 +589,13 @@ async def read_invoice(
             status_code=500,
             detail=FAILED_TO_FETCH_INVOICE
         )
-    finally:
-        db.close()
 
 @router.put("/{invoice_id}", response_model=InvoiceSchema)
 async def update_invoice(
     invoice_id: int,
     invoice: InvoiceUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     logger.info("Invoice update endpoint called")
     logger.debug(f"[DEBUG] Received custom_fields in update: {invoice.custom_fields}")
@@ -861,7 +849,7 @@ async def update_invoice(
 async def delete_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Move an invoice to the recycle bin (soft delete)"""
     try:
@@ -927,8 +915,7 @@ async def delete_invoice(
 @router.post("/{invoice_id}/send-email")
 async def send_invoice_email(
     invoice_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Send invoice via email - redirect to email service"""
     from fastapi import Request
@@ -945,7 +932,7 @@ async def send_invoice_email(
 @router.get("/stats/total-income", response_model=dict)
 async def get_total_income(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     try:
         # Calculate total income from all paid invoices (exclude soft-deleted)
@@ -970,7 +957,7 @@ async def get_total_income(
 async def calculate_discount(
     subtotal: float,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Calculate the applicable discount for a given subtotal using discount rules"""
     try:
@@ -1016,13 +1003,13 @@ async def calculate_discount(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to calculate discount: {str(e)}"
-        ) 
+        )
 
 @router.get("/{invoice_id}/history")
 async def get_invoice_history(
     invoice_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Get update history for a specific invoice, including user name"""
     try:
@@ -1071,8 +1058,7 @@ async def get_invoice_history(
 async def create_invoice_history_entry(
     invoice_id: int,
     history_entry: InvoiceHistoryCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Create a new history entry for an invoice"""
     try:
@@ -1112,59 +1098,62 @@ async def create_invoice_history_entry(
         raise HTTPException(
             status_code=500,
             detail="Failed to create invoice history entry"
-        ) 
+        )
 
 @router.get("/{invoice_id}/pdf")
 async def download_invoice_pdf(
     invoice_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Download or preview the invoice PDF, respecting the invoice's show_discount_in_pdf field."""
-    # Fetch invoice, client, and company/tenant info
-    invoice = db.query(Invoice).filter(Invoice.id == invoice_id, Invoice.is_deleted == False).first()
-    if not invoice:
-        raise HTTPException(status_code=404, detail="Invoice not found")
-    client = db.query(Client).filter(Client.id == invoice.client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-    # Optionally fetch tenant/company info if available
-    company_data = {"name": "Your Company"}
-    # Prepare invoice data
-    invoice_data = {
-        'id': invoice.id,
-        'number': invoice.number,
-        'date': invoice.created_at.strftime('%Y-%m-%d') if invoice.created_at else '',
-        'due_date': invoice.due_date.strftime('%Y-%m-%d') if invoice.due_date else '',
-        'amount': float(invoice.amount),
-        'subtotal': float(invoice.subtotal) if invoice.subtotal else float(invoice.amount),
-        'discount_type': invoice.discount_type,
-        'discount_value': float(invoice.discount_value) if invoice.discount_value else 0,
-        'paid_amount': 0,  # Optionally calculate from payments
-        'status': invoice.status,
-        'notes': invoice.notes or '',
-        'items': [item.__dict__ for item in invoice.items] if invoice.items else []
-    }
-    client_data = {
-        'id': client.id,
-        'name': client.name,
-        'email': client.email,
-        'phone': client.phone or '',
-        'address': client.address or ''
-    }
-    # Generate PDF using the invoice's show_discount_in_pdf field
-    pdf_bytes = generate_invoice_pdf(
-        invoice_data=invoice_data,
-        client_data=client_data,
-        company_data=company_data,
-        items=invoice.items,
-        db=db,
-        show_discount=invoice.show_discount_in_pdf
-    )
-    return StreamingResponse(
-        iter([pdf_bytes]),
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": f"inline; filename=invoice-{invoice.number}.pdf"
+    try:
+        # Fetch invoice, client, and company/tenant info
+        invoice = db.query(Invoice).filter(Invoice.id == invoice_id, Invoice.is_deleted == False).first()
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        client = db.query(Client).filter(Client.id == invoice.client_id).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="Client not found")
+        # Optionally fetch tenant/company info if available
+        company_data = {"name": "Your Company"}
+        # Prepare invoice data
+        invoice_data = {
+            'id': invoice.id,
+            'number': invoice.number,
+            'date': invoice.created_at.strftime('%Y-%m-%d') if invoice.created_at else '',
+            'due_date': invoice.due_date.strftime('%Y-%m-%d') if invoice.due_date else '',
+            'amount': float(invoice.amount),
+            'subtotal': float(invoice.subtotal) if invoice.subtotal else float(invoice.amount),
+            'discount_type': invoice.discount_type,
+            'discount_value': float(invoice.discount_value) if invoice.discount_value else 0,
+            'paid_amount': 0,  # Optionally calculate from payments
+            'status': invoice.status,
+            'notes': invoice.notes or '',
+            'items': [item.__dict__ for item in invoice.items] if invoice.items else []
         }
-    ) 
+        client_data = {
+            'id': client.id,
+            'name': client.name,
+            'email': client.email,
+            'phone': client.phone or '',
+            'address': client.address or ''
+        }
+        # Generate PDF using the invoice's show_discount_in_pdf field
+        pdf_bytes = generate_invoice_pdf(
+            invoice_data=invoice_data,
+            client_data=client_data,
+            company_data=company_data,
+            items=invoice.items,
+            db=db,
+            show_discount=invoice.show_discount_in_pdf
+        )
+        return StreamingResponse(
+            iter([pdf_bytes]),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"inline; filename=invoice-{invoice.number}.pdf"
+            }
+        )
+    finally:
+        db.close() 

@@ -3,7 +3,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi import status
 from models.database import set_tenant_context, clear_tenant_context, get_master_db, get_tenant_context
-from models.models import MasterUser
+from models.models import MasterUser, user_tenant_association
 from services.tenant_database_manager import tenant_db_manager
 import jwt
 import os
@@ -24,12 +24,17 @@ async def tenant_context_middleware(request: Request, call_next):
         logger.info(f"Skipping tenant context for Slack endpoint: {request.url.path}")
         return await call_next(request)
     
+    # Skip tenant context for super admin endpoints
+    if request.url.path.startswith("/api/v1/super-admin/"):
+        logger.info(f"Skipping tenant context for super admin endpoint: {request.url.path}")
+        return await call_next(request)
+    
     # Skip tenant context for specific endpoints that don't need it or handle it manually
     skip_tenant_paths = [
         "/health", "/", "/docs", "/openapi.json",
         "/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/me",
         "/api/v1/auth/check-email-availability", "/api/v1/auth/request-password-reset",
-        "/api/v1/auth/reset-password"
+        "/api/v1/auth/reset-password", "/api/v1/tenants/check-name-availability"
     ]
     
     if request.url.path in skip_tenant_paths:
@@ -59,40 +64,56 @@ async def tenant_context_middleware(request: Request, call_next):
                 logger.info(f"Decoded email from token: {email}")
                 master_db = next(get_master_db())
                 try:
-                    user = master_db.query(MasterUser).filter(MasterUser.email == email).first()
+                    from sqlalchemy.orm import joinedload
+                    user = master_db.query(MasterUser).options(joinedload(MasterUser.tenants)).filter(MasterUser.email == email).first()
                     if user and user.tenant_id:
-                        logger.info(f"User found: {user.email}, Tenant ID: {user.tenant_id}")
-                        # Cross-check header_tenant_id if present
-                        if header_tenant_id and str(header_tenant_id) != str(user.tenant_id):
-                            logger.warning(f"Tenant ID header mismatch: header={header_tenant_id}, user={user.tenant_id}")
-                            logger.warning(f"User email: {email}, User tenant_id: {user.tenant_id}")
-                            return JSONResponse(
-                                status_code=status.HTTP_401_UNAUTHORIZED,
-                                content={"detail": "Invalid or expired token. Please log in again."}
-                            )
+                        # Use header tenant ID if provided and user has access, otherwise use default tenant
+                        tenant_id = user.tenant_id
+                        if header_tenant_id:
+                            # Check if user has access to the requested tenant
+                            # Get tenant IDs from association table
+                            tenant_memberships = master_db.execute(
+                                user_tenant_association.select().where(
+                                    user_tenant_association.c.user_id == user.id
+                                )
+                            ).fetchall()
+                            user_tenant_ids = [membership.tenant_id for membership in tenant_memberships] + [user.tenant_id]
+                            
+                            logger.info(f"User {email} has access to tenants: {user_tenant_ids}")
+                            
+                            if int(header_tenant_id) in user_tenant_ids:
+                                tenant_id = int(header_tenant_id)
+                                logger.info(f"Switching to tenant {tenant_id} for user {email}")
+                            else:
+                                logger.warning(f"User {email} does not have access to tenant {header_tenant_id}")
+                                return JSONResponse(
+                                    status_code=status.HTTP_401_UNAUTHORIZED,
+                                    content={"detail": "Access denied to requested organization."}
+                                )
+                        
+                        logger.info(f"User found: {user.email}, Using Tenant ID: {tenant_id}")
                         # Check if tenant database exists before setting context
                         try:
-                            tenant_session = tenant_db_manager.get_tenant_session(user.tenant_id)()
+                            tenant_session = tenant_db_manager.get_tenant_session(tenant_id)()
                             from sqlalchemy import text
                             tenant_session.execute(text("SELECT 1"))
                             tenant_session.close()
-                            tenant_id = user.tenant_id
                             set_tenant_context(tenant_id)
                             logger.info(f"✅ Successfully set tenant context to {tenant_id} for user {email}")
                         except Exception as e:
-                            logger.warning(f"Tenant database for tenant {user.tenant_id} does not exist or is inaccessible: {e}")
+                            logger.warning(f"Tenant database for tenant {tenant_id} does not exist or is inaccessible: {e}")
                             # Try to create the tenant database
                             from models.models import Tenant
-                            tenant = master_db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+                            tenant = master_db.query(Tenant).filter(Tenant.id == tenant_id).first()
                             if tenant:
-                                success = tenant_db_manager.create_tenant_database(user.tenant_id, tenant.name)
+                                success = tenant_db_manager.create_tenant_database(tenant_id, tenant.name)
                                 if success:
-                                    logger.info(f"Successfully created tenant database for tenant {user.tenant_id}")
-                                    set_tenant_context(user.tenant_id)
+                                    logger.info(f"Successfully created tenant database for tenant {tenant_id}")
+                                    set_tenant_context(tenant_id)
                                 else:
-                                    logger.error(f"Failed to create tenant database for tenant {user.tenant_id}")
+                                    logger.error(f"Failed to create tenant database for tenant {tenant_id}")
                             else:
-                                logger.error(f"Tenant {user.tenant_id} not found in master database")
+                                logger.error(f"Tenant {tenant_id} not found in master database")
                     else:
                         logger.warning(f"User not found or tenant_id missing for email: {email}")
                         return JSONResponse(
