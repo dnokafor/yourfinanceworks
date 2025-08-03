@@ -29,6 +29,7 @@ class MasterUser(Base):
     is_superuser = Column(Boolean, default=False, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
     theme = Column(String, default="system")
+    show_analytics = Column(Boolean, default=False)  # Show/hide analytics menu
     
     # Tenant relationship (keeping for backward compatibility)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)

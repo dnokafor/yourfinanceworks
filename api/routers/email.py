@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import Dict, Any, List
 import logging
 
@@ -191,8 +191,6 @@ async def send_invoice_email(
 @router.post("/test", response_model=EmailResponse)
 async def test_email_configuration(
     request: EmailTestRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
     email_service: EmailService = Depends(get_email_service)
 ):
     """Test email configuration by sending a test email"""
@@ -255,6 +253,7 @@ async def validate_email_configuration(
 
 @router.get("/config", response_model=EmailConfig)
 async def get_email_configuration(
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Get current email configuration"""

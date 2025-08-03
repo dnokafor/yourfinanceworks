@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import psycopg2
+import psycopg
 import os
 from urllib.parse import urlparse
 
@@ -17,7 +17,7 @@ def add_soft_delete_columns_direct():
     
     try:
         # Connect to the database
-        connection = psycopg2.connect(
+        connection = psycopg.connect(
             host=parsed.hostname,
             port=parsed.port,
             database=parsed.path[1:],  # Remove leading '/'

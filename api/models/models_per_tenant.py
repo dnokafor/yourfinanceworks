@@ -24,6 +24,7 @@ class User(Base):
     last_name = Column(String, nullable=True)
     google_id = Column(String, unique=True, nullable=True)  # For Google SSO
     theme = Column(String, default="system")
+    show_analytics = Column(Boolean, default=False)  # Show/hide analytics menu
     
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

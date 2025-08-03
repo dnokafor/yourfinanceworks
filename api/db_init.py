@@ -8,6 +8,7 @@ import os
 
 from models.models import Base, User, Client, Invoice, Settings, Payment, Invite, ClientNote, DiscountRule, SupportedCurrency, CurrencyRate, InvoiceItem, InvoiceHistory, AIConfig
 from models.models_per_tenant import Base as TenantBase, User as TenantUser
+from models.analytics import PageView
 from models.database import SQLALCHEMY_DATABASE_URL, get_master_db, set_tenant_context
 from utils.auth import get_password_hash
 from scripts.reset_users_id_sequences import reset_all_users_id_sequences
@@ -138,6 +139,24 @@ def init_db():
     
     # Create all tables in the main (master) DB
     Base.metadata.create_all(bind=engine)
+    
+    # Add show_analytics column to master_users if it doesn't exist
+    from sqlalchemy import inspect
+    inspector = inspect(engine)
+    if 'master_users' in inspector.get_table_names():
+        columns = [col['name'] for col in inspector.get_columns('master_users')]
+        if 'show_analytics' not in columns:
+            try:
+                with engine.connect() as connection:
+                    connection.execute(text("ALTER TABLE master_users ADD COLUMN show_analytics BOOLEAN DEFAULT FALSE NOT NULL"))
+                    connection.commit()
+                logger.info("Successfully added 'show_analytics' column to 'master_users' table.")
+            except Exception as e:
+                logger.error(f"Error adding 'show_analytics' column to 'master_users' table: {e}")
+    
+    # Create analytics table in master DB
+    from models.analytics import Base as AnalyticsBase
+    AnalyticsBase.metadata.create_all(bind=engine)
 
     
 

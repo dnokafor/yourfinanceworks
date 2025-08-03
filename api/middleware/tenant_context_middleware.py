@@ -5,8 +5,10 @@ from fastapi import status
 from models.database import set_tenant_context, clear_tenant_context, get_master_db, get_tenant_context
 from models.models import MasterUser, user_tenant_association
 from services.tenant_database_manager import tenant_db_manager
+from services.analytics_service import analytics_service
 import jwt
 import os
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -158,8 +160,31 @@ async def tenant_context_middleware(request: Request, call_next):
         logger.info(f"Current tenant context before handler: {current_tenant}")
         
         logger.info(f"Calling next middleware/handler for {request.url.path}")
+        start_time = time.time()
         response = await call_next(request)
+        response_time_ms = int((time.time() - start_time) * 1000)
         logger.info(f"Response status: {response.status_code}")
+        
+        # Track page view for API endpoints (skip static files and health checks)
+        if (request.url.path.startswith("/api/v1/") and 
+            not request.url.path.startswith("/api/v1/auth/") and
+            email and current_tenant):
+            try:
+                client_ip = request.headers.get("X-Forwarded-For", request.client.host if request.client else "unknown")
+                user_agent = request.headers.get("User-Agent", "")
+                analytics_service.track_page_view(
+                    user_email=email,
+                    tenant_id=current_tenant,
+                    path=request.url.path,
+                    method=request.method,
+                    user_agent=user_agent,
+                    ip_address=client_ip,
+                    response_time_ms=response_time_ms,
+                    status_code=response.status_code
+                )
+            except Exception as e:
+                logger.error(f"Analytics tracking failed: {e}")
+        
         return response
     finally:
         # Don't clear tenant context here - let it persist for the request duration

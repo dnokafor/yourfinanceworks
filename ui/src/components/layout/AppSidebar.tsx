@@ -365,6 +365,12 @@ export function AppSidebar() {
       path: '/audit-log',
       label: t('navigation.audit_log'),
       icon: <ListChecks className="w-5 h-5" />
+    }] : []),
+    // Only show Analytics for admin or superuser if user has enabled it
+    ...((isAdminUser || isSuperUser) && user?.show_analytics !== false ? [{
+      path: '/analytics',
+      label: 'Analytics',
+      icon: <BarChart className="w-5 h-5" />
     }] : [])
   ];
 

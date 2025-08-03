@@ -56,6 +56,7 @@
     "logout": "Cerrar Sesión",
     "profile": "Perfil",
     "audit_log": "Registro de Auditoría",
+    "analytics": "Analíticas",
     "dark_mode": "Modo oscuro"
   },
   "auth": {
@@ -77,7 +78,7 @@
     "invalid_credentials": "Correo o contraseña inválidos",
     "email_required": "El correo es requerido",
     "password_required": "La contraseña es requerida",
-    "password_min_length": "La contraseña debe tener al menos 8 caracteres",
+    "password_min_length": "La contraseña debe tener al menos 6 caracteres",
     "passwords_not_match": "Las contraseñas no coinciden",
     "login_description": "Ingresa tu correo y contraseña para acceder a tu cuenta",
     "email_placeholder": "Ingresa tu correo",
@@ -597,6 +598,8 @@
     "backup_current_data_first": "Haz una copia de seguridad de los datos actuales primero",
     "ai_assistant": "Asistente de IA",
     "ai_assistant_description": "Habilita o deshabilita el asistente de IA de facturación para tu organización.",
+    "show_analytics_menu": "Mostrar Menú de Analíticas",
+    "show_analytics_menu_description": "Mostrar u ocultar el menú de analíticas en la barra lateral",
     "configure_ai_provider_for_enhanced_features": "Configura el proveedor de IA para funciones mejoradas",
     "create_discount_rule": "Crear Regla de Descuento",
     "edit_discount_rule": "Editar Regla de Descuento",
@@ -668,6 +671,7 @@
     "test_notification_sent_successfully": "Notificación de prueba enviada exitosamente",
     "loading_settings": "Cargando configuración...",
     "profile_updated_successfully": "Perfil actualizado exitosamente",
+    "failed_to_load_settings": "Error al cargar la configuración",
     "error_message": "Lo sentimos, encontramos un error. Por favor intenta de nuevo o verifica tu configuración de IA.",
     "no_ai_config_found": "No se encontró configuración de IA. Por favor configura un proveedor de IA en Configuración > Configuraciones de Proveedor de IA.",
     "suggestActions": "Sugerencias",

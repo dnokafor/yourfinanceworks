@@ -155,6 +155,14 @@ const Settings = () => {
         // Set AI assistant enabled state
         setAiAssistantEnabled(settings.enable_ai_assistant ?? false);
         
+        // Update user profile with any settings that might affect it
+        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+        if (currentUser && settings.user_profile) {
+          const updatedUser = { ...currentUser, ...settings.user_profile };
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+          setUserProfile(updatedUser);
+        }
+        
         if (settings.invoice_settings) {
           setInvoiceSettings({
             prefix: settings.invoice_settings.prefix || invoiceSettings.prefix,
@@ -789,6 +797,7 @@ const Settings = () => {
       const updated = await api.put('/auth/me', {
         first_name: userProfile.first_name,
         last_name: userProfile.last_name,
+        show_analytics: userProfile.show_analytics ?? true,
       });
       // Update localStorage and state
       localStorage.setItem('user', JSON.stringify(updated));
@@ -893,6 +902,17 @@ const Settings = () => {
                       autoComplete="family-name"
                     />
                   </div>
+                </div>
+                <div className="flex items-center justify-between mt-4">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="show_analytics">Show Analytics Menu</Label>
+                    <p className="text-sm text-muted-foreground">Show or hide the analytics menu in the sidebar</p>
+                  </div>
+                  <Switch 
+                    id="show_analytics" 
+                    checked={userProfile.show_analytics ?? true} 
+                    onCheckedChange={(checked) => setUserProfile((prev: any) => ({ ...prev, show_analytics: checked }))} 
+                  />
                 </div>
                 <div className="flex justify-end mt-4">
                   <Button onClick={handleProfileSave} disabled={profileSaving}>
@@ -1142,7 +1162,7 @@ const Settings = () => {
                   <CardTitle>{t('settings.discount_rules')}</CardTitle>
                   <Button onClick={openCreateDialog} size="sm">
                     <Plus className="h-4 w-4 mr-2" />
-                    {t('settings.add_rule')}
+                    {t('settings.tabs.add_rule')}
                   </Button>
                 </div>
               </CardHeader>

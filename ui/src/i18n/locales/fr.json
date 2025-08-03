@@ -56,6 +56,7 @@
     "logout": "Déconnexion",
     "profile": "Profil",
     "audit_log": "Journal d'Audit",
+    "analytics": "Analytiques",
     "dark_mode": "Mode sombre"
   },
   "auth": {
@@ -77,7 +78,7 @@
     "invalid_credentials": "E-mail ou mot de passe invalide",
     "email_required": "L'e-mail est requis",
     "password_required": "Le mot de passe est requis",
-    "password_min_length": "Le mot de passe doit contenir au moins 8 caractères",
+    "password_min_length": "Le mot de passe doit contenir au moins 6 caractères",
     "passwords_not_match": "Les mots de passe ne correspondent pas",
     "login_description": "Entrez votre email et mot de passe pour accéder à votre compte",
     "email_placeholder": "Entrez votre email",
@@ -602,6 +603,8 @@
     "failed_to_save_settings": "Échec de l'enregistrement des paramètres.",
     "ai_assistant": "Assistant IA",
     "ai_assistant_description": "Activez ou désactivez l'assistant IA de facturation pour votre organisation.",
+    "show_analytics_menu": "Afficher le Menu Analytiques",
+    "show_analytics_menu_description": "Afficher ou masquer le menu analytiques dans la barre latérale",
     "discount_rules": "Règles de Remise",
     "name": "Nom",
     "email": "E-mail",
@@ -666,7 +669,8 @@
     "notification_settings_saved_successfully": "Paramètres de notification enregistrés avec succès",
     "test_notification_sent_successfully": "Notification de test envoyée avec succès",
     "loading_settings": "Chargement des paramètres...",
-    "profile_updated_successfully": "Profil mis à jour avec succès"
+    "profile_updated_successfully": "Profil mis à jour avec succès",
+    "failed_to_load_settings": "Échec du chargement des paramètres"
   },
   "users": {
     "title": "Utilisateurs",

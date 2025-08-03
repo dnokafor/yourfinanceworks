@@ -435,6 +435,9 @@ async def update_current_user(
     if user_update.theme is not None:
         current_user.theme = user_update.theme
         updated = True
+    if hasattr(user_update, 'show_analytics') and user_update.show_analytics is not None:
+        current_user.show_analytics = user_update.show_analytics
+        updated = True
     if not updated:
         raise HTTPException(status_code=400, detail="No updatable fields provided.")
     db.add(current_user)
@@ -454,6 +457,8 @@ async def update_current_user(
                 tenant_user.last_name = user_update.last_name
             if user_update.theme is not None:
                 tenant_user.theme = user_update.theme
+            if hasattr(user_update, 'show_analytics') and user_update.show_analytics is not None:
+                tenant_user.show_analytics = user_update.show_analytics
             tenant_db.commit()
             tenant_db.refresh(tenant_user)
     finally:

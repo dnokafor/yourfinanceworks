@@ -33,11 +33,13 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
     password: Optional[str] = None
     theme: Optional[str] = None
+    show_analytics: Optional[bool] = None
 
 class UserRead(UserBase):
     id: int
     tenant_id: int
     google_id: Optional[str] = None
+    show_analytics: Optional[bool] = True
     created_at: datetime
     updated_at: datetime
     organizations: Optional[List[Dict[str, Any]]] = []

@@ -23,7 +23,8 @@ from routers import (
     super_admin, # Add the new super admin router
     audit_log, # Add the new audit log router
     slack_simplified, # Add the new simplified Slack router
-    notifications # Add the new notifications router
+    notifications, # Add the new notifications router
+    analytics # Add the new analytics router
 )
 from models.database import engine
 from models import models
@@ -98,6 +99,7 @@ app.include_router(ai_config.router, prefix="/api/v1") # Include the new AI conf
 app.include_router(audit_log.router, prefix="/api/v1") # Include the new audit log router
 app.include_router(slack_simplified.router, prefix="/api/v1") # Include the new simplified Slack router
 app.include_router(notifications.router, prefix="/api/v1") # Include the new notifications router
+app.include_router(analytics.router, prefix="/api/v1") # Include the new analytics router
 
 @app.get("/")
 def read_root():

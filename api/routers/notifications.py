@@ -21,6 +21,7 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 @router.get("/settings", response_model=EmailNotificationSettingsSchema)
 async def get_notification_settings(
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Get current user's notification settings"""
