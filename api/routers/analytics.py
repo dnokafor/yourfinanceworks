@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
-from models.database import get_master_db
+from models.database import get_master_db, get_tenant_context
 from models.analytics import PageView
 from .auth import get_current_user
 from models.models import MasterUser
@@ -26,12 +26,14 @@ async def get_page_views(
     try:
         start_date = datetime.utcnow() - timedelta(days=days)
         
-        # Filter by tenant for non-super users
+        # Get current tenant context - use context if available, otherwise use user's primary tenant
+        current_tenant_id = get_tenant_context() or current_user.tenant_id
+        
+        # Filter by tenant - all users should see data for their current tenant context
         query = master_db.query(PageView).filter(
-            PageView.timestamp >= start_date
+            PageView.timestamp >= start_date,
+            PageView.tenant_id == current_tenant_id
         )
-        if not current_user.is_superuser:
-            query = query.filter(PageView.tenant_id == current_user.tenant_id)
         
         if path_filter:
             query = query.filter(PageView.path.contains(path_filter))
@@ -42,10 +44,9 @@ async def get_page_views(
             func.count(PageView.id).label('views'),
             func.avg(PageView.response_time_ms).label('avg_response_time')
         ).filter(
-            PageView.timestamp >= start_date
+            PageView.timestamp >= start_date,
+            PageView.tenant_id == current_tenant_id
         )
-        if not current_user.is_superuser:
-            path_query = path_query.filter(PageView.tenant_id == current_user.tenant_id)
         path_stats = path_query.group_by(PageView.path).order_by(desc('views')).limit(20).all()
         
         # Get daily views
@@ -53,10 +54,9 @@ async def get_page_views(
             func.date(PageView.timestamp).label('date'),
             func.count(PageView.id).label('views')
         ).filter(
-            PageView.timestamp >= start_date
+            PageView.timestamp >= start_date,
+            PageView.tenant_id == current_tenant_id
         )
-        if not current_user.is_superuser:
-            daily_query = daily_query.filter(PageView.tenant_id == current_user.tenant_id)
         daily_stats = daily_query.group_by(func.date(PageView.timestamp)).order_by('date').all()
         
         # Get user activity
@@ -64,10 +64,9 @@ async def get_page_views(
             PageView.user_email,
             func.count(PageView.id).label('views')
         ).filter(
-            PageView.timestamp >= start_date
+            PageView.timestamp >= start_date,
+            PageView.tenant_id == current_tenant_id
         )
-        if not current_user.is_superuser:
-            user_query = user_query.filter(PageView.tenant_id == current_user.tenant_id)
         user_stats = user_query.group_by(PageView.user_email).order_by(desc('views')).limit(10).all()
         
         return {

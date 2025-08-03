@@ -343,22 +343,12 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
     }
   }, [invoice]);
 
-  // Update newClientForm when tenant info is loaded
+  // Ensure correct currency when dialog opens
   useEffect(() => {
-    if (tenantInfo && tenantInfo.default_currency) {
+    if (showNewClientDialog && tenantInfo?.default_currency) {
       setNewClientForm(prev => ({
         ...prev,
         preferred_currency: tenantInfo.default_currency
-      }));
-    }
-  }, [tenantInfo]);
-
-  // Ensure correct currency when dialog opens
-  useEffect(() => {
-    if (showNewClientDialog && tenantInfo) {
-      setNewClientForm(prev => ({
-        ...prev,
-        preferred_currency: tenantInfo.default_currency || "USD"
       }));
     }
   }, [showNewClientDialog, tenantInfo]);
@@ -393,16 +383,22 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
       console.log("Creating client with data:", clientData);
       
       const newClient = await clientApi.createClient(clientData);
-      console.log("Created client:", newClient);
+      console.log("✅ Created client:", newClient);
+      console.log("✅ Client preferred currency:", newClient.preferred_currency);
       setClients([...clients, newClient]);
+      
+      // Set the client in the form
+      console.log("✅ Setting form client to:", newClient.id.toString());
       form.setValue("client", newClient.id.toString());
       
-      // Defer currency update to avoid React warning
+      // Set currency to client's preferred currency
       if (newClient.preferred_currency && !isEdit) {
-        console.log("Setting currency to newly created client's preferred currency:", newClient.preferred_currency);
-        setTimeout(() => {
-          form.setValue("currency", newClient.preferred_currency);
-        }, 0);
+        console.log("✅ Setting invoice currency to:", newClient.preferred_currency);
+        // Use immediate update instead of setTimeout
+        form.setValue("currency", newClient.preferred_currency);
+        console.log("✅ Form currency after setValue:", form.getValues("currency"));
+      } else {
+        console.log("❌ Not setting currency - preferred_currency:", newClient.preferred_currency, "isEdit:", isEdit);
       }
       
       setShowNewClientDialog(false);
@@ -1432,10 +1428,12 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
               <div>
                 <Label htmlFor="preferred_currency">{t('invoices.preferred_currency')}</Label>
                 <CurrencySelector
-                  value={newClientForm.preferred_currency || 'USD'}
+                  key={`client-currency-${showNewClientDialog}`}
+                  value={newClientForm.preferred_currency || tenantInfo?.default_currency || 'USD'}
                   onValueChange={(val) => setNewClientForm({ ...newClientForm, preferred_currency: val })}
                   placeholder={t('invoices.select_preferred_currency')}
                 />
+
               </div>
             </div>
             <DialogFooter>
@@ -1552,16 +1550,18 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
                                 field.onChange(value);
                                 // Set currency to client's preferred currency when client is selected
                                 const selectedClient = clients.find(c => c.id.toString() === value);
-                                console.log("Client selected:", value);
-                                console.log("Selected client data:", selectedClient);
-                                console.log("Client preferred currency:", selectedClient?.preferred_currency);
-                                console.log("Is edit mode:", isEdit);
+                                console.log("🎯 Client selected:", value);
+                                console.log("🎯 Selected client data:", selectedClient);
+                                console.log("🎯 Client preferred currency:", selectedClient?.preferred_currency);
+                                console.log("🎯 Is edit mode:", isEdit);
+                                console.log("🎯 Current form currency before update:", form.getValues("currency"));
+                                
                                 if (selectedClient?.preferred_currency && !isEdit) {
-                                  console.log("Setting currency to:", selectedClient.preferred_currency);
+                                  console.log("✅ Setting invoice currency to client's preferred:", selectedClient.preferred_currency);
                                   form.setValue("currency", selectedClient.preferred_currency);
-                                  console.log("Form currency after setValue:", form.getValues("currency"));
+                                  console.log("✅ Form currency after setValue:", form.getValues("currency"));
                                 } else {
-                                  console.log("Not setting currency - preferred_currency:", selectedClient?.preferred_currency, "isEdit:", isEdit);
+                                  console.log("❌ Not setting currency - preferred_currency:", selectedClient?.preferred_currency, "isEdit:", isEdit);
                                 }
                               }}
                               defaultValue={field.value}
@@ -1613,15 +1613,15 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
                       control={form.control}
                       name="currency"
                       render={({ field }) => {
-                        console.log("Currency field render - value:", field.value);
+                        console.log("💰 Currency field render - value:", field.value, "type:", typeof field.value);
                         return (
                           <FormItem>
                             <FormLabel>{t('invoices.currency')}</FormLabel>
                             <FormControl>
                               <CurrencySelector
-                                value={field.value}
+                                value={field.value || ""}
                                 onValueChange={(value) => {
-                                  console.log("Currency changed to:", value);
+                                  console.log("💰 Currency manually changed to:", value);
                                   field.onChange(value);
                                 }}
                                 placeholder="Select currency"

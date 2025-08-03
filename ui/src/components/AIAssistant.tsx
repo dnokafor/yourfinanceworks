@@ -390,29 +390,29 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
     retry: false,
   });
 
-  // Conditional rendering checks - moved to the end after all hooks
-  console.log('AI Assistant Debug:', { 
-    settings, 
-    settingsLoading, 
-    settingsError, 
-    isAIAssistantEnabled: !!(settings && (settings as any).enable_ai_assistant),
-    aiConfigs,
-    aiConfigsLoading,
-    defaultAIConfig: aiConfigs && Array.isArray(aiConfigs) ? 
-      (aiConfigs as any[]).find((config: any) => config.is_default && config.is_active) : 
-      undefined,
-    shouldRender: !settingsLoading && !!(settings && (settings as any).enable_ai_assistant) 
-  });
+  // // Conditional rendering checks - moved to the end after all hooks
+  // console.log('AI Assistant Debug:', { 
+  //   settings, 
+  //   settingsLoading, 
+  //   settingsError, 
+  //   isAIAssistantEnabled: !!(settings && (settings as any).enable_ai_assistant),
+  //   aiConfigs,
+  //   aiConfigsLoading,
+  //   defaultAIConfig: aiConfigs && Array.isArray(aiConfigs) ? 
+  //     (aiConfigs as any[]).find((config: any) => config.is_default && config.is_active) : 
+  //     undefined,
+  //   shouldRender: !settingsLoading && !!(settings && (settings as any).enable_ai_assistant) 
+  // });
 
-  // CRITICAL: Add detailed logging for disabled state
-  console.log('AI Assistant Render Decision:', {
-    settingsLoading,
-    settingsError: !!settingsError,
-    settings: settings,
-    isAIAssistantEnabled: !!(settings && (settings as any).enable_ai_assistant),
-    rawSettingsValue: settings ? (settings as any).enable_ai_assistant : 'no settings',
-    willRender: !settingsLoading && !!(settings && (settings as any).enable_ai_assistant)
-  });
+  // // CRITICAL: Add detailed logging for disabled state
+  // console.log('AI Assistant Render Decision:', {
+  //   settingsLoading,
+  //   settingsError: !!settingsError,
+  //   settings: settings,
+  //   isAIAssistantEnabled: !!(settings && (settings as any).enable_ai_assistant),
+  //   rawSettingsValue: settings ? (settings as any).enable_ai_assistant : 'no settings',
+  //   willRender: !settingsLoading && !!(settings && (settings as any).enable_ai_assistant)
+  // });
 
   const isAIAssistantEnabled = !!(settings && (settings as any).enable_ai_assistant);
   const defaultAIConfig = aiConfigs && Array.isArray(aiConfigs) ? 
@@ -421,7 +421,7 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
 
   // Handle different states more gracefully
   if (settingsLoading) {
-    console.log('AI Assistant: Settings loading, showing minimal UI');
+    // console.log('AI Assistant: Settings loading, showing minimal UI');
     // Don't hide completely while loading - show a minimal button that's disabled
     return (
       <div className="fixed bottom-4 right-4 z-50">
@@ -483,7 +483,7 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
     try {
       // Check for specific patterns that should use dedicated endpoints
       const lowerText = textToSend.toLowerCase();
-      console.log('AI Assistant: Processing message:', { textToSend, lowerText });
+      // console.log('AI Assistant: Processing message:', { textToSend, lowerText });
       
       // Analyze Patterns: match translated or English keywords
       if (
@@ -492,13 +492,13 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
         (lowerText.includes('analyze') && lowerText.includes('pattern'))
       ) {
         // Use the analyze-patterns endpoint (MCP-like functionality)
-        console.log('AI Assistant: Using analyze-patterns endpoint');
+        // console.log('AI Assistant: Using analyze-patterns endpoint');
         try {
           const response = await api.get('/ai/analyze-patterns') as any;
-          console.log('AI Assistant: Analyze patterns response:', response);
-          console.log('AI Assistant: Response success:', response.success);
-          console.log('AI Assistant: Response data:', response.data);
-          console.log('AI Assistant: Response error:', (response as any).error);
+          // console.log('AI Assistant: Analyze patterns response:', response);
+          // console.log('AI Assistant: Response success:', response.success);
+          // console.log('AI Assistant: Response data:', response.data);
+          // console.log('AI Assistant: Response error:', (response as any).error);
           
           if (response.success) {
             const data = response.data;
@@ -583,7 +583,6 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
             throw new Error('Failed to analyze patterns');
           }
         } catch (error) {
-          console.error('AI Assistant: Error calling analyze-patterns:', error);
           console.error('AI Assistant: Error details:', {
             message: error.message,
             stack: error.stack,
@@ -597,10 +596,10 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
         (lowerText.includes('suggest') && lowerText.includes('action'))
       ) {
         // Use the suggest-actions endpoint
-        console.log('AI Assistant: Using suggest-actions endpoint');
+        // console.log('AI Assistant: Using suggest-actions endpoint');
         try {
           const response = await api.get('/ai/suggest-actions') as any;
-          console.log('AI Assistant: Suggest actions response:', response);
+          // console.log('AI Assistant: Suggest actions response:', response);
           
           if (response.success) {
             const data = response.data;
@@ -670,10 +669,10 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
         lowerText.includes('payment') || lowerText.includes('payments')
       ) {
         // Handle payment data display with charts
-        console.log('AI Assistant: Using payments endpoint with charts');
+        // console.log('AI Assistant: Using payments endpoint with charts');
         try {
           const response = await api.get('/payments/') as any;
-          console.log('AI Assistant: Payments response:', response);
+          // console.log('AI Assistant: Payments response:', response);
           
           if (response.success && response.chart_data && Array.isArray(response.data)) {
             const paymentCharts = (
@@ -703,11 +702,11 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
         }
       } else {
         // Use the regular chat endpoint
-        console.log('AI Assistant: Using chat endpoint');
+        // console.log('AI Assistant: Using chat endpoint');
         
         // Check if we have a default AI configuration
         if (!defaultAIConfig) {
-          console.log('AI Assistant: No default AI config found:', { aiConfigs, defaultAIConfig });
+          // console.log('AI Assistant: No default AI config found:', { aiConfigs, defaultAIConfig });
           const errorMessage = t('settings.no_ai_config_found');
           setMessages((prev) => [...prev.slice(0, -1), { id: prev.length, sender: 'ai', text: errorMessage }]);
           return;

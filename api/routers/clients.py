@@ -193,7 +193,7 @@ async def create_client(
         client_data = client.dict()
         
         # If no preferred_currency is provided, use tenant's default currency
-        if not client_data.get('preferred_currency'):
+        if not client_data.get('preferred_currency') or client_data.get('preferred_currency').strip() == "":
             try:
                 # Get tenant's default currency from master database
                 master_db = next(get_master_db())
