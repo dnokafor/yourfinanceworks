@@ -9,7 +9,7 @@ from datetime import datetime, date, timezone
 from collections import defaultdict
 
 from models.database import get_db
-from models.models_per_tenant import Invoice, Client, User
+from models.models_per_tenant import Invoice, Client, User, Payment
 from models.models import MasterUser
 from schemas.payment import PaymentCreate, PaymentUpdate, Payment as PaymentSchema, PaymentWithInvoice
 from routers.auth import get_current_user
@@ -92,22 +92,7 @@ def _prepare_payment_chart_data(payments: List[Dict[str, Any]]) -> Dict[str, Any
             }
         }
 
-# Create a simple Payment model that matches the actual database schema
-Base = declarative_base()
 
-class Payment(Base):
-    __tablename__ = "payments"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    invoice_id = Column(Integer, ForeignKey("invoices.id"))
-    amount = Column(Float, nullable=False)
-    currency = Column(String, default="USD", nullable=False)
-    payment_date = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
-    payment_method = Column(String, nullable=False, default="system")
-    reference_number = Column(String, nullable=True)
-    notes = Column(String, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -280,6 +265,7 @@ async def create_payment(
             reference_number=payment.reference_number,
             notes=payment.notes,
             invoice_id=payment.invoice_id,
+            user_id=current_user.id,
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
         )
@@ -295,7 +281,7 @@ async def create_payment(
             action="CREATE",
             resource_type="payment",
             resource_id=str(db_payment.id),
-            resource_name=f"Payment for Invoice #{db_payment.invoice.number}",
+            resource_name=f"Payment for Invoice #{invoice.number}",
             details=payment.dict(),
             status="success"
         )

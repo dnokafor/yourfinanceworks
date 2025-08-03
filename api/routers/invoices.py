@@ -619,9 +619,12 @@ async def update_invoice(
             )
         
         # Check if invoice is paid and prevent updates except status changes
-        if db_invoice.status == "paid":
+        update_data = invoice.dict(exclude_unset=True)
+        if db_invoice.status == "paid" and "status" in update_data:
+            # If changing status from paid, allow the change
+            pass
+        elif db_invoice.status == "paid":
             # Only allow status updates for paid invoices
-            update_data = invoice.dict(exclude_unset=True)
             non_status_updates = {k: v for k, v in update_data.items() if k != "status"}
             if non_status_updates:
                 logger.warning(f"User {current_user.email} attempted to modify paid invoice {invoice_id} (fields: {list(non_status_updates.keys())})")
@@ -641,6 +644,7 @@ async def update_invoice(
         old_notes = db_invoice.notes
         old_custom_fields = db_invoice.custom_fields
         old_show_discount_in_pdf = db_invoice.show_discount_in_pdf
+        old_status = db_invoice.status
 
         # Update invoice fields
         update_data = invoice.dict(exclude_unset=True)
@@ -714,6 +718,8 @@ async def update_invoice(
         # Create history entry for the update only if there are actual changes
         from models.models_per_tenant import InvoiceHistory as InvoiceHistoryModel
         changes = []
+        if invoice.status is not None and old_status != invoice.status:
+            changes.append(f"Status changed from {old_status} to {invoice.status}")
         if invoice.currency and old_currency != invoice.currency:
             changes.append(f"Currency changed from {old_currency} to {invoice.currency}")
         if invoice.discount_value is not None and old_discount_value != invoice.discount_value:

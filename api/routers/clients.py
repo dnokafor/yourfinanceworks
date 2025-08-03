@@ -15,7 +15,7 @@ from routers.auth import get_current_user
 from services.tenant_database_manager import tenant_db_manager
 from utils.rbac import require_non_viewer
 from utils.audit import log_audit_event
-from constants.error_codes import CLIENT_ALREADY_EXISTS, CLIENT_NOT_FOUND, FAILED_TO_CREATE_CLIENT, FAILED_TO_UPDATE_CLIENT, FAILED_TO_FETCH_CLIENTS, FAILED_TO_FETCH_CLIENT
+from constants.error_codes import CLIENT_ALREADY_EXISTS, CLIENT_NOT_FOUND, CLIENT_HAS_INVOICES, FAILED_TO_CREATE_CLIENT, FAILED_TO_UPDATE_CLIENT, FAILED_TO_FETCH_CLIENTS, FAILED_TO_FETCH_CLIENT
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -394,13 +394,12 @@ async def delete_client(
         ).first() is not None
         
         if has_invoices:
-            # Delete all associated invoices first
-            # No tenant_id filtering needed since we're in the tenant's database
-            db.query(Invoice).filter(
-                Invoice.client_id == client_id
-            ).delete()
+            raise HTTPException(
+                status_code=400,
+                detail=CLIENT_HAS_INVOICES
+            )
         
-        # Now delete the client
+        # Delete the client
         db.delete(db_client)
         db.commit()
         # Audit log for client delete

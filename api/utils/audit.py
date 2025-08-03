@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from models.models_per_tenant import AuditLog
 from models.models import AuditLog as MasterAuditLog
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, date
 
 # Helper to convert all datetime objects in a dict/list to ISO strings
 def convert_datetimes(obj):
@@ -11,6 +11,8 @@ def convert_datetimes(obj):
     elif isinstance(obj, list):
         return [convert_datetimes(i) for i in obj]
     elif isinstance(obj, datetime):
+        return obj.isoformat()
+    elif isinstance(obj, date):
         return obj.isoformat()
     else:
         return obj
