@@ -78,15 +78,19 @@ def get_db():
                 db.close()
         except Exception as e:
             import re
-            from sqlalchemy.exc import StatementError, DataError, IntegrityError
+            from sqlalchemy.exc import StatementError, DataError, IntegrityError, OperationalError
+            
+            # If it's an HTTPException, it's an application-level error, not a database connection issue
+            if isinstance(e, HTTPException):
+                logger.debug(f"HTTPException raised in tenant database context: {e.status_code} - {e.detail}")
+                raise
+            
             logger.error(f"Failed to connect to tenant database for tenant {tenant_id}: {e}")
             # Robust safeguard: Only attempt to create tenant DB for connection/operational errors, not validation errors
             if isinstance(e, (ValidationError, RequestValidationError, StatementError, DataError, IntegrityError)):
                 logger.error(f"Validation or schema error encountered, not attempting to recreate tenant DB: {e}")
                 raise
-            if isinstance(e, HTTPException) and getattr(e, 'status_code', None) == 422:
-                logger.error(f"HTTP 422 Unprocessable Entity (likely validation error), not attempting to recreate tenant DB: {e}")
-                raise
+            
             # Regex to catch any error message that hints at validation/schema issues
             error_str = str(e).lower()
             if re.search(r"(validation|pydantic|schema|statement|integrity|data) error|field required|missing|unprocessable entity", error_str):

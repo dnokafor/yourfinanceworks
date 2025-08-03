@@ -872,6 +872,37 @@ async def list_users(
     # Get all users with access to this tenant
     if user_ids:
         users = master_db.query(MasterUser).filter(MasterUser.id.in_(user_ids)).all()
+        
+        # Get tenant-specific roles for these users
+        try:
+            tenant_session = tenant_db_manager.get_tenant_session(current_tenant_id)
+            tenant_db = tenant_session()
+            try:
+                # Get all tenant users for this tenant
+                tenant_users = tenant_db.query(TenantUser).filter(
+                    TenantUser.id.in_(user_ids)
+                ).all()
+                
+                # Create a mapping of user_id to tenant role
+                tenant_role_map = {tu.id: tu.role for tu in tenant_users}
+                logger.info(f"Found {len(tenant_role_map)} tenant-specific roles: {tenant_role_map}")
+                
+                # Update user roles with tenant-specific roles
+                for user in users:
+                    if user.id in tenant_role_map:
+                        old_role = user.role
+                        user.role = tenant_role_map[user.id]
+                        logger.info(f"Updated user {user.email} role from '{old_role}' to '{user.role}'")
+                    else:
+                        logger.info(f"User {user.email} has no tenant-specific role, keeping master role: '{user.role}'")
+
+            finally:
+                tenant_db.close()
+        except Exception as e:
+            logger.warning(f"Failed to get tenant-specific roles for users in tenant {current_tenant_id}: {e}")
+            # Continue with master database roles if tenant lookup fails
+        
+        logger.info(f"Returning {len(users)} users with roles: {[(u.email, u.role) for u in users]}")
         return users
     else:
         return []
@@ -900,21 +931,30 @@ async def update_user_role(
     
     # Store old role for audit logging
     old_role = user.role
+    logger.info(f"Updating role for user {user.email} (ID: {user_id}) from '{old_role}' to '{role_update.role}'")
     
     # Update role in master database
     user.role = role_update.role
     db.commit()
     db.refresh(user)
+    logger.info(f"Updated role in master database for user {user.email}")
     
-    # Update role in tenant database    tenant_db = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
+    # Update role in tenant database
     try:
-        tenant_user = tenant_db.query(TenantUser).filter(TenantUser.id == user_id).first()
-        
-        if tenant_user:
-            tenant_user.role = role_update.role
-            tenant_db.commit()
-    finally:
-        tenant_db.close()
+        tenant_db = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
+        try:
+            tenant_user = tenant_db.query(TenantUser).filter(TenantUser.id == user_id).first()
+            
+            if tenant_user:
+                tenant_user.role = role_update.role
+                tenant_db.commit()
+                logger.info(f"Updated role in tenant database for user {user.email}")
+            else:
+                logger.warning(f"User {user.email} not found in tenant database")
+        finally:
+            tenant_db.close()
+    except Exception as e:
+        logger.error(f"Failed to update role in tenant database for user {user.email}: {e}")
     
     # Log audit event in master database
     log_audit_event_master(
@@ -1331,3 +1371,58 @@ async def reset_password(
         message="Password has been reset successfully. You can now log in with your new password.",
         success=True
     )
+
+@router.delete("/users/{user_id}", response_model=Dict[str, str])
+async def remove_user_from_organization(
+    user_id: int,
+    db: Session = Depends(get_master_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Remove a user from the current organization (admin only)"""
+    require_admin(current_user, "remove users")
+    
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot remove yourself from the organization")
+    
+    from models.models import user_tenant_association
+    from utils.user_sync import remove_user_from_tenant_database
+    
+    # Check if user has access to this tenant
+    membership = db.execute(
+        user_tenant_association.select().where(
+            user_tenant_association.c.user_id == user_id,
+            user_tenant_association.c.tenant_id == current_user.tenant_id
+        )
+    ).first()
+    
+    if not membership:
+        # Check if it's their primary tenant
+        user = db.query(MasterUser).filter(
+            MasterUser.id == user_id,
+            MasterUser.tenant_id == current_user.tenant_id
+        ).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found in this organization")
+        
+        # Cannot remove user from their primary tenant
+        raise HTTPException(status_code=400, detail="Cannot remove user from their primary organization")
+    
+    # Get user details for logging
+    user = db.query(MasterUser).filter(MasterUser.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Remove from association table
+    db.execute(
+        user_tenant_association.delete().where(
+            user_tenant_association.c.user_id == user_id,
+            user_tenant_association.c.tenant_id == current_user.tenant_id
+        )
+    )
+    
+    # Remove from tenant database
+    remove_user_from_tenant_database(user_id, current_user.tenant_id)
+    
+    db.commit()
+    
+    return {"message": f"User {user.email} has been removed from the organization"}

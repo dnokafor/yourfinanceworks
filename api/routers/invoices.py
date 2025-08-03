@@ -528,6 +528,7 @@ async def read_invoice(
         ).first()
 
         if invoice_tuple is None:
+            logger.warning(f"User {current_user.email} attempted to access invoice {invoice_id} which doesn't exist in their tenant database")
             raise HTTPException(
                 status_code=404,
                 detail="Invoice not found"
@@ -597,22 +598,37 @@ async def update_invoice(
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
-    logger.info("Invoice update endpoint called")
+    from models.database import get_tenant_context
+    current_tenant = get_tenant_context()
+    logger.info(f"Invoice update endpoint called - User: {current_user.email}, Tenant: {current_tenant}, Invoice ID: {invoice_id}")
     logger.debug(f"[DEBUG] Received custom_fields in update: {invoice.custom_fields}")
     # Check if user has permission to update invoices
     require_non_viewer(current_user, "update invoices")
     
     try:
-        # No tenant_id filtering needed since we're in the tenant's database (exclude soft-deleted)
+        # Query invoice in current tenant's database (exclude soft-deleted)
         db_invoice = db.query(Invoice).filter(
             Invoice.id == invoice_id,
             Invoice.is_deleted == False
         ).first()
         if db_invoice is None:
+            logger.warning(f"User {current_user.email} (tenant {current_tenant}) attempted to access invoice {invoice_id} which doesn't exist in their tenant database")
             raise HTTPException(
                 status_code=404,
                 detail="Invoice not found"
             )
+        
+        # Check if invoice is paid and prevent updates except status changes
+        if db_invoice.status == "paid":
+            # Only allow status updates for paid invoices
+            update_data = invoice.dict(exclude_unset=True)
+            non_status_updates = {k: v for k, v in update_data.items() if k != "status"}
+            if non_status_updates:
+                logger.warning(f"User {current_user.email} attempted to modify paid invoice {invoice_id} (fields: {list(non_status_updates.keys())})")
+                raise HTTPException(
+                    status_code=400,
+                    detail="Paid invoices cannot be modified except for status changes"
+                )
         
         # Initialize currency service for validation
         currency_service = CurrencyService(db)

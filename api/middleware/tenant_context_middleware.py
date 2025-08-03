@@ -69,16 +69,19 @@ async def tenant_context_middleware(request: Request, call_next):
                     if user and user.tenant_id:
                         # Use header tenant ID if provided and user has access, otherwise use default tenant
                         tenant_id = user.tenant_id
+                        
+                        # Get tenant IDs from association table - always do this
+                        tenant_memberships = master_db.execute(
+                            user_tenant_association.select().where(
+                                user_tenant_association.c.user_id == user.id
+                            )
+                        ).fetchall()
+                        user_tenant_ids = [membership.tenant_id for membership in tenant_memberships] + [user.tenant_id]
+                        
+                        logger.info(f"User {email} has access to tenants: {user_tenant_ids}")
+                        
                         if header_tenant_id:
                             # Check if user has access to the requested tenant
-                            # Get tenant IDs from association table
-                            tenant_memberships = master_db.execute(
-                                user_tenant_association.select().where(
-                                    user_tenant_association.c.user_id == user.id
-                                )
-                            ).fetchall()
-                            user_tenant_ids = [membership.tenant_id for membership in tenant_memberships] + [user.tenant_id]
-                            
                             logger.info(f"User {email} has access to tenants: {user_tenant_ids}")
                             
                             if int(header_tenant_id) in user_tenant_ids:
@@ -98,6 +101,12 @@ async def tenant_context_middleware(request: Request, call_next):
                             from sqlalchemy import text
                             tenant_session.execute(text("SELECT 1"))
                             tenant_session.close()
+                            
+                            # Only sync user if they still have access to this tenant
+                            if tenant_id in user_tenant_ids:
+                                from utils.user_sync import sync_user_to_tenant_database
+                                sync_user_to_tenant_database(user, tenant_id)
+                            
                             set_tenant_context(tenant_id)
                             logger.info(f"✅ Successfully set tenant context to {tenant_id} for user {email}")
                         except Exception as e:
@@ -109,6 +118,10 @@ async def tenant_context_middleware(request: Request, call_next):
                                 success = tenant_db_manager.create_tenant_database(tenant_id, tenant.name)
                                 if success:
                                     logger.info(f"Successfully created tenant database for tenant {tenant_id}")
+                                    # Only sync if user has access to this tenant
+                                    if tenant_id in user_tenant_ids:
+                                        from utils.user_sync import sync_user_to_tenant_database
+                                        sync_user_to_tenant_database(user, tenant_id)
                                     set_tenant_context(tenant_id)
                                 else:
                                     logger.error(f"Failed to create tenant database for tenant {tenant_id}")
