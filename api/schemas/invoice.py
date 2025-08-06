@@ -77,6 +77,8 @@ class InvoiceWithClient(Invoice):
     total_paid: float = 0.0
     items: List[InvoiceItem] = [] 
     custom_fields: Optional[Dict[str, Any]] = Field(default=None, description="Custom fields for the invoice")
+    has_attachment: Optional[bool] = False
+    attachment_filename: Optional[str] = None
 
     class Config:
         from_attributes = True

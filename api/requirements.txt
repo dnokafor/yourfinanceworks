@@ -1,7 +1,7 @@
 fastapi==0.116.1
 uvicorn==0.35.0
 pydantic==2.11.7
-pydantic-settings==2.1.0
+pydantic-settings==2.10.1
 python-dotenv==1.1.1
 sqlalchemy==2.0.42
 alembic==1.13.0
@@ -26,7 +26,11 @@ jinja2==3.1.6  # Email templating
 reportlab==4.4.3  # PDF generation for email attachments
 
 # AI/LLM dependencies
-litellm==1.30.7  # Unified interface for multiple LLM providers 
+litellm==1.75.0  # Unified interface for multiple LLM providers
+langchain==0.3.27  # LangChain for PDF processing
+langchain-community==0.3.27  # LangChain community components
+pypdf2==3.0.1  # PDF processing
+ollama==0.5.1  # Ollama client
 
 # Security fix for HTTP Request Smuggling vulnerability
 h11==0.16.0

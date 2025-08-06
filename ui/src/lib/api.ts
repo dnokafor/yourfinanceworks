@@ -61,6 +61,8 @@ export interface Invoice {
   subtotal?: number;
   custom_fields?: Record<string, any>;
   show_discount_in_pdf?: boolean; // New property added
+  has_attachment?: boolean;
+  attachment_filename?: string;
 }
 
 export interface Payment {
@@ -240,6 +242,9 @@ export async function apiRequest<T>(
     }
     
     const requestUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+    console.log(`🔍 API REQUEST DEBUG - URL: ${requestUrl}`);
+    console.log(`🔍 API REQUEST DEBUG - Method: ${options.method || 'GET'}`);
+    console.log(`🔍 API REQUEST DEBUG - Body: ${options.body ? 'Present' : 'None'}`);
     console.log(`Making API request to ${requestUrl}`, options);
     let extraHeaders: Record<string, string> = {};
     if (options.headers) {
@@ -523,6 +528,8 @@ export const invoiceApi = {
         updated_at: apiInvoice.updated_at,
         is_recurring: apiInvoice.is_recurring,
         recurring_frequency: apiInvoice.recurring_frequency,
+        has_attachment: apiInvoice.has_attachment || false,
+        attachment_filename: apiInvoice.attachment_filename || undefined,
       }));
       
       console.log("Mapped invoices with paid amounts:", mappedInvoices);
@@ -569,8 +576,20 @@ export const invoiceApi = {
         subtotal: apiResponse.subtotal,
         custom_fields: apiResponse.custom_fields,
         show_discount_in_pdf: apiResponse.show_discount_in_pdf || false, // Map show_discount_in_pdf from API response
+        has_attachment: apiResponse.has_attachment || false,
+        attachment_filename: apiResponse.attachment_filename || undefined,
       };
       
+      console.log("🔍 API CLIENT - Raw apiResponse keys:", Object.keys(apiResponse));
+      console.log("🔍 API CLIENT - Raw apiResponse:", JSON.stringify(apiResponse, null, 2));
+      console.log("🔍 API RESPONSE ATTACHMENT DEBUG:", {
+        'raw apiResponse.has_attachment': apiResponse.has_attachment,
+        'raw apiResponse.attachment_filename': apiResponse.attachment_filename,
+        'typeof has_attachment': typeof apiResponse.has_attachment,
+        'typeof attachment_filename': typeof apiResponse.attachment_filename,
+        'mapped has_attachment': invoice.has_attachment,
+        'mapped attachment_filename': invoice.attachment_filename
+      });
       console.log("Mapped invoice object:", invoice);
       
       return invoice;
@@ -604,6 +623,92 @@ export const invoiceApi = {
     apiRequest(`/invoices/${id}/permanent`, { method: 'DELETE' }),
   emptyRecycleBin: () => 
     apiRequest('/invoices/recycle-bin/empty', { method: 'POST' }),
+  
+  // Attachment methods
+  uploadAttachment: async (invoiceId: number, file: File) => {
+    const token = localStorage.getItem('token');
+    const tenantId = localStorage.getItem('selected_tenant_id') || 
+      (() => {
+        try {
+          const user = JSON.parse(localStorage.getItem('user') || '{}');
+          return user.tenant_id?.toString();
+        } catch { return undefined; }
+      })();
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${token}`,
+    };
+    if (tenantId) {
+      headers['X-Tenant-ID'] = tenantId;
+    }
+    
+    const uploadUrl = `${API_BASE_URL}/invoices/${invoiceId}/upload-attachment`;
+    console.log("🔍 UPLOAD API DEBUG - API_BASE_URL:", API_BASE_URL);
+    console.log("🔍 UPLOAD API DEBUG - Calling URL:", uploadUrl);
+    console.log("🔍 UPLOAD API DEBUG - Full URL:", uploadUrl);
+    console.log("🔍 UPLOAD API DEBUG - Headers:", headers);
+    console.log("🔍 UPLOAD API DEBUG - FormData keys:", Array.from(formData.keys()));
+    
+    const response = await fetch(uploadUrl, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    
+    console.log("🔍 UPLOAD API DEBUG - Response status:", response.status);
+    console.log("🔍 UPLOAD API DEBUG - Response ok:", response.ok);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorMessage = 'Failed to upload attachment';
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.detail || errorMessage;
+      } catch {
+        errorMessage = errorText || errorMessage;
+      }
+      throw new Error(errorMessage);
+    }
+    
+    const responseText = await response.text();
+    try {
+      return JSON.parse(responseText);
+    } catch (e) {
+      console.error('Failed to parse upload response as JSON:', responseText);
+      throw new Error('Invalid response from server');
+    }
+  },
+  downloadAttachment: (invoiceId: number) => {
+    const token = localStorage.getItem('token');
+    const tenantId = localStorage.getItem('selected_tenant_id') || 
+      (() => {
+        try {
+          const user = JSON.parse(localStorage.getItem('user') || '{}');
+          return user.tenant_id?.toString();
+        } catch { return undefined; }
+      })();
+    
+    // Create a form to submit with proper headers
+    const form = document.createElement('form');
+    form.method = 'GET';
+    form.action = `${API_BASE_URL}/invoices/${invoiceId}/download-attachment`;
+    form.target = '_blank';
+    
+    // Add token as query parameter since we can't set headers on form submission
+    const url = new URL(form.action);
+    url.searchParams.set('token', token || '');
+    if (tenantId) {
+      url.searchParams.set('tenant_id', tenantId);
+    }
+    form.action = url.toString();
+    
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
+  },
   
   // Invoice history methods
   getInvoiceHistory: (invoiceId: number) => 

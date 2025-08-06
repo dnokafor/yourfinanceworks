@@ -327,7 +327,15 @@
     "view_details": "Ver Detalles",
     "no_update_history_available": "No hay historial de actualizaciones disponible",
     "show_discount_in_pdf": "Mostrar Descuento en PDF",
-    "if_checked_discount_details_will_be_visible_in_the_pdf_preview_and_download": "Si está marcado, los detalles del descuento serán visibles en la vista previa y descarga del PDF."
+    "if_checked_discount_details_will_be_visible_in_the_pdf_preview_and_download": "Si está marcado, los detalles del descuento serán visibles en la vista previa y descarga del PDF.",
+    "attachment": "Adjunto",
+    "supported_formats": "Formatos soportados",
+    "upload_attachment": "Subir Adjunto (Opcional)",
+    "attachment_uploaded": "Adjunto subido",
+    "download": "Descargar",
+    "save_invoice_first": "Por favor guarda la factura primero para descargar adjuntos",
+    "download_failed": "Descarga fallida. Por favor intenta de nuevo.",
+    "size": "Tamaño"
   },
   "clients": {
     "title": "Clientes",
@@ -672,6 +680,7 @@
     "loading_settings": "Cargando configuración...",
     "profile_updated_successfully": "Perfil actualizado exitosamente",
     "failed_to_load_settings": "Error al cargar la configuración",
+    "update": "Actualizar",
     "error_message": "Lo sentimos, encontramos un error. Por favor intenta de nuevo o verifica tu configuración de IA.",
     "no_ai_config_found": "No se encontró configuración de IA. Por favor configura un proveedor de IA en Configuración > Configuraciones de Proveedor de IA.",
     "suggestActions": "Sugerencias",

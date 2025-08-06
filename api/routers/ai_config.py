@@ -37,6 +37,7 @@ async def get_ai_configs(
 @router.post("/", response_model=AIConfigSchema)
 async def create_ai_config(
     config: AIConfigCreate,
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Create a new AI configuration"""
@@ -70,6 +71,7 @@ async def create_ai_config(
 async def update_ai_config(
     config_id: int,
     config: AIConfigUpdate,
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Update an AI configuration"""
@@ -111,6 +113,7 @@ async def update_ai_config(
 @router.delete("/{config_id}")
 async def delete_ai_config(
     config_id: int,
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Delete an AI configuration"""
@@ -139,6 +142,7 @@ async def delete_ai_config(
 @router.get("/test/{config_id}")
 async def test_ai_config(
     config_id: int,
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Test an AI configuration"""
@@ -224,6 +228,10 @@ async def test_ai_config(
             }
             
         except Exception as e:
+            print(f"AI Config Test Error: {str(e)}")
+            print(f"AI Config Test Error Type: {type(e)}")
+            import traceback
+            print(f"AI Config Test Traceback: {traceback.format_exc()}")
             return {
                 "success": False,
                 "message": f"Configuration test failed: {str(e)}"
@@ -239,6 +247,7 @@ async def test_ai_config(
 @router.post("/mark-tested/{config_id}")
 async def mark_config_as_tested(
     config_id: int,
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Manually mark an AI configuration as tested"""

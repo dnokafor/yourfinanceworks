@@ -328,7 +328,15 @@
     "view_details": "Voir les détails",
     "no_update_history_available": "Aucun historique de mise à jour disponible",
     "show_discount_in_pdf": "Afficher la remise dans le PDF",
-    "if_checked_discount_details_will_be_visible_in_the_pdf_preview_and_download": "Si coché, les détails de la remise seront visibles dans l'aperçu et le téléchargement du PDF."
+    "if_checked_discount_details_will_be_visible_in_the_pdf_preview_and_download": "Si coché, les détails de la remise seront visibles dans l'aperçu et le téléchargement du PDF.",
+    "attachment": "Pièce jointe",
+    "upload_attachment": "Télécharger une pièce jointe (optionnel)",
+    "supported_formats": "Formats supportés",
+    "attachment_uploaded": "Pièce jointe téléchargée",
+    "download": "Télécharger",
+    "save_invoice_first": "Veuillez d'abord enregistrer la facture pour télécharger les pièces jointes",
+    "download_failed": "Téléchargement échoué. Veuillez réessayer.",
+    "size": "Taille"
   },
   "clients": {
     "title": "Clients",
@@ -670,7 +678,8 @@
     "test_notification_sent_successfully": "Notification de test envoyée avec succès",
     "loading_settings": "Chargement des paramètres...",
     "profile_updated_successfully": "Profil mis à jour avec succès",
-    "failed_to_load_settings": "Échec du chargement des paramètres"
+    "failed_to_load_settings": "Échec du chargement des paramètres",
+    "update": "Mettre à jour"
   },
   "users": {
     "title": "Utilisateurs",

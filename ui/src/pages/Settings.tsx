@@ -649,14 +649,18 @@ const Settings = () => {
 
   const handleTestAIConfig = async (id: number) => {
     try {
+      console.log(`Testing AI config ${id}...`);
       const result = await aiConfigApi.testAIConfig(id);
+      console.log('Test AI config result:', result);
+      
       if (result.success) {
         toast.success(t('settings.ai_config_test_successful'));
         // Refresh AI configs to show updated tested status
         const configs = await aiConfigApi.getAIConfigs();
         setAiConfigs(configs);
       } else {
-        toast.error(t('settings.ai_config_test_failed', { message: result.message }));
+        console.log('Test failed with message:', result.message);
+        toast.error(result.message || t('settings.ai_config_test_failed'));
       }
     } catch (error) {
       console.error("Failed to test AI config:", error);

@@ -24,8 +24,15 @@ const EditInvoice = () => {
 
       setLoading(true);
       try {
+        console.log("🔍 EDIT INVOICE - About to fetch invoice", parseInt(id));
         const data = await invoiceApi.getInvoice(parseInt(id));
-        console.log("Loaded invoice data:", data);
+        console.log("🔍 EDIT INVOICE - Raw API response:", JSON.stringify(data, null, 2));
+        console.log("🔍 EDIT INVOICE - Loaded invoice data:", data);
+        console.log("🔍 EDIT INVOICE - Attachment data:", {
+          has_attachment: data.has_attachment,
+          attachment_filename: data.attachment_filename,
+          attachment_path: data.attachment_path
+        });
         
         // Check if items exists and has content
         if (!data.items || !Array.isArray(data.items) || data.items.length === 0) {
@@ -83,7 +90,20 @@ const EditInvoice = () => {
           <p className="text-muted-foreground">{t('editInvoice.updateInvoiceDetails')}</p>
         </div>
         
-        <InvoiceForm invoice={invoice} isEdit={true} />
+        <InvoiceForm 
+          invoice={invoice} 
+          isEdit={true} 
+          key={`${invoice.id}-${invoice.has_attachment}-${invoice.attachment_filename}`} 
+          onInvoiceUpdate={(updatedInvoice) => {
+            console.log("🔍 EDIT INVOICE - Invoice updated via callback:", updatedInvoice);
+            console.log("🔍 EDIT INVOICE - Updated attachment info:", {
+              has_attachment: updatedInvoice.has_attachment,
+              attachment_filename: updatedInvoice.attachment_filename,
+              attachment_path: updatedInvoice.attachment_path
+            });
+            setInvoice(updatedInvoice);
+          }}
+        />
       </div>
     </AppLayout>
   );

@@ -87,6 +87,8 @@ class Invoice(Base):
     subtotal = Column(Float, nullable=False)  # Amount before discount
     custom_fields = Column(JSON, nullable=True)
     show_discount_in_pdf = Column(Boolean, default=True, nullable=False)
+    attachment_path = Column(String, nullable=True)  # Path to uploaded attachment file
+    attachment_filename = Column(String, nullable=True)  # Original filename
     
     # Soft delete fields for recycle bin functionality
     is_deleted = Column(Boolean, default=False, nullable=False)

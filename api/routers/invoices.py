@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, and_, distinct
 from typing import List, Optional
@@ -6,8 +6,11 @@ import logging
 import traceback
 from datetime import datetime, date, timezone
 from decimal import Decimal
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from utils.pdf_generator import generate_invoice_pdf
+import os
+import shutil
+from pathlib import Path
 
 from models.database import get_db
 from models.models_per_tenant import Invoice, Client, User, InvoiceItem, DiscountRule
@@ -228,7 +231,9 @@ async def read_invoices(
                 "discount_value": float(invoice.discount_value) if invoice.discount_value else 0,
                 "subtotal": float(invoice.subtotal) if invoice.subtotal else float(invoice.amount),
                 "custom_fields": invoice.custom_fields if invoice.custom_fields is not None else {},
-                "show_discount_in_pdf": invoice.show_discount_in_pdf
+                "show_discount_in_pdf": invoice.show_discount_in_pdf,
+                "has_attachment": bool(invoice.attachment_filename) if invoice.attachment_filename is not None else False,
+                "attachment_filename": invoice.attachment_filename if invoice.attachment_filename is not None else None
             }
             result.append(invoice_dict)
 
@@ -509,6 +514,7 @@ async def read_invoice(
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
+    logger.info(f"🔍 READ_INVOICE ENDPOINT CALLED - invoice_id: {invoice_id}, user: {current_user.email}")
     try:
         # Get invoice with client information and payment status
         # No tenant_id filtering needed since we're in the tenant's database
@@ -575,11 +581,31 @@ async def read_invoice(
             "subtotal": float(invoice.subtotal) if invoice.subtotal else float(invoice.amount),
             "custom_fields": invoice.custom_fields if invoice.custom_fields is not None else {},
             "items": items_data,
-            "show_discount_in_pdf": invoice.show_discount_in_pdf
+            "show_discount_in_pdf": invoice.show_discount_in_pdf,
+            "has_attachment": bool(invoice.attachment_filename) if invoice.attachment_filename is not None else False,
+            "attachment_filename": invoice.attachment_filename if invoice.attachment_filename is not None else None
         }
+        
+
         logger.info(f"[DEBUG] Final invoice_dict response - custom_fields: {invoice_dict.get('custom_fields')}")
         logger.info(f"[DEBUG] Final invoice_dict response - custom_fields type: {type(invoice_dict.get('custom_fields'))}")
         logger.info(f"[DEBUG] Final invoice_dict response - all keys: {list(invoice_dict.keys())}")
+        logger.info(f"🔍 ATTACHMENT DEBUG - DB values: attachment_path={invoice.attachment_path}, attachment_filename={invoice.attachment_filename}")
+        logger.info(f"🔍 ATTACHMENT DEBUG - DB attachment_filename type: {type(invoice.attachment_filename)}")
+        logger.info(f"🔍 ATTACHMENT DEBUG - DB attachment_filename repr: {repr(invoice.attachment_filename)}")
+        logger.info(f"🔍 ATTACHMENT DEBUG - bool(invoice.attachment_filename): {bool(invoice.attachment_filename)}")
+        logger.info(f"🔍 ATTACHMENT DEBUG - Response values: has_attachment={invoice_dict['has_attachment']}, attachment_filename={invoice_dict['attachment_filename']}")
+        logger.info(f"🔍 ATTACHMENT DEBUG - Response attachment_filename type: {type(invoice_dict['attachment_filename'])}")
+        logger.info(f"🔍 ATTACHMENT DEBUG - Response attachment_filename repr: {repr(invoice_dict['attachment_filename'])}")
+        
+        # Check the actual invoice object attributes
+        logger.info(f"🔍 INVOICE OBJECT DEBUG - hasattr attachment_filename: {hasattr(invoice, 'attachment_filename')}")
+        logger.info(f"🔍 INVOICE OBJECT DEBUG - hasattr attachment_path: {hasattr(invoice, 'attachment_path')}")
+        if hasattr(invoice, 'attachment_filename'):
+            logger.info(f"🔍 INVOICE OBJECT DEBUG - invoice.attachment_filename: {invoice.attachment_filename}")
+        if hasattr(invoice, 'attachment_path'):
+            logger.info(f"🔍 INVOICE OBJECT DEBUG - invoice.attachment_path: {invoice.attachment_path}")
+        
         return invoice_dict
     except HTTPException:
         raise
@@ -832,7 +858,9 @@ async def update_invoice(
                 "discount_value": float(db_invoice.discount_value) if db_invoice.discount_value else 0,
                 "subtotal": float(db_invoice.subtotal) if db_invoice.subtotal else float(db_invoice.amount),
                 "items": items_data,
-                "show_discount_in_pdf": db_invoice.show_discount_in_pdf
+                "show_discount_in_pdf": db_invoice.show_discount_in_pdf,
+                "has_attachment": bool(db_invoice.attachment_filename),
+                "attachment_filename": db_invoice.attachment_filename
             }
             return invoice_dict
         else:
@@ -854,7 +882,9 @@ async def update_invoice(
                 "discount_value": float(db_invoice.discount_value) if db_invoice.discount_value else 0,
                 "subtotal": float(db_invoice.subtotal) if db_invoice.subtotal else float(db_invoice.amount),
                 "items": [], # No items if no changes
-                "show_discount_in_pdf": db_invoice.show_discount_in_pdf
+                "show_discount_in_pdf": db_invoice.show_discount_in_pdf,
+                "has_attachment": bool(db_invoice.attachment_filename),
+                "attachment_filename": db_invoice.attachment_filename
             }
     except HTTPException:
         raise
@@ -1122,6 +1152,30 @@ async def create_invoice_history_entry(
             detail="Failed to create invoice history entry"
         )
 
+@router.get("/ai-status")
+async def get_ai_status(
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Check if AI/LLM is configured and available for PDF processing"""
+    try:
+        from models.models_per_tenant import AIConfig as AIConfigModel
+        
+        # Check if there's at least one active and tested AI configuration
+        active_config = db.query(AIConfigModel).filter(
+            AIConfigModel.is_active == True,
+            AIConfigModel.tested == True
+        ).first()
+        
+        return {
+            "configured": active_config is not None
+        }
+    except Exception as e:
+        logger.error(f"Error checking AI status: {str(e)}")
+        return {
+            "configured": False
+        }
+
 @router.get("/{invoice_id}/pdf")
 async def download_invoice_pdf(
     invoice_id: int,
@@ -1178,4 +1232,151 @@ async def download_invoice_pdf(
             }
         )
     finally:
-        db.close() 
+        db.close()
+
+@router.post("/{invoice_id}/upload-attachment")
+async def upload_invoice_attachment(
+    invoice_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Upload an attachment for an invoice"""
+    logger.info(f"🔍 UPLOAD ENDPOINT CALLED - invoice_id: {invoice_id}, filename: {file.filename}, content_type: {file.content_type}")
+    try:
+        # Verify invoice exists
+        invoice = db.query(Invoice).filter(
+            Invoice.id == invoice_id,
+            Invoice.is_deleted == False
+        ).first()
+        
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        
+        # Validate file type
+        allowed_types = {
+            'application/pdf': '.pdf',
+            'application/msword': '.doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+            'image/jpeg': '.jpg',
+            'image/png': '.png'
+        }
+        
+        if file.content_type not in allowed_types:
+            raise HTTPException(
+                status_code=400,
+                detail="File type not allowed. Supported types: PDF, DOC, DOCX, JPG, PNG"
+            )
+        
+        # Create attachments directory
+        attachments_dir = Path("attachments/invoices")
+        attachments_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate filename with invoice ID and original filename
+        # Extract file extension from original filename or content type
+        original_name = file.filename or "attachment"
+        name_without_ext = os.path.splitext(original_name)[0]
+        file_extension = os.path.splitext(original_name)[1] or allowed_types[file.content_type]
+        
+        # Create filename in format: invoice_id_uploaded_filename.ext
+        filename = f"invoice_{invoice_id}_{name_without_ext}{file_extension}"
+        file_path = attachments_dir / filename
+        
+        # Remove old attachment if exists
+        if invoice.attachment_path and os.path.exists(invoice.attachment_path):
+            try:
+                os.remove(invoice.attachment_path)
+                logger.info(f"Removed old attachment: {invoice.attachment_path}")
+            except Exception as e:
+                logger.warning(f"Failed to remove old attachment: {e}")
+        
+        # Save file
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Update invoice with attachment info
+        invoice.attachment_path = str(file_path)
+        invoice.attachment_filename = file.filename
+        invoice.updated_at = datetime.now(timezone.utc)
+        
+        logger.info(f"🔍 BEFORE COMMIT - invoice {invoice_id}: path={file_path}, filename={file.filename}")
+        logger.info(f"🔍 BEFORE COMMIT - invoice object: attachment_path={invoice.attachment_path}, attachment_filename={invoice.attachment_filename}")
+        
+        try:
+            db.commit()
+            logger.info(f"✅ DATABASE COMMIT SUCCESSFUL for invoice {invoice_id}")
+        except Exception as commit_error:
+            logger.error(f"❌ DATABASE COMMIT FAILED for invoice {invoice_id}: {commit_error}")
+            db.rollback()
+            raise
+        
+        db.refresh(invoice)
+        
+        logger.info(f"✅ AFTER COMMIT - invoice {invoice_id}: attachment_path={invoice.attachment_path}, attachment_filename={invoice.attachment_filename}")
+        
+        # Verify the data was saved by querying again
+        verification_invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+        logger.info(f"🔍 VERIFICATION QUERY - invoice {invoice_id}: attachment_path={verification_invoice.attachment_path}, attachment_filename={verification_invoice.attachment_filename}")
+        logger.info(f"🔍 VERIFICATION QUERY - has_attachment would be: {bool(verification_invoice.attachment_filename)}")
+        
+        # Also check what the API response would return
+        api_has_attachment = bool(verification_invoice.attachment_filename)
+        logger.info(f"🔍 API RESPONSE CHECK - has_attachment: {api_has_attachment}, attachment_filename: '{verification_invoice.attachment_filename}'")
+        
+        logger.info(f"✅ UPLOAD ENDPOINT SUCCESS - Returning response for invoice {invoice_id}")
+        return {
+            "message": "Attachment uploaded successfully",
+            "filename": file.filename,
+            "size": os.path.getsize(file_path),
+            "attachment_path": str(file_path),
+            "attachment_filename": verification_invoice.attachment_filename,
+            "has_attachment": api_has_attachment
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading attachment: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to upload attachment: {str(e)}"
+        )
+
+@router.get("/{invoice_id}/download-attachment")
+async def download_invoice_attachment(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Download an invoice attachment"""
+    try:
+        # Verify invoice exists and has attachment
+        invoice = db.query(Invoice).filter(
+            Invoice.id == invoice_id,
+            Invoice.is_deleted == False
+        ).first()
+        
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        
+        if not invoice.attachment_path or not invoice.attachment_filename:
+            raise HTTPException(status_code=404, detail="No attachment found for this invoice")
+        
+        # Check if file exists
+        if not os.path.exists(invoice.attachment_path):
+            raise HTTPException(status_code=404, detail="Attachment file not found on disk")
+        
+        return FileResponse(
+            path=invoice.attachment_path,
+            filename=invoice.attachment_filename,
+            media_type='application/octet-stream'
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error downloading attachment: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to download attachment: {str(e)}"
+        ) 

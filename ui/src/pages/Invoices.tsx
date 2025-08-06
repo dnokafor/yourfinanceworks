@@ -3,10 +3,11 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Filter, FileText, Loader2, Pencil, Trash2, RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Search, Filter, FileText, Loader2, Pencil, Trash2, RotateCcw, ChevronDown, ChevronUp, Upload, Edit } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Link } from "react-router-dom";
 import { invoiceApi, Invoice, api } from "@/lib/api";
@@ -208,11 +209,34 @@ const Invoices = () => {
                 Recycle Bin
                 {showRecycleBin ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />}
               </Button>
-              <Link to="/invoices/new">
-                <Button className="sm:self-end whitespace-nowrap">
-                  <Plus className="mr-2 h-4 w-4" /> {t('invoices.new_invoice')}
+              <div className="flex">
+                <Button asChild className="rounded-r-none border-r-0">
+                  <Link to="/invoices/new">
+                    <Plus className="mr-2 h-4 w-4" /> {t('invoices.new_invoice')}
+                  </Link>
                 </Button>
-              </Link>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button className="rounded-l-none px-2">
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem asChild>
+                      <Link to="/invoices/new" className="flex items-center w-full">
+                        <Upload className="mr-2 h-4 w-4" />
+                        Import from PDF
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/invoices/new-manual" className="flex items-center w-full">
+                        <Edit className="mr-2 h-4 w-4" />
+                        Enter details manually
+                      </Link>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           )}
         </div>

@@ -266,6 +266,14 @@
     "remaining_balance": "Remaining Balance",
     "note": "Note",
     "invoice_type": "Invoice Type",
+    "attachment": "Attachment",
+    "supported_formats": "Supported formats",
+    "upload_attachment": "Upload Attachment (Optional)",
+    "attachment_uploaded": "Attachment uploaded",
+    "download": "Download",
+    "save_invoice_first": "Please save the invoice first to download attachments",
+    "download_failed": "Download failed. Please try again.",
+    "size": "Size",
     "one_time": "One-time",
     "select_frequency": "Select frequency",
     "daily": "Daily",
@@ -328,7 +336,19 @@
     "view_details": "View Details",
     "no_update_history_available": "No update history available",
     "show_discount_in_pdf": "Show Discount in PDF",
-    "if_checked_discount_details_will_be_visible_in_the_pdf_preview_and_download": "If checked, discount details will be visible in the PDF preview and download."
+    "if_checked_discount_details_will_be_visible_in_the_pdf_preview_and_download": "If checked, discount details will be visible in the PDF preview and download.",
+    "create_new_invoice": "Create New Invoice",
+    "choose_creation_method": "Choose how you'd like to create your invoice",
+    "import_from_pdf": "Import from PDF",
+    "upload_pdf_to_extract_invoice_details": "Upload a PDF invoice to automatically extract client and item details",
+    "select_pdf_file": "Select PDF File",
+    "selected_file": "Selected file",
+    "llm_not_configured_will_proceed_manually": "LLM not configured. Will proceed with manual invoice creation.",
+    "processing_pdf": "Processing PDF...",
+    "create_manually": "Create Manually",
+    "enter_invoice_details_manually": "Enter all invoice details manually with optional file attachment",
+    "optional_attachment": "Optional Attachment",
+    "attachment_selected": "Attachment selected"
   },
   "clients": {
     "title": "Clients",
@@ -668,7 +688,8 @@
     "test_notification_sent_successfully": "Test notification sent successfully",
     "loading_settings": "Loading settings...",
     "profile_updated_successfully": "Profile updated successfully",
-    "failed_to_load_settings": "Failed to load settings"
+    "failed_to_load_settings": "Failed to load settings",
+    "update": "Update"
   },
   "users": {
     "title": "Users",

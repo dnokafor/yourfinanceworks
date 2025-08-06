@@ -19,7 +19,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { isAdmin } from "@/utils/auth";
-import { clientApi, Client, invoiceApi, paymentApi, Invoice, InvoiceItem, InvoiceStatus, settingsApi, Settings, discountRulesApi, DiscountCalculation, DiscountRule, tenantApi } from "@/lib/api";
+import { clientApi, Client, invoiceApi, paymentApi, Invoice, InvoiceItem, InvoiceStatus, settingsApi, Settings, discountRulesApi, DiscountCalculation, DiscountRule, tenantApi, API_BASE_URL } from "@/lib/api";
 import { Label } from "@/components/ui/label";
 import { InvoicePDF } from "./InvoicePDF";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -87,9 +87,10 @@ const defaultItem = {
 interface InvoiceFormProps {
   invoice?: Invoice;
   isEdit?: boolean;
+  onInvoiceUpdate?: (updatedInvoice: Invoice) => void;
 }
 
-export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
+export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate }: InvoiceFormProps) {
   const navigate = useNavigate();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -126,6 +127,12 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
   const [currenciesLoaded, setCurrenciesLoaded] = useState(false);
   const [selectedHistoryEntry, setSelectedHistoryEntry] = useState<any>(null);
   const [showHistoryDetailsModal, setShowHistoryDetailsModal] = useState(false);
+  
+  // Attachment states
+  const [invoiceAttachment, setInvoiceAttachment] = useState<File | null>(null);
+  const [attachmentInfo, setAttachmentInfo] = useState<{has_attachment: boolean, filename?: string} | null>(null);
+  
+  
   // Custom fields state for UI
   const [customFields, setCustomFields] = useState<{ key: string; value: string }[]>(() => {
     if (invoice?.custom_fields && typeof invoice.custom_fields === 'object') {
@@ -155,6 +162,24 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
     } else {
       setCustomFields([]);
       console.log("[DEBUG] Reset customFields to empty array");
+    }
+  }, [invoice]);
+
+  // Initialize attachment info when invoice changes
+  useEffect(() => {
+    if (invoice) {
+      console.log("🔍 INITIALIZING attachmentInfo from invoice:", {
+        has_attachment: invoice.has_attachment,
+        attachment_filename: invoice.attachment_filename,
+        attachment_path: invoice.attachment_path
+      });
+      setAttachmentInfo({
+        has_attachment: invoice.has_attachment || !!invoice.attachment_filename,
+        filename: invoice.attachment_filename
+      });
+    } else {
+      // Reset attachment info when no invoice
+      setAttachmentInfo(null);
     }
   }, [invoice]);
 
@@ -330,18 +355,11 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
   }, [navigate]);
 
   // Fetch update history when invoice is available
-      useEffect(() => {
-      if (invoice && isEdit) {
-        fetchUpdateHistory(invoice.id);
-      }
-    }, [invoice, isEdit, fetchUpdateHistory]);
-
   useEffect(() => {
-    if (invoice) {
-      console.log("[DEBUG] Invoice object received by InvoiceForm:", invoice);
-      console.log("[DEBUG] Invoice currency:", invoice.currency);
+    if (invoice && isEdit) {
+      fetchUpdateHistory(invoice.id);
     }
-  }, [invoice]);
+  }, [invoice, isEdit, fetchUpdateHistory]);
 
   // Ensure correct currency when dialog opens
   useEffect(() => {
@@ -467,6 +485,11 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
   useEffect(() => {
     if (invoice && isEdit) {
       console.log("[DEBUG] Form initialized with invoice data:", invoice);
+      console.log("[DEBUG] Attachment info:", {
+        has_attachment: invoice.has_attachment,
+        attachment_filename: invoice.attachment_filename,
+        attachment_path: invoice.attachment_path
+      });
       console.log("[DEBUG] Form currency default:", form.getValues("currency"));
       console.log("Form initialized with invoice data:");
       console.log("- Client ID:", invoice.client_id);
@@ -896,7 +919,8 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
   };
 
   const sendInvoiceEmail = async () => {
-    if (!invoice?.id) {
+    const invoiceId = invoice?.id || previewInvoice?.id;
+    if (!invoiceId) {
       toast.error("Please save the invoice first before sending");
       return;
     }
@@ -906,7 +930,7 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
       const result = await apiRequest<any>('/email/send-invoice', {
         method: 'POST',
         body: JSON.stringify({
-          invoice_id: invoice.id,
+          invoice_id: invoiceId,
           include_pdf: true,
           show_discount_in_pdf: form.getValues("showDiscountInPdf"), // Pass the new field value
         }),
@@ -1187,6 +1211,18 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
             const currentDiscountType = form.getValues("discountType") || 'percentage';
             
             const updatedInvoice = await invoiceApi.getInvoice(invoice.id);
+            
+            // Update attachmentInfo from refreshed invoice data
+            if (updatedInvoice.has_attachment || updatedInvoice.attachment_filename) {
+              setAttachmentInfo({
+                has_attachment: updatedInvoice.has_attachment || true,
+                filename: updatedInvoice.attachment_filename
+              });
+              console.log("🔍 Updated attachmentInfo from refreshed invoice:", {
+                has_attachment: updatedInvoice.has_attachment || true,
+                filename: updatedInvoice.attachment_filename
+              });
+            }
             console.log("Refreshed invoice data after update:", updatedInvoice);
             console.log("Discount data from updated invoice:", {
               discount_type: updatedInvoice.discount_type,
@@ -1270,6 +1306,42 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
             
             await fetchUpdateHistory(updatedInvoice.id);
             
+            // Update preview invoice with the updated data including attachment info
+            setPreviewInvoice(prev => ({
+              ...prev,
+              ...updatedInvoice,
+              id: updatedInvoice.id,
+              has_attachment: updatedInvoice.has_attachment,
+              attachment_filename: updatedInvoice.attachment_filename
+            }));
+            
+            // Notify parent component about the updated invoice
+            if (onInvoiceUpdate) {
+              onInvoiceUpdate(updatedInvoice);
+              console.log("🔍 CALLED onInvoiceUpdate with regular update:", updatedInvoice);
+            }
+            
+            // Handle attachment upload BEFORE refreshing invoice data
+            if (invoiceAttachment && invoice.id) {
+              console.log("🔍 HANDLING ATTACHMENT UPLOAD after invoice update");
+              try {
+                const uploadResult = await invoiceApi.uploadAttachment(invoice.id, invoiceAttachment);
+                console.log("✅ UPLOAD COMPLETED - Upload result:", uploadResult);
+                
+                // Update attachmentInfo immediately
+                setAttachmentInfo({
+                  has_attachment: true,
+                  filename: uploadResult.filename
+                });
+                
+                setInvoiceAttachment(null);
+                toast.success("Attachment uploaded successfully!");
+                
+              } catch (attachmentError) {
+                console.error("❌ ATTACHMENT UPLOAD FAILED:", attachmentError);
+                toast.error("Failed to upload attachment");
+              }
+            }
 
           } catch (refreshError) {
             console.error("Failed to refresh invoice data after update:", refreshError);
@@ -1336,8 +1408,44 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
         console.log("Invoice data being sent:", invoiceData);
         
         // Create new invoice
-        await invoiceApi.createInvoice(invoiceData);
-        toast.success("Invoice created successfully!");
+        const newInvoice = await invoiceApi.createInvoice(invoiceData);
+        
+        // Handle attachment upload if there's an attachment
+        if (invoiceAttachment && newInvoice.id) {
+          console.log("🔍 HANDLING ATTACHMENT UPLOAD for new invoice");
+          try {
+            console.log("✅ STARTING ATTACHMENT UPLOAD for new invoice:", newInvoice.id);
+            const uploadResult = await invoiceApi.uploadAttachment(newInvoice.id, invoiceAttachment);
+            console.log("✅ UPLOAD API CALL COMPLETED - Upload result:", uploadResult);
+            
+            // Update attachment info and preview invoice
+            setAttachmentInfo({
+              has_attachment: true,
+              filename: uploadResult.filename
+            });
+            setPreviewInvoice(prev => ({
+              ...prev,
+              id: newInvoice.id,
+              has_attachment: true,
+              attachment_filename: uploadResult.filename
+            }));
+            
+            console.log("🔍 attachmentInfo updated for new invoice:", {
+              has_attachment: true,
+              filename: uploadResult.filename
+            });
+            
+            setInvoiceAttachment(null);
+            toast.success("Invoice created with attachment successfully!");
+            
+          } catch (attachmentError) {
+            console.error("❌ ATTACHMENT UPLOAD FAILED for new invoice:", attachmentError);
+            toast.success("Invoice created successfully, but attachment upload failed");
+          }
+        } else {
+          toast.success("Invoice created successfully!");
+        }
+        
         navigate("/invoices"); // Only navigate back for new invoices
       }
     } catch (err) {
@@ -2279,6 +2387,211 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
                     )}
                   </div>
 
+                  {/* Attachment Section */}
+                  {console.log("🔍 RENDERING ATTACHMENT SECTION")}
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="attachment" className="text-base font-medium">
+                        {t('invoices.attachment')}
+                      </Label>
+                      <div className="mt-2">
+                        <Input
+                          id="attachment"
+                          type="file"
+                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            console.log("🔍 FILE INPUT CHANGE EVENT:", {
+                              files: e.target.files,
+                              fileCount: e.target.files?.length,
+                              selectedFile: file
+                            });
+                            if (file) {
+                              console.log("🔍 FILE SELECTED:", {
+                                name: file.name,
+                                size: file.size,
+                                type: file.type
+                              });
+                              setInvoiceAttachment(file);
+                              console.log("🔍 invoiceAttachment state set to:", file);
+                            } else {
+                              console.log("🔍 NO FILE SELECTED");
+                              setInvoiceAttachment(null);
+                            }
+                          }}
+                          className="cursor-pointer"
+                        />
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {t('invoices.supported_formats')}: PDF, DOC, DOCX, JPG, PNG
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Show existing attachment if available */}
+                    {console.log("🔍 ATTACHMENT CHECK:", { 
+                      isEdit, 
+                      attachmentInfo, 
+                      invoice_has_attachment: invoice?.has_attachment, 
+                      invoice_filename: invoice?.attachment_filename,
+                      preview_has_attachment: previewInvoice?.has_attachment,
+                      preview_filename: previewInvoice?.attachment_filename
+                    })}
+                    {isEdit && (
+                      attachmentInfo?.has_attachment || 
+                      attachmentInfo?.filename || 
+                      invoice?.has_attachment || 
+                      invoice?.attachment_filename || 
+                      previewInvoice?.has_attachment || 
+                      previewInvoice?.attachment_filename
+                    ) && (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3 p-4 bg-white rounded-lg border border-green-200 shadow-sm">
+                          <FileText className="h-5 w-5 text-green-600" />
+                          <div className="flex-1">
+                            <div className="text-sm text-gray-700 font-medium mb-1">
+                              {(() => {
+                                const filename = attachmentInfo?.filename || invoice?.attachment_filename || previewInvoice?.attachment_filename;
+                                console.log("🔍 DISPLAYING FILENAME:", {
+                                  attachmentInfo_filename: attachmentInfo?.filename,
+                                  invoice_filename: invoice?.attachment_filename,
+                                  preview_filename: previewInvoice?.attachment_filename,
+                                  final_filename: filename
+                                });
+                                return filename;
+                              })()} 
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {t('invoices.attachment_uploaded')}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="default"
+                              onClick={() => {
+                                const token = localStorage.getItem('token');
+                                const tenantId = localStorage.getItem('selected_tenant_id') || 
+                                  (() => {
+                                    try {
+                                      const user = JSON.parse(localStorage.getItem('user') || '{}');
+                                      return user.tenant_id?.toString();
+                                    } catch { return undefined; }
+                                  })();
+                                
+                                fetch(`${API_BASE_URL}/invoices/${invoice.id}/download-attachment`, {
+                                  method: 'GET',
+                                  headers: {
+                                    'Authorization': `Bearer ${token}`,
+                                    'X-Tenant-ID': tenantId || '1'
+                                  }
+                                })
+                                .then(response => {
+                                  if (!response.ok) {
+                                    throw new Error(`Download failed: ${response.status}`);
+                                  }
+                                  return response.blob();
+                                })
+                                .then(blob => {
+                                  const url = window.URL.createObjectURL(blob);
+                                  const a = document.createElement('a');
+                                  a.href = url;
+                                  const downloadFilename = attachmentInfo?.filename || invoice?.attachment_filename || previewInvoice?.attachment_filename || 'attachment';
+                                  console.log("🔍 DOWNLOAD FILENAME:", downloadFilename);
+                                  a.download = downloadFilename;
+                                  document.body.appendChild(a);
+                                  a.click();
+                                  window.URL.revokeObjectURL(url);
+                                  document.body.removeChild(a);
+                                })
+                                .catch(error => {
+                                  console.error('Download failed:', error);
+                                  toast.error(t('invoices.download_failed'));
+                                });
+                              }}
+                              className="bg-blue-600 hover:bg-blue-700 text-white"
+                            >
+                              {t('invoices.download')}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Show uploaded attachment for new invoices */}
+                    {invoiceAttachment && (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3 p-4 bg-white rounded-lg border border-blue-200 shadow-sm">
+                          <FileText className="h-5 w-5 text-blue-600" />
+                          <div className="flex-1">
+                            <div className="text-sm text-gray-700 font-medium mb-1">
+                              {invoiceAttachment.name}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {t('invoices.size')}: {(invoiceAttachment.size / 1024 / 1024).toFixed(2)} MB
+                              {(invoice?.id || previewInvoice?.id) && " • Click download to open the file"}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="default"
+                              onClick={() => {
+                                const invoiceId = invoice?.id || previewInvoice?.id;
+                                if (!invoiceId) {
+                                  toast.error(t('invoices.save_invoice_first'));
+                                  return;
+                                }
+                                
+                                const token = localStorage.getItem('token');
+                                const tenantId = localStorage.getItem('selected_tenant_id') || 
+                                  (() => {
+                                    try {
+                                      const user = JSON.parse(localStorage.getItem('user') || '{}');
+                                      return user.tenant_id?.toString();
+                                    } catch { return undefined; }
+                                  })();
+                                
+                                fetch(`${API_BASE_URL}/invoices/${invoiceId}/download-attachment`, {
+                                  method: 'GET',
+                                  headers: {
+                                    'Authorization': `Bearer ${token}`,
+                                    'X-Tenant-ID': tenantId || '1'
+                                  }
+                                })
+                                .then(response => {
+                                  if (!response.ok) {
+                                    throw new Error(`Download failed: ${response.status}`);
+                                  }
+                                  return response.blob();
+                                })
+                                .then(blob => {
+                                  const url = window.URL.createObjectURL(blob);
+                                  const a = document.createElement('a');
+                                  a.href = url;
+                                  const filename = invoice?.attachment_filename || previewInvoice?.attachment_filename || 'attachment.pdf';
+                                  a.download = filename;
+                                  document.body.appendChild(a);
+                                  a.click();
+                                  window.URL.revokeObjectURL(url);
+                                  document.body.removeChild(a);
+                                })
+                                .catch(error => {
+                                  console.error('Download failed:', error);
+                                  toast.error(t('invoices.download_failed'));
+                                });
+                              }}
+                              className="bg-blue-600 hover:bg-blue-700 text-white"
+                            >
+                              {t('invoices.download')}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex justify-end gap-4">
                     <Button
                       type="submit"
@@ -2325,7 +2638,7 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
                   </React.Suspense>
                 </div>
                 <div className="p-2 border-t flex justify-between items-center">
-                  {previewInvoice && settings && (
+                  {previewInvoice && settings ? (
                     <PDFDownloadLink 
                       document={
                         <InvoicePDF 
@@ -2340,25 +2653,25 @@ export function InvoiceForm({ invoice, isEdit = false }: InvoiceFormProps) {
                         loading ? t('invoices.preparing_pdf') : <span className="text-blue-600 hover:underline cursor-pointer">{t('invoices.download_pdf')}</span>
                       }
                     </PDFDownloadLink>
+                  ) : (
+                    <span className="text-gray-500 text-sm">{t('invoices.save_invoice_first')}</span>
                   )}
                   
-                  {invoice?.id && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={sendInvoiceEmail}
-                      disabled={sendingEmail}
-                      className="flex items-center gap-2"
-                    >
-                      {sendingEmail ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Mail className="h-4 w-4" />
-                      )}
-                      {sendingEmail ? t('invoices.sending') : t('invoices.send_email')}
-                    </Button>
-                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={sendInvoiceEmail}
+                    disabled={sendingEmail || (!(invoice?.id || previewInvoice?.id))}
+                    className="flex items-center gap-2 bg-green-100 border-green-300"
+                  >
+                    {sendingEmail ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Mail className="h-4 w-4" />
+                    )}
+                    {sendingEmail ? t('invoices.sending') : t('invoices.send_email')}
+                  </Button>
                 </div>
               </div>
             </div>
