@@ -11,9 +11,10 @@ import { CalendarIcon, Upload } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { expenseApi, Expense, linkApi } from '@/lib/api';
+import { EXPENSE_CATEGORY_OPTIONS } from '@/constants/expenses';
 
 export default function ExpensesNew() {
-  const categoryOptions = ['General', 'Travel', 'Meals', 'Software', 'Supplies'];
+  const categoryOptions = EXPENSE_CATEGORY_OPTIONS;
   const [form, setForm] = useState<Partial<Expense>>({
     amount: 0,
     currency: 'USD',
@@ -34,8 +35,12 @@ export default function ExpensesNew() {
   const onSubmit = async () => {
     try {
       setSaving(true);
-      if (!form.amount || !form.category) {
-        toast.error('Amount and category are required');
+      if ((!form.amount || Number(form.amount) === 0) && files.length === 0) {
+        toast.error('Amount is required unless importing from files');
+        return;
+      }
+      if (!form.category) {
+        toast.error('Category is required');
         return;
       }
       const payload = {
@@ -53,9 +58,9 @@ export default function ExpensesNew() {
         notes: form.notes,
         invoice_id: form.invoice_id ?? null,
       } as any;
-      const created = await expenseApi.createExpense(payload);
-      // Upload up to 5 files
-      for (let i = 0; i < Math.min(files.length, 5); i++) {
+      const created = await expenseApi.createExpense({ ...payload, imported_from_attachment: files.length > 0, analysis_status: files.length > 0 ? 'queued' : 'not_started' } as any);
+      // Upload up to 10 files
+      for (let i = 0; i < Math.min(files.length, 10); i++) {
         try { await expenseApi.uploadReceipt(created.id, files[i]); } catch (e) { console.error(e); }
       }
       toast.success('Expense created');
@@ -154,13 +159,13 @@ export default function ExpensesNew() {
               <Input value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} />
             </div>
             <div className="sm:col-span-2">
-              <label className="text-sm">Attachments (max 5)</label>
+             <label className="text-sm">Attachments (max 10)</label>
               <div className="flex items-center gap-3">
                 <label className="inline-flex items-center gap-2 cursor-pointer">
                   <Upload className="w-4 h-4" />
-                  <input multiple type="file" accept="application/pdf,image/jpeg,image/png" className="hidden" onChange={(e) => {
+                   <input multiple type="file" accept="application/pdf,image/jpeg,image/png" className="hidden" onChange={(e) => {
                     const selected = Array.from(e.target.files || []);
-                    const combined = [...files, ...selected].slice(0, 5);
+                     const combined = [...files, ...selected].slice(0, 10);
                     setFiles(combined);
                   }} />
                   Upload

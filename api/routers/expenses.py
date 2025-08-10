@@ -18,6 +18,7 @@ from schemas.expense import ExpenseCreate, ExpenseUpdate, Expense as ExpenseSche
 from services.currency_service import CurrencyService
 from utils.rbac import require_non_viewer
 from utils.audit import log_audit_event
+from services.ocr_service import queue_or_process_attachment, cancel_ocr_tasks_for_expense
 
 
 logging.basicConfig(level=logging.INFO)
@@ -122,6 +123,11 @@ async def create_expense(
             notes=expense.notes,
             user_id=current_user.id,
             invoice_id=expense.invoice_id,
+            imported_from_attachment=bool(getattr(expense, "imported_from_attachment", False)),
+            analysis_status=getattr(expense, "analysis_status", "not_started"),
+            analysis_result=getattr(expense, "analysis_result", None),
+            analysis_error=getattr(expense, "analysis_error", None),
+            manual_override=bool(getattr(expense, "manual_override", False)),
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
         )
@@ -162,6 +168,7 @@ async def update_expense(
         db_expense = db.query(Expense).filter(Expense.id == expense_id).first()
         if not db_expense:
             raise HTTPException(status_code=404, detail="Expense not found")
+        previous_status = getattr(db_expense, "analysis_status", None)
 
         currency_service = CurrencyService(db)
         update_data = expense.dict(exclude_unset=True)
@@ -200,6 +207,15 @@ async def update_expense(
 
         for k, v in update_data.items():
             setattr(db_expense, k, v if k != "amount" else float(v))
+        # Any manual update marks manual_override true and halts analysis
+        db_expense.manual_override = True
+        # If analysis was queued/processing, mark as cancelled and try to cancel downstream
+        if previous_status in ("queued", "processing"):
+            db_expense.analysis_status = "cancelled"
+            try:
+                cancel_ocr_tasks_for_expense(expense_id)
+            except Exception:
+                pass
 
         db_expense.updated_at = datetime.now(timezone.utc)
         db.commit()
@@ -328,10 +344,10 @@ async def upload_receipt(
         filename = f"expense_{expense_id}_{name_without_ext}_{unique_suffix}{file_extension}"
         file_path = receipts_dir / filename
 
-        # Enforce maximum of 5 attachments
+        # Enforce maximum of 10 attachments
         existing_count = db.query(ExpenseAttachment).filter(ExpenseAttachment.expense_id == expense_id).count()
-        if existing_count >= 5:
-            raise HTTPException(status_code=400, detail="Maximum of 5 attachments per expense")
+        if existing_count >= 10:
+            raise HTTPException(status_code=400, detail="Maximum of 10 attachments per expense")
 
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
@@ -349,8 +365,28 @@ async def upload_receipt(
         db.add(attachment)
         expense.updated_at = datetime.now(timezone.utc)
 
-        db.commit()
-        db.refresh(expense)
+        # Mark expense as imported and queue OCR if not manually overridden
+        try:
+            expense.imported_from_attachment = True
+            if not expense.manual_override:
+                expense.analysis_status = "queued"
+            expense.updated_at = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(expense)
+        except Exception:
+            db.rollback()
+
+        # TODO: Publish Kafka message for OCR processing
+        try:
+            from models.database import get_tenant_context
+            tenant_id = get_tenant_context()
+        except Exception:
+            tenant_id = None
+        try:
+            db.refresh(attachment)
+        except Exception:
+            pass
+        queue_or_process_attachment(db, tenant_id, expense_id, getattr(attachment, 'id', 0), str(file_path))
 
         return {
             "message": "Attachment uploaded successfully",

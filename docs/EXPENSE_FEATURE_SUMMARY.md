@@ -16,7 +16,8 @@ End-to-end expense management integrated with invoices:
 - API (`api/routers/expenses.py`):
   - CRUD with RBAC and audit logging.
   - Filters: `category`, `invoice_id`, `unlinked_only`.
-  - Attachments: upload (<=5; PDF/JPG/PNG; 10MB max; UUID filenames), list, delete, download.
+  - Attachments: upload (<=10; PDF/JPG/PNG; 10MB max; UUID filenames), list, delete, download.
+  - OCR/LLM analysis: on upload, mark `imported_from_attachment` and set `analysis_status` to `queued` unless manually overridden.
   - Delete cleans legacy `receipt_path` and all attachment files.
   - Linking validation: ensures invoice exists on create/update; `invoice_id: null` unlinks.
   - Uvicorn logs: linking/unlinking intent and persisted values.
@@ -29,9 +30,9 @@ End-to-end expense management integrated with invoices:
   - `Expense`, `ExpenseAttachmentMeta`, `expenseApi` for CRUD/filters/attachments; `linkApi.getInvoicesBasic()` for linking selectors.
 - Navigation: `Expenses` added to sidebar.
 - Pages:
-  - `ui/src/pages/Expenses.tsx`: list, category filter, delete confirm, upload + preview modal, `attachments_count`, Invoice column link.
-  - `ui/src/pages/ExpensesNew.tsx`: full-page create with currency, category, date picker, multi-upload, "Link to Invoice".
-  - `ui/src/pages/ExpensesEdit.tsx`: full-page edit; same controls; in-modal preview; deferred attachment deletion until save.
+  - `ui/src/pages/Expenses.tsx`: list, category filter, delete confirm, upload + preview modal, `attachments_count`, Invoice column link, Analysis status column.
+  - `ui/src/pages/ExpensesNew.tsx`: full-page create with currency, category, date picker, multi-upload (max 10), "Link to Invoice". Allows amount 0 if importing files.
+  - `ui/src/pages/ExpensesEdit.tsx`: full-page edit; same controls; in-modal preview; deferred attachment deletion until save; allows amount 0 if adding files.
 - Invoice integration:
   - `ui/src/components/invoices/InvoiceForm.tsx`: on create, optional "Link an Expense" (unlinked-only + client-side guard). After creation, updates selected expense with new invoice id.
   - `ui/src/pages/EditInvoice.tsx`: "Linked Expenses" section to link/unlink. Sends `invoice_id: null` to unlink; optimistic UI updates then refresh.
@@ -45,7 +46,7 @@ End-to-end expense management integrated with invoices:
 ## Usage Notes
 - Link on invoice creation via the "Link an Expense" dropdown.
 - Manage links on the invoice edit page under "Linked Expenses".
-- Up to 5 attachments per expense; images/PDF preview inline; others downloadable.
+- Up to 10 attachments per expense; images/PDF preview inline; others downloadable.
 
 ## Constraints
 - One expense → one invoice; one invoice → many expenses.

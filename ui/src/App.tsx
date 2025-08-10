@@ -19,6 +19,7 @@ import NewInvoiceManual from "./pages/NewInvoiceManual";
 import EditInvoice from "./pages/EditInvoice";
 import Payments from "./pages/Payments";
 import ExpensesNew from "./pages/ExpensesNew";
+import ExpensesImport from "./pages/ExpensesImport";
 import ExpensesEdit from "./pages/ExpensesEdit";
 import Expenses from "./pages/Expenses";
 import Settings from "./pages/Settings";
@@ -54,6 +55,7 @@ const App = () => (
           <Route path="/invoices/edit/:id" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><EditInvoice /></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
           <Route path="/expenses/new" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><ExpensesNew /></RoleProtectedRoute></ProtectedRoute>} />
+          <Route path="/expenses/import" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><ExpensesImport /></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/expenses/edit/:id" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><ExpensesEdit /></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/expenses" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><Expenses /></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin']}><TenantProtectedRoute requirePrimaryTenant={true}><Settings /></TenantProtectedRoute></RoleProtectedRoute></ProtectedRoute>} />

@@ -1653,7 +1653,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
               <div className="w-full lg:w-80 order-2 lg:order-1">
                 <div className="mb-4">
                   <h3 className="text-lg font-semibold mb-3">{t('invoices.update_history')}</h3>
-                  <div className="space-y-3 max-h-96 overflow-y-auto bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border">
+                  <div className="space-y-3 max-h-96 overflow-y-auto bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
                     {loadingHistory ? (
                       <div className="flex items-center justify-center py-8">
                         <Loader2 className="h-6 w-6 animate-spin mr-2" />
@@ -1661,7 +1661,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                       </div>
                     ) : updateHistory.length > 0 ? (
                       updateHistory.map((entry) => (
-                        <div key={entry.id} className="bg-white p-3 rounded border border-gray-200 shadow-sm">
+                        <div key={entry.id} className="bg-white dark:bg-gray-900 p-3 rounded border border-gray-200 dark:border-gray-700 shadow-sm">
                                                      <div className="flex items-start justify-between mb-2">
                              <div className="flex items-center gap-2">
                                {entry.type === 'payment' && (
@@ -1694,7 +1694,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                               <div className="text-muted-foreground">{entry.details}</div>
                             )}
                             {entry.notes && (
-                              <div className="text-xs text-gray-600 bg-gray-100 p-2 rounded">
+                              <div className="text-xs text-muted-foreground bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-2 rounded">
                                 {entry.notes}
                               </div>
                             )}
@@ -1705,7 +1705,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => handleOpenHistoryDetails(entry)}
-                                  className="h-6 px-2 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                                  className="h-6 px-2 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/30"
                                 >
                                   {t('invoices.view_details')}
                                 </Button>
@@ -2440,22 +2440,24 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
 
                   <div className="space-y-4">
                     <div className="font-semibold">{t('invoices.custom_fields')}</div>
-                    {form.watch("customFields").map((field, idx) => (
+                    {(form.watch("customFields") || []).map((field, idx) => (
                       <div key={idx} className="flex gap-2 items-center">
                         <Input
                           placeholder={t('invoices.field_name')}
-                          value={field.key}
+                          value={field?.key ?? ''}
                           onChange={e => {
-                            const updated = form.getValues("customFields").map((f, i) => i === idx ? { key: e.target.value, value: f.value ?? '' } : { key: f.key ?? '', value: f.value ?? '' });
+                            const base = form.getValues("customFields") || [];
+                            const updated = base.map((f, i) => i === idx ? { key: e.target.value, value: f?.value ?? '' } : { key: f?.key ?? '', value: f?.value ?? '' });
                             setCustomFields(updated);
                           }}
                           className="w-1/3"
                         />
                         <Input
                           placeholder={t('invoices.field_value')}
-                          value={field.value}
+                          value={field?.value ?? ''}
                           onChange={e => {
-                            const updated = form.getValues("customFields").map((f, i) => i === idx ? { key: f.key ?? '', value: e.target.value } : { key: f.key ?? '', value: f.value ?? '' });
+                            const base = form.getValues("customFields") || [];
+                            const updated = base.map((f, i) => i === idx ? { key: f?.key ?? '', value: e.target.value } : { key: f?.key ?? '', value: f?.value ?? '' });
                             setCustomFields(updated);
                           }}
                           className="w-1/2"
@@ -2464,10 +2466,11 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                           type="button"
                           variant="ghost"
                           onClick={() => {
+                            const base = form.getValues("customFields") || [];
                             setCustomFields(
-                              form.getValues("customFields")
+                              base
                                 .filter((_, i) => i !== idx)
-                                .map(f => ({ key: typeof f.key === 'string' ? f.key : '', value: typeof f.value === 'string' ? f.value : '' }))
+                                .map(f => ({ key: typeof f?.key === 'string' ? f.key : '', value: typeof f?.value === 'string' ? f.value : '' }))
                             );
                           }}
                         >
@@ -2479,7 +2482,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                       type="button"
                       variant="outline"
                       onClick={() => setCustomFields([
-                        ...form.getValues("customFields").map(f => ({ key: typeof f.key === 'string' ? f.key : '', value: typeof f.value === 'string' ? f.value : '' })),
+                        ...((form.getValues("customFields") || []).map(f => ({ key: typeof f?.key === 'string' ? f.key : '', value: typeof f?.value === 'string' ? f.value : '' }))),
                         { key: '', value: '' }
                       ])}
                       className="mt-2"

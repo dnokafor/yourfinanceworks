@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { useTranslation } from 'react-i18next';
+import { CurrencyDisplay } from '@/components/ui/currency-display';
 
 const EditInvoice = () => {
   const { t } = useTranslation();
@@ -118,14 +119,15 @@ const EditInvoice = () => {
           }}
         />
 
-        <Card className="slide-in">
-          <CardHeader>
-            <CardTitle>Linked Expenses</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-3 mb-4">
+        <div className="px-6">
+          <Card className="slide-in">
+            <CardHeader>
+              <CardTitle>Linked Expenses</CardTitle>
+            </CardHeader>
+            <CardContent>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
               <Select value={linkSelect} onValueChange={setLinkSelect}>
-                <SelectTrigger className="w-[360px]">
+                <SelectTrigger className="w-full sm:w-[360px]">
                   <SelectValue placeholder="Select an unlinked expense to attach" />
                 </SelectTrigger>
                 <SelectContent>
@@ -172,8 +174,8 @@ const EditInvoice = () => {
                     <TableHead>ID</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead>Vendor</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead></TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -186,8 +188,10 @@ const EditInvoice = () => {
                       <TableCell>#{e.id}</TableCell>
                       <TableCell>{e.category}</TableCell>
                       <TableCell>{e.vendor || '—'}</TableCell>
-                      <TableCell>{e.amount} {e.currency}</TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
+                        <CurrencyDisplay amount={e.amount || 0} currency={e.currency || 'USD'} />
+                      </TableCell>
+                      <TableCell className="text-right">
                         <Button variant="outline" size="sm" onClick={async () => {
                           try {
                             // Use null to explicitly clear the link on the backend
@@ -215,8 +219,9 @@ const EditInvoice = () => {
                 </TableBody>
               </Table>
             </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </AppLayout>
   );

@@ -12,12 +12,13 @@ import { CalendarIcon, Upload } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { expenseApi, Expense, ExpenseAttachmentMeta, linkApi } from '@/lib/api';
+import { EXPENSE_CATEGORY_OPTIONS } from '@/constants/expenses';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export default function ExpensesEdit() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const categoryOptions = ['General', 'Travel', 'Meals', 'Software', 'Supplies'];
+  const categoryOptions = EXPENSE_CATEGORY_OPTIONS;
   const [form, setForm] = useState<Partial<Expense>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -50,8 +51,12 @@ export default function ExpensesEdit() {
     try {
       if (!id) return;
       setSaving(true);
-      if (!form.amount || !form.category) {
-        toast.error('Amount and category are required');
+      if ((!form.amount || Number(form.amount) === 0) && newFiles.length === 0) {
+        toast.error('Amount is required unless importing from files');
+        return;
+      }
+      if (!form.category) {
+        toast.error('Category is required');
         return;
       }
       const payload = {
@@ -76,10 +81,10 @@ export default function ExpensesEdit() {
         await Promise.all(Array.from(pendingDelete.values()).map(attId => expenseApi.deleteAttachment(Number(id), attId).catch(() => {})));
       }
 
-      // Refresh attachments and compute how many new files can be uploaded (cap 5)
+      // Refresh attachments and compute how many new files can be uploaded (cap 10)
       let currentList: ExpenseAttachmentMeta[] = [];
       try { currentList = await expenseApi.listAttachments(Number(id)); } catch {}
-      const remainingSlots = Math.max(0, 5 - (currentList?.length || 0));
+      const remainingSlots = Math.max(0, 10 - (currentList?.length || 0));
 
       for (let i = 0; i < Math.min(newFiles.length, remainingSlots); i++) {
         try { await expenseApi.uploadReceipt(Number(id), newFiles[i]); } catch (e) { console.error(e); }
@@ -188,13 +193,13 @@ export default function ExpensesEdit() {
               <Input value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} />
             </div>
             <div className="sm:col-span-2">
-              <label className="text-sm">Add Attachments (max 5)</label>
+              <label className="text-sm">Add Attachments (max 10)</label>
               <div className="flex items-center gap-3">
                 <label className="inline-flex items-center gap-2 cursor-pointer">
                   <Upload className="w-4 h-4" />
                   <input multiple type="file" accept="application/pdf,image/jpeg,image/png" className="hidden" onChange={(e) => {
                     const selected = Array.from(e.target.files || []);
-                    const combined = [...newFiles, ...selected].slice(0, 5);
+                    const combined = [...newFiles, ...selected].slice(0, 10);
                     setNewFiles(combined);
                   }} />
                   Upload

@@ -1,18 +1,26 @@
-FROM python:3.13-alpine
+FROM python:3.13-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apk add --no-cache \
-    build-base \
+# Install system dependencies (Debian/Ubuntu)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     curl \
     bash \
-    postgresql-dev \
-    postgresql-client \
-    libffi-dev
+    libpq-dev \
+    librdkafka-dev \
+    libsasl2-dev \
+    libssl-dev \
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxrender1 \
+    libxext6 \
+ && rm -rf /var/lib/apt/lists/*
 
-# Install Rust for tiktoken
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+# (Optional) Install Rust if needed for certain deps
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+ && echo 'export PATH=/root/.cargo/bin:$PATH' >> /root/.bashrc
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Copy requirements first to leverage Docker cache

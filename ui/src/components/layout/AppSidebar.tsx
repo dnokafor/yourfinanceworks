@@ -359,12 +359,7 @@ export function AppSidebar() {
       icon: <DollarSign className="w-5 h-5" /> 
     },
 
-    // Only show Users menu item for admin users
-    ...(isAdminUser ? [{ 
-      path: '/users', 
-      label: t('navigation.users'), 
-      icon: <UserCheck className="w-5 h-5" /> 
-    }] : []),
+    // Users moved under Settings; remove from main nav
     // Only show Audit Log for admin or superuser
     ...((isAdminUser || isSuperUser) ? [{
       path: '/audit-log',
@@ -385,6 +380,12 @@ export function AppSidebar() {
       path: '/settings', 
       label: t('navigation.settings'), 
       icon: <Settings className="w-5 h-5" /> 
+    }] : []),
+    // Users is now a sub-entry under Settings for admins
+    ...(isAdminUser ? [{
+      path: '/users',
+      label: t('navigation.users'),
+      icon: <UserCheck className="w-5 h-5" />
     }] : []),
     // Only show Super Admin for super users in their primary tenant
     ...(user?.is_superuser && (currentOrgId === user?.tenant_id?.toString() || currentOrgId === user?.tenant_id) ? [{ 

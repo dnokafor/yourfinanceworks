@@ -17,6 +17,12 @@ class ExpenseBase(BaseModel):
     status: str = Field("recorded", description="Status of the expense (recorded, reimbursed, submitted)")
     notes: Optional[str] = Field(None, description="Additional notes about the expense")
     invoice_id: Optional[int] = Field(None, description="Linked invoice ID (one expense -> at most one invoice)")
+    # OCR/AI analysis flags
+    imported_from_attachment: Optional[bool] = Field(False, description="Whether this expense originated from an uploaded file")
+    analysis_status: Optional[str] = Field("not_started", description="OCR analysis status: not_started|queued|processing|done|failed|cancelled")
+    analysis_result: Optional[dict] = Field(None, description="Raw analysis payload from OCR/LLM")
+    analysis_error: Optional[str] = Field(None, description="Error message if analysis failed")
+    manual_override: Optional[bool] = Field(False, description="True if user manually edited; stops further analysis")
 
 
 class ExpenseCreate(ExpenseBase):
@@ -38,6 +44,11 @@ class ExpenseUpdate(BaseModel):
     notes: Optional[str] = None
     # Allow linking/unlinking to an invoice
     invoice_id: Optional[int] = None
+    imported_from_attachment: Optional[bool] = None
+    analysis_status: Optional[str] = None
+    analysis_result: Optional[dict] = None
+    analysis_error: Optional[str] = None
+    manual_override: Optional[bool] = None
 
 
 class Expense(ExpenseBase):
@@ -46,6 +57,7 @@ class Expense(ExpenseBase):
     updated_at: datetime
     receipt_filename: Optional[str] = None  # legacy single receipt
     attachments_count: Optional[int] = None
+    analysis_updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

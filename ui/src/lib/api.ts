@@ -109,6 +109,9 @@ export interface Expense {
   invoice_id?: number | null;
   created_at: string;
   updated_at: string;
+  imported_from_attachment?: boolean;
+  analysis_status?: 'not_started' | 'queued' | 'processing' | 'done' | 'failed' | 'cancelled';
+  manual_override?: boolean;
 }
 
 export interface ExpenseAttachmentMeta {

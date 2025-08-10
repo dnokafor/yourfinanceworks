@@ -31,6 +31,7 @@ langchain==0.3.27  # LangChain for PDF processing
 langchain-community==0.3.27  # LangChain community components
 pypdf2==3.0.1  # PDF processing
 ollama==0.5.1  # Ollama client
+ollama-ocr==0.1.6  # OCR processor (example)  # Avoids heavy cv builds
 
 # Security fix for HTTP Request Smuggling vulnerability
 h11==0.16.0
@@ -44,3 +45,6 @@ httpx==0.28.1
 
 # Image processing
 pillow==11.3.0
+
+# Kafka
+confluent-kafka==2.10.0

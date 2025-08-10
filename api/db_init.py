@@ -292,6 +292,12 @@ def init_db():
     # Run comprehensive migrations after initial setup
     from scripts.run_all_migrations import run_all_migrations
     run_all_migrations()
+    # Ensure OCR fields exist on expenses across all tenants
+    try:
+        from scripts.add_ocr_fields_to_expenses import run as add_ocr_fields
+        add_ocr_fields()
+    except Exception as e:
+        logger.error(f"Failed to add OCR fields to expenses: {e}")
     # Reset users.id sequences for all tenant DBs
     reset_all_users_id_sequences()
     

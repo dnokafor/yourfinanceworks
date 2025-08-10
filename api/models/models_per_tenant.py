@@ -149,6 +149,14 @@ class Expense(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=True)
 
+    # OCR/AI analysis fields
+    imported_from_attachment = Column(Boolean, default=False, nullable=False)
+    analysis_status = Column(String, default="not_started", nullable=False)  # not_started|queued|processing|done|failed|cancelled
+    analysis_result = Column(JSON, nullable=True)
+    analysis_error = Column(Text, nullable=True)
+    manual_override = Column(Boolean, default=False, nullable=False)
+    analysis_updated_at = Column(DateTime(timezone=True), nullable=True)
+
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
