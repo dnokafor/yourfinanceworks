@@ -15,6 +15,9 @@ import PaymentCharts from './PaymentCharts';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/components/ui/use-toast';
 
+// Debug toggle for AI Assistant logs (set VITE_DEBUG_AI_ASSISTANT=true to enable)
+const DEBUG_AI_ASSISTANT = (typeof import.meta !== 'undefined' && (import.meta as any)?.env?.VITE_DEBUG_AI_ASSISTANT === 'true');
+
 interface Message {
   id: number;
   sender: 'user' | 'ai';
@@ -299,7 +302,7 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
 
   // Add effect to log settings changes for debugging
   useEffect(() => {
-    if (settings) {
+    if (settings && DEBUG_AI_ASSISTANT) {
       console.log('AI Assistant: Settings updated', {
         enable_ai_assistant: (settings as any)?.enable_ai_assistant,
         settingsData: settings
@@ -314,7 +317,7 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
     enabled: !settingsLoading && !!(settings && (settings as any).enable_ai_assistant),
     retry: (failureCount, error) => {
       if (error.message.includes('403') || error.message.includes('Authentication failed')) {
-        console.log('AI Configs: Not retrying due to authentication error');
+        if (DEBUG_AI_ASSISTANT) console.log('AI Configs: Not retrying due to authentication error');
         return false;
       }
       return failureCount < 3;
@@ -442,26 +445,28 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
     const errorMessage = settingsError.message || '';
     // Only hide for persistent errors, not temporary auth issues
     if (errorMessage.includes('Network Error') || errorMessage.includes('500')) {
-      console.log('AI Assistant: Network/server error, hiding assistant:', settingsError);
+      if (DEBUG_AI_ASSISTANT) console.log('AI Assistant: Network/server error, hiding assistant:', settingsError);
       return null;
     } else {
-      console.log('AI Assistant: Auth error but defaulting to show (will be handled by queries):', settingsError);
+      if (DEBUG_AI_ASSISTANT) console.log('AI Assistant: Auth error but defaulting to show (will be handled by queries):', settingsError);
       // For auth errors, let the component try to render and individual queries will handle auth
     }
   }
 
   // Check if AI assistant should be shown
   if (!isAIAssistantEnabled) {
-    console.log('AI Assistant: Not rendering because AI assistant is disabled', {
-      settings,
-      enable_ai_assistant: settings ? (settings as any).enable_ai_assistant : 'undefined',
-      isAIAssistantEnabled,
-      reason: 'enable_ai_assistant is false or settings is null'
-    });
+    if (DEBUG_AI_ASSISTANT) {
+      console.log('AI Assistant: Not rendering because AI assistant is disabled', {
+        settings,
+        enable_ai_assistant: settings ? (settings as any).enable_ai_assistant : 'undefined',
+        isAIAssistantEnabled,
+        reason: 'enable_ai_assistant is false or settings is null'
+      });
+    }
     return null;
   }
 
-  console.log('AI Assistant: Rendering component - all checks passed');
+  if (DEBUG_AI_ASSISTANT) console.log('AI Assistant: Rendering component - all checks passed');
 
   const handleSendMessage = async (messageText?: string) => {
     const textToSend = messageText || input.trim();

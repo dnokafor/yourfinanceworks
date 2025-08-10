@@ -11,6 +11,7 @@ import os
 import time
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
 
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 SECRET_KEY = os.getenv("SECRET_KEY") or ("dev-insecure-key" if DEBUG else None)

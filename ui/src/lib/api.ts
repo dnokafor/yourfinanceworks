@@ -292,7 +292,7 @@ export async function apiRequest<T>(
     
     // Log the raw response text for debugging
     const responseText = await response.text();
-    console.log('API Raw response text:', responseText);
+    // console.log('API Raw response text:', responseText);
     
     if (!response.ok) {
       // Try to parse error response

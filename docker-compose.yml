@@ -114,17 +114,17 @@ services:
       - invoice_app_network
     restart: unless-stopped
 
-  # Ollama AI service
-  ollama:
-    image: ollama/ollama
-    container_name: invoice_app_ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - invoice_app_network
-    restart: unless-stopped
+  # # Ollama AI service
+  # ollama:
+  #   image: ollama/ollama
+  #   container_name: invoice_app_ollama
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   networks:
+  #     - invoice_app_network
+  #   restart: unless-stopped
 
   # Database backup service (optional)
   backup:

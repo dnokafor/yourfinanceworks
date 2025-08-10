@@ -88,9 +88,13 @@ interface InvoiceFormProps {
   invoice?: Invoice;
   isEdit?: boolean;
   onInvoiceUpdate?: (updatedInvoice: Invoice) => void;
+  initialData?: any;
+  attachment?: File | null;
+  prefillNewClient?: { name?: string; email?: string; address?: string; phone?: string } | null;
+  openNewClientOnInit?: boolean;
 }
 
-export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate }: InvoiceFormProps) {
+export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialData, attachment, prefillNewClient, openNewClientOnInit }: InvoiceFormProps) {
   const navigate = useNavigate();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -127,6 +131,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate }: Invoic
   const [currenciesLoaded, setCurrenciesLoaded] = useState(false);
   const [selectedHistoryEntry, setSelectedHistoryEntry] = useState<any>(null);
   const [showHistoryDetailsModal, setShowHistoryDetailsModal] = useState(false);
+  const hasAppliedInitialDataRef = React.useRef(false);
   
   // Attachment states
   const [invoiceAttachment, setInvoiceAttachment] = useState<File | null>(null);
@@ -164,6 +169,23 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate }: Invoic
       console.log("[DEBUG] Reset customFields to empty array");
     }
   }, [invoice]);
+
+  // Open and prefill the Create Client modal on init when requested
+  useEffect(() => {
+    if (openNewClientOnInit && prefillNewClient) {
+      setNewClientForm((prev) => ({
+        ...prev,
+        name: prefillNewClient.name ?? prev.name,
+        email: prefillNewClient.email ?? prev.email,
+        address: prefillNewClient.address ?? prev.address,
+        phone: prefillNewClient.phone ?? prev.phone,
+        preferred_currency: prev.preferred_currency || tenantInfo?.default_currency || 'USD',
+      }));
+      setShowNewClientDialog(true);
+    }
+  }, [prefillNewClient, openNewClientOnInit, tenantInfo]);
+
+  // (moved below after form initialization)
 
   // Initialize attachment info when invoice changes
   useEffect(() => {
@@ -479,6 +501,54 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate }: Invoic
       showDiscountInPdf: invoice?.show_discount_in_pdf || false,
     },
   });
+
+  // Apply initial data from PDF import into the new invoice form (one-time)
+  useEffect(() => {
+    if (isEdit) return; // only for new invoices
+    if (hasAppliedInitialDataRef.current) return;
+
+    let appliedSomething = false;
+    if (initialData) {
+      if (typeof initialData.client === 'string') {
+        form.setValue('client', initialData.client);
+        appliedSomething = true;
+      }
+      if (Array.isArray(initialData.items) && initialData.items.length > 0) {
+        const normalizedItems = initialData.items.map((it: any) => ({
+          id: it.id,
+          description: it.description || '',
+          quantity: Number(it.quantity) || 1,
+          price: Number(it.price) || 0,
+          amount: (Number(it.quantity) || 1) * (Number(it.price) || 0),
+        }));
+        form.setValue('items', normalizedItems);
+        appliedSomething = true;
+      }
+      if (initialData.notes) {
+        form.setValue('notes', initialData.notes);
+        appliedSomething = true;
+      }
+      if (initialData.date instanceof Date && !isNaN(initialData.date.getTime())) {
+        form.setValue('date', initialData.date);
+        try {
+          const next = new Date(initialData.date);
+          next.setDate(next.getDate() + 30);
+          form.setValue('dueDate', next);
+        } catch {}
+        appliedSomething = true;
+      }
+    }
+
+    if (attachment) {
+      setInvoiceAttachment(attachment);
+      appliedSomething = true;
+    }
+
+    if (appliedSomething) {
+      hasAppliedInitialDataRef.current = true;
+      form.trigger();
+    }
+  }, [initialData, attachment, isEdit, form]);
 
   // Debug logging for form initialization
   useEffect(() => {
@@ -1534,7 +1604,6 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate }: Invoic
               <div>
                 <Label htmlFor="preferred_currency">{t('invoices.preferred_currency')}</Label>
                 <CurrencySelector
-                  key={`client-currency-${showNewClientDialog}`}
                   value={newClientForm.preferred_currency || tenantInfo?.default_currency || 'USD'}
                   onValueChange={(val) => setNewClientForm({ ...newClientForm, preferred_currency: val })}
                   placeholder={t('invoices.select_preferred_currency')}

@@ -3,7 +3,6 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { InvoiceForm } from "@/components/invoices/InvoiceForm";
 import { InvoiceCreationChoice } from "@/components/invoices/InvoiceCreationChoice";
 import { useTranslation } from "react-i18next";
-import { clientApi } from "@/lib/api";
 import { toast } from "sonner";
 
 const NewInvoice = () => {
@@ -11,6 +10,8 @@ const NewInvoice = () => {
   const [showForm, setShowForm] = useState(false);
   const [initialData, setInitialData] = useState<any>(null);
   const [attachment, setAttachment] = useState<File | null>(null);
+  const [prefillNewClient, setPrefillNewClient] = useState<{ name?: string; email?: string; address?: string; phone?: string } | null>(null);
+  const [openNewClientOnInit, setOpenNewClientOnInit] = useState(false);
 
   const handleManualCreate = (attachmentFile?: File) => {
     setAttachment(attachmentFile || null);
@@ -27,18 +28,16 @@ const NewInvoice = () => {
         clientId = pdfData.existing_client.id;
         toast.success(`Using existing client: ${pdfData.existing_client.name}`);
       } else if (!pdfData.client_exists && pdfData.suggested_client) {
-        // Create new client
-        const newClient = await clientApi.createClient({
-          name: pdfData.suggested_client.name,
-          email: pdfData.suggested_client.email || '',
-          phone: '',
-          address: pdfData.suggested_client.address || '',
-          preferred_currency: 'USD',
-          balance: 0,
-          paid_amount: 0,
+        // Prefill and open create client modal in the form
+        const suggested = pdfData.suggested_client || {};
+        setPrefillNewClient({
+          name: suggested.name || '',
+          email: suggested.email || '',
+          address: suggested.address || '',
+          phone: ''
         });
-        clientId = newClient.id;
-        toast.success(`Created new client: ${newClient.name}`);
+        setOpenNewClientOnInit(true);
+        toast.success('Suggested client detected. Opening create client dialog...');
       }
 
       // Prepare initial data from PDF extraction
@@ -78,6 +77,8 @@ const NewInvoice = () => {
             <InvoiceForm 
               initialData={initialData}
               attachment={attachment}
+              prefillNewClient={prefillNewClient}
+              openNewClientOnInit={openNewClientOnInit}
             />
           </div>
         </div>
