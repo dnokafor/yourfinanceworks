@@ -457,6 +457,8 @@
     "invoice_settings": "Paramètres des Factures",
     "invoice_prefix": "Préfixe du Numéro de Facture",
     "next_invoice_number": "Prochain Numéro de Facture",
+    "thank_you": "Merci pour votre confiance !",
+    "payment_terms_net30": "Le paiement est exigible dans les 30 jours à compter de la date de la facture. Les retards de paiement sont soumis à des frais financiers mensuels de 1,5 %.",
     "default_currency": "Devise par Défaut",
     "default_terms": "Conditions Générales par Défaut",
     "default_notes": "Notes par Défaut",
@@ -827,8 +829,7 @@
     "total": "Total :",
     "paid": "Payé :",
     "balance": "Solde :",
-    "terms": "Conditions :",
-    "thank_you": "Merci pour votre confiance !"
+    "terms": "Conditions :"
   },
   "notifications": {
     "success": "Succès",

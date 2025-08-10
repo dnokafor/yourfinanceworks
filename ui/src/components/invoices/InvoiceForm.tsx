@@ -336,8 +336,8 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
               invoice_settings: {
                 prefix: 'INV-',
                 next_number: '0001',
-                terms: 'Payment due within 30 days from the date of invoice.',
-                notes: 'Thank you for your business!',
+                terms: t('settings.payment_terms_net30'),
+                notes: t('settings.thank_you'),
                 send_copy: true,
                 auto_reminders: true
               },
@@ -358,8 +358,8 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
             invoice_settings: {
               prefix: 'INV-',
               next_number: '0001',
-              terms: 'Payment due within 30 days from the date of invoice.',
-              notes: 'Thank you for your business!',
+              terms: t('settings.payment_terms_net30'),
+              notes: t('settings.thank_you'),
               send_copy: true,
               auto_reminders: true
             },

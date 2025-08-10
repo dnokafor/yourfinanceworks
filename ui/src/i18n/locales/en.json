@@ -472,6 +472,8 @@
     "default_currency": "Default Currency",
     "default_terms": "Default Terms & Conditions",
     "default_notes": "Default Notes",
+    "thank_you": "Thank you for your business!",
+    "payment_terms_net30": "Payment due within 30 days from the date of invoice. Late payments are subject to a 1.5% monthly finance charge.",
     "send_copy": "Send Me a Copy",
     "send_copy_description": "Receive a copy of each invoice by email",
     "auto_reminders": "Automatic Reminders",
@@ -831,8 +833,7 @@
     "total": "Total:",
     "paid": "Paid:",
     "balance": "Balance:",
-    "terms": "Terms:",
-    "thank_you": "Thank you for your business!"
+    "terms": "Terms:"
   },
   "notifications": {
     "success": "Success",

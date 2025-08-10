@@ -28,6 +28,10 @@ const Settings = () => {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  // Backend hardcoded English defaults used for detection
+  const BACKEND_DEFAULT_NOTES = t('settings.thank_you');
+  const BACKEND_DEFAULT_TERMS = t('settings.payment_terms_net30');
   
   // Discount rules state
   const [discountRules, setDiscountRules] = useState<DiscountRule[]>([]);
@@ -76,8 +80,8 @@ const Settings = () => {
   const [invoiceSettings, setInvoiceSettings] = useState({
     prefix: "INV-",
     next_number: "0001",
-    terms: "Payment due within 30 days from the date of invoice.\nLate payments are subject to a 1.5% monthly finance charge.",
-    notes: "Thank you for your business!",
+    terms: t('settings.payment_terms_net30'),
+    notes: t('settings.thank_you'),
     send_copy: true,
     auto_reminders: true,
   });
@@ -167,8 +171,12 @@ const Settings = () => {
           setInvoiceSettings({
             prefix: settings.invoice_settings.prefix || invoiceSettings.prefix,
             next_number: settings.invoice_settings.next_number || invoiceSettings.next_number,
-            terms: settings.invoice_settings.terms || invoiceSettings.terms,
-            notes: settings.invoice_settings.notes || invoiceSettings.notes,
+            terms: (settings.invoice_settings.terms && settings.invoice_settings.terms !== BACKEND_DEFAULT_TERMS)
+              ? settings.invoice_settings.terms
+              : t('settings.payment_terms_net30'),
+            notes: (settings.invoice_settings.notes && settings.invoice_settings.notes !== BACKEND_DEFAULT_NOTES)
+              ? settings.invoice_settings.notes
+              : t('settings.thank_you'),
             send_copy: settings.invoice_settings.send_copy ?? invoiceSettings.send_copy,
             auto_reminders: settings.invoice_settings.auto_reminders ?? invoiceSettings.auto_reminders,
           });

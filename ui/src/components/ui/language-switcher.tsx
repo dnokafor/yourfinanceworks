@@ -19,7 +19,9 @@ export function LanguageSwitcher() {
   const { i18n } = useTranslation();
 
   const handleLanguageChange = (languageCode: string) => {
-    i18n.changeLanguage(languageCode);
+    i18n.changeLanguage(languageCode).then(() => {
+      window.location.reload();
+    });
   };
 
   return (

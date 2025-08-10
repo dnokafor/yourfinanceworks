@@ -457,6 +457,8 @@
     "invoice_settings": "Configuración de Facturas",
     "invoice_prefix": "Prefijo del Número de Factura",
     "next_invoice_number": "Próximo Número de Factura",
+    "thank_you": "¡Gracias por su negocio!",
+    "payment_terms_net30": "El pago vence dentro de los 30 días a partir de la fecha de la factura. Los pagos atrasados están sujetos a un cargo financiero mensual del 1,5 %.",
     "default_currency": "Moneda Predeterminada",
     "default_terms": "Términos y Condiciones Predeterminados",
     "default_notes": "Notas Predeterminadas",
@@ -844,8 +846,7 @@
     "total": "Total:",
     "paid": "Pagado:",
     "balance": "Saldo:",
-    "terms": "Términos:",
-    "thank_you": "¡Gracias por su negocio!"
+    "terms": "Términos:"
   },
   "notifications": {
     "success": "Éxito",

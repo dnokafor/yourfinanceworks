@@ -785,8 +785,7 @@
     "total": "Total:",
     "paid": "Paid:",
     "balance": "Balance:",
-    "terms": "Terms:",
-    "thank_you": "Thank you for your business!"
+    "terms": "Terms:"
   },
   "notifications": {
     "success": "Success",

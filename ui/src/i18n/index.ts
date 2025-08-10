@@ -24,7 +24,8 @@ i18n
   .use(initReactI18next)
   .init({
     resources,
-    lng: 'en', // Set English as default language
+    // Do not force a language when using the language detector.
+    // The detector will read from localStorage ('i18nextLng') or browser prefs.
     fallbackLng: 'en',
     debug: process.env.NODE_ENV === 'development',
 

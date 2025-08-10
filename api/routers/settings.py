@@ -58,8 +58,8 @@ async def get_settings(
             "invoice_settings": {
                 "prefix": "INV-",
                 "next_number": "0001",
-                "terms": "Payment due within 30 days from the date of invoice.\nLate payments are subject to a 1.5% monthly finance charge.",
-                "notes": "Thank you for your business!",
+                "terms": "",
+                "notes": "",
                 "send_copy": True,
                 "auto_reminders": True
             },

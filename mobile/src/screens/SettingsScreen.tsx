@@ -90,8 +90,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [invoiceSettings, setInvoiceSettings] = useState<InvoiceSettings>({
     prefix: "INV-",
     next_number: "0001",
-    terms: "Payment due within 30 days from the date of invoice.\nLate payments are subject to a 1.5% monthly finance charge.",
-    notes: "Thank you for your business!",
+    terms: t('settings.payment_terms_net30'),
+    notes: t('settings.thank_you'),
     send_copy: true,
     auto_reminders: true,
   });

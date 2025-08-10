@@ -140,6 +140,7 @@ export function AppSidebar() {
     }
     return settings?.company_info?.name || 'InvoiceApp';
   })();
+  const companyLogoUrl = settings?.company_info?.logo;
 
   // Debug logging
   useEffect(() => {
@@ -403,8 +404,12 @@ export function AppSidebar() {
     <>
       <Sidebar>
         <SidebarHeader className="py-6 px-2 border-b border-sidebar-border">
-          <div className="flex flex-col items-center text-center">
-            <span className="text-xl font-bold text-white">InvoiceApp</span>
+          <div className="flex items-center justify-center text-center">
+            {companyLogoUrl ? (
+              <img src={companyLogoUrl} alt={companyName} className="h-8 max-w-[160px] object-contain" />
+            ) : (
+              <span className="text-xl font-bold text-white">{companyName}</span>
+            )}
           </div>
         </SidebarHeader>
         <SidebarContent className="pt-6">
