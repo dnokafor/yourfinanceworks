@@ -19,11 +19,8 @@ from services.tenant_database_manager import tenant_db_manager
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Enable foreign key support for SQLite
+# Enable foreign key support for SQLite (kept minimal)
 if make_url(SQLALCHEMY_DATABASE_URL).get_backend_name() == "sqlite":
-    from sqlalchemy import event
-    from sqlalchemy.engine import Engine
-
     @event.listens_for(Engine, "connect")
     def set_sqlite_pragma(dbapi_connection, connection_record):
         cursor = dbapi_connection.cursor()
@@ -140,19 +137,9 @@ def init_db():
     # Create all tables in the main (master) DB
     Base.metadata.create_all(bind=engine)
     
-    # Add show_analytics column to master_users if it doesn't exist
+    # Master models are created via metadata; avoid manual ALTERs that should be handled by models/migrations
     from sqlalchemy import inspect
     inspector = inspect(engine)
-    if 'master_users' in inspector.get_table_names():
-        columns = [col['name'] for col in inspector.get_columns('master_users')]
-        if 'show_analytics' not in columns:
-            try:
-                with engine.connect() as connection:
-                    connection.execute(text("ALTER TABLE master_users ADD COLUMN show_analytics BOOLEAN DEFAULT FALSE NOT NULL"))
-                    connection.commit()
-                logger.info("Successfully added 'show_analytics' column to 'master_users' table.")
-            except Exception as e:
-                logger.error(f"Error adding 'show_analytics' column to 'master_users' table: {e}")
     
     # Create analytics table in master DB
     from models.analytics import Base as AnalyticsBase
@@ -186,61 +173,6 @@ def init_db():
         try:
             TenantBase.metadata.create_all(bind=tenant_engine)
             print(f"Tables created for tenant {tenant.id}")
-            
-            # Add the 'theme' column to 'users' table in tenant DB if it doesn't exist
-            from sqlalchemy import inspect
-            inspector = inspect(tenant_engine)
-            columns = [col['name'] for col in inspector.get_columns('users')]
-            if 'theme' not in columns:
-                try:
-                    with tenant_engine.connect() as connection:
-                        connection.execute(text("ALTER TABLE users ADD COLUMN theme VARCHAR(255) DEFAULT 'system'"))
-                        connection.commit()
-                    logger.info(f"Successfully added 'theme' column to 'users' table for tenant {tenant.id}.")
-                except Exception as e:
-                    logger.error(f"Error adding 'theme' column to 'users' table for tenant {tenant.id}: {e}")
-
-            # Add the 'show_discount_in_pdf' column to 'invoices' table in tenant DB if it doesn't exist
-            columns = [col['name'] for col in inspector.get_columns('invoices')]
-            if 'show_discount_in_pdf' not in columns:
-                try:
-                    tenant_engine.execute(text('ALTER TABLE invoices ADD COLUMN show_discount_in_pdf BOOLEAN DEFAULT TRUE NOT NULL'))
-                    logger.info(f"Successfully added 'show_discount_in_pdf' column to 'invoices' table for tenant {tenant.id}.")
-                except Exception as e:
-                    logger.error(f"Error adding 'show_discount_in_pdf' column to 'invoices' table for tenant {tenant.id}: {e}")
-
-            # Add email_notification_settings table if it doesn't exist
-            if 'email_notification_settings' not in inspector.get_table_names():
-                try:
-                    from models.models_per_tenant import EmailNotificationSettings
-                    EmailNotificationSettings.__table__.create(tenant_engine)
-                    logger.info(f"Created email_notification_settings table for tenant {tenant.id}")
-                except Exception as e:
-                    logger.error(f"Error creating email_notification_settings table for tenant {tenant.id}: {e}")
-            
-            # Ensure expenses.invoice_id column exists for expense->invoice linking
-            try:
-                expense_columns = [col['name'] for col in inspector.get_columns('expenses')]
-                if 'invoice_id' not in expense_columns:
-                    with tenant_engine.connect() as connection:
-                        connection.execute(text("ALTER TABLE expenses ADD COLUMN invoice_id INTEGER"))
-                        # Add FK if invoices table exists
-                        invoice_columns = [col['name'] for col in inspector.get_columns('invoices')]
-                        if 'id' in invoice_columns:
-                            try:
-                                connection.execute(text("ALTER TABLE expenses ADD CONSTRAINT fk_expenses_invoice_id FOREIGN KEY (invoice_id) REFERENCES invoices(id)"))
-                            except Exception as fk_err:
-                                logger.warning(f"Could not add FK for expenses.invoice_id in tenant {tenant.id}: {fk_err}")
-                        connection.commit()
-                    logger.info(f"Added expenses.invoice_id column for tenant {tenant.id}")
-            except Exception as e:
-                logger.error(f"Error ensuring expenses.invoice_id for tenant {tenant.id}: {e}")
-            
-            # Verify if audit_logs table exists
-            if 'audit_logs' in inspector.get_table_names():
-                logger.info(f"audit_logs table successfully created for tenant {tenant.id}")
-            else:
-                logger.error(f"audit_logs table NOT found for tenant {tenant.id} after create_all")
         except Exception as e:
             logger.error(f"Error creating tables for tenant {tenant.id}: {str(e)}")
         
