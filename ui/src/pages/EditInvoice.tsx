@@ -164,7 +164,7 @@ const EditInvoice = () => {
                   }
                 }}
               >
-                Link Expense
+               {t('invoices.link_expense')}
               </Button>
             </div>
             <div className="rounded-md border">

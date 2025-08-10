@@ -2099,7 +2099,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
 
                     {/* Column headers for items */}
                     <div className="grid grid-cols-12 gap-4 font-semibold text-sm text-gray-600 mb-2">
-                      <div className="col-span-6">{t('invoices.description')}</div>
+                      <div className="col-span-6">{t('invoices.item_description')}</div>
                       <div className="col-span-2">{t('invoices.quantity')}</div>
                       <div className="col-span-3">{t('invoices.price')}</div>
                       <div className="col-span-1">{t('invoices.actions')}</div>
@@ -2115,7 +2115,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                               <FormItem>
                                 <FormControl>
                                   <Input 
-                                    placeholder={t('invoices.description')} 
+                                    placeholder={t('invoices.item_description')} 
                                     {...field}
                                     key={`desc-${index}`}
                                     value={field.value || ''}
@@ -2348,12 +2348,12 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                     {/* Summary Section */}
                     <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg space-y-2">
                       <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">Subtotal:</span>
+                        <span className="text-sm text-gray-600">{t('invoices.subtotal')}:</span>
                         <span className="font-medium">${calculateSubtotal().toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-600">
-                          Discount: {t('invoices.discount_type', { type: t('invoices.discount_type', { type: form.watch("discountType") }) })} {t('invoices.discount_value', { value: form.watch("discountValue") })}
+                          {t('invoices.discount')}: {t('invoices.discount_type')} {t('invoices.discount_value')}
                         </span>
                         <span className="font-medium text-red-600">${(() => {
                           const discountType = form.watch("discountType");
@@ -2375,7 +2375,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                         })()}</span>
                       </div>
                       <div className="border-t pt-2 flex justify-between">
-                        <span className="font-semibold">Total:</span>
+                        <span className="font-semibold">{t('invoices.total')}:</span>
                         <span className="font-bold text-lg">${calculateTotal().toFixed(2)}</span>
                       </div>
                     </div>
@@ -2421,7 +2421,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                   {!isEdit && (
                     <div>
                       <FormItem>
-                        <FormLabel>Link an Expense (optional)</FormLabel>
+                        <FormLabel>{t('invoices.link_an_expense')}</FormLabel>
                         <Select value={linkExpenseId} onValueChange={setLinkExpenseId}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select unlinked expense" />

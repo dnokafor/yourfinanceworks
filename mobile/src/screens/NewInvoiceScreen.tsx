@@ -537,14 +537,14 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
               
               <TextInput
                 style={styles.input}
-                placeholder="Description"
+                placeholder={t('invoices.item_description')}
                 value={item.description}
                 onChangeText={(text) => handleItemChange(index, 'description', text)}
               />
               
               <View style={styles.itemRow}>
                 <View style={styles.itemField}>
-                  <Text style={styles.itemLabel}>Quantity</Text>
+                  <Text style={styles.itemLabel}>{t('invoices.quantity')}</Text>
                   <TextInput
                     style={styles.input}
                     placeholder="1"
@@ -555,7 +555,7 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
                 </View>
                 
                 <View style={styles.itemField}>
-                  <Text style={styles.itemLabel}>Price</Text>
+                  <Text style={styles.itemLabel}>{t('invoices.price')}</Text>
                   <TextInput
                     style={styles.input}
                     placeholder="0.00"
@@ -567,7 +567,7 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
               </View>
               
               <View style={styles.itemTotal}>
-                <Text style={styles.itemTotalLabel}>Total:</Text>
+                <Text style={styles.itemTotalLabel}>{t('invoices.total')}:</Text>
                 <Text style={styles.itemTotalAmount}>
                   {formatCurrencyDisplay(item.amount)}
                 </Text>
@@ -577,13 +577,13 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
           
           <TouchableOpacity style={styles.addItemButton} onPress={addItem}>
             <Ionicons name="add-circle-outline" size={20} color="#3B82F6" />
-            <Text style={styles.addItemText}>Add Item</Text>
+            <Text style={styles.addItemText}>{t('invoices.add_item')}</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.summaryContainer}>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Subtotal:</Text>
+            <Text style={styles.summaryLabel}>{t('invoices.subtotal')}:</Text>
             <Text style={styles.summaryValue}>
               {formatCurrencyDisplay(calculateSubtotal())}
             </Text>
@@ -591,7 +591,7 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
           
           {calculateDiscount() > 0 && (
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Discount:</Text>
+              <Text style={styles.summaryLabel}>{t('invoices.discount')}:</Text>
               <Text style={styles.summaryValue}>
                 -{formatCurrencyDisplay(calculateDiscount())}
               </Text>
@@ -599,7 +599,7 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
           )}
           
           <View style={[styles.summaryRow, styles.totalRow]}>
-            <Text style={styles.totalLabel}>Total:</Text>
+            <Text style={styles.totalLabel}>{t('invoices.total')}:</Text>
             <Text style={styles.totalValue}>
               {formatCurrencyDisplay(calculateTotal())}
             </Text>
@@ -607,7 +607,7 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
         </View>
 
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Notes (optional)</Text>
+          <Text style={styles.label}>{t('invoices.notes')}</Text>
           <TextInput
             style={[styles.input, styles.textArea]}
             placeholder="Add any additional notes..."
@@ -630,7 +630,7 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Client</Text>
+            <Text style={styles.modalTitle}>{t('invoices.select_client')}</Text>
             <ScrollView style={{ maxHeight: 300 }}>
               {clients.map((client) => (
                 <TouchableOpacity
@@ -672,7 +672,7 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Date</Text>
+            <Text style={styles.modalTitle}>{t('invoices.select_date')}</Text>
             <TextInput
               style={styles.input}
               placeholder="YYYY-MM-DD"
@@ -706,7 +706,7 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Due Date</Text>
+            <Text style={styles.modalTitle}>{t('invoices.select_due_date')}</Text>
             <TextInput
               style={styles.input}
               placeholder="YYYY-MM-DD"
@@ -749,7 +749,7 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
             onPress={(e) => e.stopPropagation()}
           >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Currency</Text>
+              <Text style={styles.modalTitle}>{t('invoices.select_currency')}</Text>
               <TouchableOpacity onPress={() => setShowCurrencyModal(false)}>
                 <Ionicons name="close" size={24} color="#666" />
               </TouchableOpacity>

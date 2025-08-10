@@ -44,6 +44,9 @@ def _get_consumer():
             "auto.offset.reset": os.getenv("KAFKA_AUTO_OFFSET_RESET", "earliest"),
             # We'll manually commit after a successful 'done' parse
             "enable.auto.commit": False,
+            # Be generous to allow long OCR jobs without rebalance kicking us out
+            "max.poll.interval.ms": int(os.getenv("KAFKA_MAX_POLL_INTERVAL_MS", "900000")),  # 15 minutes
+            "session.timeout.ms": int(os.getenv("KAFKA_SESSION_TIMEOUT_MS", "45000")),
         }
         consumer = Consumer(conf)
         return consumer, topic
@@ -74,6 +77,7 @@ def main() -> int:
         if msg is None:
             continue
         if msg.error():
+            # Don't commit on poll errors; just log and continue so we can retry.
             logger.error(f"Kafka error: {msg.error()}")
             continue
         try:
@@ -87,11 +91,17 @@ def main() -> int:
                 try:
                     set_tenant_context(int(tenant_id))
                 except Exception as e:
+                    # Don't commit; without tenant context we cannot process. Let retry handle it.
                     logger.warning(f"Failed to set tenant context {tenant_id}: {e}")
 
             # Open tenant-scoped DB session
             if tenant_id is None:
-                logger.error("No tenant_id in OCR message; skipping")
+                # Invalid message; commit to avoid poison-pill redelivery.
+                logger.error("No tenant_id in OCR message; committing and skipping invalid message")
+                try:
+                    consumer.commit(message=msg, asynchronous=False)
+                except Exception:
+                    pass
                 continue
             SessionLocalTenant = tenant_db_manager.get_tenant_session(int(tenant_id))
             db = SessionLocalTenant()
@@ -100,9 +110,19 @@ def main() -> int:
                 from models.models_per_tenant import Expense
                 exp = db.query(Expense).filter(Expense.id == expense_id).first()
                 if not exp:
-                    logger.warning(f"Expense {expense_id} not found; skipping")
+                    # Commit because the referenced expense no longer exists
+                    logger.warning(f"Expense {expense_id} not found; committing and skipping")
+                    try:
+                        consumer.commit(message=msg, asynchronous=False)
+                    except Exception:
+                        pass
                 elif exp.manual_override:
-                    logger.info(f"Expense {expense_id} manually overridden; skipping OCR application")
+                    # Commit because we should not retry if user manually overrided it
+                    logger.info(f"Expense {expense_id} manually overridden; committing and skipping OCR application")
+                    try:
+                        consumer.commit(message=msg, asynchronous=False)
+                    except Exception:
+                        pass
                 else:
                     # Mark as processing and process
                     try:
@@ -126,8 +146,13 @@ def main() -> int:
                             consumer.commit(message=msg, asynchronous=False)
                             logger.info(f"Committed Kafka offset for expense_id={expense_id} (done)")
                         except Exception as e:
-                            logger.error(f"Failed to commit Kafka offset: {e}
-")
+                            logger.error(f"Failed to commit Kafka offset: {e}")
+                    elif getattr(exp, "analysis_status", None) == "failed":
+                        # Do NOT commit on transient/unknown errors to allow retry on restart.
+                        # If desired, we could implement a retry counter and DLQ here.
+                        logger.warning(
+                            f"OCR failed for expense_id={expense_id}. Keeping message uncommitted for retry."
+                        )
             finally:
                 db.close()
         except Exception as e:
@@ -142,5 +167,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
-

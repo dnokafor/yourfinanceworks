@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -40,6 +41,7 @@ const defaultNewExpense: Partial<Expense> = {
 };
 
 const Expenses = () => {
+  const { t } = useTranslation();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const categoryOptions = EXPENSE_CATEGORY_OPTIONS;
   const [loading, setLoading] = useState(true);
@@ -260,13 +262,13 @@ const Expenses = () => {
       <div className="h-full space-y-6 fade-in">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Expenses</h1>
-            <p className="text-muted-foreground">Track and manage your business expenses.</p>
+            <h1 className="text-3xl font-bold">{t('expenses.title')}</h1>
+            <p className="text-muted-foreground">{t('expenses.description')}</p>
           </div>
           <div className="flex gap-2">
             <div className="flex">
               <Button onClick={openCreate} className="rounded-r-none border-r-0">
-                <Plus className="w-4 h-4 mr-2" /> New Expense
+                <Plus className="w-4 h-4 mr-2" /> {t('expenses.new')}
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -278,7 +280,7 @@ const Expenses = () => {
                   <DropdownMenuItem asChild>
                     <Link to="/expenses/import" className="flex items-center w-full">
                       <Upload className="mr-2 h-4 w-4" />
-                      Import from PDF or Images
+                      {t('expenses.import_from_pdf_images')}
                     </Link>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -290,12 +292,12 @@ const Expenses = () => {
         <Card className="slide-in">
           <CardHeader className="pb-3">
             <div className="flex flex-col sm:flex-row justify-between gap-4">
-              <CardTitle>Expense List</CardTitle>
+              <CardTitle>{t('expenses.list_title')}</CardTitle>
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="relative">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search by vendor, category, or notes"
+                     placeholder={t('expenses.search_placeholder')}
                     className="pl-8 w-full sm:w-[260px]"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -303,10 +305,10 @@ const Expenses = () => {
                 </div>
                 <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                   <SelectTrigger className="w-full sm:w-[180px]">
-                    <SelectValue placeholder="Filter by category" />
+                     <SelectValue placeholder={t('expenses.filter_by_category')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All categories</SelectItem>
+                    <SelectItem value="all">{t('expenses.all_categories')}</SelectItem>
                     {categoryOptions.map((c) => (
                       <SelectItem key={c} value={c}>{c}</SelectItem>
                     ))}
@@ -320,15 +322,15 @@ const Expenses = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Vendor</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead>Invoice</TableHead>
-                    <TableHead>Analyzed</TableHead>
-                    <TableHead>Receipt</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead>{t('expenses.table.date')}</TableHead>
+                    <TableHead>{t('expenses.table.category')}</TableHead>
+                    <TableHead>{t('expenses.table.vendor')}</TableHead>
+                    <TableHead>{t('expenses.table.amount')}</TableHead>
+                    <TableHead>{t('expenses.table.total')}</TableHead>
+                    <TableHead>{t('expenses.table.invoice')}</TableHead>
+                    <TableHead>{t('expenses.table.analyzed')}</TableHead>
+                    <TableHead>{t('expenses.table.receipt')}</TableHead>
+                    <TableHead>{t('expenses.table.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -337,7 +339,7 @@ const Expenses = () => {
                       <TableCell colSpan={7} className="h-24 text-center">
                         <div className="flex justify-center items-center">
                           <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                          Loading expenses
+                          {t('expenses.loading')}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -353,16 +355,16 @@ const Expenses = () => {
                           {typeof e.invoice_id === 'number' ? (
                             <Link to={`/invoices/edit/${e.invoice_id}`} className="text-blue-600 hover:underline">#{e.invoice_id}</Link>
                           ) : (
-                            <span className="text-muted-foreground">None</span>
+                             <span className="text-muted-foreground">{t('expenses.none')}</span>
                           )}
                         </TableCell>
                         <TableCell>
                           {e.analysis_status === 'done' ? (
-                            <span className="text-green-700 bg-green-100 px-2 py-0.5 rounded text-xs">Done</span>
+                             <span className="text-green-700 bg-green-100 px-2 py-0.5 rounded text-xs">{t('expenses.status_done')}</span>
                           ) : e.analysis_status === 'processing' || e.analysis_status === 'queued' ? (
-                            <span className="text-amber-700 bg-amber-100 px-2 py-0.5 rounded text-xs capitalize">{e.analysis_status}</span>
+                             <span className="text-amber-700 bg-amber-100 px-2 py-0.5 rounded text-xs capitalize">{e.analysis_status === 'processing' ? t('expenses.status_processing') : t('expenses.status_queued')}</span>
                           ) : e.imported_from_attachment ? (
-                            <span className="text-muted-foreground text-xs">Pending</span>
+                             <span className="text-muted-foreground text-xs">{t('expenses.status_pending')}</span>
                           ) : (
                             <span className="text-muted-foreground text-xs">—</span>
                           )}
@@ -383,20 +385,20 @@ const Expenses = () => {
                                 setAttachmentPreviewOpen({ expenseId: e.id });
                               }}
                             />
-                            {uploadingId === e.id ? 'Uploading...' : 'Upload'}
+                             {uploadingId === e.id ? t('expenses.uploading') : t('expenses.upload')}
                           </label>
                           <Button variant="ghost" size="sm" onClick={async () => {
                             const list = await expenseApi.listAttachments(e.id);
                             setAttachments(prev => ({ ...prev, [e.id]: list }));
                             setAttachmentPreviewOpen({ expenseId: e.id });
                           }}>
-                            {Array.isArray(attachments[e.id]) ? `${attachments[e.id].length} file(s)` : (typeof e.attachments_count === 'number' ? `${e.attachments_count} file(s)` : 'Preview')}
+                             {Array.isArray(attachments[e.id]) ? `${attachments[e.id].length} ${t('attachments_count', { defaultValue: 'file(s)' })}` : (typeof e.attachments_count === 'number' ? `${e.attachments_count} ${t('attachments_count', { defaultValue: 'file(s)' })}` : t('expenses.preview'))}
                           </Button>
                         </TableCell>
                         <TableCell className="space-x-2">
                           <Link to={`/expenses/edit/${e.id}`}>
-                            <Button variant="outline" size="sm">
-                              <Pencil className="w-4 h-4 mr-1" /> Edit
+                               <Button variant="outline" size="sm">
+                               <Pencil className="w-4 h-4 mr-1" /> {t('edit', { defaultValue: 'Edit' })}
                             </Button>
                           </Link>
                           <AlertDialog>
@@ -407,14 +409,14 @@ const Expenses = () => {
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
-                                <AlertDialogTitle>Delete expense?</AlertDialogTitle>
+                                <AlertDialogTitle>{t('expenses.delete_confirm_title')}</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  This action cannot be undone. This will permanently delete this expense and its attachments.
+                                  {t('expenses.delete_confirm_description')}
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDelete(e.id)}>Delete</AlertDialogAction>
+                                <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDelete(e.id)}>{t('delete')}</AlertDialogAction>
                               </AlertDialogFooter>
                             </AlertDialogContent>
                           </AlertDialog>
@@ -437,28 +439,28 @@ const Expenses = () => {
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>New Expense</DialogTitle>
+              <DialogTitle>{t('expenses.new_title')}</DialogTitle>
             </DialogHeader>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4">
               <div>
-                <label className="text-sm">Amount</label>
+                <label className="text-sm">{t('expenses.labels.amount')}</label>
                 <Input type="number" value={Number(newExpense.amount || 0)} onChange={e => setNewExpense({ ...newExpense, amount: Number(e.target.value) })} />
               </div>
               <div>
-                <label className="text-sm">Currency</label>
+                <label className="text-sm">{t('expenses.labels.currency')}</label>
                 <CurrencySelector
                   value={newExpense.currency || 'USD'}
                   onValueChange={(v) => setNewExpense({ ...newExpense, currency: v })}
-                  placeholder="Select currency"
+                  placeholder={t('select_currency')}
                 />
               </div>
               <div>
-                <label className="text-sm">Date</label>
+                <label className="text-sm">{t('expenses.labels.date')}</label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button variant="outline" className="w-full justify-start text-left font-normal">
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {newExpense.expense_date ? format(new Date(newExpense.expense_date as string), 'PPP') : 'Pick a date'}
+                       {newExpense.expense_date ? format(new Date(newExpense.expense_date as string), 'PPP') : t('expenses.labels.pick_date')}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -477,13 +479,13 @@ const Expenses = () => {
                 </Popover>
               </div>
               <div>
-                <label className="text-sm">Category</label>
+                <label className="text-sm">{t('expenses.labels.category')}</label>
                 <Select
                   value={(newExpense.category as string) || 'General'}
                   onValueChange={(v) => setNewExpense({ ...newExpense, category: v })}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select category" />
+                     <SelectValue placeholder={t('select_category', { defaultValue: 'Select category' }) as string} />
                   </SelectTrigger>
                   <SelectContent>
                     {categoryOptions.map((c) => (
@@ -493,23 +495,23 @@ const Expenses = () => {
                 </Select>
               </div>
               <div>
-                <label className="text-sm">Vendor</label>
+                <label className="text-sm">{t('expenses.labels.vendor')}</label>
                 <Input value={newExpense.vendor || ''} onChange={e => setNewExpense({ ...newExpense, vendor: e.target.value })} />
               </div>
               <div>
-                <label className="text-sm">Payment method</label>
+                <label className="text-sm">{t('expenses.labels.payment_method')}</label>
                 <Input value={newExpense.payment_method || ''} onChange={e => setNewExpense({ ...newExpense, payment_method: e.target.value })} />
               </div>
               <div>
-                <label className="text-sm">Reference #</label>
+                <label className="text-sm">{t('expenses.labels.reference_number')}</label>
                 <Input value={newExpense.reference_number || ''} onChange={e => setNewExpense({ ...newExpense, reference_number: e.target.value })} />
               </div>
               <div className="sm:col-span-2">
-                <label className="text-sm">Notes</label>
+                <label className="text-sm">{t('expenses.labels.notes')}</label>
                 <Input value={newExpense.notes || ''} onChange={e => setNewExpense({ ...newExpense, notes: e.target.value })} />
               </div>
               <div className="sm:col-span-2">
-                <label className="text-sm">Receipt (PDF, JPG, PNG)</label>
+                <label className="text-sm">{t('expenses.labels.receipt')}</label>
                 <input
                   type="file"
                   accept="application/pdf,image/jpeg,image/png"
@@ -518,36 +520,36 @@ const Expenses = () => {
               </div>
             </div>
             <div className="p-4 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
-              <Button onClick={handleCreate}>Create</Button>
+              <Button variant="outline" onClick={() => setIsCreateOpen(false)}>{t('cancel')}</Button>
+              <Button onClick={handleCreate}>{t('expenses.buttons.create')}</Button>
             </div>
           </DialogContent>
         </Dialog>
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Edit Expense</DialogTitle>
+              <DialogTitle>{t('expenses.edit_title')}</DialogTitle>
             </DialogHeader>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4">
               <div>
-                <label className="text-sm">Amount</label>
+                <label className="text-sm">{t('expenses.labels.amount')}</label>
                 <Input type="number" value={Number(editExpense.amount || 0)} onChange={e => setEditExpense({ ...editExpense, amount: Number(e.target.value) })} />
               </div>
               <div>
-                <label className="text-sm">Currency</label>
+                <label className="text-sm">{t('expenses.labels.currency')}</label>
                 <CurrencySelector
                   value={editExpense.currency || 'USD'}
                   onValueChange={(v) => setEditExpense({ ...editExpense, currency: v })}
-                  placeholder="Select currency"
+                  placeholder={t('select_currency')}
                 />
               </div>
               <div>
-                <label className="text-sm">Date</label>
+                <label className="text-sm">{t('expenses.labels.date')}</label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button variant="outline" className="w-full justify-start text-left font-normal">
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {editExpense.expense_date ? format(new Date(editExpense.expense_date as string), 'PPP') : 'Pick a date'}
+                       {editExpense.expense_date ? format(new Date(editExpense.expense_date as string), 'PPP') : t('expenses.labels.pick_date')}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -566,13 +568,13 @@ const Expenses = () => {
                 </Popover>
               </div>
               <div>
-                <label className="text-sm">Category</label>
+                <label className="text-sm">{t('expenses.labels.category')}</label>
                 <Select
                   value={(editExpense.category as string) || 'General'}
                   onValueChange={(v) => setEditExpense({ ...editExpense, category: v })}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select category" />
+                     <SelectValue placeholder={t('select_category', { defaultValue: 'Select category' }) as string} />
                   </SelectTrigger>
                   <SelectContent>
                     {categoryOptions.map((c) => (
@@ -582,23 +584,23 @@ const Expenses = () => {
                 </Select>
               </div>
               <div>
-                <label className="text-sm">Vendor</label>
+                <label className="text-sm">{t('expenses.labels.vendor')}</label>
                 <Input value={editExpense.vendor || ''} onChange={e => setEditExpense({ ...editExpense, vendor: e.target.value })} />
               </div>
               <div>
-                <label className="text-sm">Payment method</label>
+                <label className="text-sm">{t('expenses.labels.payment_method')}</label>
                 <Input value={editExpense.payment_method || ''} onChange={e => setEditExpense({ ...editExpense, payment_method: e.target.value })} />
               </div>
               <div>
-                <label className="text-sm">Reference #</label>
+                <label className="text-sm">{t('expenses.labels.reference_number')}</label>
                 <Input value={editExpense.reference_number || ''} onChange={e => setEditExpense({ ...editExpense, reference_number: e.target.value })} />
               </div>
               <div className="sm:col-span-2">
-                <label className="text-sm">Notes</label>
+                <label className="text-sm">{t('expenses.labels.notes')}</label>
                 <Input value={editExpense.notes || ''} onChange={e => setEditExpense({ ...editExpense, notes: e.target.value })} />
               </div>
               <div className="sm:col-span-2">
-                <label className="text-sm">Receipt (PDF, JPG, PNG)</label>
+                <label className="text-sm">{t('expenses.labels.receipt')}</label>
                 <input
                   type="file"
                   accept="application/pdf,image/jpeg,image/png"
@@ -610,8 +612,8 @@ const Expenses = () => {
               </div>
             </div>
             <div className="p-4 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancel</Button>
-              <Button onClick={handleUpdate}>Save</Button>
+              <Button variant="outline" onClick={() => setIsEditOpen(false)}>{t('cancel')}</Button>
+              <Button onClick={handleUpdate}>{t('expenses.buttons.save')}</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -619,11 +621,11 @@ const Expenses = () => {
         <Dialog open={!!attachmentPreviewOpen.expenseId} onOpenChange={(o) => !o && setAttachmentPreviewOpen({ expenseId: null })}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Attachments</DialogTitle>
+              <DialogTitle>{t('expenses.attachments')}</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
               {(attachments[attachmentPreviewOpen.expenseId || -1] || []).length === 0 ? (
-                <div className="text-sm text-muted-foreground">No attachments</div>
+                <div className="text-sm text-muted-foreground">{t('expenses.no_attachments')}</div>
               ) : (
                 <ul className="space-y-2">
                   {(attachments[attachmentPreviewOpen.expenseId || -1] || []).map((att) => (
@@ -643,7 +645,7 @@ const Expenses = () => {
                             setPreview({ open: true, url, contentType: att.content_type || null, filename: att.filename || null });
                           }}
                         >
-                          Preview
+                          {t('expenses.preview')}
                         </Button>
                         <Button
                           variant="destructive"
@@ -655,7 +657,7 @@ const Expenses = () => {
                             setAttachments(prev => ({ ...prev, [attachmentPreviewOpen.expenseId!]: list }));
                           }}
                         >
-                          Delete
+                           {t('delete')}
                         </Button>
                       </div>
                     </li>
@@ -695,7 +697,7 @@ const Expenses = () => {
                   document.body.appendChild(a);
                   a.click();
                   document.body.removeChild(a);
-                }}>Download</Button>
+                }}>{t('expenses.download')}</Button>
               )}
             </div>
           </DialogContent>

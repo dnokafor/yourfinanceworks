@@ -355,7 +355,7 @@ export function AppSidebar() {
     },
     { 
       path: '/expenses', 
-      label: 'Expenses', 
+      label: t('navigation.expenses'), 
       icon: <DollarSign className="w-5 h-5" /> 
     },
 
