@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Eye, EyeOff } from "lucide-react";
-import { authApi } from "@/lib/api";
+import { authApi, API_BASE_URL } from "@/lib/api";
 import { toast } from "sonner";
 import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from '@/components/ui/language-switcher';
@@ -44,9 +44,38 @@ const Login = () => {
   };
 
   const handleGoogleLogin = () => {
-    // TODO: Implement Google SSO
-    toast.info(t('auth.google_sso_coming_soon'));
+    const next = encodeURIComponent('/dashboard');
+    const url = `${API_BASE_URL}/auth/google/login?next=${next}`;
+    window.location.href = url;
   };
+
+  // Handle OAuth callback via URL hash (e.g., /#/oauth-callback?token=...)
+  useEffect(() => {
+    const hash = window.location.hash || '';
+    if (hash.startsWith('#/oauth-callback')) {
+      const queryIndex = hash.indexOf('?');
+      const queryString = queryIndex >= 0 ? hash.slice(queryIndex + 1) : '';
+      const params = new URLSearchParams(queryString);
+      const token = params.get('token');
+      const userB64 = params.get('user');
+      const next = params.get('next') || '/dashboard';
+      if (token && userB64) {
+        try {
+          const userJson = atob(userB64.replace(/-/g, '+').replace(/_/g, '/'));
+          const user = JSON.parse(userJson);
+          localStorage.setItem('token', token);
+          localStorage.setItem('user', JSON.stringify(user));
+          // Clear hash and navigate
+          window.history.replaceState(null, '', next);
+          navigate(next, { replace: true });
+          return;
+        } catch (e) {
+          console.error('Failed to process OAuth callback:', e);
+          toast.error(t('errors.unknown_error'));
+        }
+      }
+    }
+  }, [navigate]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">

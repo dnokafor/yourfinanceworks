@@ -36,6 +36,10 @@ services:
       - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=30
+      # Google OAuth (optional)
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - UI_BASE_URL=${UI_BASE_URL:-http://localhost:8080}
       # Multi-tenant configuration
       - MULTITENANT_MODE=database_per_tenant
       - TENANT_DATABASE_PREFIX=tenant_
@@ -142,6 +146,7 @@ services:
       # Static cluster id required for KRaft mode (22-char base64-like string)
       CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      # Pre-create topics at startup (Confluent image doesn't have built-in create topics, we ensure from worker)
     healthcheck:
       test: ["CMD", "bash", "-lc", "kafka-topics --bootstrap-server kafka:9092 --list | cat"]
       interval: 10s

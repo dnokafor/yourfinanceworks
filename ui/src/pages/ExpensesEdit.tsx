@@ -51,8 +51,19 @@ export default function ExpensesEdit() {
     try {
       if (!id) return;
       setSaving(true);
-      if ((!form.amount || Number(form.amount) === 0) && newFiles.length === 0) {
-        toast.error('Amount is required unless importing from files');
+      const isAnalyzedDone = (form as any)?.analysis_status === 'done';
+      if (isAnalyzedDone && pendingDelete.size > 0) {
+        toast.error('Cannot delete attachments from an analyzed expense');
+        return;
+      }
+      // Allow amount 0 if there will be at least one attachment after this save
+      const existingCount = (attachments?.length || 0);
+      const toDeleteCount = Array.from(pendingDelete).length;
+      const effectiveExistingAfterSave = Math.max(0, existingCount - toDeleteCount);
+      const hasNewFiles = newFiles.length > 0;
+      const willHaveAnyAttachments = effectiveExistingAfterSave > 0 || hasNewFiles;
+      if ((!form.amount || Number(form.amount) === 0) && !willHaveAnyAttachments) {
+        toast.error('Amount is required unless at least one attachment is kept or newly added');
         return;
       }
       if (!form.category) {
@@ -194,6 +205,9 @@ export default function ExpensesEdit() {
             </div>
             <div className="sm:col-span-2">
               <label className="text-sm">Add Attachments (max 10)</label>
+              {(form as any)?.analysis_status === 'done' && (
+                <div className="text-xs text-muted-foreground mt-1">Attachments cannot be deleted after analysis is completed.</div>
+              )}
               <div className="flex items-center gap-3">
                 <label className="inline-flex items-center gap-2 cursor-pointer">
                   <Upload className="w-4 h-4" />
@@ -229,6 +243,7 @@ export default function ExpensesEdit() {
                           <Button
                             variant={pendingDelete.has(att.id) ? 'outline' : 'destructive'}
                             size="sm"
+                            disabled={(form as any)?.analysis_status === 'done'}
                             onClick={() => {
                               setPendingDelete(prev => {
                                 const next = new Set(prev);

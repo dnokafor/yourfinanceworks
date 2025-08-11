@@ -10,6 +10,9 @@ from datetime import datetime, timezone
 from services.ocr_service import process_attachment_inline
 from models.database import set_tenant_context
 from services.tenant_database_manager import tenant_db_manager
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+from typing import List
 
 def _resolve_log_level(name: str) -> int:
     name = (name or "INFO").upper()
@@ -37,6 +40,34 @@ def _get_consumer():
         return None, topic
     try:
         from confluent_kafka import Consumer  # type: ignore
+        # Try to ensure topic exists before subscribing (consumer subscription won't auto-create)
+        try:
+            from confluent_kafka.admin import AdminClient, NewTopic  # type: ignore
+
+            def ensure_topic_exists() -> None:
+                try:
+                    admin = AdminClient({"bootstrap.servers": bootstrap})
+                    md = admin.list_topics(timeout=5)
+                    if topic in md.topics and not md.topics[topic].error:
+                        logger.debug(f"Kafka topic '{topic}' already exists")
+                        return
+                    partitions = int(os.getenv("KAFKA_OCR_TOPIC_PARTITIONS", "1"))
+                    replication_factor = int(os.getenv("KAFKA_OCR_TOPIC_RF", "1"))
+                    new_topic = NewTopic(topic=topic, num_partitions=partitions, replication_factor=replication_factor)
+                    fs = admin.create_topics([new_topic])
+                    fut = fs.get(topic)
+                    try:
+                        fut.result(timeout=10)
+                        logger.info(f"Created Kafka topic '{topic}' (partitions={partitions}, rf={replication_factor})")
+                    except Exception as e:
+                        # If topic exists due to race, ignore; otherwise log warning
+                        logger.warning(f"Topic creation for '{topic}' may have failed or already exists: {e}")
+                except Exception as e:
+                    logger.warning(f"Unable to ensure Kafka topic '{topic}': {e}")
+
+            ensure_topic_exists()
+        except Exception as e:
+            logger.debug(f"Kafka Admin client not available or failed: {e}")
 
         conf = {
             "bootstrap.servers": bootstrap,
@@ -59,6 +90,51 @@ def main() -> int:
     consumer, topic = _get_consumer()
     if not consumer:
         return 1
+    try:
+        # On startup, scan all tenants for queued expenses and requeue them
+        logger.info("Startup scan: requeue queued expenses if any")
+        # Fetch tenant IDs from master
+        master_session_factory = tenant_db_manager.master_session
+        if master_session_factory is not None:
+            master_db: Session = master_session_factory()
+            try:
+                tenant_rows = master_db.execute(text("SELECT id FROM tenants WHERE is_active = TRUE")).fetchall()
+                tenant_ids: List[int] = [row[0] for row in tenant_rows]
+            finally:
+                master_db.close()
+        else:
+            tenant_ids = []
+        # For each tenant, look for queued expenses and requeue using latest attachment
+        for tid in tenant_ids:
+            try:
+                set_tenant_context(tid)
+            except Exception:
+                continue
+            SessionLocalTenant = tenant_db_manager.get_tenant_session(tid)
+            db = SessionLocalTenant()
+            try:
+                from models.models_per_tenant import Expense, ExpenseAttachment
+                queued: List[Expense] = db.query(Expense).filter(Expense.analysis_status == "queued").all()
+                for exp in queued:
+                    att = (
+                        db.query(ExpenseAttachment)
+                        .filter(ExpenseAttachment.expense_id == exp.id)
+                        .order_by(ExpenseAttachment.uploaded_at.desc())
+                        .first()
+                    )
+                    if not att or not getattr(att, "file_path", None):
+                        continue
+                    # Reuse queue_or_process_attachment via lightweight import to avoid cycles
+                    try:
+                        from services.ocr_service import queue_or_process_attachment
+                        queue_or_process_attachment(db, tid, exp.id, att.id, str(att.file_path))
+                        logger.info(f"Requeued queued expense_id={exp.id} tenant_id={tid}")
+                    except Exception as e:
+                        logger.warning(f"Failed to requeue expense {exp.id} in tenant {tid}: {e}")
+            finally:
+                db.close()
+    except Exception as e:
+        logger.warning(f"Startup requeue scan failed: {e}")
     consumer.subscribe([topic])
 
     running = True

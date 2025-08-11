@@ -424,6 +424,65 @@ async def list_expense_attachments(
     ]
 
 
+@router.post("/requeue-queued")
+async def requeue_queued_expenses(
+    expense_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user),
+):
+    """Scan for expenses with analysis_status='queued' and re-publish OCR tasks.
+
+    - If expense_id is provided, only attempts requeue for that expense when in queued status.
+    - For each matching expense, uses the most recent attachment to re-trigger analysis.
+    """
+    require_non_viewer(current_user, "requeue expenses for OCR")
+    try:
+        from models.database import get_tenant_context
+        tenant_id = get_tenant_context()
+
+        q = db.query(Expense).filter(Expense.analysis_status == "queued")
+        if expense_id is not None:
+            q = q.filter(Expense.id == int(expense_id))
+        items = q.all()
+        total = len(items)
+        success = 0
+        skipped_no_attachment = 0
+        failed = 0
+
+        for exp in items:
+            # Find the most recent attachment
+            att = (
+                db.query(ExpenseAttachment)
+                .filter(ExpenseAttachment.expense_id == exp.id)
+                .order_by(ExpenseAttachment.uploaded_at.desc())
+                .first()
+            )
+            if not att or not getattr(att, "file_path", None):
+                skipped_no_attachment += 1
+                continue
+            try:
+                queue_or_process_attachment(
+                    db=db,
+                    tenant_id=tenant_id,
+                    expense_id=exp.id,
+                    attachment_id=att.id,
+                    file_path=str(att.file_path),
+                )
+                success += 1
+            except Exception as e:
+                logger.error(f"Failed to requeue expense {exp.id}: {e}")
+                failed += 1
+
+        return {
+            "total_candidates": total,
+            "requeued": success,
+            "skipped_no_attachment": skipped_no_attachment,
+            "failed": failed,
+        }
+    except Exception as e:
+        logger.error(f"Failed to requeue queued expenses: {e}")
+        raise HTTPException(status_code=500, detail="Failed to requeue queued expenses")
+
 @router.delete("/{expense_id}/attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_expense_attachment(
     expense_id: int,
@@ -434,6 +493,15 @@ async def delete_expense_attachment(
     att = db.query(ExpenseAttachment).filter(ExpenseAttachment.id == attachment_id, ExpenseAttachment.expense_id == expense_id).first()
     if not att:
         raise HTTPException(status_code=404, detail="Attachment not found")
+    # Prevent deleting attachments for expenses already analyzed as done
+    try:
+        exp = db.query(Expense).filter(Expense.id == expense_id).first()
+        if exp and getattr(exp, "analysis_status", None) == "done":
+            raise HTTPException(status_code=400, detail="Cannot delete attachments from an analyzed expense")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Failed to verify expense status before deleting attachment: {e}")
     # Try to remove file from disk
     try:
         if att.file_path and os.path.exists(att.file_path):

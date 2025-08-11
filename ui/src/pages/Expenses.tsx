@@ -28,7 +28,7 @@ import { Loader2, Plus, Search, Trash2, Upload, Pencil, ChevronDown } from 'luci
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { expenseApi, Expense, ExpenseAttachmentMeta } from '@/lib/api';
+import { expenseApi, Expense, ExpenseAttachmentMeta, api } from '@/lib/api';
 import { CurrencySelector } from '@/components/ui/currency-selector';
 import { EXPENSE_CATEGORY_OPTIONS } from '@/constants/expenses';
 
@@ -191,6 +191,17 @@ const Expenses = () => {
       toast.error(e?.message || 'Failed to upload receipt');
     } finally {
       setUploadingId(null);
+    }
+  };
+
+  const handleRequeue = async (expenseId: number) => {
+    try {
+      await api.post(`/expenses/requeue-queued?expense_id=${expenseId}`);
+      toast.success('Requeued for analysis');
+      const data = await expenseApi.getExpenses(categoryFilter);
+      setExpenses(data);
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to requeue');
     }
   };
 
@@ -367,6 +378,11 @@ const Expenses = () => {
                              <span className="text-muted-foreground text-xs">{t('expenses.status_pending')}</span>
                           ) : (
                             <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                          {e.analysis_status === 'queued' && (
+                            <Button variant="ghost" size="sm" className="ml-2" onClick={() => handleRequeue(e.id)}>
+                              {t('expenses.process_again', { defaultValue: 'Process Again' })}
+                            </Button>
                           )}
                         </TableCell>
                         <TableCell className="space-x-2">

@@ -1,15 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm, HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from collections import defaultdict, deque
 import time
 import os
 import secrets
 import hashlib
 from sqlalchemy import func
+from httpx_oauth.clients.google import GoogleOAuth2
 import logging
 import traceback
 
@@ -54,6 +56,25 @@ def _prune_attempts(attempts: deque, window_seconds: int) -> None:
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 security = HTTPBearer()
+
+# --- Google OAuth2 (SSO) setup ---
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+GOOGLE_OAUTH_SCOPES = ["openid", "email", "profile"]
+
+google_oauth_client: Optional[GoogleOAuth2] = None
+if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
+    google_oauth_client = GoogleOAuth2(client_id=GOOGLE_CLIENT_ID, client_secret=GOOGLE_CLIENT_SECRET)
+
+# In-memory state store for CSRF protection and to carry 'next' parameter
+OAUTH_STATE_STORE: Dict[str, Dict[str, Any]] = {}
+OAUTH_STATE_TTL_SECONDS = 600
+
+def _oauth_prune_states() -> None:
+    cutoff = time.time() - OAUTH_STATE_TTL_SECONDS
+    stale = [s for s, v in OAUTH_STATE_STORE.items() if v.get("ts", 0) < cutoff]
+    for s in stale:
+        OAUTH_STATE_STORE.pop(s, None)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
@@ -362,6 +383,141 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
         "token_type": "bearer",
         "user": UserRead.from_orm(db_user)
     }
+
+# -------------------- Google OAuth (SSO) endpoints --------------------
+@router.get("/google/login")
+async def google_login(request: Request, next: Optional[str] = None):
+    if not google_oauth_client:
+        raise HTTPException(status_code=503, detail="Google SSO is not configured")
+
+    # Determine redirect URI (callback)
+    # Expect external UI at nginx 8080. Backend base is discovered from request.
+    # Using API path /api/v1/auth/google/callback
+    base_url = str(request.base_url).rstrip("/")
+    callback_url = f"{base_url}/api/v1/auth/google/callback"
+
+    # Generate state for CSRF protection
+    state = secrets.token_urlsafe(32)
+    OAUTH_STATE_STORE[state] = {"ts": time.time(), "next": next or "/dashboard"}
+    _oauth_prune_states()
+
+    authorization_url = await google_oauth_client.get_authorization_url(
+        redirect_uri=callback_url,
+        scope=GOOGLE_OAUTH_SCOPES,
+        state=state,
+        extras={"access_type": "offline", "prompt": "consent"}
+    )
+    return RedirectResponse(url=authorization_url)
+
+@router.get("/google/callback")
+async def google_callback(request: Request, code: Optional[str] = None, state: Optional[str] = None, db: Session = Depends(get_master_db)):
+    if not google_oauth_client:
+        raise HTTPException(status_code=503, detail="Google SSO is not configured")
+    if not code or not state:
+        raise HTTPException(status_code=400, detail="Missing code or state")
+
+    # Validate state
+    state_data = OAUTH_STATE_STORE.pop(state, None)
+    _oauth_prune_states()
+    if not state_data:
+        raise HTTPException(status_code=400, detail="Invalid or expired state")
+
+    base_url = str(request.base_url).rstrip("/")
+    callback_url = f"{base_url}/api/v1/auth/google/callback"
+
+    # Exchange code for token
+    try:
+        token = await google_oauth_client.get_access_token(code, redirect_uri=callback_url)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to exchange code: {e}")
+
+    # Fetch user info
+    try:
+        user_info = await google_oauth_client.get_id_email(token["access_token"])  # returns tuple (id, email, verified)
+        google_id, email, verified_email = user_info
+    except Exception:
+        # Fallback to userinfo endpoint if needed
+        raise HTTPException(status_code=400, detail="Failed to fetch Google user info")
+
+    if not email:
+        raise HTTPException(status_code=400, detail="Google account has no email")
+
+    # Find or create user in master database
+    user = db.query(MasterUser).filter((MasterUser.google_id == google_id) | (MasterUser.email == email)).first()
+    if not user:
+        # Create a minimal tenant for first user if none exists yet, otherwise attach to the first active tenant
+        # Determine if this is the first user in the system
+        is_first_user = db.query(MasterUser).count() == 0
+        # Create tenant for first user
+        tenant_name = f"{email.split('@')[0]}'s Organization"
+        db_tenant = Tenant(name=tenant_name, email=email, is_active=True)
+        db.add(db_tenant)
+        db.commit()
+        db.refresh(db_tenant)
+
+        # Provision tenant DB
+        success = tenant_db_manager.create_tenant_database(db_tenant.id, tenant_name)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to create tenant database")
+
+        # Create master user
+        user = MasterUser(
+            email=email,
+            hashed_password=get_password_hash(secrets.token_urlsafe(16)),
+            first_name=None,
+            last_name=None,
+            role="admin" if is_first_user else "admin",  # Owner of the new tenant
+            tenant_id=db_tenant.id,
+            is_active=True,
+            is_superuser=is_first_user,
+            is_verified=bool(verified_email),
+            google_id=str(google_id),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        # Create tenant user mirror
+        set_tenant_context(db_tenant.id)
+        tenant_session = tenant_db_manager.get_tenant_session(db_tenant.id)
+        tenant_db = tenant_session()
+        try:
+            tenant_user = TenantUser(
+                id=user.id,
+                email=email,
+                hashed_password=user.hashed_password,
+                first_name=None,
+                last_name=None,
+                role="admin",
+                is_active=True,
+                is_superuser=is_first_user,
+                is_verified=True,
+                google_id=str(google_id),
+            )
+            tenant_db.add(tenant_user)
+            tenant_db.commit()
+        finally:
+            tenant_db.close()
+    else:
+        # Ensure google_id is linked
+        if not user.google_id:
+            user.google_id = str(google_id)
+            db.commit()
+
+    # Issue JWT
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(data={"sub": user.email}, expires_delta=access_token_expires)
+
+    # Redirect back to UI with token via fragment so it doesn't hit server logs
+    ui_base = os.getenv("UI_BASE_URL") or "http://localhost:8080"
+    redirect_next = state_data.get("next") or "/dashboard"
+    # Compose URL: e.g., /oauth-callback?token=...&user=...
+    import json, base64
+    user_payload = UserRead.from_orm(user).dict()
+    # encode user payload compactly
+    user_b64 = base64.urlsafe_b64encode(json.dumps(user_payload).encode()).decode()
+    redirect_url = f"{ui_base}/oauth-callback?token={access_token}&user={user_b64}&next={redirect_next}"
+    return RedirectResponse(url=redirect_url)
 
 @router.post("/login", response_model=Token)
 async def login(user_credentials: UserLogin, db: Session = Depends(get_master_db)):

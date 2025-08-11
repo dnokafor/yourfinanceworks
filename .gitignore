@@ -42,6 +42,6 @@ api/static/logos/*
 !api/static/logos/.gitkeep
 
 # Ignore all files under api/attachments/
-api/api/attachments/*
+api/attachments/*
 # But do not ignore the directory itself
-!api/api/attachments/.gitkeep
+!api/attachments/.gitkeep

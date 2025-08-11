@@ -1,4 +1,5 @@
 import { toast } from 'sonner';
+import { EXPENSE_CATEGORY_OPTIONS } from '@/constants/expenses';
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
@@ -800,7 +801,13 @@ export const paymentApi = {
 export const expenseApi = {
   getExpenses: async (category?: string) => {
     const query = category && category !== 'all' ? `?category=${encodeURIComponent(category)}` : '';
-    return apiRequest<Expense[]>(`/expenses/${query}`);
+    const list = await apiRequest<Expense[]>(`/expenses/${query}`);
+    // Normalize category to a known option; fallback to 'General'
+    const validCategories = EXPENSE_CATEGORY_OPTIONS;
+    return list.map(e => ({
+      ...e,
+      category: validCategories.includes(e.category) ? e.category : 'General'
+    }));
   },
   getExpensesFiltered: async (opts: { category?: string; invoiceId?: number; unlinkedOnly?: boolean } = {}) => {
     const params = new URLSearchParams();
@@ -811,7 +818,14 @@ export const expenseApi = {
     const url = `/expenses/${qs ? `?${qs}` : ''}`;
     return apiRequest<Expense[]>(url);
   },
-  getExpense: (id: number) => apiRequest<Expense>(`/expenses/${id}`),
+  getExpense: async (id: number) => {
+    const e = await apiRequest<Expense>(`/expenses/${id}`);
+    const validCategories = EXPENSE_CATEGORY_OPTIONS;
+    return {
+      ...e,
+      category: validCategories.includes(e.category) ? e.category : 'General'
+    };
+  },
   createExpense: (expense: Omit<Expense, 'id' | 'created_at' | 'updated_at' | 'receipt_filename'>) =>
     apiRequest<Expense>(`/expenses/`, {
       method: 'POST',

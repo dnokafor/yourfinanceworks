@@ -7,6 +7,7 @@ import { RoleProtectedRoute } from "./components/auth/RoleProtectedRoute";
 import { TenantProtectedRoute } from "./components/auth/TenantProtectedRoute";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
+import OAuthCallback from "./pages/OAuthCallback";
 import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
@@ -41,6 +42,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/oauth-callback" element={<OAuthCallback />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
