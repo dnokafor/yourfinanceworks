@@ -168,7 +168,7 @@ async def read_client(
             detail=FAILED_TO_FETCH_CLIENT
         )
 
-@router.post("/", response_model=ClientSchema)
+@router.post("/", response_model=ClientSchema, status_code=status.HTTP_201_CREATED)
 async def create_client(
     client: ClientCreate,
     db: Session = Depends(get_db),
@@ -390,7 +390,8 @@ async def delete_client(
         # Check if client has associated invoices
         # No tenant_id filtering needed since we're in the tenant's database
         has_invoices = db.query(Invoice).filter(
-            Invoice.client_id == client_id
+            Invoice.client_id == client_id,
+            Invoice.is_deleted == False
         ).first() is not None
         
         if has_invoices:

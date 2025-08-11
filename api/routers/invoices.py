@@ -1,11 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_, and_, distinct
+from sqlalchemy import func
 from typing import List, Optional
 import logging
 import traceback
-from datetime import datetime, date, timezone
-from decimal import Decimal
+from datetime import datetime, timezone, timedelta
 from fastapi.responses import StreamingResponse, FileResponse
 from utils.pdf_generator import generate_invoice_pdf
 import os
@@ -39,7 +38,7 @@ def make_aware(dt):
         return dt.replace(tzinfo=timezone.utc)
     return dt
 
-@router.post("/", response_model=InvoiceSchema)
+@router.post("/", response_model=InvoiceSchema, status_code=status.HTTP_201_CREATED)
 async def create_invoice(
     invoice: InvoiceCreate,
     db: Session = Depends(get_db),
@@ -84,7 +83,8 @@ async def create_invoice(
             currency=invoice_currency,
             due_date=invoice.due_date,
             status=invoice.status,
-            notes=invoice.notes,
+            # Persist description into notes field for backward compatibility
+            notes=invoice.description or invoice.notes,
             client_id=invoice.client_id,
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
@@ -94,28 +94,42 @@ async def create_invoice(
             show_discount_in_pdf=invoice.show_discount_in_pdf
         )
         
-        # Calculate subtotal from items
-        calculated_subtotal = sum(float(item_data.quantity) * float(item_data.price) for item_data in invoice.items)
+        # Calculate subtotal and amount
+        items_list = invoice.items or []
+        if items_list:
+            calculated_subtotal = sum(
+                float(item_data.quantity) * float(item_data.price) for item_data in items_list
+            )
+        else:
+            calculated_subtotal = float(invoice.amount)
         db_invoice.subtotal = calculated_subtotal
 
-        # Apply discount if provided
+        # Apply discount if provided; if no items were provided, keep the provided amount
         db_invoice.discount_type = invoice.discount_type or "percentage"
         db_invoice.discount_value = float(invoice.discount_value or 0)
 
-        if db_invoice.discount_value > 0:
-            if db_invoice.discount_type == "percentage":
-                discount_amount = (calculated_subtotal * db_invoice.discount_value) / 100
-            else: # fixed
-                discount_amount = db_invoice.discount_value
-            db_invoice.amount = calculated_subtotal - discount_amount
+        if items_list:
+            if db_invoice.discount_value > 0:
+                if db_invoice.discount_type == "percentage":
+                    discount_amount = (calculated_subtotal * db_invoice.discount_value) / 100
+                else:  # fixed
+                    discount_amount = db_invoice.discount_value
+                db_invoice.amount = calculated_subtotal - discount_amount
+            else:
+                db_invoice.amount = calculated_subtotal
         else:
-            db_invoice.amount = calculated_subtotal
+            db_invoice.amount = float(invoice.amount)
+
+        # Ensure due_date default if not provided
+        if db_invoice.due_date is None:
+            db_invoice.due_date = (datetime.now(timezone.utc) + timedelta(days=30))
+
         db.add(db_invoice)
         db.flush()  # Get the invoice ID
         logger.info(f"[DEBUG] Saved custom_fields in DB: {db_invoice.custom_fields}")
         
         # Create invoice items
-        for item_data in invoice.items:
+        for item_data in items_list:
             db_item = InvoiceItem(
                 invoice_id=db_invoice.id,
                 description=item_data.description,
@@ -167,7 +181,43 @@ async def create_invoice(
             status="success"
         )
         
-        return db_invoice
+        # Build response including description from notes
+        items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id == db_invoice.id).all()
+        items_data = [
+            {
+                "id": item.id,
+                "invoice_id": item.invoice_id,
+                "description": item.description,
+                "quantity": item.quantity,
+                "price": item.price,
+                "amount": item.amount
+            }
+            for item in items
+        ]
+
+        return {
+            "id": db_invoice.id,
+            "number": db_invoice.number,
+            "amount": float(db_invoice.amount),
+            "currency": db_invoice.currency,
+            "due_date": db_invoice.due_date.isoformat() if db_invoice.due_date else None,
+            "status": db_invoice.status,
+            "notes": db_invoice.notes,
+            "description": db_invoice.notes,
+            "client_id": db_invoice.client_id,
+            "created_at": db_invoice.created_at.isoformat() if db_invoice.created_at else None,
+            "updated_at": db_invoice.updated_at.isoformat() if db_invoice.updated_at else None,
+            "is_recurring": db_invoice.is_recurring,
+            "recurring_frequency": db_invoice.recurring_frequency,
+            "discount_type": db_invoice.discount_type,
+            "discount_value": float(db_invoice.discount_value) if db_invoice.discount_value else 0,
+            "subtotal": float(db_invoice.subtotal) if db_invoice.subtotal else float(db_invoice.amount),
+            "items": items_data,
+            "custom_fields": db_invoice.custom_fields if db_invoice.custom_fields is not None else {},
+            "show_discount_in_pdf": db_invoice.show_discount_in_pdf,
+            "has_attachment": bool(db_invoice.attachment_filename) if hasattr(db_invoice, 'attachment_filename') else False,
+            "attachment_filename": getattr(db_invoice, 'attachment_filename', None)
+        }
     except HTTPException:
         db.rollback()
         raise

@@ -27,8 +27,9 @@ class InvoiceItem(InvoiceItemBase):
 class InvoiceBase(BaseModel):
     amount: float = Field(..., description="Total amount of the invoice")
     currency: str = Field("USD", description="Currency code for the invoice")
-    due_date: datetime = Field(..., description="Due date of the invoice")
-    status: str = Field(..., description="Status of the invoice (draft, sent, paid, etc.)")
+    due_date: Optional[datetime] = Field(None, description="Due date of the invoice")
+    status: str = Field("draft", description="Status of the invoice (draft, sent, paid, etc.)")
+    description: Optional[str] = Field(None, description="Short description of the invoice")
     notes: Optional[str] = Field(None, description="Additional notes for the invoice")
     client_id: int = Field(..., description="ID of the client this invoice belongs to")
     is_recurring: Optional[bool] = False
@@ -40,7 +41,7 @@ class InvoiceBase(BaseModel):
     show_discount_in_pdf: Optional[bool] = True
 
 class InvoiceCreate(InvoiceBase):
-    items: List[InvoiceItemCreate]
+    items: Optional[List[InvoiceItemCreate]] = None
 
 class InvoiceUpdate(BaseModel):
     amount: Optional[float] = Field(None, description="Total amount of the invoice")
@@ -65,6 +66,7 @@ class Invoice(InvoiceBase):
     updated_at: datetime
     items: List[InvoiceItem] = []
     custom_fields: Optional[Dict[str, Any]] = None
+    description: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -79,6 +81,7 @@ class InvoiceWithClient(Invoice):
     custom_fields: Optional[Dict[str, Any]] = Field(default=None, description="Custom fields for the invoice")
     has_attachment: Optional[bool] = False
     attachment_filename: Optional[str] = None
+    description: Optional[str] = None
 
     class Config:
         from_attributes = True

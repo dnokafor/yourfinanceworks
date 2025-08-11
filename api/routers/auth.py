@@ -269,15 +269,29 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
 
         # Create tenant
         logger.info(f"Creating new tenant for {user.email} with name {tenant_name}")
-        db_tenant = Tenant(
-            name=tenant_name,
-            email=user.email,
-            is_active=True,
-            address=tenant_address if tenant_address else None
-        )
-        db.add(db_tenant)
-        db.commit()
-        db.refresh(db_tenant)
+        # Ensure unique tenant name to satisfy DB unique constraint
+        base_name = tenant_name
+        suffix_attempt = 0
+        from sqlalchemy.exc import IntegrityError
+        while True:
+            try:
+                db_tenant = Tenant(
+                    name=tenant_name,
+                    email=user.email,
+                    is_active=True,
+                    address=tenant_address if tenant_address else None
+                )
+                db.add(db_tenant)
+                db.commit()
+                db.refresh(db_tenant)
+                break
+            except IntegrityError:
+                db.rollback()
+                suffix_attempt += 1
+                import uuid
+                # Append a short unique suffix and retry
+                short = uuid.uuid4().hex[:6]
+                tenant_name = f"{base_name} {short}"
         tenant_id = db_tenant.id
         logger.info(f"Created tenant {tenant_id} for {user.email}")
 
@@ -383,6 +397,8 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
         "token_type": "bearer",
         "user": UserRead.from_orm(db_user)
     }
+
+# Intentionally no /signup endpoint; /register is the canonical signup route.
 
 # -------------------- Google OAuth (SSO) endpoints --------------------
 @router.get("/google/login")

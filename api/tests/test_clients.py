@@ -1,4 +1,5 @@
 import pytest
+from uuid import uuid4
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -8,18 +9,20 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def auth_headers(client: TestClient):
     # Create and login user
+    unique_email = f"test_{uuid4().hex}@example.com"
     client.post(
-        "/api/v1/auth/signup",
+        "/api/v1/auth/register",
         json={
-            "email": "test@example.com",
+            "email": unique_email,
             "password": "testpass123",
-            "full_name": "Test User"
+            "first_name": "Test",
+            "last_name": "User"
         }
     )
     
     response = client.post(
         "/api/v1/auth/login",
-        data={"username": "test@example.com", "password": "testpass123"}
+        json={"email": unique_email, "password": "testpass123"}
     )
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
