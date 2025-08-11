@@ -755,6 +755,30 @@ export const invoiceApi = {
     form.submit();
     document.body.removeChild(form);
   },
+  getAttachmentInfo: (invoiceId: number) =>
+    apiRequest<{ has_attachment: boolean; filename?: string; content_type?: string; size_bytes?: number }>(`/invoices/${invoiceId}/attachment-info`),
+  previewAttachmentBlob: async (invoiceId: number): Promise<Blob> => {
+    const token = localStorage.getItem('token');
+    const tenantId = localStorage.getItem('selected_tenant_id') || (() => {
+      try {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        return user.tenant_id?.toString();
+      } catch { return undefined; }
+    })();
+
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (tenantId) headers['X-Tenant-ID'] = tenantId;
+
+    const url = `${API_BASE_URL}/invoices/${invoiceId}/preview-attachment`;
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) {
+      const text = await resp.text();
+      try { throw new Error(JSON.parse(text).detail || 'Failed to preview'); }
+      catch { throw new Error(text || 'Failed to preview'); }
+    }
+    return await resp.blob();
+  },
   
   // Invoice history methods
   getInvoiceHistory: (invoiceId: number) => 

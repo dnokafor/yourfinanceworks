@@ -6,6 +6,7 @@ import logging
 import traceback
 from datetime import datetime, timezone, timedelta
 from fastapi.responses import StreamingResponse, FileResponse
+import mimetypes
 from utils.pdf_generator import generate_invoice_pdf
 import os
 import shutil
@@ -1459,3 +1460,73 @@ async def download_invoice_attachment(
             status_code=500,
             detail=f"Failed to download attachment: {str(e)}"
         ) 
+
+
+@router.get("/{invoice_id}/attachment-info")
+async def get_invoice_attachment_info(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Return metadata for the invoice attachment so the UI can decide to preview or download."""
+    try:
+        invoice = db.query(Invoice).filter(
+            Invoice.id == invoice_id,
+            Invoice.is_deleted == False
+        ).first()
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+
+        has_attachment = bool(getattr(invoice, "attachment_path", None) and os.path.exists(invoice.attachment_path))
+        content_type, _ = (mimetypes.guess_type(invoice.attachment_filename or "") if has_attachment else (None, None))
+        size_bytes = os.path.getsize(invoice.attachment_path) if has_attachment else None
+        return {
+            "has_attachment": has_attachment,
+            "filename": invoice.attachment_filename,
+            "content_type": content_type or "application/octet-stream",
+            "size_bytes": size_bytes,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting attachment info for invoice {invoice_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get attachment info")
+
+
+@router.get("/{invoice_id}/preview-attachment")
+async def preview_invoice_attachment(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Serve the invoice attachment with inline Content-Disposition for browser preview (PDF/images)."""
+    try:
+        invoice = db.query(Invoice).filter(
+            Invoice.id == invoice_id,
+            Invoice.is_deleted == False
+        ).first()
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+
+        if not invoice.attachment_path or not os.path.exists(invoice.attachment_path):
+            raise HTTPException(status_code=404, detail="Attachment file not found")
+
+        # Guess media type from filename; fallback to octet-stream
+        media_type, _ = mimetypes.guess_type(invoice.attachment_filename or "")
+        media_type = media_type or "application/octet-stream"
+
+        headers = {
+            # Inline to allow preview in browser tabs for supported types (e.g., PDF, images)
+            "Content-Disposition": f"inline; filename={invoice.attachment_filename or 'attachment'}"
+        }
+        return FileResponse(
+            path=invoice.attachment_path,
+            filename=invoice.attachment_filename,
+            media_type=media_type,
+            headers=headers
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error previewing attachment for invoice {invoice_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to preview attachment")

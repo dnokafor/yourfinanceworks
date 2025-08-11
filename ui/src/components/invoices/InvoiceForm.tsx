@@ -138,6 +138,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
   // Attachment states
   const [invoiceAttachment, setInvoiceAttachment] = useState<File | null>(null);
   const [attachmentInfo, setAttachmentInfo] = useState<{has_attachment: boolean, filename?: string} | null>(null);
+  const [attachmentPreview, setAttachmentPreview] = useState<{ open: boolean; url: string | null; contentType: string | null; filename: string | null }>({ open: false, url: null, contentType: null, filename: null });
   
   
   // Custom fields state for UI
@@ -2560,6 +2561,26 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                             <Button
                               type="button"
                               size="sm"
+                              variant="secondary"
+                              onClick={async () => {
+                                try {
+                                  const id = invoice?.id || previewInvoice?.id;
+                                  if (!id) return;
+                                  const blob = await invoiceApi.previewAttachmentBlob(id);
+                                  const url = window.URL.createObjectURL(blob);
+                                  const filename = attachmentInfo?.filename || invoice?.attachment_filename || previewInvoice?.attachment_filename || 'attachment';
+                                  setAttachmentPreview({ open: true, url, contentType: blob.type || null, filename });
+                                } catch (e) {
+                                  console.error('Preview failed:', e);
+                                  toast.error(t('invoices.preview_failed', { defaultValue: 'Preview failed' }));
+                                }
+                              }}
+                            >
+                              {t('invoices.preview', { defaultValue: 'Preview' })}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
                               variant="default"
                               onClick={() => {
                                 const token = localStorage.getItem('token');
@@ -2625,6 +2646,30 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                             </div>
                           </div>
                           <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onClick={async () => {
+                                try {
+                                  const id = invoice?.id || previewInvoice?.id;
+                                  if (id) {
+                                    const blob = await invoiceApi.previewAttachmentBlob(id);
+                                    const url = window.URL.createObjectURL(blob);
+                                    const filename = invoice?.attachment_filename || previewInvoice?.attachment_filename || (invoiceAttachment?.name || 'attachment');
+                                    setAttachmentPreview({ open: true, url, contentType: blob.type || null, filename });
+                                  } else if (invoiceAttachment) {
+                                    const url = window.URL.createObjectURL(invoiceAttachment);
+                                    setAttachmentPreview({ open: true, url, contentType: invoiceAttachment.type || null, filename: invoiceAttachment.name });
+                                  }
+                                } catch (e) {
+                                  console.error('Preview failed:', e);
+                                  toast.error(t('invoices.preview_failed', { defaultValue: 'Preview failed' }));
+                                }
+                              }}
+                            >
+                              {t('invoices.preview', { defaultValue: 'Preview' })}
+                            </Button>
                             <Button
                               type="button"
                               size="sm"
@@ -2770,6 +2815,46 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
           </div>
         </CardContent>
       </Card>
+
+      {/* Attachment Preview Modal */}
+      <Dialog open={attachmentPreview.open} onOpenChange={(o) => {
+        if (!o && attachmentPreview.url) URL.revokeObjectURL(attachmentPreview.url);
+        setAttachmentPreview(prev => ({
+          open: o,
+          url: o ? prev.url : null,
+          contentType: o ? prev.contentType : null,
+          filename: o ? prev.filename : null,
+        }));
+      }}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>{attachmentPreview.filename || t('invoices.preview', { defaultValue: 'Preview' })}</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[70vh] overflow-auto">
+            {attachmentPreview.url && (attachmentPreview.contentType || '').startsWith('image/') && (
+              <img src={attachmentPreview.url} alt={attachmentPreview.filename || 'attachment'} className="max-w-full h-auto" />
+            )}
+            {attachmentPreview.url && attachmentPreview.contentType === 'application/pdf' && (
+              <iframe src={attachmentPreview.url} className="w-full h-[70vh]" title="PDF Preview" />
+            )}
+            {attachmentPreview.url && attachmentPreview.contentType && !((attachmentPreview.contentType || '').startsWith('image/') || attachmentPreview.contentType === 'application/pdf') && (
+              <div className="text-sm text-muted-foreground">{t('invoices.preview_not_supported', { defaultValue: 'This file type cannot be previewed. Please download instead.' })}</div>
+            )}
+          </div>
+          <div className="flex gap-2">
+            {attachmentPreview.url && (
+              <Button variant="outline" onClick={() => {
+                const a = document.createElement('a');
+                a.href = attachmentPreview.url!;
+                a.download = attachmentPreview.filename || 'attachment';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+              }}>{t('invoices.download')}</Button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showExcessAmountDialog} onOpenChange={setShowExcessAmountDialog}>
         <DialogContent>
