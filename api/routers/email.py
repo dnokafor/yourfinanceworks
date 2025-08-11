@@ -111,7 +111,7 @@ async def send_invoice_email(
             'paid_amount': 0,  # Calculate from payments if needed
             'status': invoice.status,
             'notes': invoice.notes or '',
-            'items': [item.dict() for item in invoice.items] if invoice.items else [] # Ensure items are included
+            'items': [item.model_dump() for item in invoice.items] if hasattr(invoice, 'items') and invoice.items else [] # Ensure items are included
         }
         
         # Prepare client data

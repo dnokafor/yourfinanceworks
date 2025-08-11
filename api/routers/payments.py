@@ -282,7 +282,7 @@ async def create_payment(
             resource_type="payment",
             resource_id=str(db_payment.id),
             resource_name=f"Payment for Invoice #{invoice.number}",
-            details=payment.dict(),
+            details=payment.model_dump(),
             status="success"
         )
         
@@ -299,7 +299,7 @@ async def create_payment(
             resource_type="payment",
             resource_id=None,
             resource_name=None,
-            details=payment.dict(),
+            details=payment.model_dump(),
             status="error",
             error_message=str(e)
         )
@@ -330,7 +330,7 @@ async def update_payment(
         currency_service = CurrencyService(db)
         
         # Update payment fields
-        for field, value in payment.dict(exclude_unset=True).items():
+        for field, value in payment.model_dump(exclude_unset=True).items():
             if field == 'amount':
                 value = float(value)
             elif field == 'payment_date' and isinstance(value, date):
@@ -356,7 +356,7 @@ async def update_payment(
             resource_type="payment",
             resource_id=str(payment_id),
             resource_name=f"Payment for Invoice #{db_payment.invoice_id}",
-            details=payment.dict(exclude_unset=True),
+            details=payment.model_dump(exclude_unset=True),
             status="success"
         )
         return db_payment

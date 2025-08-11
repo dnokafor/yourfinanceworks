@@ -190,7 +190,7 @@ async def create_client(
             )
         
         # Prepare client data
-        client_data = client.dict()
+        client_data = client.model_dump()
         
         # If no preferred_currency is provided, use tenant's default currency
         if not client_data.get('preferred_currency') or client_data.get('preferred_currency').strip() == "":
@@ -226,7 +226,7 @@ async def create_client(
             resource_type="client",
             resource_id=str(db_client.id),
             resource_name=db_client.name,
-            details=client.dict(),
+            details=client.model_dump(),
             status="success"
         )
         # Return client data as dict to avoid DetachedInstanceError
@@ -253,7 +253,7 @@ async def create_client(
             resource_type="client",
             resource_id=None,
             resource_name=client.name,
-            details=client.dict(),
+            details=client.model_dump(),
             status="error",
             error_message=str(e.detail) if hasattr(e, 'detail') else str(e)
         )
@@ -268,7 +268,7 @@ async def create_client(
             resource_type="client",
             resource_id=None,
             resource_name=client.name,
-            details=client.dict(),
+            details=client.model_dump(),
             status="error",
             error_message=str(e)
         )
@@ -301,7 +301,7 @@ async def update_client(
             )
         
         # Update client fields, excluding email
-        update_data = client.dict(exclude_unset=True)
+        update_data = client.model_dump(exclude_unset=True)
         if 'email' in update_data:
             del update_data['email']  # Remove email from update data
         
@@ -345,7 +345,7 @@ async def update_client(
             resource_type="client",
             resource_id=str(client_id),
             resource_name=None,
-            details=client.dict(),
+            details=client.model_dump(),
             status="error",
             error_message=str(e.detail) if hasattr(e, 'detail') else str(e)
         )

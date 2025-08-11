@@ -14,7 +14,7 @@ router = APIRouter()
 
 @router.post("/audit-logs", response_model=AuditLog)
 def create_audit_log(audit_log: AuditLogCreate, db: Session = Depends(get_db)):
-    db_audit_log = AuditLogModel(**audit_log.dict())
+    db_audit_log = AuditLogModel(**audit_log.model_dump())
     db.add(db_audit_log)
     db.commit()
     db.refresh(db_audit_log)

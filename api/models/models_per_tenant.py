@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, Float, ForeignKey, Date, Table, 
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime, date, timezone
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
 

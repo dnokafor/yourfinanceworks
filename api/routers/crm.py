@@ -31,7 +31,7 @@ async def create_client_note(
             raise HTTPException(status_code=404, detail="Client not found")
 
         db_note = ClientNote(
-            **note.dict(),
+            **note.model_dump(),
             client_id=client_id,
             user_id=current_user.id,
             created_at=datetime.now(timezone.utc),

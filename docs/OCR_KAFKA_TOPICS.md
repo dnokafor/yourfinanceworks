@@ -79,5 +79,3 @@ docker compose exec -T kafka \
 
 - On worker startup, the worker scans each tenant DB for expenses with `analysis_status='queued'` and re-publishes a task for the most recent attachment.
 - This helps recover from missed publishes or broker restarts without manual intervention.
-
-

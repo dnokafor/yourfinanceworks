@@ -79,12 +79,12 @@ async def update_notification_settings(
             # Create new settings
             settings = EmailNotificationSettings(
                 user_id=current_user.id,
-                **settings_update.dict()
+                **settings_update.model_dump()
             )
             db.add(settings)
         else:
             # Update existing settings
-            for field, value in settings_update.dict().items():
+            for field, value in settings_update.model_dump().items():
                 setattr(settings, field, value)
         
         db.commit()
@@ -99,7 +99,7 @@ async def update_notification_settings(
             resource_type="notification_settings",
             resource_id=str(settings.id),
             resource_name="Email Notification Settings",
-            details=settings_update.dict(),
+            details=settings_update.model_dump(),
             status="success"
         )
         

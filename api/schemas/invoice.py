@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List, Dict, Any
 from datetime import datetime, date
 
@@ -21,8 +21,7 @@ class InvoiceItem(InvoiceItemBase):
     invoice_id: int
     amount: float
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class InvoiceBase(BaseModel):
     amount: float = Field(..., description="Total amount of the invoice")
@@ -68,11 +67,7 @@ class Invoice(InvoiceBase):
     custom_fields: Optional[Dict[str, Any]] = None
     description: Optional[str] = None
 
-    class Config:
-        from_attributes = True
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
-        }
+    model_config = ConfigDict(from_attributes=True)
 
 class InvoiceWithClient(Invoice):
     client_name: str
@@ -83,11 +78,7 @@ class InvoiceWithClient(Invoice):
     attachment_filename: Optional[str] = None
     description: Optional[str] = None
 
-    class Config:
-        from_attributes = True
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
-        }
+    model_config = ConfigDict(from_attributes=True)
 
 class InvoiceHistoryBase(BaseModel):
     action: str
@@ -105,8 +96,7 @@ class InvoiceHistory(InvoiceHistoryBase):
     user_id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Recycle Bin Schemas
 class DeletedInvoice(Invoice):

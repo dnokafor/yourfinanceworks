@@ -177,7 +177,7 @@ async def create_invoice(
             resource_type="invoice",
             resource_id=str(db_invoice.id),
             resource_name=f"Invoice {db_invoice.number}",
-            details=invoice.dict(),
+            details=invoice.model_dump(),
             status="success"
         )
         
@@ -720,7 +720,7 @@ async def update_invoice(
             )
         
         # Check if invoice is paid and prevent updates except status changes
-        update_data = invoice.dict(exclude_unset=True)
+        update_data = invoice.model_dump(exclude_unset=True)
         if db_invoice.status == "paid" and "status" in update_data:
             # If changing status from paid, allow the change
             pass
@@ -748,7 +748,7 @@ async def update_invoice(
         old_status = db_invoice.status
 
         # Update invoice fields
-        update_data = invoice.dict(exclude_unset=True)
+        update_data = invoice.model_dump(exclude_unset=True)
         logger.info(f"[DEBUG] Update data received: {update_data}")
         for key, value in update_data.items():
             if key != "items":

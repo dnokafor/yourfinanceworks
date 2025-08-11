@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
 from datetime import datetime
 
@@ -28,8 +28,7 @@ class DiscountRule(DiscountRuleBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class DiscountRuleResponse(BaseModel):
     id: int
@@ -43,8 +42,7 @@ class DiscountRuleResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class DiscountCalculationRequest(BaseModel):
     subtotal: float = Field(..., description="Subtotal amount to calculate discount for")

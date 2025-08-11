@@ -374,7 +374,10 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
             logger.info(f"Created user {tenant_user.id} in tenant DB {tenant_id} for {user.email}")
             
         finally:
-            tenant_db.close()
+            try:
+                tenant_db.close()
+            except Exception:
+                pass
     except Exception as e:
         logger.error(f"Failed to create tenant user for {user.email} in tenant DB {tenant_id}: {str(e)}")
         logger.error(traceback.format_exc())
@@ -395,7 +398,7 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "user": UserRead.from_orm(db_user)
+        "user": UserRead.model_validate(db_user)
     }
 
 # Intentionally no /signup endpoint; /register is the canonical signup route.
@@ -529,7 +532,7 @@ async def google_callback(request: Request, code: Optional[str] = None, state: O
     redirect_next = state_data.get("next") or "/dashboard"
     # Compose URL: e.g., /oauth-callback?token=...&user=...
     import json, base64
-    user_payload = UserRead.from_orm(user).dict()
+    user_payload = UserRead.model_validate(user).model_dump()
     # encode user payload compactly
     user_b64 = base64.urlsafe_b64encode(json.dumps(user_payload).encode()).decode()
     redirect_url = f"{ui_base}/oauth-callback?token={access_token}&user={user_b64}&next={redirect_next}"
@@ -584,7 +587,7 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_master_db
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "user": UserRead.from_orm(user)
+        "user": UserRead.model_validate(user)
     }
 
 @router.get("/me", response_model=UserRead)
@@ -612,8 +615,8 @@ async def read_users_me(current_user: MasterUser = Depends(get_current_user), db
         organizations = [{'id': t.id, 'name': t.name} for t in tenants]
     
     # Create response with organizations
-    user_data = UserRead.from_orm(current_user)
-    user_dict = user_data.dict()
+    user_data = UserRead.model_validate(current_user)
+    user_dict = user_data.model_dump()
     user_dict['organizations'] = organizations
     
     return user_dict
@@ -665,7 +668,7 @@ async def update_current_user(
     finally:
         tenant_db.close()
 
-    return UserRead.from_orm(current_user)
+    return UserRead.model_validate(current_user)
 
 @router.post("/invite", response_model=InviteRead)
 async def invite_user(

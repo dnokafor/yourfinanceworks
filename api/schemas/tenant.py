@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel, EmailStr, field_validator, ConfigDict
 from typing import Optional
 from datetime import datetime
 
@@ -13,7 +13,8 @@ class TenantBase(BaseModel):
     default_currency: str = "USD"
     is_active: bool = True
     
-    @validator('name')
+    @field_validator('name')
+    @classmethod
     def validate_name(cls, v):
         if len(v.strip()) < 2:
             raise ValueError('Organization name must be at least 2 characters long')
@@ -38,5 +39,4 @@ class Tenant(TenantBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True 
+    model_config = ConfigDict(from_attributes=True)

@@ -136,7 +136,7 @@ async def create_tenant(
         )
     
     # Create tenant in master database
-    tenant_data = tenant.dict()
+    tenant_data = tenant.model_dump()
     # Map logo_url to company_logo_url to match the model field
     if 'logo_url' in tenant_data:
         tenant_data['company_logo_url'] = tenant_data.pop('logo_url')
@@ -217,7 +217,7 @@ async def update_tenant(
         raise HTTPException(status_code=404, detail="Tenant not found")
     
     # Update tenant fields
-    tenant_data = tenant_update.dict(exclude_unset=True)
+    tenant_data = tenant_update.model_dump(exclude_unset=True)
     # Map logo_url to company_logo_url to match the model field
     if 'logo_url' in tenant_data:
         tenant_data['company_logo_url'] = tenant_data.pop('logo_url')

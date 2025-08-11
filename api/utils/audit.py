@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from models.models_per_tenant import AuditLog
 from models.models import AuditLog as MasterAuditLog
 from typing import Optional, Dict, Any
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 
 # Helper to convert all datetime objects in a dict/list to ISO strings
 def convert_datetimes(obj):
@@ -47,7 +47,7 @@ def log_audit_event(
         user_agent=user_agent,
         status=status,
         error_message=error_message,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
     db.add(audit_log)
     db.commit()
@@ -87,7 +87,7 @@ def log_audit_event_master(
         status=status,
         error_message=error_message,
         tenant_id=tenant_id,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
     db.add(audit_log)
     db.commit()

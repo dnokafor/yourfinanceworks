@@ -54,7 +54,7 @@ async def create_ai_config(
             ).update({"is_default": False})
         
         # No tenant_id needed since each tenant has its own database
-        db_config = AIConfigModel(**config.dict())
+        db_config = AIConfigModel(**config.model_dump())
         db.add(db_config)
         db.commit()
         db.refresh(db_config)
@@ -95,7 +95,7 @@ async def update_ai_config(
             ).update({"is_default": False})
         
         # Update only provided fields
-        update_data = config.dict(exclude_unset=True)
+        update_data = config.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(db_config, field, value)
         

@@ -143,7 +143,7 @@ async def create_expense(
             resource_type="expense",
             resource_id=str(db_expense.id),
             resource_name=f"Expense {db_expense.id}",
-            details=expense.dict(),
+            details=expense.model_dump(),
             status="success",
         )
 
@@ -171,7 +171,7 @@ async def update_expense(
         previous_status = getattr(db_expense, "analysis_status", None)
 
         currency_service = CurrencyService(db)
-        update_data = expense.dict(exclude_unset=True)
+        update_data = expense.model_dump(exclude_unset=True)
 
         if "currency" in update_data:
             if not currency_service.validate_currency_code(update_data["currency"]):
@@ -231,7 +231,7 @@ async def update_expense(
             resource_type="expense",
             resource_id=str(expense_id),
             resource_name=f"Expense {expense_id}",
-            details=expense.dict(exclude_unset=True),
+            details=expense.model_dump(exclude_unset=True),
             status="success",
         )
 

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
 from datetime import datetime, date
 
@@ -59,11 +59,6 @@ class Expense(ExpenseBase):
     attachments_count: Optional[int] = None
     analysis_updated_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None,
-            date: lambda v: v.isoformat() if v else None,
-        }
+    model_config = ConfigDict(from_attributes=True)
 
 

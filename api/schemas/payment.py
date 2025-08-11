@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
 from datetime import date, datetime
 
@@ -31,20 +31,10 @@ class Payment(PaymentBase):
     user_id: Optional[int] = None
     user_name: Optional[str] = None
 
-    class Config:
-        from_attributes = True
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None,
-            date: lambda v: v.isoformat() if v else None
-        }
+    model_config = ConfigDict(from_attributes=True)
 
 class PaymentWithInvoice(Payment):
     invoice_number: str = Field(..., description="Invoice number")
     client_name: str = Field(..., description="Client name")
 
-    class Config:
-        from_attributes = True
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None,
-            date: lambda v: v.isoformat() if v else None
-        } 
+    model_config = ConfigDict(from_attributes=True)

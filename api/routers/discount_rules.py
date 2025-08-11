@@ -115,7 +115,7 @@ async def update_discount_rule(
             )
         
         # Update fields
-        for field, value in rule.dict(exclude_unset=True).items():
+        for field, value in rule.model_dump(exclude_unset=True).items():
             setattr(discount_rule, field, value)
         
         discount_rule.updated_at = datetime.now(timezone.utc)

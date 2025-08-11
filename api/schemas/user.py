@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel, EmailStr, field_validator, ConfigDict
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -17,7 +17,8 @@ class UserCreate(UserBase):
     tenant_id: Optional[int] = None  # Optional for signup flow
     organization_name: Optional[str] = None  # For creating new tenant during signup
     
-    @validator('organization_name')
+    @field_validator('organization_name')
+    @classmethod
     def validate_organization_name(cls, v):
         if v is not None and len(v.strip()) < 2:
             raise ValueError('Organization name must be at least 2 characters long')
@@ -44,8 +45,7 @@ class UserRead(UserBase):
     updated_at: datetime
     organizations: Optional[List[Dict[str, Any]]] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -73,8 +73,7 @@ class InviteRead(BaseModel):
     created_at: datetime
     invited_by: Optional[str] = None  # email of inviter
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class InviteAccept(BaseModel):
     token: str
@@ -91,8 +90,7 @@ class UserList(BaseModel):
     is_active: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class UserRoleUpdate(BaseModel):
     role: str  # admin, user, viewer 
