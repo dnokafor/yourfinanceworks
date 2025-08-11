@@ -162,6 +162,7 @@ def main() -> int:
             attachment_id = int(payload.get("attachment_id"))
             file_path = str(payload.get("file_path"))
             tenant_id: Optional[int] = payload.get("tenant_id")
+            attempt = int(payload.get("attempt", 0))
 
             if tenant_id is not None:
                 try:
@@ -223,12 +224,62 @@ def main() -> int:
                             logger.info(f"Committed Kafka offset for expense_id={expense_id} (done)")
                         except Exception as e:
                             logger.error(f"Failed to commit Kafka offset: {e}")
+                        try:
+                            from services.ocr_service import publish_ocr_result
+                            publish_ocr_result(expense_id, tenant_id, status="done")
+                        except Exception:
+                            logger.error(f"Failed to publish OCR result for expense_id={expense_id}")
+                            pass
                     elif getattr(exp, "analysis_status", None) == "failed":
-                        # Do NOT commit on transient/unknown errors to allow retry on restart.
-                        # If desired, we could implement a retry counter and DLQ here.
-                        logger.warning(
-                            f"OCR failed for expense_id={expense_id}. Keeping message uncommitted for retry."
-                        )
+                        # Retry with backoff and DLQ after max attempts
+                        MAX_ATTEMPTS = int(os.getenv("KAFKA_OCR_MAX_ATTEMPTS", "5"))
+                        if attempt + 1 >= MAX_ATTEMPTS:
+                            logger.warning(f"OCR failed for expense_id={expense_id}. Sending to DLQ after {attempt+1} attempts.")
+                            try:
+                                from confluent_kafka import Producer  # type: ignore
+                                from services.ocr_service import _get_kafka_producer
+                                producer, _ = _get_kafka_producer()
+                                if producer:
+                                    dlq_topic = os.getenv("KAFKA_OCR_DLQ_TOPIC", "expenses_ocr_dlq")
+                                    dlq_event = {
+                                        "tenant_id": tenant_id,
+                                        "expense_id": expense_id,
+                                        "attachment_id": attachment_id,
+                                        "file_path": file_path,
+                                        "attempt": attempt + 1,
+                                        "ts": datetime.now(timezone.utc).isoformat(),
+                                    }
+                                    producer.produce(dlq_topic, key=str(expense_id), value=json.dumps(dlq_event).encode("utf-8"))
+                                    producer.flush(1.0)
+                                # Commit the failed message since we moved it to DLQ
+                                try:
+                                    consumer.commit(message=msg, asynchronous=False)
+                                except Exception:
+                                    pass
+                                try:
+                                    from services.ocr_service import publish_ocr_result
+                                    publish_ocr_result(expense_id, tenant_id, status="failed", details={"dlq": True})
+                                except Exception:
+                                    pass
+                            except Exception as e:
+                                logger.error(f"Failed to publish to DLQ: {e}")
+                        else:
+                            # Requeue with incremented attempt and simple time-based backoff (client-side)
+                            try:
+                                backoff_ms = min(60000, 1000 * (2 ** attempt))
+                                logger.warning(f"Requeueing expense_id={expense_id} attempt={attempt+1} after backoff_ms={backoff_ms}")
+                                from time import sleep
+                                sleep(backoff_ms / 1000.0)
+                                from services.ocr_service import publish_ocr_task
+                                payload.update({"attempt": attempt + 1})
+                                publish_ocr_task(payload)
+                                # Commit the current message so we don't tight-loop
+                                try:
+                                    consumer.commit(message=msg, asynchronous=False)
+                                except Exception:
+                                    pass
+                            except Exception as e:
+                                logger.error(f"Failed to requeue message: {e}")
             finally:
                 db.close()
         except Exception as e:

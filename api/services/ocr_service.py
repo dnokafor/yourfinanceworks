@@ -99,13 +99,39 @@ def publish_ocr_task(message: Dict[str, Any]) -> bool:
         return False
     try:
         payload = json.dumps(message).encode("utf-8")
-        logger.info(f"Publishing OCR message: expense_id={message.get('expense_id')} tenant_id={message.get('tenant_id')} attachment_id={message.get('attachment_id')}")
-        producer.produce(topic, value=payload, key=str(message.get("expense_id")))
+        attempt = int(message.get("attempt", 0))
+        logger.info(
+            f"Publishing OCR message: expense_id={message.get('expense_id')} tenant_id={message.get('tenant_id')} attachment_id={message.get('attachment_id')} attempt={attempt}"
+        )
+        headers = [("attempt", str(attempt))]
+        producer.produce(topic, value=payload, key=str(message.get("expense_id")), headers=headers)
         producer.flush(1.0)
         logger.info(f"Published OCR task to Kafka topic={topic} expense_id={message.get('expense_id')}")
         return True
     except Exception as e:
         logger.error(f"Failed to publish OCR task: {e}")
+        return False
+
+
+def publish_ocr_result(expense_id: int, tenant_id: Optional[int], status: str, details: Optional[Dict[str, Any]] = None) -> bool:
+    """Publish a compact result event keyed by expense_id to a result topic (suitable for compaction)."""
+    producer, _ = _get_kafka_producer()
+    if not producer:
+        return False
+    try:
+        topic = os.getenv("KAFKA_OCR_RESULT_TOPIC", "expenses_ocr_result")
+        event = {
+            "expense_id": expense_id,
+            "tenant_id": tenant_id,
+            "status": status,
+            "ts": datetime.now(timezone.utc).isoformat(),
+            **({"details": details} if details else {}),
+        }
+        producer.produce(topic, key=str(expense_id), value=json.dumps(event).encode("utf-8"))
+        producer.flush(1.0)
+        return True
+    except Exception as e:
+        logger.warning(f"Failed to publish OCR result event: {e}")
         return False
 
 
