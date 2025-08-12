@@ -414,19 +414,7 @@ export function AppSidebar() {
       icon: <DollarSign className="w-5 h-5" /> 
     },
 
-    // Users moved under Settings; remove from main nav
-    // Only show Audit Log for admin or superuser
-    ...((!roleLoading && (isAdminEffective || isSuperUser)) ? [{
-      path: '/audit-log',
-      label: t('navigation.audit_log'),
-      icon: <ListChecks className="w-5 h-5" />
-    }] : []),
-    // Only show Analytics for admin or superuser if user has enabled it
-    ...((!roleLoading && (isAdminEffective || isSuperUser) && showAnalytics) ? [{
-      path: '/analytics',
-      label: 'Analytics',
-      icon: <BarChart className="w-5 h-5" />
-    }] : [])
+    // Users, Audit Log, and Analytics moved under Settings; remove from main nav
   ];
 
   const settingsMenuItems = [
@@ -441,6 +429,18 @@ export function AppSidebar() {
       path: '/users',
       label: t('navigation.users'),
       icon: <UserCheck className="w-5 h-5" />
+    }] : []),
+    // Only show Audit Log for admin or superuser
+    ...((!roleLoading && (isAdminEffective || isSuperUser)) ? [{
+      path: '/audit-log',
+      label: t('navigation.audit_log'),
+      icon: <ListChecks className="w-5 h-5" />
+    }] : []),
+    // Only show Analytics for admin or superuser if user has enabled it
+    ...((!roleLoading && (isAdminEffective || isSuperUser) && showAnalytics) ? [{
+      path: '/analytics',
+      label: 'Analytics',
+      icon: <BarChart className="w-5 h-5" />
     }] : []),
     // Only show Super Admin for super users in their primary tenant
     ...((user?.is_superuser && isPrimaryTenant) ? [{ 

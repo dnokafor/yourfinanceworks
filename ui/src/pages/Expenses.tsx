@@ -31,6 +31,7 @@ import { toast } from 'sonner';
 import { expenseApi, Expense, ExpenseAttachmentMeta, api } from '@/lib/api';
 import { CurrencySelector } from '@/components/ui/currency-selector';
 import { EXPENSE_CATEGORY_OPTIONS } from '@/constants/expenses';
+import { canPerformActions } from '@/utils/auth';
 
 const defaultNewExpense: Partial<Expense> = {
   amount: 0,
@@ -276,28 +277,30 @@ const Expenses = () => {
             <h1 className="text-3xl font-bold">{t('expenses.title')}</h1>
             <p className="text-muted-foreground">{t('expenses.description')}</p>
           </div>
-          <div className="flex gap-2">
-            <div className="flex">
-              <Button onClick={openCreate} className="rounded-r-none border-r-0">
-                <Plus className="w-4 h-4 mr-2" /> {t('expenses.new')}
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button className="rounded-l-none px-2">
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem asChild>
-                    <Link to="/expenses/import" className="flex items-center w-full">
-                      <Upload className="mr-2 h-4 w-4" />
-                      {t('expenses.import_from_pdf_images')}
-                    </Link>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+          {canPerformActions() && (
+            <div className="flex gap-2">
+              <div className="flex">
+                <Button onClick={openCreate} className="rounded-r-none border-r-0">
+                  <Plus className="w-4 h-4 mr-2" /> {t('expenses.new')}
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button className="rounded-l-none px-2">
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem asChild>
+                      <Link to="/expenses/import" className="flex items-center w-full">
+                        <Upload className="mr-2 h-4 w-4" />
+                        {t('expenses.import_from_pdf_images')}
+                      </Link>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <Card className="slide-in">
@@ -379,7 +382,7 @@ const Expenses = () => {
                           ) : (
                             <span className="text-muted-foreground text-xs">—</span>
                           )}
-                          {e.analysis_status === 'queued' && (
+                          {e.analysis_status === 'queued' && canPerformActions() && (
                             <Button variant="ghost" size="sm" className="ml-2" onClick={() => handleRequeue(e.id)}>
                               {t('expenses.process_again', { defaultValue: 'Process Again' })}
                             </Button>
@@ -412,17 +415,19 @@ const Expenses = () => {
                           </Button>
                         </TableCell>
                         <TableCell className="space-x-2">
-                          <Link to={`/expenses/edit/${e.id}`}>
-                               <Button variant="outline" size="sm">
-                               <Pencil className="w-4 h-4 mr-1" /> {t('edit', { defaultValue: 'Edit' })}
-                            </Button>
-                          </Link>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="destructive" size="sm">
-                                <Trash2 className="w-4 h-4 mr-1" /> Delete
-                              </Button>
-                            </AlertDialogTrigger>
+                          {canPerformActions() && (
+                            <>
+                              <Link to={`/expenses/edit/${e.id}`}>
+                                   <Button variant="outline" size="sm">
+                                   <Pencil className="w-4 h-4 mr-1" /> {t('edit', { defaultValue: 'Edit' })}
+                                </Button>
+                              </Link>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="destructive" size="sm">
+                                    <Trash2 className="w-4 h-4 mr-1" /> Delete
+                                  </Button>
+                                </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
                                 <AlertDialogTitle>{t('expenses.delete_confirm_title')}</AlertDialogTitle>
@@ -436,6 +441,8 @@ const Expenses = () => {
                               </AlertDialogFooter>
                             </AlertDialogContent>
                           </AlertDialog>
+                            </>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))

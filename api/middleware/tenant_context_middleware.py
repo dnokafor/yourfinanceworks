@@ -25,17 +25,17 @@ async def tenant_context_middleware(request: Request, call_next):
     clear_tenant_context()
     logger.info(f"Middleware processing: {request.method} {request.url.path}")
     logger.info(f"Authorization header: {'Present' if request.headers.get('Authorization') else 'Missing'}")
-    
+
     # Skip tenant context for Slack endpoints
     if request.url.path.startswith("/api/v1/slack/"):
         logger.info(f"Skipping tenant context for Slack endpoint: {request.url.path}")
         return await call_next(request)
-    
+
     # Skip tenant context for super admin endpoints
     if request.url.path.startswith("/api/v1/super-admin/"):
         logger.info(f"Skipping tenant context for super admin endpoint: {request.url.path}")
         return await call_next(request)
-    
+
     # Skip tenant context for specific endpoints that don't need it or handle it manually
     skip_tenant_paths = [
         "/health", "/", "/docs", "/openapi.json",
@@ -46,30 +46,30 @@ async def tenant_context_middleware(request: Request, call_next):
         # Google OAuth SSO endpoints must be public
         "/api/v1/auth/google/login", "/api/v1/auth/google/callback",
     ]
-    
+
     if request.url.path in skip_tenant_paths:
         return await call_next(request)
-    
+
     try:
         # Extract tenant context from authentication token
         try:
             authorization = request.headers.get("Authorization")
             header_tenant_id = request.headers.get("X-Tenant-ID")
             logger.info(f"Auth header: {authorization[:20] if authorization else 'None'}...")
-            
+
             if not authorization or not authorization.startswith("Bearer "):
                 logger.info("No valid Bearer token found")
                 return JSONResponse(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     content={"detail": "Authentication required. Please log in."}
                 )
-            
+
             logger.info("Processing Bearer token")
             token = authorization.split(" ")[1]
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
             email = payload.get("sub")
             logger.info(f"Token payload email: {email}")
-            
+
             if email:
                 logger.info(f"Decoded email from token: {email}")
                 master_db = next(get_master_db())
@@ -79,7 +79,7 @@ async def tenant_context_middleware(request: Request, call_next):
                     if user and user.tenant_id:
                         # Use header tenant ID if provided and user has access, otherwise use default tenant
                         tenant_id = user.tenant_id
-                        
+
                         # Get tenant IDs from association table - always do this
                         tenant_memberships = master_db.execute(
                             user_tenant_association.select().where(
@@ -87,9 +87,9 @@ async def tenant_context_middleware(request: Request, call_next):
                             )
                         ).fetchall()
                         user_tenant_ids = [membership.tenant_id for membership in tenant_memberships] + [user.tenant_id]
-                        
+
                         logger.info(f"User {email} has access to tenants: {user_tenant_ids}")
-                        
+
                         if header_tenant_id:
                             # Check if user has access to the requested tenant
                             logger.info(f"User {email} has access to tenants: {user_tenant_ids}")
@@ -103,7 +103,7 @@ async def tenant_context_middleware(request: Request, call_next):
                                     status_code=status.HTTP_401_UNAUTHORIZED,
                                     content={"detail": "Access denied to requested organization."}
                                 )
-                        
+
                         logger.info(f"User found: {user.email}, Using Tenant ID: {tenant_id}")
                         # Check if tenant database exists before setting context
                         try:
@@ -111,12 +111,12 @@ async def tenant_context_middleware(request: Request, call_next):
                             from sqlalchemy import text
                             tenant_session.execute(text("SELECT 1"))
                             tenant_session.close()
-                            
+
                             # Only sync user if they still have access to this tenant
                             if tenant_id in user_tenant_ids:
                                 from utils.user_sync import sync_user_to_tenant_database
                                 sync_user_to_tenant_database(user, tenant_id)
-                            
+
                             set_tenant_context(tenant_id)
                             logger.info(f"✅ Successfully set tenant context to {tenant_id} for user {email}")
                         except Exception as e:
@@ -187,13 +187,13 @@ async def tenant_context_middleware(request: Request, call_next):
         # Ensure tenant context is set before proceeding
         current_tenant = get_tenant_context()
         logger.info(f"Current tenant context before handler: {current_tenant}")
-        
+
         logger.info(f"Calling next middleware/handler for {request.url.path}")
         start_time = time.time()
         response = await call_next(request)
         response_time_ms = int((time.time() - start_time) * 1000)
         logger.info(f"Response status: {response.status_code}")
-        
+
         # Track page view for API endpoints (skip static files and health checks)
         if (request.url.path.startswith("/api/v1/") and 
             not request.url.path.startswith("/api/v1/auth/") and
@@ -213,8 +213,8 @@ async def tenant_context_middleware(request: Request, call_next):
                 )
             except Exception as e:
                 logger.error(f"Analytics tracking failed: {e}")
-        
+
         return response
     finally:
         # Don't clear tenant context here - let it persist for the request duration
-        pass 
+        pass
