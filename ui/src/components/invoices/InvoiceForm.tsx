@@ -1738,7 +1738,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                           <FormLabel>{t('invoices.client')}</FormLabel>
                           <div className="flex gap-2">
                             <Select
-                              disabled={isEdit}
+                              disabled={isInvoicePaid}
                               onValueChange={(value) => {
                                 field.onChange(value);
                                 // Set currency to client's preferred currency when client is selected
@@ -1749,7 +1749,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                                 console.log("🎯 Is edit mode:", isEdit);
                                 console.log("🎯 Current form currency before update:", form.getValues("currency"));
                                 
-                                if (selectedClient?.preferred_currency && !isEdit) {
+                                if (selectedClient?.preferred_currency && !isInvoicePaid) {
                                   console.log("✅ Setting invoice currency to client's preferred:", selectedClient.preferred_currency);
                                   form.setValue("currency", selectedClient.preferred_currency);
                                   console.log("✅ Form currency after setValue:", form.getValues("currency"));
@@ -1772,7 +1772,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                                 ))}
                               </SelectContent>
                             </Select>
-                            {!isEdit && (
+                            {!isInvoicePaid && (
                               <Button
                                 type="button"
                                 variant="outline"

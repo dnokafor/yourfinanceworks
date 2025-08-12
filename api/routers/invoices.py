@@ -231,6 +231,179 @@ async def create_invoice(
             detail=FAILED_TO_CREATE_INVOICE
         )
 
+@router.post("/{invoice_id}/clone", response_model=InvoiceSchema, status_code=status.HTTP_201_CREATED)
+async def clone_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Clone an existing invoice and create a new draft with a new number and ID.
+
+    - Copies all primitive fields and items from the source invoice
+    - Generates a new invoice number
+    - Resets status to 'draft'
+    - Does not copy payments or attachments
+    """
+    # Check permissions
+    require_non_viewer(current_user, "clone invoices")
+
+    try:
+        # Fetch source invoice (exclude soft-deleted)
+        source_invoice = db.query(Invoice).filter(
+            Invoice.id == invoice_id,
+            Invoice.is_deleted == False
+        ).first()
+
+        if source_invoice is None:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+
+        # Fetch items for source invoice
+        source_items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).all()
+
+        # Generate new invoice number
+        new_number = generate_invoice_number(db)
+
+        # Build new invoice (reset status to draft, keep due_date as-is)
+        cloned_invoice = Invoice(
+            number=new_number,
+            amount=float(source_invoice.amount),
+            currency=source_invoice.currency,
+            due_date=source_invoice.due_date,
+            status="draft",
+            notes=source_invoice.notes,
+            client_id=source_invoice.client_id,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            is_recurring=source_invoice.is_recurring,
+            recurring_frequency=source_invoice.recurring_frequency,
+            custom_fields=source_invoice.custom_fields,
+            show_discount_in_pdf=source_invoice.show_discount_in_pdf
+        )
+
+        # If the original has items, recalc subtotal/amount like create endpoint
+        if source_items:
+            calculated_subtotal = sum(float(item.quantity) * float(item.price) for item in source_items)
+        else:
+            calculated_subtotal = float(source_invoice.amount)
+        cloned_invoice.subtotal = calculated_subtotal
+
+        # Copy discount fields and recalc total
+        cloned_invoice.discount_type = source_invoice.discount_type or "percentage"
+        cloned_invoice.discount_value = float(source_invoice.discount_value or 0)
+
+        if source_items:
+            if cloned_invoice.discount_value > 0:
+                if cloned_invoice.discount_type == "percentage":
+                    discount_amount = (calculated_subtotal * cloned_invoice.discount_value) / 100
+                else:
+                    discount_amount = cloned_invoice.discount_value
+                cloned_invoice.amount = calculated_subtotal - discount_amount
+            else:
+                cloned_invoice.amount = calculated_subtotal
+        else:
+            cloned_invoice.amount = float(source_invoice.amount)
+
+        # Default due_date if None
+        if cloned_invoice.due_date is None:
+            cloned_invoice.due_date = (datetime.now(timezone.utc) + timedelta(days=30))
+
+        # Persist invoice
+        db.add(cloned_invoice)
+        db.flush()
+
+        # Clone items
+        for s_item in source_items:
+            db_item = InvoiceItem(
+                invoice_id=cloned_invoice.id,
+                description=s_item.description,
+                quantity=float(s_item.quantity),
+                price=float(s_item.price),
+                amount=float(s_item.quantity) * float(s_item.price)
+            )
+            db.add(db_item)
+
+        # History for clone on new invoice
+        from models.models_per_tenant import InvoiceHistory as InvoiceHistoryModel
+        history_entry = InvoiceHistoryModel(
+            invoice_id=cloned_invoice.id,
+            user_id=current_user.id,
+            action='cloned',
+            details=f"Invoice cloned from {source_invoice.number} (ID {source_invoice.id})",
+            previous_values=None,
+            current_values={
+                'source_invoice_id': source_invoice.id,
+                'source_invoice_number': source_invoice.number,
+                'number': cloned_invoice.number,
+                'amount': cloned_invoice.amount,
+                'currency': cloned_invoice.currency,
+                'status': cloned_invoice.status,
+                'due_date': cloned_invoice.due_date.isoformat() if cloned_invoice.due_date else None,
+            }
+        )
+        db.add(history_entry)
+
+        db.commit()
+        db.refresh(cloned_invoice)
+
+        # Audit log
+        log_audit_event(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="CLONE",
+            resource_type="invoice",
+            resource_id=str(cloned_invoice.id),
+            resource_name=f"Invoice {cloned_invoice.number}",
+            details={"cloned_from": source_invoice.id},
+            status="success"
+        )
+
+        # Build response
+        items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id == cloned_invoice.id).all()
+        items_data = [
+            {
+                "id": item.id,
+                "invoice_id": item.invoice_id,
+                "description": item.description,
+                "quantity": item.quantity,
+                "price": item.price,
+                "amount": item.amount
+            }
+            for item in items
+        ]
+
+        return {
+            "id": cloned_invoice.id,
+            "number": cloned_invoice.number,
+            "amount": float(cloned_invoice.amount),
+            "currency": cloned_invoice.currency,
+            "due_date": cloned_invoice.due_date.isoformat() if cloned_invoice.due_date else None,
+            "status": cloned_invoice.status,
+            "notes": cloned_invoice.notes,
+            "description": cloned_invoice.notes,
+            "client_id": cloned_invoice.client_id,
+            "created_at": cloned_invoice.created_at.isoformat() if cloned_invoice.created_at else None,
+            "updated_at": cloned_invoice.updated_at.isoformat() if cloned_invoice.updated_at else None,
+            "is_recurring": cloned_invoice.is_recurring,
+            "recurring_frequency": cloned_invoice.recurring_frequency,
+            "discount_type": cloned_invoice.discount_type,
+            "discount_value": float(cloned_invoice.discount_value) if cloned_invoice.discount_value else 0,
+            "subtotal": float(cloned_invoice.subtotal) if cloned_invoice.subtotal else float(cloned_invoice.amount),
+            "items": items_data,
+            "custom_fields": cloned_invoice.custom_fields if cloned_invoice.custom_fields is not None else {},
+            "show_discount_in_pdf": cloned_invoice.show_discount_in_pdf,
+            "has_attachment": False,
+            "attachment_filename": None
+        }
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error cloning invoice {invoice_id}: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Failed to clone invoice")
+
 @router.get("/", response_model=List[InvoiceWithClient])
 async def read_invoices(
     skip: int = 0,
@@ -747,6 +920,7 @@ async def update_invoice(
         old_custom_fields = db_invoice.custom_fields
         old_show_discount_in_pdf = db_invoice.show_discount_in_pdf
         old_status = db_invoice.status
+        old_client_id = db_invoice.client_id
 
         # Update invoice fields
         update_data = invoice.model_dump(exclude_unset=True)
@@ -840,6 +1014,18 @@ async def update_invoice(
             logger.info(f"[DEBUG] Custom fields changed from {old_custom_fields} to {invoice.custom_fields}")
         if invoice.show_discount_in_pdf is not None and old_show_discount_in_pdf != invoice.show_discount_in_pdf:
             changes.append(f"Show discount in PDF changed from {old_show_discount_in_pdf} to {invoice.show_discount_in_pdf}")
+
+        # Track client change
+        if invoice.client_id is not None and old_client_id != invoice.client_id:
+            try:
+                old_client = db.query(Client).filter(Client.id == old_client_id).first()
+                new_client = db.query(Client).filter(Client.id == invoice.client_id).first()
+                old_client_name = old_client.name if old_client else str(old_client_id)
+                new_client_name = new_client.name if new_client else str(invoice.client_id)
+                changes.append(f"Client changed from {old_client_name} to {new_client_name}")
+            except Exception as _e:
+                # Fallback to IDs if names cannot be resolved
+                changes.append(f"Client changed from {old_client_id} to {invoice.client_id}")
         
         # Only create history entry if there are actual changes
         if changes:
@@ -853,7 +1039,9 @@ async def update_invoice(
                     'discount_value': old_discount_value,
                     'discount_type': old_discount_type,
                     'amount': old_amount,
-                    'notes': old_notes
+                    'notes': old_notes,
+                    'client_id': old_client_id,
+                    'show_discount_in_pdf': old_show_discount_in_pdf
                 },
                 current_values={
                     'currency': db_invoice.currency,
@@ -861,7 +1049,8 @@ async def update_invoice(
                     'discount_type': db_invoice.discount_type,
                     'amount': db_invoice.amount,
                     'notes': db_invoice.notes,
-                    'show_discount_in_pdf': db_invoice.show_discount_in_pdf
+                    'show_discount_in_pdf': db_invoice.show_discount_in_pdf,
+                    'client_id': db_invoice.client_id
                 }
             )
             db.add(history_entry)

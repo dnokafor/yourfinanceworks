@@ -654,6 +654,8 @@ export const invoiceApi = {
       method: 'PUT',
       body: JSON.stringify(invoiceData),
     }),
+  cloneInvoice: (id: number) =>
+    apiRequest<Invoice>(`/invoices/${id}/clone`, { method: 'POST' }),
   deleteInvoice: (id: number) => 
     apiRequest(`/invoices/${id}`, { method: 'DELETE' }),
   

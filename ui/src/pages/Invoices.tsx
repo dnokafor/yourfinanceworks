@@ -3,7 +3,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Filter, FileText, Loader2, Pencil, Trash2, RotateCcw, ChevronDown, ChevronUp, Upload, Edit } from "lucide-react";
+import { Plus, Search, Filter, FileText, Loader2, Pencil, Trash2, RotateCcw, ChevronDown, ChevronUp, Upload, Edit, Copy } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,6 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Link } from "react-router-dom";
 import { invoiceApi, Invoice, api } from "@/lib/api";
+import { useNavigate } from 'react-router-dom';
 import { toast } from "sonner";
 import { CurrencyDisplay } from "@/components/ui/currency-display";
 import { formatDate } from '@/lib/utils';
@@ -38,6 +39,7 @@ interface DeletedInvoice {
 const Invoices = () => {
   const { t } = useTranslation();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentTenantId, setCurrentTenantId] = useState<string | null>(null);
@@ -172,6 +174,22 @@ const Invoices = () => {
     } catch (error) {
       console.error('Failed to permanently delete invoice:', error);
       toast.error('Failed to permanently delete invoice');
+    }
+  };
+
+  const handleCloneInvoice = async (invoiceId: number) => {
+    try {
+      const newInvoice = await invoiceApi.cloneInvoice(invoiceId);
+      toast.success(`Cloned as ${newInvoice.number}`);
+      // Refresh list
+      const status = statusFilter !== "all" ? statusFilter : undefined;
+      const data = await invoiceApi.getInvoices(status);
+      setInvoices(data);
+      // Redirect to edit
+      navigate(`/invoices/edit/${newInvoice.id}`);
+    } catch (error) {
+      console.error('Failed to clone invoice:', error);
+      toast.error('Failed to clone invoice');
     }
   };
 
@@ -435,6 +453,14 @@ const Invoices = () => {
                                   <Pencil className="h-4 w-4" />
                                 </Button>
                               </Link>
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                onClick={() => handleCloneInvoice(invoice.id)}
+                                title="Clone invoice"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
                               <Button 
                                 variant="ghost" 
                                 size="icon"
