@@ -74,7 +74,7 @@ services:
       - ./api:/app
       - /app/__pycache__
       - /app/venv
-      - ./docker/wait-for-it.sh:/wait-for-it.sh
+      - ./infra/docker/wait-for-it.sh:/wait-for-it.sh
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 5s
@@ -116,7 +116,7 @@ services:
     ports:
       - "8080:80"
     volumes:
-      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./infra/docker/nginx.conf:/etc/nginx/conf.d/default.conf
     depends_on:
       - api
       - ui
