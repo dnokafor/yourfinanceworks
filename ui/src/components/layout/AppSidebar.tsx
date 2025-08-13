@@ -417,6 +417,11 @@ export function AppSidebar() {
       label: t('navigation.expenses'),
       icon: <DollarSign className="w-5 h-5" /> 
     },
+    { 
+      path: '/bank-statements', 
+      label: 'Bank Statements',
+      icon: <FileText className="w-5 h-5" /> 
+    },
 
     // Users, Audit Log, and Analytics moved under Settings; remove from main nav
   ];

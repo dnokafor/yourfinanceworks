@@ -26,7 +26,8 @@ from routers import (
     slack_simplified, # Add the new simplified Slack router
     notifications, # Add the new notifications router
     analytics, # Add the new analytics router
-    pdf_processor # Add the new PDF processor router
+    pdf_processor, # Add the new PDF processor router
+    bank_statements
 )
 from models.database import engine
 from models import models
@@ -131,6 +132,7 @@ app.include_router(slack_simplified.router, prefix="/api/v1") # Include the new 
 app.include_router(notifications.router, prefix="/api/v1") # Include the new notifications router
 app.include_router(analytics.router, prefix="/api/v1") # Include the new analytics router
 app.include_router(pdf_processor.router, prefix="/api/v1") # Include the new PDF processor router
+app.include_router(bank_statements.router, prefix="/api/v1")
 
 @app.get("/")
 def read_root():

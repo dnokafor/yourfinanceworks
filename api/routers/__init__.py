@@ -17,3 +17,4 @@ from .notifications import *
 from .analytics import *
 from .pdf_processor import *
 from .expenses import *
+from .bank_statements import *

@@ -124,6 +124,40 @@ export interface ExpenseAttachmentMeta {
   uploaded_at?: string;
 }
 
+export interface BankTransactionEntry {
+  date: string;
+  description: string;
+  amount: number;
+  transaction_type: 'debit' | 'credit';
+  balance?: number | null;
+  category?: string | null;
+}
+
+export const bankStatementApi = {
+  uploadAndExtract: async (files: File[]): Promise<{ success: boolean; count: number; transactions: BankTransactionEntry[] }> => {
+    const token = localStorage.getItem('token');
+    const tenantId = localStorage.getItem('selected_tenant_id') || (() => {
+      try { const user = JSON.parse(localStorage.getItem('user') || '{}'); return user.tenant_id?.toString(); } catch { return undefined; }
+    })();
+
+    const formData = new FormData();
+    files.slice(0, 12).forEach((f) => formData.append('files', f));
+
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (tenantId) headers['X-Tenant-ID'] = tenantId;
+
+    const url = `${API_BASE_URL}/bank-statements/upload`;
+    const resp = await fetch(url, { method: 'POST', headers, body: formData });
+    const text = await resp.text();
+    if (!resp.ok) {
+      try { throw new Error(JSON.parse(text).detail || 'Failed to process bank statements'); }
+      catch { throw new Error(text || 'Failed to process bank statements'); }
+    }
+    return JSON.parse(text);
+  },
+};
+
 // Add settings types
 export interface CompanyInfo {
   name: string;
