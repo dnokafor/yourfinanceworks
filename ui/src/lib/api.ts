@@ -68,7 +68,7 @@ export interface Invoice {
 export const linkApi = {
   // Simple invoice list for selectors
   getInvoicesBasic: async () => {
-    const list = await invoiceApi.getInvoices();
+    const list = await invoiceApi.getInvoicesWithParams({ limit: 1000 });
     // Map to minimal data
     return list.map(inv => ({ id: inv.id, number: inv.number, client_name: inv.client_name, amount: inv.amount, status: inv.status }));
   },
@@ -98,6 +98,7 @@ export interface Expense {
   expense_date: string;
   category: string;
   vendor?: string;
+  labels?: string[];
   tax_rate?: number;
   tax_amount?: number;
   total_amount?: number;
@@ -551,6 +552,40 @@ export const authApi = {
 
 // Invoice API methods
 export const invoiceApi = {
+  getInvoicesWithParams: async (opts: { status?: string; skip?: number; limit?: number } = {}): Promise<Invoice[]> => {
+    try {
+      const params = new URLSearchParams();
+      if (opts.status) params.set('status_filter', opts.status);
+      if (typeof opts.skip === 'number') params.set('skip', String(opts.skip));
+      if (typeof opts.limit === 'number') params.set('limit', String(opts.limit));
+      const response = await apiRequest<any[]>(`/invoices/${params.toString() ? `?${params.toString()}` : ''}`);
+      const mappedInvoices: Invoice[] = response.map(apiInvoice => ({
+        id: apiInvoice.id,
+        number: apiInvoice.number || '',
+        client_id: apiInvoice.client_id,
+        client_name: apiInvoice.client_name || '',
+        client_email: '',
+        date: apiInvoice.created_at || apiInvoice.date || '',
+        due_date: apiInvoice.due_date || '',
+        amount: apiInvoice.amount || 0,
+        currency: apiInvoice.currency || 'USD',
+        paid_amount: apiInvoice.total_paid || 0,
+        status: apiInvoice.status || 'pending',
+        notes: apiInvoice.notes || '',
+        items: [],
+        created_at: apiInvoice.created_at,
+        updated_at: apiInvoice.updated_at,
+        is_recurring: apiInvoice.is_recurring,
+        recurring_frequency: apiInvoice.recurring_frequency,
+        has_attachment: apiInvoice.has_attachment || false,
+        attachment_filename: apiInvoice.attachment_filename || undefined,
+      }));
+      return mappedInvoices;
+    } catch (error) {
+      console.error('Failed to fetch invoices with params:', error);
+      throw error;
+    }
+  },
   getInvoices: async (status?: string): Promise<Invoice[]> => {
     try {
       const response = await apiRequest<any[]>(`/invoices/${status ? `?status_filter=${status}` : ''}`);
@@ -825,8 +860,11 @@ export const paymentApi = {
 
 // Expense API methods
 export const expenseApi = {
-  getExpenses: async (category?: string) => {
-    const query = category && category !== 'all' ? `?category=${encodeURIComponent(category)}` : '';
+  getExpenses: async (category?: string, label?: string) => {
+    const params = new URLSearchParams();
+    if (category && category !== 'all') params.set('category', category);
+    if (label) params.set('label', label);
+    const query = params.toString() ? `?${params.toString()}` : '';
     const list = await apiRequest<Expense[]>(`/expenses/${query}`);
     // Normalize category to a known option; fallback to 'General'
     const validCategories = EXPENSE_CATEGORY_OPTIONS;
@@ -835,11 +873,14 @@ export const expenseApi = {
       category: validCategories.includes(e.category) ? e.category : 'General'
     }));
   },
-  getExpensesFiltered: async (opts: { category?: string; invoiceId?: number; unlinkedOnly?: boolean } = {}) => {
+  getExpensesFiltered: async (opts: { category?: string; label?: string; invoiceId?: number; unlinkedOnly?: boolean; skip?: number; limit?: number } = {}) => {
     const params = new URLSearchParams();
     if (opts.category && opts.category !== 'all') params.set('category', opts.category);
+    if (opts.label) params.set('label', opts.label);
     if (typeof opts.invoiceId === 'number') params.set('invoice_id', String(opts.invoiceId));
     if (opts.unlinkedOnly) params.set('unlinked_only', 'true');
+    if (typeof opts.skip === 'number') params.set('skip', String(opts.skip));
+    if (typeof opts.limit === 'number') params.set('limit', String(opts.limit));
     const qs = params.toString();
     const url = `/expenses/${qs ? `?${qs}` : ''}`;
     return apiRequest<Expense[]>(url);
@@ -861,6 +902,11 @@ export const expenseApi = {
     apiRequest<Expense>(`/expenses/${id}`, {
       method: 'PUT',
       body: JSON.stringify(expense),
+    }),
+  bulkLabels: (expenseIds: number[], operation: 'add' | 'remove', label: string) =>
+    apiRequest<{ updated: number }>(`/expenses/bulk-labels`, {
+      method: 'POST',
+      body: JSON.stringify({ expense_ids: expenseIds, operation, label }),
     }),
   deleteExpense: (id: number) => apiRequest(`/expenses/${id}`, { method: 'DELETE' }),
   uploadReceipt: async (expenseId: number, file: File) => {

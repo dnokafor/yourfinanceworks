@@ -947,7 +947,8 @@
     },
     "buttons": {
       "create": "Create",
-      "save": "Save"
+      "save": "Save",
+      "add_label": "Add label to selected"
     },
     "attachments": "Attachments",
     "no_attachments": "No attachments",

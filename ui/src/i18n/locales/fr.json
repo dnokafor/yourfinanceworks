@@ -943,7 +943,8 @@
     },
     "buttons": {
       "create": "Créer",
-      "save": "Enregistrer"
+      "save": "Enregistrer",
+      "add_label": "Ajouter une étiquette aux éléments sélectionnés"
     },
     "attachments": "Pièces jointes",
     "no_attachments": "Aucune pièce jointe",

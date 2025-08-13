@@ -35,6 +35,7 @@ async def list_expenses(
     skip: int = 0,
     limit: int = 100,
     category: Optional[str] = None,
+    label: Optional[str] = None,
     invoice_id: Optional[int] = None,
     unlinked_only: bool = False,
     db: Session = Depends(get_db),
@@ -44,6 +45,15 @@ async def list_expenses(
         query = db.query(Expense)
         if category and category != "all":
             query = query.filter(Expense.category == category)
+        if label:
+            # Match legacy single label or within labels array
+            try:
+                query = query.filter(
+                    (Expense.label.ilike(f"%{label}%")) |
+                    (sa.cast(Expense.labels, sa.String).ilike(f"%{label}%"))
+                )
+            except Exception:
+                query = query.filter(Expense.label == label)
         if invoice_id is not None:
             query = query.filter(Expense.invoice_id == invoice_id)
         if unlinked_only:
@@ -109,12 +119,33 @@ async def create_expense(
                 raise HTTPException(status_code=400, detail=f"Invoice {expense.invoice_id} not found")
             uvicorn_logger.info(f"Creating expense linked to invoice_id={expense.invoice_id}")
 
+        # Normalize labels: enforce max 10, unique, trimmed, non-empty
+        input_labels = getattr(expense, "labels", None) or ([] if not getattr(expense, "label", None) else [getattr(expense, "label")])
+        if input_labels:
+            norm = []
+            seen = set()
+            for s in input_labels:
+                if not isinstance(s, str):
+                    continue
+                v = s.strip()
+                if not v or v in seen:
+                    continue
+                norm.append(v)
+                seen.add(v)
+                if len(norm) >= 10:
+                    break
+            input_labels = norm
+        else:
+            input_labels = None
+
         db_expense = Expense(
             amount=float(expense.amount),
             currency=currency_code,
             expense_date=expense_dt,
             category=expense.category,
             vendor=expense.vendor,
+            label=getattr(expense, "label", None),
+            labels=input_labels,
             tax_rate=float(expense.tax_rate) if expense.tax_rate is not None else None,
             tax_amount=float(tax_amount) if tax_amount is not None else None,
             total_amount=float(total_amount) if total_amount is not None else None,
@@ -155,6 +186,56 @@ async def create_expense(
         db.rollback()
         logger.error(f"Failed to create expense: {e}")
         raise HTTPException(status_code=500, detail="Failed to create expense")
+
+
+from pydantic import BaseModel
+from typing import List as TypingList, Literal
+
+
+class BulkLabelsRequest(BaseModel):
+    expense_ids: TypingList[int]
+    operation: Literal['add', 'remove']
+    label: str
+
+
+@router.post("/bulk-labels")
+async def bulk_labels_expenses(
+    payload: BulkLabelsRequest,
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user),
+):
+    require_non_viewer(current_user, "bulk label expenses")
+    try:
+        if not payload.expense_ids:
+            raise HTTPException(status_code=400, detail="No expense IDs provided")
+        if not payload.label or not isinstance(payload.label, str):
+            raise HTTPException(status_code=400, detail="Label is required")
+
+        target_items = db.query(Expense).filter(Expense.id.in_(payload.expense_ids)).all()
+        updated = 0
+        for item in target_items:
+            labels = list(getattr(item, 'labels', []) or [])
+            if payload.operation == 'add':
+                val = payload.label.strip()
+                if val and val not in labels:
+                    if len(labels) >= 10:
+                        continue
+                    labels.append(val)
+            elif payload.operation == 'remove':
+                labels = [x for x in labels if x != payload.label]
+            else:
+                continue
+            item.labels = labels or None
+            item.updated_at = datetime.now(timezone.utc)
+            updated += 1
+        db.commit()
+        return {"updated": int(updated)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed bulk label update: {e}")
+        raise HTTPException(status_code=500, detail="Failed to bulk update labels")
 
 
 @router.put("/{expense_id}", response_model=ExpenseSchema)
@@ -205,6 +286,23 @@ async def update_expense(
             uvicorn_logger.info(
                 f"Updating expense {expense_id}: invoice_id {db_expense.invoice_id} -> {update_data['invoice_id']}"
             )
+
+        # Normalize labels if provided
+        if "labels" in update_data:
+            raw = update_data.get("labels") or ([] if not update_data.get("label") else [update_data.get("label")])
+            norm = []
+            seen = set()
+            for s in raw:
+                if not isinstance(s, str):
+                    continue
+                v = s.strip()
+                if not v or v in seen:
+                    continue
+                norm.append(v)
+                seen.add(v)
+                if len(norm) >= 10:
+                    break
+            update_data["labels"] = norm or None
 
         for k, v in update_data.items():
             setattr(db_expense, k, v if k != "amount" else float(v))

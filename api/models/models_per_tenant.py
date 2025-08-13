@@ -138,6 +138,10 @@ class Expense(Base):
     expense_date = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     category = Column(String, nullable=False)
     vendor = Column(String, nullable=True)
+    # Optional label to categorize or tag expenses (legacy single label)
+    label = Column(String, nullable=True, index=True)
+    # Optional multiple labels (tags) stored as JSON array of strings
+    labels = Column(JSON, nullable=True)
     tax_rate = Column(Float, nullable=True)
     tax_amount = Column(Float, nullable=True)
     total_amount = Column(Float, nullable=True)

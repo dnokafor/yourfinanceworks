@@ -6,7 +6,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi.testclient import TestClient
 
-def test_signup(client: TestClient):
+def test_signup(client: TestClient, test_user_registry):
     email = f"test_{uuid4().hex}@example.com"
     response = client.post(
         "/api/v1/auth/register",
@@ -21,8 +21,9 @@ def test_signup(client: TestClient):
     data = response.json()
     assert data["user"]["email"] == email
     assert "access_token" in data
+    test_user_registry.append(email)
 
-def test_login(client: TestClient):
+def test_login(client: TestClient, test_user_registry):
     email = f"test_{uuid4().hex}@example.com"
     # First create a user
     client.post(
@@ -34,6 +35,7 @@ def test_login(client: TestClient):
             "last_name": "User"
         }
     )
+    test_user_registry.append(email)
     
     # Then login
     response = client.post(

@@ -960,7 +960,8 @@
     },
     "buttons": {
       "create": "Crear",
-      "save": "Guardar"
+      "save": "Guardar",
+      "add_label": "Agregar etiqueta a los seleccionados"
     },
     "attachments": "Adjuntos",
     "no_attachments": "Sin adjuntos",

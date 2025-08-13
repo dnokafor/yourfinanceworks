@@ -8,12 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CurrencySelector } from '@/components/ui/currency-selector';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Upload } from 'lucide-react';
+import { CalendarIcon, Upload, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { expenseApi, Expense, ExpenseAttachmentMeta, linkApi } from '@/lib/api';
 import { EXPENSE_CATEGORY_OPTIONS } from '@/constants/expenses';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 
 export default function ExpensesEdit() {
   const { id } = useParams();
@@ -27,6 +28,7 @@ export default function ExpensesEdit() {
   const [pendingDelete, setPendingDelete] = useState<Set<number>>(new Set());
   const [preview, setPreview] = useState<{ open: boolean; url: string | null; contentType: string | null; filename: string | null }>({ open: false, url: null, contentType: null, filename: null });
   const [invoiceOptions, setInvoiceOptions] = useState<Array<{ id: number; number: string; client_name: string }>>([]);
+  const [newLabel, setNewLabel] = useState<string>('');
 
   useEffect(() => {
     const load = async () => {
@@ -70,6 +72,17 @@ export default function ExpensesEdit() {
         toast.error('Category is required');
         return;
       }
+      // Ensure pending input label is included if user didn't press Enter
+      let labelsFromForm: string[] = Array.isArray((form as any).labels) ? ((form as any).labels as string[]) : [];
+      const pending = (newLabel || '').trim();
+      if (pending) {
+        const set = new Set(labelsFromForm);
+        if (!set.has(pending) && set.size < 10) {
+          set.add(pending);
+        }
+        labelsFromForm = Array.from(set).slice(0, 10);
+      }
+
       const payload = {
         amount: Number(form.amount),
         currency: form.currency || 'USD',
@@ -83,6 +96,7 @@ export default function ExpensesEdit() {
         reference_number: form.reference_number,
         status: form.status || 'recorded',
         notes: form.notes,
+        labels: labelsFromForm.length ? labelsFromForm : undefined,
         invoice_id: form.invoice_id ?? null,
       } as any;
       await expenseApi.updateExpense(Number(id), payload);
@@ -101,6 +115,7 @@ export default function ExpensesEdit() {
         try { await expenseApi.uploadReceipt(Number(id), newFiles[i]); } catch (e) { console.error(e); }
       }
       toast.success('Expense updated');
+      setNewLabel('');
       navigate('/expenses');
     } catch (e: any) {
       toast.error(e?.message || 'Failed to update expense');
@@ -198,6 +213,45 @@ export default function ExpensesEdit() {
             <div>
               <label className="text-sm">Reference #</label>
               <Input value={form.reference_number || ''} onChange={e => setForm({ ...form, reference_number: e.target.value })} />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="text-sm">Labels</label>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                {((form as any).labels || []).slice(0, 10).map((lab: string, idx: number) => (
+                  <Badge key={`lab-${idx}`} variant="secondary" className="text-xs">
+                    {lab}
+                    <button
+                      className="ml-1 text-muted-foreground hover:text-foreground"
+                      aria-label="Remove label"
+                      onClick={() => {
+                        try {
+                          const next = ((form as any).labels || []).filter((l: string) => l !== lab);
+                          setForm({ ...form, labels: next } as any);
+                        } catch {}
+                      }}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                ))}
+                <Input
+                  placeholder="Add label"
+                  value={newLabel}
+                  className="w-[160px] h-8"
+                  onChange={(e) => setNewLabel(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const raw = (newLabel || '').trim();
+                      if (!raw) return;
+                      const existing: string[] = ((form as any).labels || []);
+                      if (existing.includes(raw)) { setNewLabel(''); return; }
+                      if (existing.length >= 10) { toast.error('Maximum of 10 labels reached'); return; }
+                      setForm({ ...form, labels: [...existing, raw] } as any);
+                      setNewLabel('');
+                    }
+                  }}
+                />
+              </div>
             </div>
             <div className="sm:col-span-2">
               <label className="text-sm">Notes</label>

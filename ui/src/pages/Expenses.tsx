@@ -6,11 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import { Checkbox } from '@/components/ui/checkbox';
 import { CurrencyDisplay } from '@/components/ui/currency-display';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { 
   AlertDialog,
@@ -24,11 +26,13 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 // removed duplicate useEffect import
-import { Loader2, Plus, Search, Trash2, Upload, Pencil, ChevronDown } from 'lucide-react';
+import { Loader2, Plus, Search, Trash2, Upload, ChevronDown } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { expenseApi, Expense, ExpenseAttachmentMeta, api } from '@/lib/api';
+import { Badge } from '@/components/ui/badge';
 import { CurrencySelector } from '@/components/ui/currency-selector';
 import { EXPENSE_CATEGORY_OPTIONS } from '@/constants/expenses';
 import { canPerformActions } from '@/utils/auth';
@@ -47,7 +51,17 @@ const Expenses = () => {
   const categoryOptions = EXPENSE_CATEGORY_OPTIONS;
   const [loading, setLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [labelFilter, setLabelFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  // Bulk label removed
+  const [unlinkedOnly, setUnlinkedOnly] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [bulkLabel, setBulkLabel] = useState('');
+  const [newLabelValueById, setNewLabelValueById] = useState<Record<number, string>>({});
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [hasNextPage, setHasNextPage] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newExpense, setNewExpense] = useState<Partial<Expense>>(defaultNewExpense);
   const [uploadingId, setUploadingId] = useState<number | null>(null);
@@ -94,8 +108,16 @@ const Expenses = () => {
     const fetchExpenses = async () => {
       setLoading(true);
       try {
-        const data = await expenseApi.getExpenses(categoryFilter);
+        const skip = (page - 1) * pageSize;
+        const data = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip, limit: pageSize });
         setExpenses(data);
+        // Probe next page existence precisely
+        try {
+          const probe = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip: skip + pageSize, limit: 1 });
+          setHasNextPage(Array.isArray(probe) && probe.length > 0);
+        } catch {
+          setHasNextPage(data.length === pageSize);
+        }
       } catch (e) {
         toast.error('Failed to load expenses');
       } finally {
@@ -103,7 +125,38 @@ const Expenses = () => {
       }
     };
     fetchExpenses();
-  }, [categoryFilter, currentTenantId]);
+  }, [categoryFilter, labelFilter, unlinkedOnly, page, pageSize, currentTenantId]);
+
+  // Initialize from URL on first render
+  useEffect(() => {
+    try {
+      const cat = searchParams.get('category');
+      const lab = searchParams.get('label');
+      const q = searchParams.get('q');
+      const ul = searchParams.get('unlinked');
+      const pg = searchParams.get('page');
+      const ps = searchParams.get('pageSize');
+      if (cat) setCategoryFilter(cat);
+      if (lab) setLabelFilter(lab);
+      if (q) setSearchQuery(q);
+      if (ul === '1') setUnlinkedOnly(true);
+      if (pg && !Number.isNaN(Number(pg))) setPage(Math.max(1, Number(pg)));
+      if (ps && !Number.isNaN(Number(ps))) setPageSize(Math.min(200, Math.max(5, Number(ps))));
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist filters to URL
+  useEffect(() => {
+    const p = new URLSearchParams();
+    if (categoryFilter && categoryFilter !== 'all') p.set('category', categoryFilter);
+    if (labelFilter) p.set('label', labelFilter);
+    if (searchQuery) p.set('q', searchQuery);
+    if (unlinkedOnly) p.set('unlinked', '1');
+    if (page && page !== 1) p.set('page', String(page));
+    if (pageSize && pageSize !== 20) p.set('pageSize', String(pageSize));
+    setSearchParams(p, { replace: true });
+  }, [categoryFilter, labelFilter, searchQuery, unlinkedOnly, page, pageSize, setSearchParams]);
 
   const filteredExpenses = useMemo(() => {
     return (expenses || []).filter(e => {
@@ -111,7 +164,8 @@ const Expenses = () => {
       return (
         (e.vendor || '').toLowerCase().includes(s) ||
         (e.category || '').toLowerCase().includes(s) ||
-        (e.notes || '').toLowerCase().includes(s)
+        (e.notes || '').toLowerCase().includes(s) ||
+        ((e.labels || []).join(',').toLowerCase().includes(s))
       );
     });
   }, [expenses, searchQuery]);
@@ -328,17 +382,113 @@ const Expenses = () => {
                     ))}
                   </SelectContent>
                 </Select>
+                <div className="relative">
+                  <Input
+                    placeholder={t('expenses.filter_by_label', { defaultValue: 'Filter by label' })}
+                    className="pl-8 w-full sm:w-[180px] pr-8"
+                    value={labelFilter}
+                    onChange={(e) => { setLabelFilter(e.target.value); setPage(1); }}
+                  />
+                  {labelFilter && (
+                    <button
+                      aria-label="Clear label filter"
+                      className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
+                      onClick={() => { setLabelFilter(''); setPage(1); }}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                  <input type="checkbox" checked={unlinkedOnly} onChange={(e) => { setUnlinkedOnly(e.target.checked); setPage(1); }} />
+                  {t('expenses.unlinked_only', { defaultValue: 'Unlinked only' })}
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">{t('page_size', { defaultValue: 'Page size' })}</span>
+                  <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
+                    <SelectTrigger className="w-[100px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[10,20,50,100].map(n => (
+                        <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
           </CardHeader>
           <CardContent>
+            <div className="flex flex-col md:flex-row md:items-center gap-2 mb-3 md:justify-between">
+              <div className="text-sm text-muted-foreground">
+                {selectedIds.length > 0 ? `${selectedIds.length} selected` : `${expenses.length} ${t('expenses.results', { defaultValue: 'results' })}`}
+              </div>
+              <div className="flex items-center gap-2 md:ml-auto">
+                <Input
+                  placeholder={t('expenses.bulk_label_placeholder', { defaultValue: 'Label' })}
+                  value={bulkLabel}
+                  onChange={(e) => setBulkLabel(e.target.value)}
+                  className="w-full sm:w-[220px]"
+                />
+                <Button
+                  variant="outline"
+                  disabled={!canPerformActions() || selectedIds.length === 0 || !bulkLabel.trim()}
+                  onClick={async () => {
+                    try {
+                      const skip = (page - 1) * pageSize;
+                      await expenseApi.bulkLabels(selectedIds, 'add', bulkLabel.trim());
+                      const data = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip, limit: pageSize });
+                      setExpenses(data);
+                      setSelectedIds([]);
+                      setBulkLabel('');
+                      toast.success('Labels added');
+                    } catch (e: any) {
+                      toast.error(e?.message || 'Failed to add label');
+                    }
+                  }}
+                >
+                  {t('add')}
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={!canPerformActions() || selectedIds.length === 0 || !bulkLabel.trim()}
+                  onClick={async () => {
+                    try {
+                      const skip = (page - 1) * pageSize;
+                      await expenseApi.bulkLabels(selectedIds, 'remove', bulkLabel.trim());
+                      const data = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip, limit: pageSize });
+                      setExpenses(data);
+                      setSelectedIds([]);
+                      setBulkLabel('');
+                      toast.success('Labels removed');
+                    } catch (e: any) {
+                      toast.error(e?.message || 'Failed to remove label');
+                    }
+                  }}
+                >
+                  {t('remove')}
+                </Button>
+              </div>
+            </div>
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[40px]">
+                      <Checkbox
+                        checked={selectedIds.length > 0 && selectedIds.length === filteredExpenses.length}
+                        onCheckedChange={(v) => {
+                          if (v) setSelectedIds(filteredExpenses.map(x => x.id));
+                          else setSelectedIds([]);
+                        }}
+                        aria-label="Select all"
+                      />
+                    </TableHead>
                     <TableHead>{t('expenses.table.date')}</TableHead>
                     <TableHead>{t('expenses.table.category')}</TableHead>
                     <TableHead>{t('expenses.table.vendor')}</TableHead>
+                    <TableHead>{t('labels', { defaultValue: 'Labels' })}</TableHead>
                     <TableHead>{t('expenses.table.amount')}</TableHead>
                     <TableHead>{t('expenses.table.total')}</TableHead>
                     <TableHead>{t('expenses.table.invoice')}</TableHead>
@@ -360,9 +510,70 @@ const Expenses = () => {
                   ) : (filteredExpenses || []).length > 0 ? (
                     (filteredExpenses || []).map((e) => (
                       <TableRow key={e.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedIds.includes(e.id)}
+                            onCheckedChange={(v) => {
+                              if (v) setSelectedIds(prev => Array.from(new Set([...prev, e.id])));
+                              else setSelectedIds(prev => prev.filter(x => x !== e.id));
+                            }}
+                            aria-label={`Select expense ${e.id}`}
+                          />
+                        </TableCell>
                         <TableCell>{e.expense_date ? new Date(e.expense_date).toLocaleDateString('en-US', { timeZone: 'UTC' }) : 'N/A'} UTC</TableCell>
                         <TableCell>{e.category}</TableCell>
                         <TableCell>{e.vendor || '—'}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {(e.labels || []).slice(0, 10).map((lab, idx) => (
+                              <Badge key={`${e.id}-lab-${idx}`} variant="secondary" className="text-xs">
+                                {lab}
+                                {canPerformActions() && (
+                                  <button
+                                    className="ml-1 text-muted-foreground hover:text-foreground"
+                                    aria-label={t('remove', { defaultValue: 'Remove' })}
+                                    onClick={async () => {
+                                      try {
+                                        const next = (e.labels || []).filter((l) => l !== lab);
+                                        await expenseApi.updateExpense(e.id, { labels: next });
+                                        setExpenses((prev) => prev.map((x) => (x.id === e.id ? { ...x, labels: next } as Expense : x)));
+                                      } catch (err: any) {
+                                        toast.error(err?.message || 'Failed to remove label');
+                                      }
+                                    }}
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </Badge>
+                            ))}
+                            {canPerformActions() && (
+                              <Input
+                                placeholder={t('expenses.label_placeholder', { defaultValue: 'Add label' })}
+                                value={newLabelValueById[e.id] || ''}
+                                className="w-[140px] h-8"
+                                onChange={(ev) => setNewLabelValueById((prev) => ({ ...prev, [e.id]: ev.target.value }))}
+                                onKeyDown={async (ev) => {
+                                  if (ev.key === 'Enter') {
+                                    const raw = (newLabelValueById[e.id] || '').trim();
+                                    if (!raw) return;
+                                    const existing = e.labels || [];
+                                    if (existing.includes(raw)) { setNewLabelValueById((prev) => ({ ...prev, [e.id]: '' })); return; }
+                                    if (existing.length >= 10) { toast.error(t('max_labels_reached', { defaultValue: 'Maximum of 10 labels reached' })); return; }
+                                    try {
+                                      const next = [...existing, raw];
+                                      await expenseApi.updateExpense(e.id, { labels: next });
+                                      setExpenses((prev) => prev.map((x) => (x.id === e.id ? { ...x, labels: next } as Expense : x)));
+                                      setNewLabelValueById((prev) => ({ ...prev, [e.id]: '' }));
+                                    } catch (err: any) {
+                                      toast.error(err?.message || 'Failed to add label');
+                                    }
+                                  }
+                                }}
+                              />
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell><CurrencyDisplay amount={e.amount || 0} currency={e.currency || 'USD'} /></TableCell>
                         <TableCell><CurrencyDisplay amount={e.total_amount || e.amount || 0} currency={e.currency || 'USD'} /></TableCell>
                         <TableCell>
@@ -418,9 +629,7 @@ const Expenses = () => {
                           {canPerformActions() && (
                             <>
                               <Link to={`/expenses/edit/${e.id}`}>
-                                   <Button variant="outline" size="sm">
-                                   <Pencil className="w-4 h-4 mr-1" /> {t('edit', { defaultValue: 'Edit' })}
-                                </Button>
+                                <Button variant="outline" size="sm">{t('edit', { defaultValue: 'Edit' })}</Button>
                               </Link>
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
@@ -455,6 +664,26 @@ const Expenses = () => {
                   )}
                 </TableBody>
               </Table>
+            </div>
+            <div className="mt-3">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      href="#"
+                      className={page <= 1 ? 'opacity-50 pointer-events-none' : ''}
+                      onClick={(e) => { e.preventDefault(); if (page > 1 && !loading) setPage(p => Math.max(1, p - 1)); }}
+                    />
+                  </PaginationItem>
+                  <PaginationItem>
+                    <PaginationNext
+                      href="#"
+                      className={!hasNextPage ? 'opacity-50 pointer-events-none' : ''}
+                      onClick={(e) => { e.preventDefault(); if (hasNextPage && !loading) setPage(p => p + 1); }}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
             </div>
           </CardContent>
         </Card>

@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi.testclient import TestClient
 
 @pytest.fixture
-def auth_headers(client: TestClient):
+def auth_headers(client: TestClient, test_user_registry):
     # Create and login user
     unique_email = f"test_{uuid4().hex}@example.com"
     client.post(
@@ -19,6 +19,7 @@ def auth_headers(client: TestClient):
             "last_name": "User"
         }
     )
+    test_user_registry.append(unique_email)
     
     response = client.post(
         "/api/v1/auth/login",

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, date
 
 
@@ -9,6 +9,8 @@ class ExpenseBase(BaseModel):
     expense_date: date = Field(default_factory=date.today, description="Date of the expense")
     category: str = Field(..., description="Expense category (e.g., Travel, Meals, Software)")
     vendor: Optional[str] = Field(None, description="Vendor or payee")
+    label: Optional[str] = Field(None, description="Legacy single label (backward compatible)")
+    labels: Optional[List[str]] = Field(None, description="Up to 10 labels for grouping/searching expenses")
     tax_rate: Optional[float] = Field(None, description="Tax rate percentage, e.g., 10 for 10%")
     tax_amount: Optional[float] = Field(None, description="Calculated tax amount, if provided")
     total_amount: Optional[float] = Field(None, description="Total amount including tax")
@@ -35,6 +37,8 @@ class ExpenseUpdate(BaseModel):
     expense_date: Optional[date] = None
     category: Optional[str] = None
     vendor: Optional[str] = None
+    label: Optional[str] = None
+    labels: Optional[List[str]] = None
     tax_rate: Optional[float] = None
     tax_amount: Optional[float] = None
     total_amount: Optional[float] = None
