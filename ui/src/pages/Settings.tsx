@@ -1880,6 +1880,22 @@ const Settings = () => {
                           <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
                           <span>{t('settings.company_settings')}</span>
                         </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                          <span>Expenses & Receipts</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                          <span>Bank Statements & Transactions</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
+                          <span>Audit Logs & Activity History</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className="w-2 h-2 bg-pink-500 rounded-full"></div>
+                          <span>AI Chat History</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1892,6 +1908,7 @@ const Settings = () => {
                         <p><strong>{t('settings.compatibility')}:</strong> {t('settings.works_with_database_tools')}</p>
                         <p><strong>{t('settings.security')}:</strong> {t('settings.no_sensitive_authentication_data')}</p>
                         <p><strong>{t('settings.size')}:</strong> {t('settings.size_description')}</p>
+                        <p><strong>Note:</strong> Attachment files (receipts, bank statements, invoice attachments) are not included in the export. Only database records are exported.</p>
                       </div>
                     </div>
                   </div>

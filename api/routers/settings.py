@@ -197,7 +197,7 @@ async def export_tenant_data(
     import sqlalchemy
     from sqlalchemy.orm import sessionmaker
     from models.models_per_tenant import (
-        Base as TenantBase, User, Client, ClientNote, Invoice, Payment, Settings, DiscountRule, SupportedCurrency, CurrencyRate, InvoiceItem, InvoiceHistory, AIConfig
+        Base as TenantBase, User, Client, ClientNote, Invoice, Payment, Settings, DiscountRule, SupportedCurrency, CurrencyRate, InvoiceItem, InvoiceHistory, AIConfig, Expense, ExpenseAttachment, BankStatement, BankStatementTransaction, AuditLog, AIChatHistory
     )
     import atexit
 
@@ -253,6 +253,24 @@ async def export_tenant_data(
         # 12. AIConfig
         for obj in db.query(AIConfig).all():
             sqlite_session.add(AIConfig(**{c.name: getattr(obj, c.name) for c in AIConfig.__table__.columns}))
+        # 13. Expenses
+        for obj in db.query(Expense).all():
+            sqlite_session.add(Expense(**{c.name: getattr(obj, c.name) for c in Expense.__table__.columns}))
+        # 14. ExpenseAttachments
+        for obj in db.query(ExpenseAttachment).all():
+            sqlite_session.add(ExpenseAttachment(**{c.name: getattr(obj, c.name) for c in ExpenseAttachment.__table__.columns}))
+        # 15. BankStatements
+        for obj in db.query(BankStatement).all():
+            sqlite_session.add(BankStatement(**{c.name: getattr(obj, c.name) for c in BankStatement.__table__.columns}))
+        # 16. BankStatementTransactions
+        for obj in db.query(BankStatementTransaction).all():
+            sqlite_session.add(BankStatementTransaction(**{c.name: getattr(obj, c.name) for c in BankStatementTransaction.__table__.columns}))
+        # 17. AuditLogs
+        for obj in db.query(AuditLog).all():
+            sqlite_session.add(AuditLog(**{c.name: getattr(obj, c.name) for c in AuditLog.__table__.columns}))
+        # 18. AIChatHistory
+        for obj in db.query(AIChatHistory).all():
+            sqlite_session.add(AIChatHistory(**{c.name: getattr(obj, c.name) for c in AIChatHistory.__table__.columns}))
         sqlite_session.commit()
         sqlite_session.close()
 
@@ -285,7 +303,7 @@ async def import_tenant_data(
     from sqlalchemy import create_engine, inspect
     from sqlalchemy.orm import sessionmaker
     from models.models_per_tenant import (
-        User, Client, ClientNote, Invoice, Payment, Settings, DiscountRule, SupportedCurrency, CurrencyRate, InvoiceItem, InvoiceHistory, AIConfig, EmailNotificationSettings
+        User, Client, ClientNote, Invoice, Payment, Settings, DiscountRule, SupportedCurrency, CurrencyRate, InvoiceItem, InvoiceHistory, AIConfig, EmailNotificationSettings, Expense, ExpenseAttachment, BankStatement, BankStatementTransaction, AuditLog, AIChatHistory
     )
     from services.tenant_database_manager import tenant_db_manager
     try:
@@ -318,7 +336,8 @@ async def import_tenant_data(
             table_names = [
                 'users', 'clients', 'client_notes', 'invoices', 'payments', 'settings',
                 'discount_rules', 'supported_currencies', 'currency_rates',
-                'invoice_items', 'invoice_history', 'ai_configs'
+                'invoice_items', 'invoice_history', 'ai_configs', 'expenses', 'expense_attachments',
+                'bank_statements', 'bank_statement_transactions', 'audit_logs', 'ai_chat_history'
             ]
             missing = [t for t in ['clients', 'invoices', 'payments'] if t not in tables]
             if missing:
@@ -329,6 +348,12 @@ async def import_tenant_data(
             db = SessionLocal_tenant()
             try:
                 # Delete all existing data for this tenant (order matters for FKs)
+                db.query(AIChatHistory).delete()
+                db.query(AuditLog).delete()
+                db.query(BankStatementTransaction).delete()
+                db.query(BankStatement).delete()
+                db.query(ExpenseAttachment).delete()
+                db.query(Expense).delete()
                 db.query(ClientNote).delete()
                 db.query(InvoiceItem).delete()
                 db.query(Payment).delete()
@@ -346,6 +371,8 @@ async def import_tenant_data(
                 old_to_new_user_ids = {}
                 old_to_new_client_ids = {}
                 old_to_new_invoice_ids = {}
+                old_to_new_expense_ids = {}
+                old_to_new_statement_ids = {}
                 # 1. Users
                 if 'users' in tables:
                     users = import_db.query(User).all()
@@ -578,8 +605,8 @@ async def import_tenant_data(
                     histories = import_db.query(InvoiceHistory).all()
                     for hist in histories:
                         new_invoice_id = old_to_new_invoice_ids.get(hist.invoice_id)
-                        new_user_id = old_to_new_user_ids.get(hist.user_id) if hasattr(hist, 'user_id') else current_user.id
-                        if new_invoice_id:
+                        new_user_id = old_to_new_user_ids.get(hist.user_id) if hist.user_id else current_user.id
+                        if new_invoice_id and new_user_id:
                             new_hist = InvoiceHistory(
                                 invoice_id=new_invoice_id,
                                 user_id=new_user_id,
@@ -608,6 +635,151 @@ async def import_tenant_data(
                         )
                         db.add(new_config)
                     imported_counts['ai_configs'] = len(configs)
+                
+                # 13. Expenses
+                if 'expenses' in tables:
+                    expenses = import_db.query(Expense).all()
+                    for expense in expenses:
+                        new_user_id = old_to_new_user_ids.get(expense.user_id) if expense.user_id else None
+                        new_invoice_id = old_to_new_invoice_ids.get(expense.invoice_id) if expense.invoice_id else None
+                        new_expense = Expense(
+                            amount=expense.amount,
+                            currency=expense.currency,
+                            expense_date=expense.expense_date,
+                            category=expense.category,
+                            vendor=expense.vendor,
+                            label=expense.label,
+                            labels=expense.labels,
+                            tax_rate=expense.tax_rate,
+                            tax_amount=expense.tax_amount,
+                            total_amount=expense.total_amount,
+                            payment_method=expense.payment_method,
+                            reference_number=expense.reference_number,
+                            status=expense.status,
+                            notes=expense.notes,
+                            receipt_path=expense.receipt_path,
+                            receipt_filename=expense.receipt_filename,
+                            user_id=new_user_id,
+                            invoice_id=new_invoice_id,
+                            imported_from_attachment=getattr(expense, 'imported_from_attachment', False),
+                            analysis_status=getattr(expense, 'analysis_status', 'not_started'),
+                            analysis_result=getattr(expense, 'analysis_result', None),
+                            analysis_error=getattr(expense, 'analysis_error', None),
+                            manual_override=getattr(expense, 'manual_override', False),
+                            analysis_updated_at=getattr(expense, 'analysis_updated_at', None),
+                            created_at=expense.created_at,
+                            updated_at=datetime.now(timezone.utc)
+                        )
+                        db.add(new_expense)
+                        db.flush()
+                        old_to_new_expense_ids[expense.id] = new_expense.id
+                    imported_counts['expenses'] = len(expenses)
+                
+                # 14. ExpenseAttachments
+                if 'expense_attachments' in tables:
+                    attachments = import_db.query(ExpenseAttachment).all()
+                    attachment_count = 0
+                    for attachment in attachments:
+                        new_expense_id = old_to_new_expense_ids.get(attachment.expense_id)
+                        new_user_id = old_to_new_user_ids.get(attachment.uploaded_by) if attachment.uploaded_by else None
+                        if new_expense_id:
+                            new_attachment = ExpenseAttachment(
+                                expense_id=new_expense_id,
+                                filename=attachment.filename,
+                                content_type=attachment.content_type,
+                                size_bytes=attachment.size_bytes,
+                                file_path=attachment.file_path,
+                                uploaded_at=attachment.uploaded_at,
+                                uploaded_by=new_user_id
+                            )
+                            db.add(new_attachment)
+                            attachment_count += 1
+                    imported_counts['expense_attachments'] = attachment_count
+                
+                # 15. BankStatements
+                if 'bank_statements' in tables:
+                    statements = import_db.query(BankStatement).all()
+                    for statement in statements:
+                        new_statement = BankStatement(
+                            tenant_id=current_user.tenant_id,
+                            original_filename=statement.original_filename,
+                            stored_filename=statement.stored_filename,
+                            file_path=statement.file_path,
+                            status=statement.status,
+                            extracted_count=statement.extracted_count,
+                            notes=statement.notes,
+                            labels=statement.labels,
+                            created_at=statement.created_at,
+                            updated_at=datetime.now(timezone.utc)
+                        )
+                        db.add(new_statement)
+                        db.flush()
+                        old_to_new_statement_ids[statement.id] = new_statement.id
+                    imported_counts['bank_statements'] = len(statements)
+                
+                # 16. BankStatementTransactions
+                if 'bank_statement_transactions' in tables:
+                    transactions = import_db.query(BankStatementTransaction).all()
+                    transaction_count = 0
+                    for transaction in transactions:
+                        new_statement_id = old_to_new_statement_ids.get(transaction.statement_id)
+                        new_invoice_id = old_to_new_invoice_ids.get(transaction.invoice_id) if transaction.invoice_id else None
+                        new_expense_id = old_to_new_expense_ids.get(transaction.expense_id) if transaction.expense_id else None
+                        if new_statement_id:
+                            new_transaction = BankStatementTransaction(
+                                statement_id=new_statement_id,
+                                date=transaction.date,
+                                description=transaction.description,
+                                amount=transaction.amount,
+                                transaction_type=transaction.transaction_type,
+                                balance=transaction.balance,
+                                category=transaction.category,
+                                invoice_id=new_invoice_id,
+                                expense_id=new_expense_id,
+                                created_at=transaction.created_at,
+                                updated_at=datetime.now(timezone.utc)
+                            )
+                            db.add(new_transaction)
+                            transaction_count += 1
+                    imported_counts['bank_statement_transactions'] = transaction_count
+                
+                # 17. AuditLogs
+                if 'audit_logs' in tables:
+                    audit_logs = import_db.query(AuditLog).all()
+                    for log in audit_logs:
+                        new_log = AuditLog(
+                            user_id=log.user_id,
+                            user_email=log.user_email,
+                            action=log.action,
+                            resource_type=log.resource_type,
+                            resource_id=log.resource_id,
+                            resource_name=log.resource_name,
+                            details=log.details,
+                            ip_address=log.ip_address,
+                            user_agent=log.user_agent,
+                            status=log.status,
+                            error_message=log.error_message,
+                            created_at=log.created_at
+                        )
+                        db.add(new_log)
+                    imported_counts['audit_logs'] = len(audit_logs)
+                
+                # 18. AIChatHistory
+                if 'ai_chat_history' in tables:
+                    chat_history = import_db.query(AIChatHistory).all()
+                    for chat in chat_history:
+                        new_user_id = old_to_new_user_ids.get(chat.user_id) if chat.user_id else None
+                        if new_user_id:
+                            new_chat = AIChatHistory(
+                                user_id=new_user_id,
+                                tenant_id=current_user.tenant_id,
+                                message=chat.message,
+                                sender=chat.sender,
+                                created_at=chat.created_at
+                            )
+                            db.add(new_chat)
+                    imported_counts['ai_chat_history'] = len(chat_history)
+                
                 db.commit()
                 logger.info(f"Successfully imported data for tenant {current_user.tenant_id}: {imported_counts}")
                 return {

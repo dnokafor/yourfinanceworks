@@ -556,6 +556,7 @@ For detailed testing information, see [TESTING.md](TESTING.md).
 - [Frontend Guide](ui/README.md) - Frontend development guide
 - [Database Troubleshooting](api/docs/TROUBLESHOOTING_MISSING_TENANT_DATABASES.md) - Database troubleshooting guide
 - [Super User System](api/docs/SUPER_USER_SYSTEM.md) - Super user system documentation
+- [Data Export & Import Guide](docs/DATA_EXPORT_IMPORT_GUIDE.md) - Complete backup and restore documentation
 
 ## 🤝 Contributing
 

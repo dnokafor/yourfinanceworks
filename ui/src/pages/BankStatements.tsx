@@ -24,6 +24,7 @@ const CATEGORY_OPTIONS = [
 type BankRow = BankTransactionEntry & { id?: number; invoice_id?: number | null; expense_id?: number | null };
 
 export default function BankStatements() {
+  const { t } = useTranslation();
   const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [statements, setStatements] = useState<BankStatementSummary[]>([]);
@@ -317,7 +318,7 @@ export default function BankStatements() {
       }
       setPreviewOpen(true);
     } catch (e: any) {
-      toast.error(e?.message || 'Failed to preview file');
+      toast.error(e?.message || t('bankStatements.failed_to_preview'));
     }
   };
 
@@ -333,7 +334,7 @@ export default function BankStatements() {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e: any) {
-      toast.error(e?.message || 'Failed to download file');
+      toast.error(e?.message || t('bankStatements.failed_to_download'));
     }
   };
 
@@ -342,8 +343,8 @@ export default function BankStatements() {
       <div className="h-full space-y-6 fade-in">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Bank Statements</h1>
-            <p className="text-muted-foreground">Each entry is a PDF or CSV. Open to view or edit its transactions.</p>
+            <h1 className="text-3xl font-bold">{t('bankStatements.title')}</h1>
+            <p className="text-muted-foreground">{t('bankStatements.description')}</p>
           </div>
           {!selected && (
             <div className="flex items-center gap-2">
@@ -353,9 +354,9 @@ export default function BankStatements() {
                   const list = Array.from(e.target.files || []).slice(0, 12);
                   setFiles(list);
                 }} />
-                {files.length > 0 ? `${files.length} file(s)` : 'Select PDFs or CSVs'}
+                {files.length > 0 ? `${files.length} file(s)` : t('bankStatements.select_files')}
               </label>
-              <Button onClick={onUpload} disabled={loading || files.length === 0}>{loading ? 'Processing...' : 'Upload'}</Button>
+              <Button onClick={onUpload} disabled={loading || files.length === 0}>{loading ? t('bankStatements.processing') : t('bankStatements.upload')}</Button>
             </div>
           )}
         </div>
@@ -363,18 +364,18 @@ export default function BankStatements() {
         {!selected && (
           <Card className="slide-in">
             <CardHeader>
-              <CardTitle>Statements</CardTitle>
+              <CardTitle>{t('bankStatements.statements')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="rounded-md border overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Filename</TableHead>
-                      <TableHead>Labels</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Transactions</TableHead>
-                      <TableHead>Uploaded</TableHead>
+                      <TableHead>{t('bankStatements.filename')}</TableHead>
+                      <TableHead>{t('bankStatements.labels')}</TableHead>
+                      <TableHead>{t('bankStatements.status')}</TableHead>
+                      <TableHead>{t('bankStatements.transactions')}</TableHead>
+                      <TableHead>{t('bankStatements.uploaded')}</TableHead>
                       <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -390,22 +391,22 @@ export default function BankStatements() {
                         <TableCell>{s.created_at ? format(new Date(s.created_at), 'PP p') : ''}</TableCell>
                         <TableCell className="text-right flex gap-2 justify-end">
                           <Button size="sm" variant="outline" onClick={() => openStatement(s.id)}>
-                            <Eye className="w-4 h-4 mr-1" /> Open
+                            <Eye className="w-4 h-4 mr-1" /> {t('bankStatements.open')}
                           </Button>
                           <Button size="sm" variant="outline" onClick={() => handlePreview(s.id)}>
-                            <ExternalLink className="w-4 h-4 mr-1" /> Preview
+                            <ExternalLink className="w-4 h-4 mr-1" /> {t('bankStatements.preview')}
                           </Button>
                           <Button size="sm" variant="outline" onClick={() => handleDownload(s.id, s.original_filename)}>
-                            <Download className="w-4 h-4 mr-1" /> Download
+                            <Download className="w-4 h-4 mr-1" /> {t('bankStatements.download')}
                           </Button>
                           <Button
                             size="sm"
                             variant="destructive"
                             onClick={async () => {
-                              if (!confirm('Delete this statement and its transactions?')) return;
+                              if (!confirm(t('bankStatements.delete_confirm'))) return;
                               try {
                                 await bankStatementApi.delete(s.id);
-                                toast.success('Statement deleted');
+                                toast.success(t('bankStatements.statement_deleted'));
                                 await loadList();
                                 if (selected === s.id) {
                                   setSelected(null);
@@ -413,18 +414,18 @@ export default function BankStatements() {
                                   setRows([]);
                                 }
                               } catch (e: any) {
-                                toast.error(e?.message || 'Failed to delete statement');
+                                toast.error(e?.message || t('bankStatements.failed_to_delete'));
                               }
                             }}
                           >
-                            <Trash2 className="w-4 h-4 mr-1" /> Delete
+                            <Trash2 className="w-4 h-4 mr-1" /> {t('bankStatements.delete')}
                           </Button>
                         </TableCell>
                       </TableRow>
                     ))}
                     {statements.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center text-muted-foreground">No statements yet</TableCell>
+                        <TableCell colSpan={6} className="text-center text-muted-foreground">{t('bankStatements.no_statements')}</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
@@ -448,7 +449,7 @@ export default function BankStatements() {
         }}>
           <DialogContent className="max-w-5xl w-full h-[80vh] flex flex-col">
             <DialogHeader>
-              <DialogTitle>Statement Preview</DialogTitle>
+              <DialogTitle>{t('bankStatements.preview_title')}</DialogTitle>
             </DialogHeader>
             <div className="w-full flex-1 min-h-0 mt-2">
               {previewText && (
@@ -460,8 +461,8 @@ export default function BankStatements() {
                 <>
                   <embed src={previewUrl} type={previewType || 'application/pdf'} className="w-full h-full rounded-md border" />
                   <div className="mt-2 text-xs text-muted-foreground">
-                    If the preview is blank, your browser may not support inline viewing.{' '}
-                    <a className="underline" href={previewUrl} target="_blank" rel="noopener noreferrer">Open in a new tab</a> or use Download.
+                    {t('bankStatements.preview_blank_note')}{' '}
+                    <a className="underline" href={previewUrl} target="_blank" rel="noopener noreferrer">{t('bankStatements.open_new_tab')}</a> or use Download.
                   </div>
                 </>
               )}
@@ -477,19 +478,19 @@ export default function BankStatements() {
                   <Button variant="ghost" size="icon" onClick={() => { setSelected(null); setDetail(null); setRows([]); }}>
                     <ArrowLeft className="w-5 h-5" />
                   </Button>
-                  <CardTitle>Transactions — {detail?.original_filename || ''}</CardTitle>
+                  <CardTitle>{t('bankStatements.transactions_title', { filename: detail?.original_filename || '' })}</CardTitle>
                 </div>
-                <p className="text-muted-foreground text-sm">Edit transactions and save</p>
+                <p className="text-muted-foreground text-sm">{t('bankStatements.transactions_description')}</p>
               </div>
               <div className="flex items-center gap-2">
                 {readOnly && (
-                  <span className="text-sm text-muted-foreground">Processing… Editing is disabled until extraction completes.</span>
+                  <span className="text-sm text-muted-foreground">{t('bankStatements.processing_disabled')}</span>
                 )}
                 <Button variant="outline" onClick={() => selected && handlePreview(selected)}>
-                  <ExternalLink className="w-4 h-4 mr-1" /> Preview
+                  <ExternalLink className="w-4 h-4 mr-1" /> {t('bankStatements.preview')}
                 </Button>
                 <Button variant="outline" onClick={() => selected && handleDownload(selected, detail?.original_filename)}>
-                  <Download className="w-4 h-4 mr-1" /> Download
+                  <Download className="w-4 h-4 mr-1" /> {t('bankStatements.download')}
                 </Button>
                 {(detail?.status === 'failed' || (detail?.status === 'processed' && (detail?.extracted_count || 0) === 0)) && (
                   <Button
