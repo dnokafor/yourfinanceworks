@@ -798,6 +798,138 @@ class ApiService {
       method: 'GET' 
     });
   }
+
+  // Expense Methods
+  async getExpenses(categoryFilter?: string): Promise<Expense[]> {
+    const params = categoryFilter ? `?category=${categoryFilter}` : '';
+    return await this.request<Expense[]>(`/expenses/${params}`);
+  }
+
+  async getExpense(expenseId: number): Promise<Expense> {
+    return await this.request<Expense>(`/expenses/${expenseId}`);
+  }
+
+  async createExpense(expenseData: Partial<Expense>): Promise<Expense> {
+    return await this.request<Expense>('/expenses/', {
+      method: 'POST',
+      body: JSON.stringify(expenseData),
+    });
+  }
+
+  async updateExpense(expenseId: number, expenseData: Partial<Expense>): Promise<Expense> {
+    return await this.request<Expense>(`/expenses/${expenseId}`, {
+      method: 'PUT',
+      body: JSON.stringify(expenseData),
+    });
+  }
+
+  async deleteExpense(expenseId: number): Promise<void> {
+    await this.request(`/expenses/${expenseId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Bank Statement Methods
+  async getBankStatements(): Promise<BankStatement[]> {
+    return await this.request<BankStatement[]>('/bank-statements/');
+  }
+
+  async getBankStatement(statementId: number): Promise<BankStatementDetail> {
+    return await this.request<BankStatementDetail>(`/bank-statements/${statementId}`);
+  }
+
+  async uploadBankStatements(files: any[]): Promise<{ statements: BankStatement[] }> {
+    const formData = new FormData();
+    files.forEach((file, index) => {
+      formData.append('files', {
+        uri: file.uri,
+        name: file.name,
+        type: file.type,
+      } as any);
+    });
+
+    const token = await this.getToken();
+    const userData = await AsyncStorage.getItem(USER_KEY);
+    const user = userData ? JSON.parse(userData) : null;
+    const tenantId = user?.tenant_id;
+
+    const response = await fetch(`${this.baseURL}/bank-statements/upload`, {
+      method: 'POST',
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+        ...(tenantId && { 'X-Tenant-ID': tenantId }),
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  }
+
+  async deleteBankStatement(statementId: number): Promise<void> {
+    await this.request(`/bank-statements/${statementId}`, {
+      method: 'DELETE',
+    });
+  }
+}
+
+// Additional types for expenses and bank statements
+export interface Expense {
+  id: number;
+  amount: number;
+  currency: string;
+  expense_date: string;
+  category: string;
+  vendor?: string;
+  tax_rate?: number;
+  tax_amount?: number;
+  total_amount?: number;
+  payment_method?: string;
+  reference_number?: string;
+  status: 'recorded' | 'pending' | 'completed';
+  notes?: string;
+  receipt_filename?: string;
+  labels?: string[];
+  invoice_id?: number;
+  tenant_id: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BankStatement {
+  id: number;
+  original_filename: string;
+  status: string;
+  extracted_count: number;
+  created_at: string;
+  labels?: string[];
+}
+
+export interface BankTransaction {
+  id?: number;
+  date: string;
+  description: string;
+  amount: number;
+  transaction_type: 'debit' | 'credit';
+  balance?: number;
+  category?: string;
+  invoice_id?: number;
+  expense_id?: number;
+}
+
+export interface BankStatementDetail {
+  id: number;
+  original_filename: string;
+  status: string;
+  extracted_count: number;
+  created_at: string;
+  notes?: string;
+  labels?: string[];
+  transactions: BankTransaction[];
 }
 
 const apiService = new ApiService();
