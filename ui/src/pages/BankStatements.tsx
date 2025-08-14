@@ -8,9 +8,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarIcon, Upload, ArrowLeft, Eye, Download, ExternalLink, Trash2 } from 'lucide-react';
+import { CalendarIcon, Upload, ArrowLeft, Eye, Download, ExternalLink, Trash2, FileText, Plus } from 'lucide-react';
 import { format } from 'date-fns';
-import { bankStatementApi, BankTransactionEntry, BankStatementDetail, BankStatementSummary } from '@/lib/api';
+import { bankStatementApi, BankTransactionEntry, BankStatementDetail, BankStatementSummary, expenseApi } from '@/lib/api';
 import { toast } from 'sonner';
 
 const CATEGORY_OPTIONS = [
@@ -29,6 +29,78 @@ export default function BankStatements() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewObjectUrl, setPreviewObjectUrl] = useState<string | null>(null);
   const readOnly = detail?.status === 'processing';
+
+  // Calculate totals
+  const totalIncome = rows.filter(r => r.transaction_type === 'credit').reduce((sum, r) => sum + r.amount, 0);
+  const totalExpense = rows.filter(r => r.transaction_type === 'debit').reduce((sum, r) => sum + Math.abs(r.amount), 0);
+  const netAmount = totalIncome - totalExpense;
+
+  const exportToCSV = () => {
+    if (rows.length === 0) {
+      toast.error('No transactions to export');
+      return;
+    }
+
+    const headers = ['Date', 'Description', 'Amount', 'Type', 'Balance', 'Category'];
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => [
+        row.date,
+        `"${row.description.replace(/"/g, '""')}"`,
+        row.amount,
+        row.transaction_type,
+        row.balance ?? '',
+        row.category ?? ''
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `transactions-${detail?.original_filename?.replace('.pdf', '') || 'export'}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success('CSV exported successfully');
+  };
+
+  const createExpenseFromTransaction = async (rowIndex: number) => {
+    const transaction = rows[rowIndex];
+    if (transaction.transaction_type !== 'debit') {
+      toast.error('Can only create expenses from debit transactions');
+      return;
+    }
+
+    try {
+      // Map bank transaction categories to expense categories
+      const categoryMap: Record<string, string> = {
+        'Transportation': 'Transportation',
+        'Food': 'Meals',
+        'Travel': 'Travel',
+        'Other': 'General'
+      };
+      
+      const expenseCategory = categoryMap[transaction.category || 'Other'] || 'General';
+      
+      const expenseData = {
+        amount: Math.abs(transaction.amount),
+        expense_date: transaction.date,
+        category: expenseCategory,
+        vendor: transaction.description,
+        notes: `Created from bank statement: ${detail?.original_filename}`,
+        payment_method: 'Bank Transfer',
+        status: 'completed'
+      };
+
+      await expenseApi.createExpense(expenseData);
+      toast.success('Expense created successfully');
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to create expense');
+    }
+  };
 
   const loadList = async () => {
     try {
@@ -278,11 +350,32 @@ export default function BankStatements() {
                 <Button variant="outline" onClick={() => selected && handleDownload(selected, detail?.original_filename)}>
                   <Download className="w-4 h-4 mr-1" /> Download
                 </Button>
+                <Button variant="outline" onClick={exportToCSV} disabled={rows.length === 0}>
+                  <FileText className="w-4 h-4 mr-1" /> Export CSV
+                </Button>
                 <Button variant="outline" onClick={addEmptyRow} disabled={readOnly}>Add Row</Button>
                 <Button onClick={saveRows} disabled={readOnly || detailLoading}>{detailLoading ? 'Saving...' : 'Save'}</Button>
               </div>
             </CardHeader>
             <CardContent>
+              {rows.length > 0 && (
+                <div className="grid grid-cols-3 gap-4 mb-6 p-4 bg-muted/50 rounded-lg">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600">${totalIncome.toFixed(2)}</div>
+                    <div className="text-sm text-muted-foreground">Total Income</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-red-600">${totalExpense.toFixed(2)}</div>
+                    <div className="text-sm text-muted-foreground">Total Expenses</div>
+                  </div>
+                  <div className="text-center">
+                    <div className={`text-2xl font-bold ${netAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      ${netAmount.toFixed(2)}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Net Amount</div>
+                  </div>
+                </div>
+              )}
               <div className="rounded-md border overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -293,6 +386,7 @@ export default function BankStatements() {
                       <TableHead>Balance</TableHead>
                       <TableHead>Type</TableHead>
                       <TableHead>Category</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -348,11 +442,24 @@ export default function BankStatements() {
                             </SelectContent>
                           </Select>
                         </TableCell>
+                        <TableCell>
+                          {r.transaction_type === 'debit' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => createExpenseFromTransaction(idx)}
+                              disabled={readOnly}
+                            >
+                              <Plus className="w-3 h-3 mr-1" />
+                              Expense
+                            </Button>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
                     {rows.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center text-muted-foreground">No transactions</TableCell>
+                        <TableCell colSpan={7} className="text-center text-muted-foreground">No transactions</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
