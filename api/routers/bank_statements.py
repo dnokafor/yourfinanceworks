@@ -16,6 +16,7 @@ from models.models_per_tenant import BankStatement, BankStatementTransaction
 from datetime import datetime
 from fastapi.responses import FileResponse
 from services.ocr_service import publish_bank_statement_task
+from utils.audit import log_audit_event
 
 
 router = APIRouter(prefix="/bank-statements", tags=["bank-statements"])
@@ -300,6 +301,9 @@ async def update_bank_statement_meta(
         raise HTTPException(status_code=404, detail="Statement not found")
 
     try:
+        # Capture previous state for audit
+        prev_notes = getattr(s, "notes", None)
+        prev_labels = list(getattr(s, "labels", []) or [])
         if "notes" in payload:
             s.notes = payload.get("notes")
         if "labels" in payload:
@@ -323,6 +327,26 @@ async def update_bank_statement_meta(
                 s.labels = cleaned
         db.commit()
         db.refresh(s)
+        # Audit log the meta update (best-effort; ignore failures)
+        try:
+            changed: Dict[str, Any] = {}
+            if "notes" in payload and prev_notes != s.notes:
+                changed["notes"] = {"before": prev_notes, "after": s.notes}
+            if "labels" in payload and (prev_labels or []) != (getattr(s, "labels", []) or []):
+                changed["labels"] = {"before": prev_labels, "after": getattr(s, "labels", []) or []}
+            if changed:
+                log_audit_event(
+                    db=db,
+                    user_id=current_user.id,
+                    user_email=current_user.email,
+                    action="UPDATE",
+                    resource_type="bank_statement_meta",
+                    resource_id=str(s.id),
+                    resource_name=s.original_filename,
+                    details={"statement_id": s.id, **changed},
+                )
+        except Exception:
+            pass
         return {
             "success": True,
             "statement": {
@@ -371,6 +395,15 @@ async def replace_bank_statement_transactions(
         raise HTTPException(status_code=400, detail="transactions must be an array")
 
     try:
+        # Snapshot previous transactions for audit summary
+        prev_rows = (
+            db.query(BankStatementTransaction)
+            .filter(BankStatementTransaction.statement_id == s.id)
+            .order_by(BankStatementTransaction.date.asc(), BankStatementTransaction.id.asc())
+            .all()
+        )
+        prev_count = len(prev_rows)
+        prev_ids = [getattr(r, "id", None) for r in prev_rows if getattr(r, "id", None) is not None]
         # Replace transactions: simple strategy but preserve invoice links if provided
         db.query(BankStatementTransaction).filter(BankStatementTransaction.statement_id == s.id).delete()
 
@@ -404,6 +437,25 @@ async def replace_bank_statement_transactions(
 
         s.extracted_count = count
         db.commit()
+        # Audit log the replace operation (best-effort; ignore failures)
+        try:
+            log_audit_event(
+                db=db,
+                user_id=current_user.id,
+                user_email=current_user.email,
+                action="UPDATE",
+                resource_type="bank_statement_transactions",
+                resource_id=str(s.id),
+                resource_name=s.original_filename,
+                details={
+                    "statement_id": s.id,
+                    "previous_count": prev_count,
+                    "new_count": count,
+                    "removed_ids": prev_ids[:200],  # cap size
+                },
+            )
+        except Exception:
+            pass
         return {"success": True, "updated_count": count}
     except HTTPException:
         db.rollback()

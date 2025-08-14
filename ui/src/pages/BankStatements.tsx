@@ -10,9 +10,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarIcon, Upload, ArrowLeft, Eye, Download, ExternalLink, Trash2, FileText, Plus, Copy } from 'lucide-react';
+import { CalendarIcon, Upload, ArrowLeft, Eye, Download, ExternalLink, Trash2, FileText, Plus, Copy, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { bankStatementApi, BankTransactionEntry, BankStatementDetail, BankStatementSummary, expenseApi, invoiceApi, clientApi } from '@/lib/api';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { InvoiceForm } from '@/components/invoices/InvoiceForm';
 
@@ -38,6 +39,7 @@ export default function BankStatements() {
   const [invoiceInitialData, setInvoiceInitialData] = useState<any>(null);
   const [statementNotes, setStatementNotes] = useState<string>('');
   const [statementLabels, setStatementLabels] = useState<string[]>([]);
+  const [newStatementLabel, setNewStatementLabel] = useState<string>('');
   const readOnly = detail?.status === 'processing';
 
   const formatStatus = (value?: string | null) => {
@@ -496,15 +498,59 @@ export default function BankStatements() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div className="flex flex-col gap-2">
                   <label className="text-sm text-muted-foreground">Labels (up to 10)</label>
-                  <Input
-                    value={statementLabels.join(', ')}
-                    onChange={(e) => {
-                      const parts = e.target.value.split(',').map(s => s.trim()).filter(Boolean).slice(0, 10);
-                      setStatementLabels(parts);
-                    }}
-                    placeholder="Comma-separated labels"
-                    disabled={readOnly}
-                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    {statementLabels.slice(0, 10).map((lab, idx) => (
+                      <Badge key={`stmt-lab-${idx}`} variant="secondary" className="text-xs">
+                        {lab}
+                        {!readOnly && (
+                          <button
+                            className="ml-1 text-muted-foreground hover:text-foreground"
+                            aria-label="Remove"
+                            onClick={async () => {
+                              try {
+                                const next = statementLabels.filter((l) => l !== lab);
+                                if (!selected) return;
+                                const resp = await bankStatementApi.updateMeta(selected, { labels: next });
+                                setStatementLabels((resp.statement as any).labels || []);
+                                setDetail(prev => prev ? { ...prev, labels: (resp.statement as any).labels || [] } : prev);
+                              } catch (err: any) {
+                                toast.error(err?.message || 'Failed to remove label');
+                              }
+                            }}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </Badge>
+                    ))}
+                    {!readOnly && (
+                      <Input
+                        placeholder="Add label"
+                        value={newStatementLabel}
+                        className="w-[160px] h-8"
+                        onChange={(ev) => setNewStatementLabel(ev.target.value)}
+                        onKeyDown={async (ev) => {
+                          if (ev.key === 'Enter') {
+                            const raw = (newStatementLabel || '').trim();
+                            if (!raw) return;
+                            const existing = statementLabels || [];
+                            if (existing.includes(raw)) { setNewStatementLabel(''); return; }
+                            if (existing.length >= 10) { toast.error('Maximum of 10 labels reached'); return; }
+                            try {
+                              if (!selected) return;
+                              const next = [...existing, raw];
+                              const resp = await bankStatementApi.updateMeta(selected, { labels: next });
+                              setStatementLabels((resp.statement as any).labels || []);
+                              setDetail(prev => prev ? { ...prev, labels: (resp.statement as any).labels || [] } : prev);
+                              setNewStatementLabel('');
+                            } catch (err: any) {
+                              toast.error(err?.message || 'Failed to add label');
+                            }
+                          }
+                        }}
+                      />
+                    )}
+                  </div>
                 </div>
                 <div className="md:col-span-2 flex flex-col gap-2">
                   <label className="text-sm text-muted-foreground">Notes</label>
@@ -521,7 +567,11 @@ export default function BankStatements() {
                 </div>
               </div>
               {rows.length > 0 && (
-                <div className="grid grid-cols-3 gap-4 mb-6 p-4 bg-muted/50 rounded-lg">
+                <div className="grid grid-cols-4 gap-4 mb-6 p-4 bg-muted/50 rounded-lg">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold">{rows.length}</div>
+                    <div className="text-sm text-muted-foreground">Transactions</div>
+                  </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-green-600">${totalIncome.toFixed(2)}</div>
                     <div className="text-sm text-muted-foreground">Total Income</div>
@@ -531,9 +581,7 @@ export default function BankStatements() {
                     <div className="text-sm text-muted-foreground">Total Expenses</div>
                   </div>
                   <div className="text-center">
-                    <div className={`text-2xl font-bold ${netAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      ${netAmount.toFixed(2)}
-                    </div>
+                    <div className={`text-2xl font-bold ${netAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}>${netAmount.toFixed(2)}</div>
                     <div className="text-sm text-muted-foreground">Net Amount</div>
                   </div>
                 </div>
