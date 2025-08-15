@@ -1096,9 +1096,14 @@ async def update_invoice(
                 changes.append("Notes removed")
             else:
                 changes.append("Notes updated")
-        if invoice.custom_fields is not None and old_custom_fields != invoice.custom_fields:
-            changes.append("Custom fields updated")
-            logger.info(f"[DEBUG] Custom fields changed from {old_custom_fields} to {invoice.custom_fields}")
+        # Only track custom fields changes if there are actual differences
+        if invoice.custom_fields is not None:
+            # Normalize both for comparison (handle None vs empty dict)
+            old_cf = old_custom_fields or {}
+            new_cf = invoice.custom_fields or {}
+            if old_cf != new_cf:
+                changes.append("Custom fields updated")
+                logger.info(f"[DEBUG] Custom fields changed from {old_custom_fields} to {invoice.custom_fields}")
         if invoice.show_discount_in_pdf is not None and old_show_discount_in_pdf != invoice.show_discount_in_pdf:
             changes.append(f"Show discount in PDF changed from {old_show_discount_in_pdf} to {invoice.show_discount_in_pdf}")
 
@@ -1115,7 +1120,7 @@ async def update_invoice(
                 changes.append(f"Client changed from {old_client_id} to {invoice.client_id}")
         
         # Only create history entry if there are actual changes
-        if changes:
+        if changes and len(changes) > 0:
             history_entry = InvoiceHistoryModel(
                 invoice_id=invoice_id,
                 user_id=current_user.id,
@@ -1510,6 +1515,7 @@ async def create_invoice_history_entry(
 @router.get("/{invoice_id}/pdf")
 async def download_invoice_pdf(
     invoice_id: int,
+    template: str = 'modern',
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
@@ -1553,7 +1559,8 @@ async def download_invoice_pdf(
             company_data=company_data,
             items=invoice.items,
             db=db,
-            show_discount=invoice.show_discount_in_pdf
+            show_discount=invoice.show_discount_in_pdf,
+            template_name=template
         )
         return StreamingResponse(
             iter([pdf_bytes]),

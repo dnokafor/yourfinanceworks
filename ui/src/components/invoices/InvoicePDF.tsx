@@ -146,14 +146,40 @@ interface InvoicePDFProps {
   invoice: Invoice;
   companyName: string;
   showDiscount: boolean;
+  template?: string;
 }
 
-export const InvoicePDF = ({ invoice, companyName, showDiscount }: InvoicePDFProps) => (
-  <Document>
-    <Page size="A4" style={styles.page}>
+export const InvoicePDF = ({ invoice, companyName, showDiscount, template = 'modern' }: InvoicePDFProps) => {
+  const getTemplateColors = () => {
+    switch (template) {
+      case 'classic':
+        return { title: '#000000', header: '#000000', accent: '#666666' };
+      case 'modern':
+      default:
+        return { title: '#1e40af', header: '#1e40af', accent: '#3b82f6' };
+    }
+  };
+  
+  const templateColors = getTemplateColors();
+  
+  const templateStyles = StyleSheet.create({
+    ...styles,
+    title: {
+      ...styles.title,
+      color: templateColors.title,
+    },
+    companyInfo: {
+      ...styles.companyInfo,
+      color: templateColors.header,
+    },
+  });
+  
+  return (
+    <Document>
+      <Page size="A4" style={templateStyles.page}>
       <View style={styles.header}>
-        <Text style={styles.title}>INVOICE</Text>
-        <Text style={styles.companyInfo}>{companyName}</Text>
+        <Text style={templateStyles.title}>INVOICE</Text>
+        <Text style={templateStyles.companyInfo}>{companyName}</Text>
       </View>
 
       <View style={styles.section}>
@@ -266,6 +292,7 @@ export const InvoicePDF = ({ invoice, companyName, showDiscount }: InvoicePDFPro
           <Text>{invoice.notes}</Text>
         </View>
       )}
-    </Page>
-  </Document>
-); 
+      </Page>
+    </Document>
+  );
+}; 

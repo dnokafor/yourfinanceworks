@@ -22,6 +22,7 @@ import { isAdmin } from "@/utils/auth";
 import { clientApi, Client, invoiceApi, paymentApi, Invoice, InvoiceItem, InvoiceStatus, settingsApi, Settings, discountRulesApi, DiscountCalculation, DiscountRule, tenantApi, API_BASE_URL, expenseApi, Expense } from "@/lib/api";
 import { Label } from "@/components/ui/label";
 import { InvoicePDF } from "./InvoicePDF";
+import { TemplateSelector } from "./TemplateSelector";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CurrencySelector } from "@/components/ui/currency-selector";
 import { apiRequest } from "@/lib/api";
@@ -118,6 +119,14 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
   const [tenantInfo, setTenantInfo] = useState<{ default_currency: string } | null>(null);
   const [unlinkedExpenses, setUnlinkedExpenses] = useState<Expense[]>([]);
   const [linkExpenseId, setLinkExpenseId] = useState<string | undefined>(undefined);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>(() => {
+    return localStorage.getItem('invoice-template') || 'modern';
+  });
+
+  // Persist template selection
+  useEffect(() => {
+    localStorage.setItem('invoice-template', selectedTemplate);
+  }, [selectedTemplate]);
 
 
   const [itemKeyCounter, setItemKeyCounter] = useState(0);
@@ -2778,7 +2787,18 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
             
             {/* Preview Section - Right Side */}
             <div className="w-full lg:w-96 order-3">
-              <div className="mb-2 font-semibold text-lg">{t('invoices.preview')}</div>
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-semibold text-lg">{t('invoices.preview')}</div>
+                  <TemplateSelector 
+                    value={selectedTemplate} 
+                    onChange={(template) => {
+                      setSelectedTemplate(template);
+                      setPreviewKey(prev => prev + 1); // Force preview refresh
+                    }} 
+                  />
+                </div>
+              </div>
               <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
                 <div className="h-[500px] overflow-auto">
                   <React.Suspense fallback={<div className="p-4">{t('invoices.loading_preview')}</div>}>
@@ -2789,10 +2809,11 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                             invoice={previewInvoice} 
                             companyName={settings.company_info?.name || "Your Company"} 
                             showDiscount={form.watch("showDiscountInPdf")}
+                            template={selectedTemplate}
                           />
                         } 
                         fileName={`invoice-${previewInvoice.number}.pdf`}
-                        key={previewKey}
+                        key={`${previewKey}-${selectedTemplate}`}
                       >
                         {({ url, loading }) =>
                           loading ? (
@@ -2811,20 +2832,24 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                 </div>
                 <div className="p-2 border-t flex justify-between items-center">
                   {previewInvoice && settings ? (
-                    <PDFDownloadLink 
-                      document={
-                        <InvoicePDF 
-                          invoice={previewInvoice} 
-                          companyName={settings.company_info?.name || "Your Company"} 
-                          showDiscount={form.watch("showDiscountInPdf")}
-                        />
-                      } 
-                      fileName={`invoice-${previewInvoice.number}.pdf`}
-                    >
-                      {({ loading }) =>
-                        loading ? t('invoices.preparing_pdf') : <span className="text-blue-600 hover:underline cursor-pointer">{t('invoices.download_pdf')}</span>
-                      }
-                    </PDFDownloadLink>
+                    <div className="flex items-center gap-2">
+                      <PDFDownloadLink 
+                        document={
+                          <InvoicePDF 
+                            invoice={previewInvoice} 
+                            companyName={settings.company_info?.name || "Your Company"} 
+                            showDiscount={form.watch("showDiscountInPdf")}
+                            template={selectedTemplate}
+                          />
+                        } 
+                        fileName={`invoice-${previewInvoice.number}.pdf`}
+                      >
+                        {({ loading }) =>
+                          loading ? t('invoices.preparing_pdf') : <span className="text-blue-600 hover:underline cursor-pointer">{t('invoices.download_pdf')}</span>
+                        }
+                      </PDFDownloadLink>
+                      <span className="text-xs text-gray-500">({selectedTemplate})</span>
+                    </div>
                   ) : (
                     <span className="text-gray-500 text-sm">{t('invoices.save_invoice_first')}</span>
                   )}
