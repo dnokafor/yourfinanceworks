@@ -7,28 +7,26 @@ export const formatDate = (date: string | Date): string => {
     let dateObj: Date;
     
     if (typeof date === 'string') {
-      // Handle YYYY-MM-DD format
+      // Handle YYYY-MM-DD format, and partial inputs
       if (date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        const [year, month, day] = date.split('-').map(Number);
-        dateObj = new Date(year, month - 1, day);
+        dateObj = parseISO(date);
       } else {
-        dateObj = new Date(date);
+        // For partial dates, or other formats, we can return a default or placeholder
+        return 'Invalid Date';
       }
     } else {
       dateObj = date;
     }
 
     if (!isValid(dateObj)) {
-      return new Date().toLocaleDateString();
+      // Fallback for invalid dates
+      return 'Invalid Date';
     }
 
-    return dateObj.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+    return format(dateObj, 'MMM d, yyyy');
   } catch (error) {
-    return new Date().toLocaleDateString();
+    // Fallback for any unexpected errors
+    return 'Invalid Date';
   }
 };
 

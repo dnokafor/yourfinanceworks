@@ -47,10 +47,11 @@ const BankStatementsScreen: React.FC<BankStatementsScreenProps> = ({
     try {
       setLoading(true);
       const data = await apiService.getBankStatements();
-      setStatements(data);
+      setStatements(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Failed to fetch bank statements:', error);
       Alert.alert('Error', 'Failed to load bank statements');
+      setStatements([]); // Ensure statements is always an array
     } finally {
       setLoading(false);
     }

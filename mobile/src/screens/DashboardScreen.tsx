@@ -20,6 +20,9 @@ interface DashboardScreenProps {
   onNavigateToInvoices: () => void;
   onNavigateToClients: () => void;
   onNavigateToPayments: () => void;
+  onNavigateToExpenses: () => void;
+  onNavigateToBankStatements: () => void;
+  onNavigateToAnalytics: () => void;
   onNavigateToSettings: () => void;
   onSignOut: () => void;
   user?: {
@@ -33,6 +36,9 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
   onNavigateToInvoices,
   onNavigateToClients,
   onNavigateToPayments,
+  onNavigateToExpenses,
+  onNavigateToBankStatements,
+  onNavigateToAnalytics,
   onNavigateToSettings,
   onSignOut,
   user,
@@ -339,6 +345,24 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
               color="#F59E0B"
             />
             <QuickAction
+              title={t('expenses.title')}
+              icon="wallet-outline"
+              onPress={onNavigateToExpenses}
+              color="#8B5CF6"
+            />
+            <QuickAction
+              title={t('bankStatements.title')}
+              icon="document-text-outline"
+              onPress={onNavigateToBankStatements}
+              color="#06B6D4"
+            />
+            <QuickAction
+              title="Analytics"
+              icon="bar-chart-outline"
+              onPress={onNavigateToAnalytics}
+              color="#8B5CF6"
+            />
+            <QuickAction
               title={t('settings.title')}
               icon="settings-outline"
               onPress={onNavigateToSettings}
@@ -500,7 +524,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    width: '48%',
+    width: '31%',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -517,7 +541,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   quickActionText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     color: '#374151',
     textAlign: 'center',

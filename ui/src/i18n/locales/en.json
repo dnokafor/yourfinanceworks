@@ -225,6 +225,9 @@
     "import": "Import",
     "bulk_actions": "Bulk Actions",
     "select_a_client": "Select a client",
+    "select_client": "Select Client",
+    "select_date": "Select Date",
+    "select_due_date": "Select Due Date",
     "select_all": "Select All",
     "deselect_all": "Deselect All",
     "invoice_list": "Invoice List",
@@ -447,7 +450,8 @@
     },
     "errors": {
       "load_failed": "Failed to load payments"
-    }
+    },
+    "record_payment": "Record Payment"
   },
   "settings": {
     "title": "Settings",

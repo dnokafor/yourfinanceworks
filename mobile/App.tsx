@@ -12,14 +12,18 @@ import ClientsScreen from './src/screens/ClientsScreen';
 import NewClientScreen from './src/screens/NewClientScreen';
 import EditClientScreen from './src/screens/EditClientScreen';
 import PaymentsScreen from './src/screens/PaymentsScreen';
+import ExpensesScreen from './src/screens/ExpensesScreen';
+import NewExpenseScreen from './src/screens/NewExpenseScreen';
+import BankStatementsScreen from './src/screens/BankStatementsScreen';
+import AnalyticsScreen from './src/screens/AnalyticsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import UsersScreen from './src/screens/UsersScreen';
 import AuditLogScreen from './src/screens/AuditLogScreen';
 import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
-import apiService, { User, Client, Invoice, CreateInvoiceData, UpdateInvoiceData, InvoiceItemCreate, InvoiceItemUpdate } from './src/services/api';
+import apiService, { User, Client, Invoice, CreateInvoiceData, UpdateInvoiceData, InvoiceItemCreate, InvoiceItemUpdate, Expense, BankStatement } from './src/services/api';
 
-type Screen = 'login' | 'signup' | 'forgotPassword' | 'resetPassword' | 'dashboard' | 'invoices' | 'newInvoice' | 'editInvoice' | 'clients' | 'newClient' | 'editClient' | 'payments' | 'settings' | 'users' | 'auditLog';
+type Screen = 'login' | 'signup' | 'forgotPassword' | 'resetPassword' | 'dashboard' | 'invoices' | 'newInvoice' | 'editInvoice' | 'clients' | 'newClient' | 'editClient' | 'payments' | 'expenses' | 'newExpense' | 'bankStatements' | 'analytics' | 'settings' | 'users' | 'auditLog';
 
 const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<Screen>('login');
@@ -107,6 +111,22 @@ const App: React.FC = () => {
 
   const handleNavigateToPayments = () => {
     setCurrentScreen('payments');
+  };
+
+  const handleNavigateToExpenses = () => {
+    setCurrentScreen('expenses');
+  };
+
+  const handleNavigateToNewExpense = () => {
+    setCurrentScreen('newExpense');
+  };
+
+  const handleNavigateToBankStatements = () => {
+    setCurrentScreen('bankStatements');
+  };
+
+  const handleNavigateToAnalytics = () => {
+    setCurrentScreen('analytics');
   };
 
   const handleNavigateToSettings = () => {
@@ -214,34 +234,10 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveInvoice = async (formData: {
-    client: string;
-    invoiceNumber: string;
-    currency: string;
-    date: string;
-    dueDate: string;
-    status: string;
-    paidAmount: number;
-    items: Array<{
-      id?: number;
-      description: string;
-      quantity: number;
-      price: number;
-      amount: number;
-    }>;
-    notes: string;
-  }) => {
+  const handleSaveInvoice = async (formData: CreateInvoiceData) => {
     try {
-      const totalAmount = formData.items.reduce((sum, item) => sum + item.amount, 0);
-      const dueDate = new Date(formData.dueDate).toISOString();
-      
       const invoiceData: CreateInvoiceData = {
-        client_id: parseInt(formData.client),
-        amount: totalAmount,
-        currency: formData.currency,
-        due_date: dueDate,
-        status: formData.status,
-        notes: formData.notes,
+        ...formData,
         items: formData.items.map(item => ({
           description: item.description,
           quantity: item.quantity,
@@ -279,13 +275,15 @@ const App: React.FC = () => {
     try {
       const totalAmount = formData.items.reduce((sum, item) => sum + item.amount, 0);
       const dueDate = new Date(formData.dueDate).toISOString();
+      console.log('dueDate', dueDate);
       
       const invoiceData: UpdateInvoiceData = {
         client_id: parseInt(formData.client),
         amount: totalAmount,
         currency: formData.currency,
+        date: formData.date,
         due_date: dueDate,
-        status: formData.status,
+        status: formData.status as any,
         notes: formData.notes,
         items: formData.items.map(item => ({
           id: item.id,
@@ -345,6 +343,9 @@ const App: React.FC = () => {
             onNavigateToInvoices={handleNavigateToInvoices}
             onNavigateToClients={handleNavigateToClients}
             onNavigateToPayments={handleNavigateToPayments}
+            onNavigateToExpenses={handleNavigateToExpenses}
+            onNavigateToBankStatements={handleNavigateToBankStatements}
+            onNavigateToAnalytics={handleNavigateToAnalytics}
             onNavigateToSettings={handleNavigateToSettings}
             onSignOut={handleSignOut}
             user={user || undefined}
@@ -420,6 +421,44 @@ const App: React.FC = () => {
       case 'payments':
         return (
           <PaymentsScreen
+            onNavigateBack={handleNavigateBack}
+          />
+        );
+      case 'expenses':
+        return (
+          <ExpensesScreen
+            onNavigateBack={handleNavigateBack}
+            onNavigateToNewExpense={handleNavigateToNewExpense}
+            onNavigateToEditExpense={(expense: Expense) => {
+              // Add edit expense navigation later
+              console.log('Edit expense:', expense);
+            }}
+          />
+        );
+      case 'newExpense':
+        return (
+          <NewExpenseScreen
+            onNavigateBack={handleNavigateBack}
+            onExpenseCreated={async (expense: Expense) => {
+              console.log('Expense created:', expense);
+              setCurrentScreen('expenses');
+              await loadData(); // Refresh data if needed
+            }}
+          />
+        );
+      case 'bankStatements':
+        return (
+          <BankStatementsScreen
+            onNavigateBack={handleNavigateBack}
+            onNavigateToStatement={(statement: BankStatement) => {
+              // Add bank statement detail navigation later
+              console.log('Open statement:', statement);
+            }}
+          />
+        );
+      case 'analytics':
+        return (
+          <AnalyticsScreen
             onNavigateBack={handleNavigateBack}
           />
         );

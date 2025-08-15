@@ -1,11 +1,35 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 
 // API Configuration
-// For development, use your computer's IP address instead of localhost
-// You can find your IP with: ifconfig (Mac/Linux) or ipconfig (Windows)
-const API_BASE_URL = __DEV__ 
-  ? 'http://10.0.0.211:8000/api/v1' // Use your computer's IP address
-  : 'https://your-production-api.com/api'; // Replace with your production URL
+// Get API base URL from environment variables
+const getApiBaseUrl = (): string => {
+  // Try to get from environment variable first
+  const envApiUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
+  if (envApiUrl) {
+    return envApiUrl;
+  }
+  
+  // Fallback to expo config
+  const expoApiUrl = Constants.expoConfig?.extra?.apiBaseUrl;
+  if (expoApiUrl) {
+    return expoApiUrl;
+  }
+  
+  // Final fallback based on dev/prod environment
+  if (__DEV__) {
+    console.warn('No API_BASE_URL environment variable found, using fallback development URL');
+    return 'http://192.168.86.32:8000/api/v1'; // Fallback development URL
+  } else {
+    console.warn('No API_BASE_URL environment variable found, using fallback production URL');
+    return 'https://your-production-api.com/api'; // Replace with your production URL
+  }
+};
+
+const API_BASE_URL = getApiBaseUrl();
+
+// Log API URL for debugging
+console.log('🌐 API Base URL:', API_BASE_URL);
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'user_data';
 
@@ -203,8 +227,8 @@ export interface CreateInvoiceData {
   client_id: number;
   amount: number;
   currency: string;
-  date: string;
-  due_date: string;
+  date: string | undefined;
+  due_date: string | undefined;
   status: InvoiceStatus;
   notes?: string;
   items: InvoiceItemCreate[];
@@ -422,7 +446,19 @@ class ApiService {
         throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
       }
 
-      return await response.json();
+      // Handle empty response body
+      const text = await response.text();
+      if (!text) {
+        return {} as T;
+      }
+      
+      try {
+        return JSON.parse(text);
+      } catch (parseError) {
+        console.error(`JSON parse error for ${endpoint}:`, parseError);
+        console.error(`Response text:`, text);
+        throw new Error(`Invalid JSON response from server`);
+      }
     } catch (error) {
       console.error(`API request failed for ${endpoint}:`, error);
       throw error;
@@ -461,6 +497,12 @@ class ApiService {
 
   async checkEmailAvailability(email: string): Promise<{ available: boolean; email: string }> {
     return await this.request<{ available: boolean; email: string }>(`/auth/check-email-availability?email=${encodeURIComponent(email)}`, {
+      method: 'GET',
+    }, { isLogin: true });
+  }
+
+  async checkOrganizationNameAvailability(name: string): Promise<{ available: boolean; name: string }> {
+    return await this.request<{ available: boolean; name: string }>(`/tenants/check-name-availability?name=${encodeURIComponent(name)}`, {
       method: 'GET',
     }, { isLogin: true });
   }
@@ -543,9 +585,16 @@ class ApiService {
   }
 
   async createInvoice(invoiceData: CreateInvoiceData): Promise<Invoice> {
+    // Convert date strings to ISO format for the API
+    const requestData = {
+      ...invoiceData,
+      date: invoiceData.date ? new Date(invoiceData.date + 'T00:00:00').toISOString() : undefined,
+      due_date: invoiceData.due_date ? new Date(invoiceData.due_date + 'T00:00:00').toISOString() : undefined,
+    };
+    
     return await this.request<Invoice>('/invoices/', {
       method: 'POST',
-      body: JSON.stringify(invoiceData),
+      body: JSON.stringify(requestData),
     });
   }
 

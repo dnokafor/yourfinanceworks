@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import apiService, { CreateClientData, CreateInvoiceData, Client, Settings, DiscountRule } from '../services/api';
 import { formatCurrency, getCurrencySymbol, parseCurrencyAmount } from '../utils/currency';
 import { formatDate, safeParseDateString } from '../utils/date';
@@ -53,12 +55,41 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
   onSaveInvoice,
   onNavigateBack,
 }) => {
+  const { t } = useTranslation();
+  
+  const getLocalDateString = (date: Date = new Date()) => {
+    try {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    } catch (error) {
+      console.error('Error in getLocalDateString:', error);
+      return '2025-01-01'; // Fallback date
+    }
+  };
+
+  // Convert date string to Date object
+  const getDateFromString = (dateString: string): Date => {
+    try {
+      const [year, month, day] = dateString.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    } catch (error) {
+      console.error('Error converting date string:', error);
+      return new Date();
+    }
+  };
+
   const [formData, setFormData] = useState<NewInvoiceFormData>({
     client_id: 0,
     number: '',
     currency: 'USD',
-    date: new Date().toISOString().split('T')[0],
-    due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    date: getLocalDateString(),
+    due_date: (() => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 30);
+      return getLocalDateString(futureDate);
+    })(),
     status: 'pending',
     paid_amount: 0,
     items: [{ id: 1, description: '', quantity: 1, price: 0, amount: 0 }],
@@ -72,8 +103,10 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showClientModal, setShowClientModal] = useState(false);
-  const [showDateModal, setShowDateModal] = useState(false);
-  const [showDueDateModal, setShowDueDateModal] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showDueDatePicker, setShowDueDatePicker] = useState(false);
+  
+
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [currentDateField, setCurrentDateField] = useState<'date' | 'due_date'>('date');
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +141,8 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
         }
       } catch (error) {
         console.error('Failed to load settings:', error);
+      } finally {
+        setLoading(false);
       }
     };
     loadSettings();
@@ -139,6 +174,61 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
       [field]: value,
     }));
     if (error) setError(null);
+  };
+
+  const isValidDate = (dateString: string): boolean => {
+    // Allow empty or partial dates during input
+    if (!dateString || dateString.length < 10) {
+      return dateString.length === 0 || /^\d{0,4}(-\d{0,2}(-\d{0,2})?)?$/.test(dateString);
+    }
+
+    // Check format first
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      return false;
+    }
+
+    const [year, month, day] = dateString.split('-').map(Number);
+    
+    // Check basic ranges
+    if (year < 1900 || year > 2100) return false;
+    if (month < 1 || month > 12) return false;
+    if (day < 1 || day > 31) return false;
+
+    // Create date and check if it's valid (handles leap years, month lengths, etc.)
+    try {
+      const date = new Date(year, month - 1, day);
+      if (isNaN(date.getTime())) {
+        return false;
+      }
+      return date.getFullYear() === year && 
+             date.getMonth() === month - 1 && 
+             date.getDate() === day;
+    } catch (error) {
+      console.error('Date validation error:', error);
+      return false;
+    }
+  };
+
+  const handleDateChange = (field: 'date' | 'due_date', value: string) => {
+    // Allow partial input for better UX
+    let formattedValue = value;
+    
+    // Auto-format as user types
+    if (value.length === 4 && !value.includes('-')) {
+      formattedValue = value + '-';
+    } else if (value.length === 7 && value.charAt(4) === '-' && value.charAt(6) !== '-') {
+      formattedValue = value + '-';
+    }
+    
+    // Remove any non-digit characters except hyphens
+    formattedValue = formattedValue.replace(/[^\d-]/g, '');
+    
+    // Limit to 10 characters (YYYY-MM-DD)
+    if (formattedValue.length > 10) {
+      formattedValue = formattedValue.substring(0, 10);
+    }
+
+    handleChange(field, formattedValue);
   };
 
   const handleItemChange = (index: number, field: keyof InvoiceItem, value: any) => {
@@ -216,16 +306,28 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
       setError('Please select a client');
       return false;
     }
+    
     if (!formData.number.trim()) {
       setError('Invoice number is required');
       return false;
     }
+    
     if (!formData.date) {
       setError('Invoice date is required');
       return false;
     }
+    
     if (!formData.due_date) {
       setError('Due date is required');
+      return false;
+    }
+    
+    // Simple date comparison since date picker ensures valid dates
+    const invoiceDate = getDateFromString(formData.date);
+    const dueDate = getDateFromString(formData.due_date);
+    
+    if (dueDate < invoiceDate) {
+      setError('Due date cannot be earlier than invoice date');
       return false;
     }
     if (formData.items.some(item => !item.description.trim())) {
@@ -335,90 +437,163 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
       transparent={true}
       onRequestClose={() => setShowAddClientModal(false)}
     >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Add New Client</Text>
+      <TouchableOpacity 
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={() => setShowAddClientModal(false)}
+      >
+        <TouchableOpacity 
+          style={[styles.modalContent, styles.addClientModalContent]}
+          activeOpacity={1}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('clients.add_new_client')}</Text>
+            <TouchableOpacity onPress={() => setShowAddClientModal(false)}>
+              <Ionicons name="close" size={24} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
           
-          <TextInput
-            style={styles.input}
-            placeholder="Client Name"
-            value={addClientForm.name}
-            onChangeText={(text) => setAddClientForm(prev => ({ ...prev, name: text }))}
-          />
-          
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            value={addClientForm.email}
-            onChangeText={(text) => setAddClientForm(prev => ({ ...prev, email: text }))}
-            keyboardType="email-address"
-          />
-          
-          <TextInput
-            style={styles.input}
-            placeholder="Phone (optional)"
-            value={addClientForm.phone}
-            onChangeText={(text) => setAddClientForm(prev => ({ ...prev, phone: text }))}
-            keyboardType="phone-pad"
-          />
-          
-          <TextInput
-            style={styles.input}
-            placeholder="Address (optional)"
-            value={addClientForm.address}
-            onChangeText={(text) => setAddClientForm(prev => ({ ...prev, address: text }))}
-            multiline
-          />
+          <ScrollView style={styles.addClientModalBody} showsVerticalScrollIndicator={false}>
+            {/* Name Field */}
+            <View style={styles.formField}>
+              <Text style={styles.fieldLabel}>{t('clients.client_name')} *</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="person-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder={t('clients.enter_name')}
+                  value={addClientForm.name}
+                  onChangeText={(text) => setAddClientForm(prev => ({ ...prev, name: text }))}
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+            </View>
 
-          {addClientError && (
-            <Text style={styles.errorText}>{addClientError}</Text>
-          )}
+            {/* Email Field */}
+            <View style={styles.formField}>
+              <Text style={styles.fieldLabel}>{t('clients.client_email')} *</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="mail-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder={t('clients.enter_email')}
+                  value={addClientForm.email}
+                  onChangeText={(text) => setAddClientForm(prev => ({ ...prev, email: text }))}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+            </View>
 
-          <View style={styles.modalButtons}>
+            {/* Phone Field */}
+            <View style={styles.formField}>
+              <Text style={styles.fieldLabel}>{t('clients.client_phone')} ({t('common.optional')})</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="call-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder={t('clients.enter_phone')}
+                  value={addClientForm.phone}
+                  onChangeText={(text) => setAddClientForm(prev => ({ ...prev, phone: text }))}
+                  keyboardType="phone-pad"
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+            </View>
+
+            {/* Address Field */}
+            <View style={styles.formField}>
+              <Text style={styles.fieldLabel}>{t('clients.client_address')} ({t('common.optional')})</Text>
+              <View style={[styles.inputContainer, styles.textAreaContainer]}>
+                <Ionicons name="location-outline" size={20} color="#6B7280" style={[styles.inputIcon, styles.textAreaIcon]} />
+                <TextInput
+                  style={[styles.modalInput, styles.textAreaInput]}
+                  placeholder={t('clients.enter_address')}
+                  value={addClientForm.address}
+                  onChangeText={(text) => setAddClientForm(prev => ({ ...prev, address: text }))}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+            </View>
+
+            {/* Preferred Currency Field */}
+            <View style={styles.formField}>
+              <Text style={styles.fieldLabel}>{t('clients.preferred_currency')}</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="card-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                <Text style={styles.modalInput}>
+                  {addClientForm.preferred_currency || tenantInfo?.default_currency || 'USD'}
+                </Text>
+              </View>
+              <Text style={styles.fieldHint}>{t('clients.currency_hint')}</Text>
+            </View>
+
+            {addClientError && (
+              <View style={styles.errorContainer}>
+                <Ionicons name="alert-circle" size={20} color="#EF4444" />
+                <Text style={styles.errorText}>{addClientError}</Text>
+              </View>
+            )}
+          </ScrollView>
+
+          <View style={styles.modalFooter}>
             <TouchableOpacity
               style={[styles.button, styles.cancelButton]}
               onPress={() => setShowAddClientModal(false)}
             >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+              <Text style={styles.cancelButtonText}>{t('common.cancel')}</Text>
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={[styles.button, styles.saveButton]}
+              style={[styles.button, styles.primaryButton, addClientLoading && styles.buttonDisabled]}
               onPress={handleAddClient}
               disabled={addClientLoading}
             >
               {addClientLoading ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Text style={styles.saveButtonText}>Add Client</Text>
+                <>
+                  <Ionicons name="add" size={18} color="#FFFFFF" />
+                  <Text style={styles.primaryButtonText}>{t('clients.add_client')}</Text>
+                </>
               )}
             </TouchableOpacity>
           </View>
-        </View>
-      </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   );
 
   const renderClientSelector = () => (
     <View style={styles.formGroup}>
-      <Text style={styles.label}>Client *</Text>
-      <TouchableOpacity
-        style={styles.selector}
-        onPress={() => setShowClientModal(true)}
-      >
-        <Text style={selectedClient ? styles.selectorText : styles.placeholderText}>
-          {selectedClient ? selectedClient.name : 'Select a client'}
-        </Text>
-        <Ionicons name="chevron-down" size={20} color="#6B7280" />
-      </TouchableOpacity>
-      
-      <TouchableOpacity
-        style={styles.addClientButton}
-        onPress={() => setShowAddClientModal(true)}
-      >
-        <Ionicons name="add-circle-outline" size={16} color="#3B82F6" />
-        <Text style={styles.addClientText}>Add New Client</Text>
-      </TouchableOpacity>
+      <Text style={styles.label}>{t('invoices.client')} *</Text>
+      <View style={styles.clientSelectorContainer}>
+        <TouchableOpacity
+          style={[styles.selector, styles.clientSelector]}
+          onPress={() => setShowClientModal(true)}
+        >
+          <View style={styles.clientSelectorContent}>
+            <Ionicons name="person-outline" size={20} color="#6B7280" />
+            <Text style={[selectedClient ? styles.selectorText : styles.placeholderText, styles.clientSelectorText]}>
+              {selectedClient ? selectedClient.name : t('invoices.select_client')}
+            </Text>
+          </View>
+          <Ionicons name="chevron-down" size={20} color="#6B7280" />
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.addClientButton}
+          onPress={() => setShowAddClientModal(true)}
+        >
+          <Ionicons name="add" size={20} color="#FFFFFF" />
+          <Text style={styles.addClientText}>{t('invoices.add_new_client')}</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
@@ -426,11 +601,12 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
     <View style={styles.formGroup}>
       <Text style={styles.label}>Invoice Date *</Text>
       <TouchableOpacity
-        style={styles.selector}
+        style={[styles.selector, loading && styles.buttonDisabled]}
         onPress={() => {
-          setCurrentDateField('date');
-          setShowDateModal(true);
+          if (loading) return;
+          setShowDatePicker(true);
         }}
+        disabled={loading}
       >
         <Text style={styles.selectorText}>
           {formatDate(formData.date)}
@@ -444,11 +620,12 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
     <View style={styles.formGroup}>
       <Text style={styles.label}>Due Date *</Text>
       <TouchableOpacity
-        style={styles.selector}
+        style={[styles.selector, loading && styles.buttonDisabled]}
         onPress={() => {
-          setCurrentDateField('due_date');
-          setShowDueDateModal(true);
+          if (loading) return;
+          setShowDueDatePicker(true);
         }}
+        disabled={loading}
       >
         <Text style={styles.selectorText}>
           {formatDate(formData.due_date)}
@@ -468,7 +645,7 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
         <TouchableOpacity onPress={onNavigateBack} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#374151" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>New Invoice</Text>
+        <Text style={styles.headerTitle}>{t('invoices.new_invoice')}</Text>
         <TouchableOpacity
           style={[styles.saveButton, submitting && styles.saveButtonDisabled]}
           onPress={handleSave}
@@ -628,103 +805,166 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
         transparent={true}
         onRequestClose={() => setShowClientModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{t('invoices.select_client')}</Text>
-            <ScrollView style={{ maxHeight: 300 }}>
-              {clients.map((client) => (
-                <TouchableOpacity
-                  key={client.id}
-                  style={styles.clientOption}
-                  onPress={() => {
-                    handleChange('client_id', client.id);
-                    
-                    // Set currency to client's preferred currency when client is selected
-                    if (client.preferred_currency) {
-                      console.log("Setting currency to selected client's preferred currency:", client.preferred_currency);
-                      handleChange('currency', client.preferred_currency);
-                    }
-                    
-                    setShowClientModal(false);
-                  }}
-                >
-                  <Text style={styles.clientName}>{client.name}</Text>
-                  <Text style={styles.clientEmail}>{client.email}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            <TouchableOpacity
-              style={[styles.button, styles.cancelButton]}
-              onPress={() => setShowClientModal(false)}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowClientModal(false)}
+        >
+          <TouchableOpacity 
+            style={[styles.modalContent, styles.clientModalContent]}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('invoices.select_client')}</Text>
+              <TouchableOpacity onPress={() => setShowClientModal(false)}>
+                <Ionicons name="close" size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.clientModalBody}>
+              {clients.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="people-outline" size={48} color="#9CA3AF" />
+                  <Text style={styles.emptyStateText}>{t('invoices.no_clients_found')}</Text>
+                  <Text style={styles.emptyStateSubtext}>{t('invoices.add_client_to_get_started')}</Text>
+                </View>
+              ) : (
+                <ScrollView style={styles.clientsList} showsVerticalScrollIndicator={false}>
+                  {clients.map((client, index) => (
+                    <TouchableOpacity
+                      key={client.id}
+                      style={[
+                        styles.clientOption,
+                        formData.client_id === client.id && styles.clientOptionSelected,
+                        index === clients.length - 1 && styles.clientOptionLast
+                      ]}
+                      onPress={() => {
+                        handleChange('client_id', client.id);
+                        
+                        // Set currency to client's preferred currency when client is selected
+                        if (client.preferred_currency) {
+                          console.log("Setting currency to selected client's preferred currency:", client.preferred_currency);
+                          handleChange('currency', client.preferred_currency);
+                        }
+                        
+                        setShowClientModal(false);
+                      }}
+                    >
+                      <View style={styles.clientInfo}>
+                        <View style={styles.clientAvatar}>
+                          <Ionicons name="person" size={20} color="#6B7280" />
+                        </View>
+                        <View style={styles.clientDetails}>
+                          <Text style={styles.clientName}>{client.name}</Text>
+                          <Text style={styles.clientEmail}>{client.email}</Text>
+                          {client.preferred_currency && (
+                            <Text style={styles.clientCurrency}>
+                              Currency: {client.preferred_currency}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                      {formData.client_id === client.id && (
+                        <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+              
+              <TouchableOpacity
+                style={styles.addClientFromModal}
+                onPress={() => {
+                  setShowClientModal(false);
+                  setShowAddClientModal(true);
+                }}
+              >
+                <Ionicons name="add-circle" size={20} color="#3B82F6" />
+                <Text style={styles.addClientFromModalText}>{t('invoices.add_new_client')}</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
       
-      {/* Date Selection Modal */}
+      {/* Native Date Picker Modal */}
       <Modal
-        visible={showDateModal}
-        animationType="slide"
+        visible={showDatePicker}
         transparent={true}
-        onRequestClose={() => setShowDateModal(false)}
+        animationType="slide"
+        onRequestClose={() => setShowDatePicker(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{t('invoices.select_date')}</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="YYYY-MM-DD"
-              value={formData.date}
-              onChangeText={(text) => handleChange('date', text)}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('invoices.select_date')}</Text>
+              <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                <Ionicons name="close" size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            
+            <DateTimePicker
+              value={getDateFromString(formData.date)}
+              mode="date"
+              display="spinner"
+              onChange={(event, selectedDate) => {
+                if (selectedDate) {
+                  const dateString = getLocalDateString(selectedDate);
+                  setFormData(prev => ({ ...prev, date: dateString }));
+                }
+                setShowDatePicker(false);
+              }}
             />
-            <View style={styles.modalButtons}>
+
+            <View style={styles.modalFooter}>
               <TouchableOpacity
                 style={[styles.button, styles.cancelButton]}
-                onPress={() => setShowDateModal(false)}
+                onPress={() => setShowDatePicker(false)}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.button, styles.saveButton]}
-                onPress={() => setShowDateModal(false)}
-              >
-                <Text style={styles.saveButtonText}>Done</Text>
+                <Text style={styles.cancelButtonText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
       
-      {/* Due Date Selection Modal */}
+      {/* Native Due Date Picker Modal */}
       <Modal
-        visible={showDueDateModal}
-        animationType="slide"
+        visible={showDueDatePicker}
         transparent={true}
-        onRequestClose={() => setShowDueDateModal(false)}
+        animationType="slide"
+        onRequestClose={() => setShowDueDatePicker(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{t('invoices.select_due_date')}</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="YYYY-MM-DD"
-              value={formData.due_date}
-              onChangeText={(text) => handleChange('due_date', text)}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('invoices.select_due_date')}</Text>
+              <TouchableOpacity onPress={() => setShowDueDatePicker(false)}>
+                <Ionicons name="close" size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            
+            <DateTimePicker
+              value={getDateFromString(formData.due_date)}
+              mode="date"
+              display="spinner"
+              minimumDate={getDateFromString(formData.date)}
+              onChange={(event, selectedDate) => {
+                if (selectedDate) {
+                  const dateString = getLocalDateString(selectedDate);
+                  setFormData(prev => ({ ...prev, due_date: dateString }));
+                }
+                setShowDueDatePicker(false);
+              }}
             />
-            <View style={styles.modalButtons}>
+
+            <View style={styles.modalFooter}>
               <TouchableOpacity
                 style={[styles.button, styles.cancelButton]}
-                onPress={() => setShowDueDateModal(false)}
+                onPress={() => setShowDueDatePicker(false)}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.button, styles.saveButton]}
-                onPress={() => setShowDueDateModal(false)}
-              >
-                <Text style={styles.saveButtonText}>Done</Text>
+                <Text style={styles.cancelButtonText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -751,31 +991,47 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('invoices.select_currency')}</Text>
               <TouchableOpacity onPress={() => setShowCurrencyModal(false)}>
-                <Ionicons name="close" size={24} color="#666" />
+                <Ionicons name="close" size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
-            <View style={styles.modalBody}>
-              {['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY'].map(currency => (
-                <TouchableOpacity
-                  key={currency}
-                  style={[
-                    styles.statusOption,
-                    formData.currency === currency && styles.statusOptionSelected
-                  ]}
-                  onPress={() => {
-                    handleChange('currency', currency);
-                    setShowCurrencyModal(false);
-                  }}
-                >
-                  <Text style={[
-                    styles.statusOptionText,
-                    formData.currency === currency && styles.statusOptionTextSelected
-                  ]}>{currency}</Text>
-                  {formData.currency === currency && (
-                    <Ionicons name="checkmark" size={20} color="#007AFF" />
-                  )}
-                </TouchableOpacity>
-              ))}
+            <View style={styles.currencyModalBody}>
+              <Text style={styles.modalSubtitle}>{t('invoices.currency_selection_subtitle')}</Text>
+              <ScrollView style={styles.currencyList} showsVerticalScrollIndicator={false}>
+                {[
+                  { code: 'USD', name: 'US Dollar', symbol: '$' },
+                  { code: 'EUR', name: 'Euro', symbol: '€' },
+                  { code: 'GBP', name: 'British Pound', symbol: '£' },
+                  { code: 'CAD', name: 'Canadian Dollar', symbol: 'C$' },
+                  { code: 'AUD', name: 'Australian Dollar', symbol: 'A$' },
+                  { code: 'JPY', name: 'Japanese Yen', symbol: '¥' }
+                ].map((currency, index) => (
+                  <TouchableOpacity
+                    key={currency.code}
+                    style={[
+                      styles.currencyOption,
+                      formData.currency === currency.code && styles.currencyOptionSelected,
+                      index === 5 && styles.currencyOptionLast
+                    ]}
+                    onPress={() => {
+                      handleChange('currency', currency.code);
+                      setShowCurrencyModal(false);
+                    }}
+                  >
+                    <View style={styles.currencyInfo}>
+                      <View style={styles.currencySymbol}>
+                        <Text style={styles.currencySymbolText}>{currency.symbol}</Text>
+                      </View>
+                      <View style={styles.currencyDetails}>
+                        <Text style={styles.currencyCode}>{currency.code}</Text>
+                        <Text style={styles.currencyName}>{currency.name}</Text>
+                      </View>
+                    </View>
+                    {formData.currency === currency.code && (
+                      <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -826,14 +1082,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
   },
-  errorContainer: {
-    backgroundColor: '#FEF2F2',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#FECACA',
-  },
+
   errorText: {
     color: '#EF4444',
     fontSize: 14,
@@ -874,16 +1123,40 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#9CA3AF',
   },
-  addClientButton: {
+  clientSelectorContainer: {
+    gap: 12,
+  },
+  clientSelector: {
+    flex: 1,
+  },
+  clientSelectorContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    flex: 1,
+  },
+  clientSelectorText: {
+    marginLeft: 8,
+    flex: 1,
+  },
+  addClientButton: {
+    backgroundColor: '#3B82F6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   addClientText: {
-    marginLeft: 4,
+    marginLeft: 8,
     fontSize: 14,
-    color: '#3B82F6',
-    fontWeight: '500',
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   currencySelector: {
     flexDirection: 'row',
@@ -894,16 +1167,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
   },
-  currencySymbol: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginRight: 8,
-  },
-  currencyCode: {
-    fontSize: 16,
-    color: '#6B7280',
-  },
+
   itemContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
@@ -1083,32 +1347,286 @@ const styles = StyleSheet.create({
     color: '#374151',
     fontWeight: '600',
   },
+  clientModalContent: {
+    maxHeight: '85%',
+    minHeight: '60%',
+  },
+  clientModalBody: {
+    flex: 1,
+    padding: 20,
+  },
+  clientsList: {
+    flex: 1,
+    marginBottom: 16,
+  },
   clientOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: '#F3F4F6',
+    backgroundColor: '#FFFFFF',
+  },
+  clientOptionSelected: {
+    backgroundColor: '#F0F9FF',
+    borderLeftWidth: 3,
+    borderLeftColor: '#3B82F6',
+  },
+  clientOptionLast: {
+    borderBottomWidth: 0,
+  },
+  clientInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  clientAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  clientDetails: {
+    flex: 1,
   },
   clientName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#111827',
+    marginBottom: 2,
   },
   clientEmail: {
     fontSize: 14,
     color: '#6B7280',
+    marginBottom: 2,
+  },
+  clientCurrency: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyStateText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#374151',
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+  },
+  addClientFromModal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+  },
+  addClientFromModalText: {
+    marginLeft: 8,
+    fontSize: 16,
+    color: '#3B82F6',
+    fontWeight: '600',
+  },
+  addClientModalContent: {
+    maxHeight: '90%',
+    minHeight: '70%',
+  },
+  addClientModalBody: {
+    flex: 1,
+    padding: 20,
+  },
+  formField: {
+    marginBottom: 20,
+  },
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  fieldHint: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  textAreaContainer: {
+    alignItems: 'flex-start',
+    paddingVertical: 16,
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  textAreaIcon: {
     marginTop: 2,
+  },
+  modalInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#111827',
+    minHeight: 20,
+  },
+  textAreaInput: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 8,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    padding: 20,
+    paddingTop: 16,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    backgroundColor: '#FFFFFF',
+  },
+  primaryButton: {
+    backgroundColor: '#3B82F6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  dateModalContent: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  dateModalBody: {
+    paddingHorizontal: 20,
+    paddingBottom: 0,
+    maxHeight: 200,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  currencyModalBody: {
+    flex: 1,
+    padding: 20,
+  },
+  currencyList: {
+    flex: 1,
+  },
+  currencyOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    backgroundColor: '#FFFFFF',
+  },
+  currencyOptionSelected: {
+    backgroundColor: '#F0F9FF',
+    borderLeftWidth: 3,
+    borderLeftColor: '#3B82F6',
+  },
+  currencyOptionLast: {
+    borderBottomWidth: 0,
+  },
+  currencyInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  currencySymbol: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  currencySymbolText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  currencyDetails: {
+    flex: 1,
+  },
+  currencyCode: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  currencyName: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  errorHint: {
+    color: '#EF4444',
   },
   currencyDisplay: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  currencyOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
+
 });
 
-export default NewInvoiceScreen; 
+export default NewInvoiceScreen;

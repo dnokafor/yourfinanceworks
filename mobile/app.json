@@ -20,7 +20,8 @@
     "extra": {
       "eas": {
         "projectId": "your-project-id-here"
-      }
+      },
+      "apiBaseUrl": "${EXPO_PUBLIC_API_BASE_URL}"
     }
   }
 } 
