@@ -15,7 +15,43 @@ from routers.auth import get_current_user
 router = APIRouter(prefix="/invoices", tags=["pdf-processing"])
 logger = logging.getLogger(__name__)
 
-async def process_pdf_with_ai(pdf_path: str, ai_config: AIConfigModel) -> Dict[str, Any]:
+@router.get("/ai-status")
+async def get_ai_status(
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Check if AI is configured (database, env vars, or manual fallback)"""
+    
+    # Use the same priority logic as PDF processing
+    ai_config = db.query(AIConfigModel).filter(
+        AIConfigModel.is_active == True,
+        AIConfigModel.tested == True
+    ).first()
+    
+    if ai_config:
+        config_source = "ai_config"
+    else:
+        # Check environment variables
+        env_model = os.getenv("LLM_MODEL_INVOICES") or os.getenv("LLM_MODEL") or os.getenv("OLLAMA_MODEL")
+        env_api_base = os.getenv("LLM_API_BASE") or os.getenv("OLLAMA_API_BASE")
+        env_api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
+        
+        if env_model or env_api_base or env_api_key:
+            config_source = "env_vars"
+        else:
+            config_source = "manual"
+    
+    return {
+        "configured": True,  # Always true since we have fallback
+        "config_source": config_source,
+        "message": {
+            "ai_config": "AI configuration from database",
+            "env_vars": "AI configuration from environment variables", 
+            "manual": "Manual fallback configuration (may require setup)"
+        }.get(config_source, "Unknown configuration source")
+    }
+
+async def process_pdf_with_ai(pdf_path: str, ai_config) -> Dict[str, Any]:
     """Process PDF using AI configuration and return extracted data"""
     try:
         # Import litellm for AI processing
@@ -97,14 +133,18 @@ Respond with JSON only:"""
         elif ai_config.provider_name == "anthropic" and ai_config.api_key:
             kwargs["api_key"] = ai_config.api_key
 
-        # Robust fallback: if provider not usable (no api_key) but Ollama env is set, route to Ollama
-        if (not kwargs.get("api_key")):
+        # Enhanced fallback logic for manual configuration
+        if not kwargs.get("api_key") and ai_config.provider_name != "ollama":
+            # Check if we can fallback to environment Ollama
             ollama_base = os.getenv("LLM_API_BASE") or os.getenv("OLLAMA_API_BASE")
             if ollama_base:
                 kwargs["api_base"] = ollama_base
                 if not str(kwargs.get("model", "")).startswith("ollama/"):
                     kwargs["model"] = f"ollama/{ai_config.model_name}"
-                logger.info("Falling back to Ollama provider via LLM_API_BASE or OLLAMA_API_BASE")
+                logger.info("Falling back to Ollama provider via environment variables")
+            elif not hasattr(ai_config, 'tested') or not ai_config.tested:
+                # This is likely a manual fallback config
+                logger.warning("Using untested manual configuration - this may fail")
 
         logger.info(f"Final kwargs for AI request: {kwargs}")
 
@@ -119,9 +159,20 @@ Respond with JSON only:"""
             logger.info(f"AI response received: {response}")
         except Exception as e:
             logger.error(f"AI completion failed: {str(e)}")
-            # Add fallback with dummy data for testing
-            logger.info("Using fallback dummy data for testing")
-            return {}
+            
+            # Provide specific error messages based on the likely cause
+            error_msg = str(e).lower()
+            if "connection" in error_msg or "timeout" in error_msg:
+                if ai_config.provider_name == "ollama":
+                    raise Exception(f"Cannot connect to Ollama server at {ai_config.provider_url or 'default URL'}. Please ensure Ollama is running and accessible.")
+                else:
+                    raise Exception(f"Cannot connect to {ai_config.provider_name} API. Please check your network connection and API endpoint.")
+            elif "api_key" in error_msg or "unauthorized" in error_msg or "authentication" in error_msg:
+                raise Exception(f"Authentication failed for {ai_config.provider_name}. Please check your API key in AI configuration settings.")
+            elif "model" in error_msg or "not found" in error_msg:
+                raise Exception(f"Model '{ai_config.model_name}' not found or not available. Please check your model name in AI configuration.")
+            else:
+                raise Exception(f"AI processing failed: {str(e)}")
 
         # Parse response
         logger.info(f"Checking AI response structure...")
@@ -158,19 +209,19 @@ Respond with JSON only:"""
                         return extracted_data
                     except json.JSONDecodeError as e:
                         logger.error(f"Failed to parse AI response as JSON: {response_text}")
-                        raise Exception(f"AI returned invalid JSON: {str(e)}")
+                        raise Exception(f"AI returned invalid JSON format. The model may not be suitable for structured data extraction. Response: {response_text[:200]}...")
                 else:
                     logger.error(f"Message content is empty or None: {message.content}")
-                    raise Exception("AI returned empty message content")
+                    raise Exception(f"AI returned empty response. This may indicate an issue with the {ai_config.provider_name} model or prompt.")
             else:
                 logger.error(f"Choice has no message or message is None: {choice}")
-                raise Exception("AI response choice has no message")
+                raise Exception(f"Invalid response format from {ai_config.provider_name}. The model may not be compatible with this request format.")
         else:
             logger.error(f"AI response structure invalid: {response}")
             logger.error(f"Response: {response}")
             logger.error(f"Has choices: {hasattr(response, 'choices') if response else 'Response is None'}")
             logger.error(f"Choices: {response.choices if response and hasattr(response, 'choices') else 'No choices'}")
-            raise Exception("AI returned invalid response structure")
+            raise Exception(f"AI returned invalid response structure. This may indicate an issue with the {ai_config.provider_name} configuration or model compatibility.")
 
     except Exception as e:
         logger.error(f"PDF processing error: {str(e)}")
@@ -194,34 +245,85 @@ async def process_pdf(
             temp_file.write(content)
             temp_pdf_path = temp_file.name
 
-        # Get active AI configuration (fallback to env if none)
-        active_config = db.query(AIConfigModel).filter(
+        # Priority system: AI config → env vars → manual fallback
+        active_config = None
+        config_source = "manual"
+        
+        # 1. Check if AI config is set up and tested
+        ai_config = db.query(AIConfigModel).filter(
             AIConfigModel.is_active == True,
             AIConfigModel.tested == True
         ).first()
         
-        if not active_config:
-            # Env fallback for fresh setups
-            model_name = os.getenv("LLM_MODEL_INVOICES") or os.getenv("LLM_MODEL") or os.getenv("OLLAMA_MODEL", "gpt-oss:latest")
-            provider_url = os.getenv("LLM_API_BASE") or os.getenv("OLLAMA_API_BASE")
-            api_key = os.getenv("LLM_API_KEY")
-            provider_name = "ollama" if (os.getenv("LLM_API_BASE") or os.getenv("OLLAMA_API_BASE") or os.getenv("OLLAMA_MODEL")) else "openai"
-            active_config = SimpleNamespace(
-                provider_name=provider_name,
-                provider_url=provider_url,
-                api_key=api_key,
-                model_name=model_name,
-                is_active=True,
-                tested=True,
-            )
+        if ai_config:
+            active_config = ai_config
+            config_source = "ai_config"
+            logger.info("Using AI configuration from database")
+        else:
+            # 2. Check if env vars are set up
+            env_model = os.getenv("LLM_MODEL_INVOICES") or os.getenv("LLM_MODEL") or os.getenv("OLLAMA_MODEL")
+            env_api_base = os.getenv("LLM_API_BASE") or os.getenv("OLLAMA_API_BASE")
+            env_api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
+            
+            # Debug logging
+            logger.info(f"Environment variables check:")
+            logger.info(f"  LLM_MODEL_INVOICES: {os.getenv('LLM_MODEL_INVOICES')}")
+            logger.info(f"  LLM_MODEL: {os.getenv('LLM_MODEL')}")
+            logger.info(f"  OLLAMA_MODEL: {os.getenv('OLLAMA_MODEL')}")
+            logger.info(f"  LLM_API_BASE: {os.getenv('LLM_API_BASE')}")
+            logger.info(f"  OLLAMA_API_BASE: {os.getenv('OLLAMA_API_BASE')}")
+            logger.info(f"  LLM_API_KEY: {'***' if os.getenv('LLM_API_KEY') else None}")
+            logger.info(f"  OPENAI_API_KEY: {'***' if os.getenv('OPENAI_API_KEY') else None}")
+            logger.info(f"  Final values - model: {env_model}, api_base: {env_api_base}, api_key: {'***' if env_api_key else None}")
+            
+            if env_model or env_api_base or env_api_key:
+                # Determine provider from env vars
+                if env_api_base or os.getenv("OLLAMA_MODEL"):
+                    provider_name = "ollama"
+                elif env_api_key:
+                    provider_name = "openai"
+                else:
+                    provider_name = "ollama"  # Default fallback
+                
+                active_config = SimpleNamespace(
+                    provider_name=provider_name,
+                    provider_url=env_api_base,
+                    api_key=env_api_key,
+                    model_name=env_model or "gpt-oss:latest",
+                    is_active=True,
+                    tested=True,
+                )
+                config_source = "env_vars"
+                logger.info(f"Using AI configuration from environment variables: provider={provider_name}, model={env_model or 'gpt-oss:latest'}, api_base={env_api_base}")
+            else:
+                # 3. Manual fallback - use basic defaults
+                active_config = SimpleNamespace(
+                    provider_name="ollama",
+                    provider_url="http://localhost:11434",
+                    api_key=None,
+                    model_name="gpt-oss:latest",
+                    is_active=True,
+                    tested=False,  # Mark as untested for manual config
+                )
+                config_source = "manual"
+                logger.info("No environment variables found, using manual fallback AI configuration")
 
         try:
             # Process PDF with AI
             extracted_data = await process_pdf_with_ai(temp_pdf_path, active_config)
-            logger.info("PDF processed successfully with AI")
+            logger.info(f"PDF processed successfully with AI (config source: {config_source})")
         except Exception as e:
-            logger.error(f"PDF processing failed: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Failed to process PDF with LLM: {str(e)}")
+            logger.error(f"PDF processing failed with {config_source} config: {str(e)}")
+            
+            # Provide helpful error message based on config source
+            if config_source == "manual":
+                error_msg = f"PDF processing failed with manual configuration. Please set up AI configuration in Settings or configure environment variables. Error: {str(e)}"
+            elif config_source == "env_vars":
+                error_msg = f"PDF processing failed with environment variables. Please check your LLM environment configuration or set up AI config in Settings. Error: {str(e)}"
+            else:
+                error_msg = f"PDF processing failed with AI configuration. Please verify your AI settings are correct. Error: {str(e)}"
+            
+            raise HTTPException(status_code=500, detail=error_msg)
 
         # Check if client exists or needs to be created
         client_info = extracted_data.get('bills_to', '')
@@ -257,13 +359,14 @@ async def process_pdf(
                 'name': client_info.split('\n')[0].strip() if client_info else '',
                 'email': client_email or '',
                 'address': client_info
-            } if client_info else None
+            } if client_info else None,
+            'config_source': config_source  # Include config source in response
         }
 
         return {
             'success': True,
             'data': response_data,
-            'message': 'PDF processed successfully'
+            'message': f'PDF processed successfully using {config_source} configuration'
         }
 
     finally:

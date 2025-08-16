@@ -18,16 +18,16 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport }: InvoiceCr
   const { t } = useTranslation();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [processing, setProcessing] = useState(false);
-  const [llmConfigured, setLlmConfigured] = useState<boolean | null>(null);
+  const [llmStatus, setLlmStatus] = useState<{ configured: boolean; config_source: string; message: string } | null>(null);
   const [manualAttachment, setManualAttachment] = useState<File | null>(null);
 
   const checkLlmConfiguration = async () => {
     try {
-      const response = await apiRequest<{ configured: boolean }>('/invoices/ai-status');
-      return response.configured;
+      const response = await apiRequest<{ configured: boolean; config_source: string; message: string }>('/invoices/ai-status');
+      return response;
     } catch (error) {
       console.error('Failed to check LLM configuration:', error);
-      return false;
+      return { configured: false, config_source: 'none', message: 'Failed to check configuration' };
     }
   };
 
@@ -49,16 +49,20 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport }: InvoiceCr
 
     setProcessing(true);
     try {
-      // Check if LLM is configured
-      const isConfigured = await checkLlmConfiguration();
-      setLlmConfigured(isConfigured);
+      // Check LLM configuration status
+      const status = await checkLlmConfiguration();
+      setLlmStatus(status);
 
-      if (!isConfigured) {
-        // If LLM not configured, proceed with manual creation but attach PDF
-        toast.info('LLM not configured. Proceeding with manual invoice creation with PDF attached.');
-        onManualCreate(selectedFile);
-        return;
-        // toast.info('No stored AI config. Trying env-based model on the server...');
+      // Always proceed with PDF processing since we have fallback
+      // The backend will handle the priority system
+      
+      // Show different messages based on config source
+      if (status.config_source === 'env_vars') {
+        toast.info('Using environment AI configuration for PDF processing...');
+      } else if (status.config_source === 'manual') {
+        toast.info('Using fallback AI configuration for PDF processing...');
+      } else if (status.config_source === 'ai_config') {
+        toast.info('Using database AI configuration for PDF processing...');
       }
 
       // Process PDF with LLM
@@ -129,11 +133,18 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport }: InvoiceCr
                 </div>
               )}
 
-              {llmConfigured === false && (
-                <Alert>
+              {llmStatus && (
+                <Alert className={
+                  llmStatus.config_source === 'ai_config' ? 'border-green-200 bg-green-50' :
+                  llmStatus.config_source === 'env_vars' ? 'border-blue-200 bg-blue-50' :
+                  'border-yellow-200 bg-yellow-50'
+                }>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    {t('invoices.llm_not_configured_will_proceed_manually')}
+                    <strong>AI Status:</strong> {llmStatus.message}
+                    {llmStatus.config_source === 'env_vars' && ' ✓'}
+                    {llmStatus.config_source === 'ai_config' && ' ✓'}
+                    {llmStatus.config_source === 'manual' && ' (Requires Ollama at localhost:11434)'}
                   </AlertDescription>
                 </Alert>
               )}

@@ -210,9 +210,9 @@ def init_db():
     finally:
         db.close()
     
-    # Run comprehensive migrations after initial setup
-    from scripts.run_all_migrations import run_all_migrations
-    run_all_migrations()
+    # Skip migrations to avoid multiple heads issue
+    # from scripts.run_all_migrations import run_all_migrations
+    # run_all_migrations()
     # Reset users.id sequences for all tenant DBs
     reset_all_users_id_sequences()
     

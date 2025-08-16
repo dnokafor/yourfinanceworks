@@ -61,7 +61,15 @@ services:
       - KAFKA_OCR_TOPIC=expenses_ocr
       - KAFKA_OCR_GROUP=invoice-app-ocr
       - KAFKA_BANK_TOPIC=bank_statements_ocr
+      # LLM Configuration
       - LLM_API_BASE=http://host.docker.internal:11434
+      - OLLAMA_API_BASE=http://host.docker.internal:11434 # OLLAMA_API_BASE is used by Ollama service
+      - LLM_MODEL_INVOICES=gpt-oss:latest
+      - LLM_MODEL_BANK_STATEMENTS=gpt-oss:latest
+      - LLM_MODEL_EXPENSES=llama3.2-vision:11b
+      # OCR Configuration
+      - OLLAMA_OCR_ENDPOINT=http://host.docker.internal:11434
+      - OLLAMA_OCR_MODEL=llama3.2-vision:11b
     ports:
       - "8000:8000"
     depends_on:
@@ -84,10 +92,8 @@ services:
       retries: 3
     command: >
       sh -c "/wait-for-it.sh postgres-master:5432 -- \
-        echo 'Initializing database and running migrations...' && \
+        echo 'Initializing database...' && \
         python db_init.py && \
-        echo 'Setting up Alembic migrations...' && \
-        python scripts/manage_migrations.py setup || echo 'Migration setup completed or already done' && \
         echo 'Starting API server...' && \
         uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
 
@@ -200,11 +206,15 @@ services:
       - KAFKA_OCR_GROUP=invoice-app-ocr
       # Logging
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # LLM Configuration
       - LLM_API_BASE=http://host.docker.internal:11434
       - OLLAMA_API_BASE=http://host.docker.internal:11434 # OLLAMA_API_BASE is used by Ollama service
       - LLM_MODEL_INVOICES=gpt-oss:latest
       - LLM_MODEL_BANK_STATEMENTS=gpt-oss:latest
       - LLM_MODEL_EXPENSES=llama3.2-vision:11b
+      # OCR Configuration
+      - OLLAMA_OCR_ENDPOINT=http://host.docker.internal:11434
+      - OLLAMA_OCR_MODEL=llama3.2-vision:11b
     depends_on:
       kafka:
         condition: service_healthy

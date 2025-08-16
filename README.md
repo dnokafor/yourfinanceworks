@@ -137,6 +137,7 @@ A modern, multi-tenant invoice management system built with FastAPI and React, w
 - **✅ SQLAlchemy Serialization Fix** - Resolved Row object serialization issues in AI endpoints
 - **✅ User Role Management** - Fixed admin role requirements for settings and AI configuration
 - **✅ Test Coverage** - Comprehensive test scripts for MCP integration validation
+- **✅ PDF Upload AI Priority System** - Smart configuration priority: AI Config → Environment Variables → Manual fallback
 
 ### 🎯 CRM System Implementation
 - **✅ Complete Client Notes System** - Full CRUD operations for client notes with user attribution
@@ -557,6 +558,7 @@ For detailed testing information, see [TESTING.md](TESTING.md).
 - [Database Troubleshooting](api/docs/TROUBLESHOOTING_MISSING_TENANT_DATABASES.md) - Database troubleshooting guide
 - [Super User System](api/docs/SUPER_USER_SYSTEM.md) - Super user system documentation
 - [Data Export & Import Guide](docs/DATA_EXPORT_IMPORT_GUIDE.md) - Complete backup and restore documentation
+- [PDF Upload AI Priority System](docs/PDF_UPLOAD_AI_PRIORITY.md) - AI configuration priority system for PDF processing
 
 ## 🤝 Contributing
 
