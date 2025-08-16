@@ -925,7 +925,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
         
         // Success validation
         if (value.client && value.items?.length > 0 && total > 0) {
-          addValidation({ type: "success", message: "Invoice is ready to be created" });
+          addValidation({ type: "success", message: isEdit ? t('invoices.invoice_ready_to_be_updated') : t('invoices.invoice_ready_to_be_created') });
         }
       }, 300);
       

@@ -351,7 +351,9 @@
     "expense_linked_success": "Gasto vinculado a la factura",
     "expense_unlinked_success": "Gasto desvinculado de la factura",
     "failed_to_link_expense": "No se pudo vincular el gasto",
-    "failed_to_unlink_expense": "No se pudo desvincular el gasto"
+    "failed_to_unlink_expense": "No se pudo desvincular el gasto",
+    "invoice_ready_to_be_created": "La factura está lista para ser creada",
+    "invoice_ready_to_be_updated": "La factura está lista para ser actualizada"
   },
   "clients": {
     "title": "Clientes",

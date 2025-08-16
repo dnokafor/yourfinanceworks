@@ -351,7 +351,9 @@
     "expense_linked_success": "Dépense liée à la facture",
     "expense_unlinked_success": "Dépense dissociée de la facture",
     "failed_to_link_expense": "Échec de la liaison de la dépense",
-    "failed_to_unlink_expense": "Échec de la dissociation de la dépense"
+    "failed_to_unlink_expense": "Échec de la dissociation de la dépense",
+    "invoice_ready_to_be_created": "La facture est prête à être créée",
+    "invoice_ready_to_be_updated": "La facture est prête à être mise à jour"
   },
   "clients": {
     "title": "Clients",

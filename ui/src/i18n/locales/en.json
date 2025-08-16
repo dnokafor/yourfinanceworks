@@ -367,7 +367,9 @@
     "expense_linked_success": "Expense linked to invoice",
     "expense_unlinked_success": "Expense unlinked from invoice",
     "failed_to_link_expense": "Failed to link expense",
-    "failed_to_unlink_expense": "Failed to unlink expense"
+    "failed_to_unlink_expense": "Failed to unlink expense",
+    "invoice_ready_to_be_created": "Invoice is ready to be created",
+    "invoice_ready_to_be_updated": "Invoice is ready to be updated"
   },
   "clients": {
     "title": "Clients",
