@@ -20,8 +20,10 @@ async def get_ai_status(
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
-    """Check if AI is configured (database, env vars, or manual fallback)"""
-    
+    """Check if AI is configured (authenticated users only)"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
     # Use the same priority logic as PDF processing
     ai_config = db.query(AIConfigModel).filter(
         AIConfigModel.is_active == True,
@@ -233,6 +235,10 @@ async def process_pdf(
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
+    """Check if AI is configured (authenticated users only)"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
     """Process PDF invoice and extract data using the main.py script"""
 
     if not pdf_file.filename.endswith('.pdf'):

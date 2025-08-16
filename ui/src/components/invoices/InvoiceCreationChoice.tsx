@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Upload, FileText, Loader2, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport }: InvoiceCr
   const [llmStatus, setLlmStatus] = useState<{ configured: boolean; config_source: string; message: string } | null>(null);
   const [manualAttachment, setManualAttachment] = useState<File | null>(null);
 
+
   const checkLlmConfiguration = async () => {
     try {
       const response = await apiRequest<{ configured: boolean; config_source: string; message: string }>('/invoices/ai-status');
@@ -30,6 +31,16 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport }: InvoiceCr
       return { configured: false, config_source: 'none', message: 'Failed to check configuration' };
     }
   };
+
+  // Check AI status on component mount and log to console
+  useEffect(() => {
+    const checkInitialStatus = async () => {
+      const status = await checkLlmConfiguration();
+      console.log('AI Status:', status);
+      setLlmStatus(status);
+    };
+    checkInitialStatus();
+  }, []);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>, isManual = false) => {
     const file = event.target.files?.[0];
@@ -51,19 +62,8 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport }: InvoiceCr
     try {
       // Check LLM configuration status
       const status = await checkLlmConfiguration();
+      console.log('PDF Processing - AI Status:', status);
       setLlmStatus(status);
-
-      // Always proceed with PDF processing since we have fallback
-      // The backend will handle the priority system
-      
-      // Show different messages based on config source
-      if (status.config_source === 'env_vars') {
-        toast.info('Using environment AI configuration for PDF processing...');
-      } else if (status.config_source === 'manual') {
-        toast.info('Using fallback AI configuration for PDF processing...');
-      } else if (status.config_source === 'ai_config') {
-        toast.info('Using database AI configuration for PDF processing...');
-      }
 
       // Process PDF with LLM
       const formData = new FormData();
@@ -131,22 +131,6 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport }: InvoiceCr
                 <div className="text-sm text-green-600 bg-green-50 p-2 rounded">
                   {t('invoices.selected_file')}: {selectedFile.name}
                 </div>
-              )}
-
-              {llmStatus && (
-                <Alert className={
-                  llmStatus.config_source === 'ai_config' ? 'border-green-200 bg-green-50' :
-                  llmStatus.config_source === 'env_vars' ? 'border-blue-200 bg-blue-50' :
-                  'border-yellow-200 bg-yellow-50'
-                }>
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    <strong>AI Status:</strong> {llmStatus.message}
-                    {llmStatus.config_source === 'env_vars' && ' ✓'}
-                    {llmStatus.config_source === 'ai_config' && ' ✓'}
-                    {llmStatus.config_source === 'manual' && ' (Requires Ollama at localhost:11434)'}
-                  </AlertDescription>
-                </Alert>
               )}
 
               <Button
