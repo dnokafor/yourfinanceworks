@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,6 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Badge } from '@/components/ui/badge';
 
 export default function ExpensesEdit() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const categoryOptions = EXPENSE_CATEGORY_OPTIONS;
@@ -41,7 +43,7 @@ export default function ExpensesEdit() {
         setAttachments(list);
         try { const invs = await linkApi.getInvoicesBasic(); setInvoiceOptions(invs); } catch {}
       } catch (e: any) {
-        toast.error(e?.message || 'Failed to load expense');
+        toast.error(e?.message || t('expenses.failed_to_load', { defaultValue: 'Failed to load expense' }));
       } finally {
         setLoading(false);
       }
@@ -55,7 +57,7 @@ export default function ExpensesEdit() {
       setSaving(true);
       const isAnalyzedDone = (form as any)?.analysis_status === 'done';
       if (isAnalyzedDone && pendingDelete.size > 0) {
-        toast.error('Cannot delete attachments from an analyzed expense');
+        toast.error(t('expenses.cannot_delete_analyzed', { defaultValue: 'Cannot delete attachments from an analyzed expense' }));
         return;
       }
       // Allow amount 0 if there will be at least one attachment after this save
@@ -65,11 +67,11 @@ export default function ExpensesEdit() {
       const hasNewFiles = newFiles.length > 0;
       const willHaveAnyAttachments = effectiveExistingAfterSave > 0 || hasNewFiles;
       if ((!form.amount || Number(form.amount) === 0) && !willHaveAnyAttachments) {
-        toast.error('Amount is required unless at least one attachment is kept or newly added');
+        toast.error(t('expenses.amount_required_with_attachment', { defaultValue: 'Amount is required unless at least one attachment is kept or newly added' }));
         return;
       }
       if (!form.category) {
-        toast.error('Category is required');
+        toast.error(t('expenses.category_required'));
         return;
       }
       // Ensure pending input label is included if user didn't press Enter
@@ -114,11 +116,11 @@ export default function ExpensesEdit() {
       for (let i = 0; i < Math.min(newFiles.length, remainingSlots); i++) {
         try { await expenseApi.uploadReceipt(Number(id), newFiles[i]); } catch (e) { console.error(e); }
       }
-      toast.success('Expense updated');
+      toast.success(t('expenses.expense_updated'));
       setNewLabel('');
       navigate('/expenses');
     } catch (e: any) {
-      toast.error(e?.message || 'Failed to update expense');
+      toast.error(e?.message || t('expenses.failed_to_update'));
     } finally {
       setSaving(false);
     }
@@ -127,7 +129,7 @@ export default function ExpensesEdit() {
   if (loading) {
     return (
       <AppLayout>
-        <div className="p-6">Loading...</div>
+        <div className="p-6">{t('common.loading')}</div>
       </AppLayout>
     );
   }
@@ -136,14 +138,14 @@ export default function ExpensesEdit() {
     <AppLayout>
       <div className="h-full space-y-6 fade-in">
         <div>
-          <h1 className="text-3xl font-bold">Edit Expense</h1>
-          <p className="text-muted-foreground">Update this expense and manage attachments.</p>
+          <h1 className="text-3xl font-bold">{t('expenses.edit_title')}</h1>
+          <p className="text-muted-foreground">{t('expenses.edit_description')}</p>
         </div>
 
         <Card className="slide-in">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Details</CardTitle>
+              <CardTitle>{t('expenses.details')}</CardTitle>
               {((form as any)?.analysis_status === 'pending' || (form as any)?.analysis_status === 'queued' || (form as any)?.analysis_status === 'failed') && (
                 <Button
                   variant="outline"
@@ -151,22 +153,22 @@ export default function ExpensesEdit() {
                   onClick={async () => {
                     try {
                       await expenseApi.reprocessExpense(Number(id));
-                      toast.success('Expense reprocessing started');
+                      toast.success(t('expenses.reprocessing_started'));
                       // Refresh the expense data
                       const exp = await expenseApi.getExpense(Number(id));
                       setForm(exp);
                     } catch (e: any) {
-                      toast.error(e?.message || 'Failed to reprocess expense');
+                      toast.error(e?.message || t('expenses.failed_to_reprocess'));
                     }
                   }}
                 >
-                  Process Again
+                  {t('expenses.process_again')}
                 </Button>
               )}
             </div>
             {(form as any)?.analysis_status && (
               <div className="text-sm text-muted-foreground">
-                Analysis Status: <span className="capitalize">{(form as any).analysis_status}</span>
+                {t('expenses.analysis_status', { defaultValue: 'Analysis Status' })}: <span className="capitalize">{(form as any).analysis_status}</span>
                 {(form as any)?.analysis_error && (
                   <span className="text-red-600 ml-2">({(form as any).analysis_error})</span>
                 )}
@@ -175,17 +177,17 @@ export default function ExpensesEdit() {
           </CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="text-sm">Amount</label>
+              <label className="text-sm">{t('expenses.labels.amount')}</label>
               <Input type="number" value={Number(form.amount || 0)} onChange={e => setForm({ ...form, amount: Number(e.target.value) })} />
             </div>
             <div>
-              <label className="text-sm">Link to Invoice (optional)</label>
+              <label className="text-sm">{t('expenses.link_to_invoice')}</label>
               <Select value={form.invoice_id ? String(form.invoice_id) : undefined} onValueChange={v => setForm({ ...form, invoice_id: v === 'none' ? undefined : Number(v) })}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select invoice" />
+                  <SelectValue placeholder={t('expenses.select_invoice')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="none">{t('expenses.none')}</SelectItem>
                   {invoiceOptions.map(inv => (
                     <SelectItem key={inv.id} value={String(inv.id)}>{inv.number} — {inv.client_name}</SelectItem>
                   ))}
@@ -193,25 +195,28 @@ export default function ExpensesEdit() {
               </Select>
             </div>
             <div>
-              <label className="text-sm">Currency</label>
+              <label className="text-sm">{t('expenses.labels.currency')}</label>
               <CurrencySelector value={form.currency || 'USD'} onValueChange={v => setForm({ ...form, currency: v })} />
             </div>
             <div>
-              <label className="text-sm">Date</label>
+              <label className="text-sm">{t('expenses.labels.date')}</label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="w-full justify-start text-left font-normal">
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {form.expense_date ? format(new Date(form.expense_date as string), 'PPP') : 'Pick a date'}
+                    {form.expense_date ? format(new Date(form.expense_date + 'T00:00:00'), 'PPP') : t('expenses.labels.pick_date')}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
                     mode="single"
-                    selected={form.expense_date ? new Date(form.expense_date as string) : undefined}
+                    selected={form.expense_date ? new Date(form.expense_date + 'T00:00:00') : undefined}
                     onSelect={(d) => {
                       if (d) {
-                        const iso = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).toISOString().split('T')[0];
+                        const year = d.getFullYear();
+                        const month = String(d.getMonth() + 1).padStart(2, '0');
+                        const day = String(d.getDate()).padStart(2, '0');
+                        const iso = `${year}-${month}-${day}`;
                         setForm({ ...form, expense_date: iso });
                       }
                     }}
@@ -221,10 +226,10 @@ export default function ExpensesEdit() {
               </Popover>
             </div>
             <div>
-              <label className="text-sm">Category</label>
+              <label className="text-sm">{t('expenses.labels.category')}</label>
               <Select value={(form.category as string) || 'General'} onValueChange={v => setForm({ ...form, category: v })}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select category" />
+                  <SelectValue placeholder={t('common.select_category')} />
                 </SelectTrigger>
                 <SelectContent>
                   {categoryOptions.map(c => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
@@ -232,26 +237,26 @@ export default function ExpensesEdit() {
               </Select>
             </div>
             <div>
-              <label className="text-sm">Vendor</label>
+              <label className="text-sm">{t('expenses.labels.vendor')}</label>
               <Input value={form.vendor || ''} onChange={e => setForm({ ...form, vendor: e.target.value })} />
             </div>
             <div>
-              <label className="text-sm">Payment method</label>
+              <label className="text-sm">{t('expenses.labels.payment_method')}</label>
               <Input value={form.payment_method || ''} onChange={e => setForm({ ...form, payment_method: e.target.value })} />
             </div>
             <div>
-              <label className="text-sm">Reference #</label>
+              <label className="text-sm">{t('expenses.labels.reference_number')}</label>
               <Input value={form.reference_number || ''} onChange={e => setForm({ ...form, reference_number: e.target.value })} />
             </div>
             <div className="sm:col-span-2">
-              <label className="text-sm">Labels</label>
+              <label className="text-sm">{t('common.labels')}</label>
               <div className="flex flex-wrap items-center gap-2 mt-1">
                 {((form as any).labels || []).slice(0, 10).map((lab: string, idx: number) => (
                   <Badge key={`lab-${idx}`} variant="secondary" className="text-xs">
                     {lab}
                     <button
                       className="ml-1 text-muted-foreground hover:text-foreground"
-                      aria-label="Remove label"
+                      aria-label={t('common.remove')}
                       onClick={() => {
                         try {
                           const next = ((form as any).labels || []).filter((l: string) => l !== lab);
@@ -264,7 +269,7 @@ export default function ExpensesEdit() {
                   </Badge>
                 ))}
                 <Input
-                  placeholder="Add label"
+                  placeholder={t('expenses.labels.label_placeholder')}
                   value={newLabel}
                   className="w-[160px] h-8"
                   onChange={(e) => setNewLabel(e.target.value)}
@@ -274,7 +279,7 @@ export default function ExpensesEdit() {
                       if (!raw) return;
                       const existing: string[] = ((form as any).labels || []);
                       if (existing.includes(raw)) { setNewLabel(''); return; }
-                      if (existing.length >= 10) { toast.error('Maximum of 10 labels reached'); return; }
+                      if (existing.length >= 10) { toast.error(t('expenses.max_labels_reached')); return; }
                       setForm({ ...form, labels: [...existing, raw] } as any);
                       setNewLabel('');
                     }
@@ -283,13 +288,13 @@ export default function ExpensesEdit() {
               </div>
             </div>
             <div className="sm:col-span-2">
-              <label className="text-sm">Notes</label>
+              <label className="text-sm">{t('expenses.labels.notes')}</label>
               <Input value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} />
             </div>
             <div className="sm:col-span-2">
-              <label className="text-sm">Add Attachments (max 10)</label>
+              <label className="text-sm">{t('expenses.max_attachments')}</label>
               {(form as any)?.analysis_status === 'done' && (
-                <div className="text-xs text-muted-foreground mt-1">Attachments cannot be deleted after analysis is completed.</div>
+                <div className="text-xs text-muted-foreground mt-1">{t('expenses.attachments_cannot_delete', { defaultValue: 'Attachments cannot be deleted after analysis is completed.' })}</div>
               )}
               <div className="flex items-center gap-3">
                 <label className="inline-flex items-center gap-2 cursor-pointer">
@@ -299,14 +304,14 @@ export default function ExpensesEdit() {
                     const combined = [...newFiles, ...selected].slice(0, 10);
                     setNewFiles(combined);
                   }} />
-                  Upload
+                  {t('expenses.upload')}
                 </label>
-                <div className="text-sm text-muted-foreground">{newFiles.length} new file(s)</div>
+                <div className="text-sm text-muted-foreground">{newFiles.length} {t('expenses.new_files', { defaultValue: 'new file(s)' })}</div>
               </div>
               <div className="mt-3">
-                <div className="text-sm font-medium mb-2">Existing attachments</div>
+                <div className="text-sm font-medium mb-2">{t('expenses.existing_attachments', { defaultValue: 'Existing attachments' })}</div>
                 {attachments.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">None</div>
+                  <div className="text-sm text-muted-foreground">{t('expenses.none')}</div>
                 ) : (
                   <ul className="space-y-2">
                     {attachments.map(att => (
@@ -314,7 +319,7 @@ export default function ExpensesEdit() {
                         <div className={`truncate text-sm ${pendingDelete.has(att.id) ? 'line-through text-muted-foreground' : ''}`}>
                           {att.filename}
                           {pendingDelete.has(att.id) && (
-                            <span className="ml-2 text-xs text-red-600">(will delete on save)</span>
+                            <span className="ml-2 text-xs text-red-600">({t('expenses.will_delete_on_save', { defaultValue: 'will delete on save' })})</span>
                           )}
                         </div>
                         <div className="flex items-center gap-2">
@@ -322,7 +327,7 @@ export default function ExpensesEdit() {
                             const blob = await expenseApi.downloadAttachmentBlob(Number(id), att.id);
                             const url = URL.createObjectURL(blob);
                             setPreview({ open: true, url, contentType: att.content_type || null, filename: att.filename || null });
-                          }}>Preview</Button>
+                          }}>{t('expenses.preview')}</Button>
                           <Button
                             variant={pendingDelete.has(att.id) ? 'outline' : 'destructive'}
                             size="sm"
@@ -335,7 +340,7 @@ export default function ExpensesEdit() {
                               });
                             }}
                           >
-                            {pendingDelete.has(att.id) ? 'Undo' : 'Delete'}
+                            {pendingDelete.has(att.id) ? t('expenses.undo', { defaultValue: 'Undo' }) : t('common.delete')}
                           </Button>
                         </div>
                       </li>
@@ -348,8 +353,8 @@ export default function ExpensesEdit() {
         </Card>
 
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate('/expenses')}>Cancel</Button>
-          <Button onClick={onSave} disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</Button>
+          <Button variant="outline" onClick={() => navigate('/expenses')}>{t('common.cancel')}</Button>
+          <Button onClick={onSave} disabled={saving}>{saving ? t('common.saving', { defaultValue: 'Saving...' }) : t('expenses.buttons.save_changes')}</Button>
         </div>
         {/* File inline preview dialog */}
         <Dialog open={preview.open} onOpenChange={(o) => {
@@ -358,17 +363,17 @@ export default function ExpensesEdit() {
         }}>
           <DialogContent className="max-w-4xl">
             <DialogHeader>
-              <DialogTitle>{preview.filename || 'Preview'}</DialogTitle>
+              <DialogTitle>{preview.filename || t('expenses.preview')}</DialogTitle>
             </DialogHeader>
             <div className="max-h-[70vh] overflow-auto">
               {preview.url && (preview.contentType || '').startsWith('image/') && (
-                <img src={preview.url} alt={preview.filename || 'attachment'} className="max-w-full h-auto" />
+                <img src={preview.url} alt={preview.filename || t('expenses.attachment', { defaultValue: 'attachment' })} className="max-w-full h-auto" />
               )}
               {preview.url && preview.contentType === 'application/pdf' && (
-                <iframe src={preview.url} className="w-full h-[70vh]" title="PDF Preview" />
+                <iframe src={preview.url} className="w-full h-[70vh]" title={t('expenses.pdf_preview', { defaultValue: 'PDF Preview' })} />
               )}
               {preview.url && preview.contentType && !((preview.contentType || '').startsWith('image/') || preview.contentType === 'application/pdf') && (
-                <div className="text-sm text-muted-foreground">This file type cannot be previewed. Please download instead.</div>
+                <div className="text-sm text-muted-foreground">{t('expenses.cannot_preview', { defaultValue: 'This file type cannot be previewed. Please download instead.' })}</div>
               )}
             </div>
             <div className="flex gap-2">
@@ -381,7 +386,7 @@ export default function ExpensesEdit() {
                   document.body.appendChild(a);
                   a.click();
                   document.body.removeChild(a);
-                }}>Download</Button>
+                }}>{t('expenses.download')}</Button>
               )}
             </div>
           </DialogContent>

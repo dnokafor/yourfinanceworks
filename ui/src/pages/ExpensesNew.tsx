@@ -105,10 +105,13 @@ export default function ExpensesNew() {
                 <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
                     mode="single"
-                    selected={form.expense_date ? new Date(form.expense_date as string) : undefined}
+                    selected={form.expense_date ? new Date(form.expense_date) : undefined}
                     onSelect={(d) => {
                       if (d) {
-                        const iso = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).toISOString().split('T')[0];
+                        const year = d.getFullYear();
+                        const month = String(d.getMonth() + 1).padStart(2, '0');
+                        const day = String(d.getDate()).padStart(2, '0');
+                        const iso = `${year}-${month}-${day}`;
                         setForm({ ...form, expense_date: iso });
                       }
                     }}
