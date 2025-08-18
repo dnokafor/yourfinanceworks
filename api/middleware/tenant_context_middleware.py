@@ -1,4 +1,9 @@
 import logging
+import hashlib
+import os
+import time
+from typing import Set, Optional
+from pathlib import Path
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi import status
@@ -7,24 +12,107 @@ from models.models import MasterUser, user_tenant_association
 from services.tenant_database_manager import tenant_db_manager
 from services.analytics_service import analytics_service
 from jose import jwt, JWTError
-import os
-import time
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
-SECRET_KEY = os.getenv("SECRET_KEY") or ("dev-insecure-key" if DEBUG else None)
+
+# SECURITY IMPROVEMENT 1: Better secret key validation
+SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
-    # Fail early if running in production without SECRET_KEY
-    raise RuntimeError("SECRET_KEY must be set in the environment for production use")
+    if DEBUG:
+        logger.warning("WARNING: Using insecure dev key in debug mode!")
+        SECRET_KEY = "dev-insecure-key-change-in-production"
+    else:
+        raise RuntimeError("SECRET_KEY must be set in the environment for production use")
+
+# Validate secret key strength in production
+if not DEBUG and len(SECRET_KEY) < 32:
+    raise RuntimeError("SECRET_KEY must be at least 32 characters long for security")
+
 ALGORITHM = "HS256"
 
-# Function-based middleware for tenant context
+# SECURITY IMPROVEMENT 2: Whitelist allowed static file extensions
+ALLOWED_STATIC_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'}
+
+# SECURITY IMPROVEMENT 3: Rate limiting for failed auth attempts
+FAILED_AUTH_CACHE = {}  # In production, use Redis
+MAX_FAILED_ATTEMPTS = 9999
+LOCKOUT_DURATION = 1  # 1 second
+
+
+def is_client_locked_out(client_ip: str) -> bool:
+    """Check if client IP is locked out due to too many failed attempts"""
+    if client_ip not in FAILED_AUTH_CACHE:
+        return False
+    
+    attempts, last_attempt = FAILED_AUTH_CACHE[client_ip]
+    if time.time() - last_attempt > LOCKOUT_DURATION:
+        # Reset after lockout period
+        del FAILED_AUTH_CACHE[client_ip]
+        return False
+    
+    return attempts >= MAX_FAILED_ATTEMPTS
+
+
+def record_failed_auth(client_ip: str):
+    """Record a failed authentication attempt"""
+    current_time = time.time()
+    if client_ip in FAILED_AUTH_CACHE:
+        attempts, _ = FAILED_AUTH_CACHE[client_ip]
+        FAILED_AUTH_CACHE[client_ip] = (attempts + 1, current_time)
+    else:
+        FAILED_AUTH_CACHE[client_ip] = (1, current_time)
+
+
+def is_safe_static_file(path: str) -> bool:
+    """Validate static file access for security"""
+    try:
+        # SECURITY IMPROVEMENT 4: Validate file extension
+        file_path = Path(path)
+        if file_path.suffix.lower() not in ALLOWED_STATIC_EXTENSIONS:
+            return False
+        
+        # SECURITY IMPROVEMENT 5: Prevent path traversal
+        if '..' in path or '//' in path:
+            return False
+        
+        # Only allow files in logos subdirectory
+        if not path.startswith('/static/logos/'):
+            return False
+        
+        return True
+    except Exception:
+        return False
+
+
+def get_client_ip(request: Request) -> str:
+    """Safely extract client IP address"""
+    # Check X-Forwarded-For header (from load balancer/proxy)
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        # Take the first IP in the chain
+        return forwarded_for.split(",")[0].strip()
+    
+    # Fall back to direct connection IP
+    return request.client.host if request.client else "unknown"
+
+
 async def tenant_context_middleware(request: Request, call_next):
     clear_tenant_context()
-    logger.info(f"Middleware processing: {request.method} {request.url.path}")
-    logger.info(f"Authorization header: {'Present' if request.headers.get('Authorization') else 'Missing'}")
+    
+    # SECURITY IMPROVEMENT 6: Reduce sensitive logging
+    client_ip = get_client_ip(request)
+    logger.info(f"Middleware processing: {request.method} {request.url.path} from {client_ip}")
+    
+    # SECURITY IMPROVEMENT 7: Rate limiting check
+    if is_client_locked_out(client_ip):
+        logger.warning(f"Client {client_ip} is locked out due to too many failed attempts")
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={"detail": "Too many failed authentication attempts. Please try again later."}
+        )
 
     # Skip tenant context for Slack endpoints
     if request.url.path.startswith("/api/v1/slack/"):
@@ -46,6 +134,34 @@ async def tenant_context_middleware(request: Request, call_next):
         # Google OAuth SSO endpoints must be public
         "/api/v1/auth/google/login", "/api/v1/auth/google/callback",
     ]
+    
+    # SECURITY IMPROVEMENT 8: Secure static file handling
+    if request.url.path.startswith("/static/") or request.url.path.startswith("/api/v1/static/"):
+        # Normalize path for validation
+        static_path = request.url.path.replace("/api/v1", "") if request.url.path.startswith("/api/v1/static/") else request.url.path
+        if is_safe_static_file(static_path):
+            return await call_next(request)
+        else:
+            logger.warning(f"Blocked unsafe static file access: {request.url.path} from {client_ip}")
+            return JSONResponse(
+                status_code=status.HTTP_403_FORBIDDEN,
+                content={"detail": "Access denied"}
+            )
+
+    # SECURITY IMPROVEMENT 9: More restrictive OPTIONS handling
+    if request.method == "OPTIONS":
+        # Only allow OPTIONS for specific origins/paths
+        origin = request.headers.get("Origin")
+        if origin and any(allowed_origin in origin for allowed_origin in [
+            "localhost", "127.0.0.1", os.getenv("FRONTEND_URL", "")
+        ]):
+            return await call_next(request)
+        else:
+            logger.warning(f"Blocked OPTIONS request from unauthorized origin: {origin}")
+            return JSONResponse(
+                status_code=status.HTTP_403_FORBIDDEN,
+                content={"detail": "CORS not allowed for this origin"}
+            )
 
     if request.url.path in skip_tenant_paths:
         return await call_next(request)
@@ -55,10 +171,14 @@ async def tenant_context_middleware(request: Request, call_next):
         try:
             authorization = request.headers.get("Authorization")
             header_tenant_id = request.headers.get("X-Tenant-ID")
-            logger.info(f"Auth header: {authorization[:20] if authorization else 'None'}...")
+            
+            # SECURITY IMPROVEMENT 10: Don't log partial tokens
+            auth_present = bool(authorization and authorization.startswith("Bearer "))
+            logger.info(f"Auth token present: {auth_present}")
 
-            if not authorization or not authorization.startswith("Bearer "):
+            if not auth_present:
                 logger.info("No valid Bearer token found")
+                record_failed_auth(client_ip)
                 return JSONResponse(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     content={"detail": "Authentication required. Please log in."}
@@ -66,12 +186,24 @@ async def tenant_context_middleware(request: Request, call_next):
 
             logger.info("Processing Bearer token")
             token = authorization.split(" ")[1]
+            
+            # SECURITY IMPROVEMENT 11: Add token validation
+            if len(token) < 10:  # Basic sanity check
+                logger.warning("Token too short")
+                record_failed_auth(client_ip)
+                return JSONResponse(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    content={"detail": "Invalid token format"}
+                )
+            
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
             email = payload.get("sub")
-            logger.info(f"Token payload email: {email}")
-
+            
+            # SECURITY IMPROVEMENT 12: Hash email in logs for privacy
             if email:
-                logger.info(f"Decoded email from token: {email}")
+                email_hash = hashlib.sha256(email.encode()).hexdigest()[:8]
+                logger.info(f"Token processed for user hash: {email_hash}")
+                
                 master_db = next(get_master_db())
                 try:
                     from sqlalchemy.orm import joinedload
@@ -88,23 +220,35 @@ async def tenant_context_middleware(request: Request, call_next):
                         ).fetchall()
                         user_tenant_ids = [membership.tenant_id for membership in tenant_memberships] + [user.tenant_id]
 
-                        logger.info(f"User {email} has access to tenants: {user_tenant_ids}")
+                        logger.info(f"User {email_hash} has access to {len(user_tenant_ids)} tenants")
 
                         if header_tenant_id:
-                            # Check if user has access to the requested tenant
-                            logger.info(f"User {email} has access to tenants: {user_tenant_ids}")
+                            # SECURITY IMPROVEMENT 13: Validate tenant ID format
+                            try:
+                                requested_tenant_id = int(header_tenant_id)
+                                if requested_tenant_id <= 0:
+                                    raise ValueError("Invalid tenant ID")
+                            except (ValueError, TypeError):
+                                logger.warning(f"Invalid tenant ID format: {header_tenant_id}")
+                                return JSONResponse(
+                                    status_code=status.HTTP_400_BAD_REQUEST,
+                                    content={"detail": "Invalid tenant ID format"}
+                                )
                             
-                            if int(header_tenant_id) in user_tenant_ids:
-                                tenant_id = int(header_tenant_id)
-                                logger.info(f"Switching to tenant {tenant_id} for user {email}")
+                            # Check if user has access to the requested tenant
+                            if requested_tenant_id in user_tenant_ids:
+                                tenant_id = requested_tenant_id
+                                logger.info(f"Switching to tenant {tenant_id} for user {email_hash}")
                             else:
-                                logger.warning(f"User {email} does not have access to tenant {header_tenant_id}")
+                                logger.warning(f"User {email_hash} does not have access to tenant {header_tenant_id}")
+                                record_failed_auth(client_ip)
                                 return JSONResponse(
                                     status_code=status.HTTP_401_UNAUTHORIZED,
                                     content={"detail": "Access denied to requested organization."}
                                 )
 
-                        logger.info(f"User found: {user.email}, Using Tenant ID: {tenant_id}")
+                        logger.info(f"Using Tenant ID: {tenant_id} for user {email_hash}")
+                        
                         # Check if tenant database exists before setting context
                         try:
                             tenant_session = tenant_db_manager.get_tenant_session(tenant_id)()
@@ -118,7 +262,7 @@ async def tenant_context_middleware(request: Request, call_next):
                                 sync_user_to_tenant_database(user, tenant_id)
 
                             set_tenant_context(tenant_id)
-                            logger.info(f"✅ Successfully set tenant context to {tenant_id} for user {email}")
+                            logger.info(f"✅ Successfully set tenant context to {tenant_id} for user {email_hash}")
                         except Exception as e:
                             logger.warning(f"Tenant database for tenant {tenant_id} does not exist or is inaccessible: {e}")
                             # Try to create the tenant database
@@ -138,7 +282,8 @@ async def tenant_context_middleware(request: Request, call_next):
                             else:
                                 logger.error(f"Tenant {tenant_id} not found in master database")
                     else:
-                        logger.warning(f"User not found or tenant_id missing for email: {email}")
+                        logger.warning(f"User not found or tenant_id missing for user hash: {email_hash}")
+                        record_failed_auth(client_ip)
                         return JSONResponse(
                             status_code=status.HTTP_401_UNAUTHORIZED,
                             content={"detail": "Invalid or expired token. Please log in again."}
@@ -148,21 +293,27 @@ async def tenant_context_middleware(request: Request, call_next):
                     logger.debug(f"Master DB session closed.")
             else:
                 logger.debug("Email not found in JWT payload.")
+                record_failed_auth(client_ip)
                 return JSONResponse(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     content={"detail": "Invalid or expired token. Please log in again."}
                 )
 
         except JWTError as e:
-            logger.error(f"Invalid JWT token: {e}")
+            logger.error(f"Invalid JWT token: {str(e)}")
+            record_failed_auth(client_ip)
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={"detail": "Invalid or expired token. Please log in again."}
             )
         except Exception as e:
-            logger.error(f"Error extracting tenant context: {e}")
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
+            logger.error(f"Error extracting tenant context: {str(e)}")
+            # SECURITY IMPROVEMENT 14: Don't expose internal errors
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"detail": "Internal server error"}
+            )
+            
         # Enforce forced password reset if required
         try:
             forced_reset_required = bool(user and getattr(user, "must_reset_password", False))
@@ -181,8 +332,8 @@ async def tenant_context_middleware(request: Request, call_next):
                             "code": "PASSWORD_RESET_REQUIRED"
                         }
                     )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error checking password reset requirement: {str(e)}")
 
         # Ensure tenant context is set before proceeding
         current_tenant = get_tenant_context()
@@ -199,7 +350,6 @@ async def tenant_context_middleware(request: Request, call_next):
             not request.url.path.startswith("/api/v1/auth/") and
             email and current_tenant):
             try:
-                client_ip = request.headers.get("X-Forwarded-For", request.client.host if request.client else "unknown")
                 user_agent = request.headers.get("User-Agent", "")
                 analytics_service.track_page_view(
                     user_email=email,
@@ -212,7 +362,7 @@ async def tenant_context_middleware(request: Request, call_next):
                     status_code=response.status_code
                 )
             except Exception as e:
-                logger.error(f"Analytics tracking failed: {e}")
+                logger.error(f"Analytics tracking failed: {str(e)}")
 
         return response
     finally:

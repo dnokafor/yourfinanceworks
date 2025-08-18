@@ -348,6 +348,11 @@ const Settings = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
+      // Upload logo first if there's a new file
+      if (logoFile) {
+        await uploadLogo();
+      }
+      
       // Format data for API
       const settingsData = {
         company_info: {
@@ -780,7 +785,6 @@ const Settings = () => {
   const uploadLogo = async () => {
     if (!logoFile) return;
 
-    setUploadingLogo(true);
     try {
       const formData = new FormData();
       formData.append('file', logoFile);
@@ -803,32 +807,13 @@ const Settings = () => {
       // Update company info with the new logo URL
       setCompanyInfo(prev => ({ ...prev, logo: logoUrl }));
       
-      // Save the settings with the new logo URL to the backend
-      try {
-        await settingsApi.updateSettings({
-          company_info: {
-            ...companyInfo,
-            logo: logoUrl
-          }
-        });
-      } catch (saveError) {
-        console.error('Failed to save logo URL to settings:', saveError);
-        // Don't show error to user since upload succeeded
-      }
-      
-      // Invalidate settings query to refresh sidebar and other components
-      queryClient.invalidateQueries({ queryKey: ['settings'] });
-      
       // Clear the file input and preview
       setLogoFile(null);
       setLogoPreview("");
       
-      toast.success(t('settings.logo_uploaded_successfully'));
     } catch (error) {
       console.error('Failed to upload logo:', error);
-      toast.error(t('settings.failed_to_upload_logo'));
-    } finally {
-      setUploadingLogo(false);
+      throw error; // Re-throw to be handled by handleSave
     }
   };
 
@@ -1072,22 +1057,6 @@ const Settings = () => {
                               e.currentTarget.style.display = 'none';
                             }}
                           />
-                          {logoFile && (
-                            <Button 
-                              onClick={uploadLogo} 
-                              disabled={uploadingLogo}
-                              size="sm"
-                            >
-                              {uploadingLogo ? (
-                                <>
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  {t('settings.uploading_logo')}
-                                </>
-                              ) : (
-                                t('settings.upload_logo')
-                              )}
-                            </Button>
-                          )}
                         </div>
                       </div>
                     )}

@@ -18,7 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { UserProfile } from "./UserProfile";
+
 import { LanguageSwitcher } from "@/components/ui/language-switcher";
 import { 
   BarChart, 
@@ -467,10 +467,48 @@ export function AppSidebar() {
     <>
       <Sidebar>
         <SidebarHeader className="py-6 px-4 border-b border-sidebar-border">
-          <div className="flex items-center justify-between">
+          {/* Company Logo Section */}
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
+              {companyLogoUrl ? (
+                <img 
+                  src={companyLogoUrl.startsWith('http') ? companyLogoUrl : `${API_BASE_URL}${companyLogoUrl}`}
+                  alt={`${companyName} Logo`}
+                  className="h-8 w-8 object-contain rounded"
+                  onError={(e) => {
+                    console.error('Failed to load company logo:', e);
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+              ) : (
+                <div className="h-8 w-8 bg-primary rounded flex items-center justify-center">
+                  <Building className="h-5 w-5 text-primary-foreground" />
+                </div>
+              )}
+              <div className="flex flex-col leading-tight">
+                <span className="text-sm font-bold text-white truncate max-w-[140px]">
+                  {companyName}
+                </span>
+                <span className="text-xs text-sidebar-foreground/60">
+                  Invoice Management
+                </span>
+              </div>
+            </div>
+            <SidebarTrigger>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                aria-label="Toggle sidebar"
+                className="text-sidebar-foreground hover:text-white"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+            </SidebarTrigger>
+          </div>
+          
+          {/* User Profile Section */}
+          <div className="flex items-center gap-3">
             <Avatar className="h-8 w-8">
-              {/* If you later store a profile image URL on the user, set it here */}
               <AvatarImage src={undefined as any} alt={user?.email || 'User'} />
               <AvatarFallback className="bg-sidebar-foreground/20 text-white text-sm font-medium">
                 {(() => {
@@ -496,17 +534,6 @@ export function AppSidebar() {
                 {user?.email}
               </span>
             </div>
-            </div>
-            <SidebarTrigger>
-              <Button 
-                variant="ghost" 
-                size="icon"
-                aria-label="Toggle sidebar"
-                className="text-sidebar-foreground hover:text-white"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-            </SidebarTrigger>
           </div>
         </SidebarHeader>
         <SidebarContent className="pt-6">
@@ -582,16 +609,8 @@ export function AppSidebar() {
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter className="py-4 px-2 border-t border-sidebar-border space-y-4">
-          <div className="px-2">
-            <UserProfile 
-              companyName={companyName} 
-              companyAddress={settings?.company_info?.address}
-              companyLogo={settings?.company_info?.logo}
-            />
-          </div>
           <div className="px-2 flex items-center gap-2">
             <LanguageSwitcher />
-            {/* Dark mode toggle button */}
             <Button
               variant="outline"
               size="icon"
@@ -600,11 +619,7 @@ export function AppSidebar() {
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               className="ml-2 border-sidebar-border bg-sidebar hover:bg-sidebar-accent text-sidebar-foreground hover:text-white"
             >
-              {theme === 'dark' ? (
-                <Sun className="w-5 h-5" />
-              ) : (
-                <Moon className="w-5 h-5" />
-              )}
+              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </Button>
           </div>
           <div className="flex justify-center">

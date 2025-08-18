@@ -69,6 +69,11 @@ app = FastAPI(
     lifespan=app_lifespan
 )
 
+# Serve static files (e.g., for company logos)
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+app.mount("/api/v1/static", StaticFiles(directory=static_dir), name="api_static")
+
 # CORS Middleware (tightened with env-driven configuration)
 # ALLOWED_ORIGINS can be a comma-separated list, e.g. "http://localhost:8080,https://app.example.com"
 allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "").strip()
@@ -79,6 +84,9 @@ if allowed_origins_env:
 else:
     # In DEBUG, fall back to permissive wildcard. In production, default to no origins.
     allowed_origins = ["*"] if debug_mode else []
+
+# Add frontend container IP to allowed origins
+allowed_origins.extend(["http://192.168.65.1", "http://localhost:8080", "http://localhost:3000"])
 
 # Credentials cannot be used with wildcard origins per CORS spec
 allow_credentials = os.getenv("ALLOW_CORS_CREDENTIALS", "False").lower() == "true"
@@ -104,10 +112,6 @@ async def add_security_headers(request: Request, call_next):
     # Content-Security-Policy is context-dependent; set a conservative default for API responses
     response.headers.setdefault("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'")
     return response
-
-# Serve static files (e.g., for company logos)
-static_dir = os.path.join(os.path.dirname(__file__), "static")
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # Add error handling middleware
 @app.middleware("http")

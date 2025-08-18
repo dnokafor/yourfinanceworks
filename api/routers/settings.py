@@ -813,13 +813,57 @@ async def upload_company_logo(
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Upload a company logo image and return its public URL (per-tenant directory)."""
+    logger.info(f"🔍 LOGO UPLOAD ENDPOINT REACHED - user: {current_user.email}, tenant: {current_user.tenant_id}")
+    logger.info(f"file: {file}")
+    
     # Only admins can upload company logo
     require_admin(current_user, "upload company logo")
     
-    # Only allow image files
-    if not file.content_type or not file.content_type.startswith("image/"):
-        logger.error(f"Rejected upload: not an image file. Content-Type: {file.content_type}")
-        raise HTTPException(status_code=400, detail="Only image files are allowed.")
+    # Debug logging to see what we're receiving
+    logger.info(f"🔍 Logo upload request - filename: {file.filename}, content_type: {file.content_type}, size: {file.size if hasattr(file, 'size') else 'unknown'}")
+    
+    # Check for allowed image types more explicitly
+    allowed_image_types = {
+        'image/jpeg',
+        'image/jpg', 
+        'image/png',
+        'image/gif',
+        'image/webp',
+        'image/svg+xml'
+    }
+    
+    # Get file extension as fallback
+    file_ext = None
+    if file.filename:
+        file_ext = os.path.splitext(file.filename.lower())[1]
+    
+    # Validate content type or file extension
+    is_valid_image = False
+    if file.content_type and file.content_type.lower() in allowed_image_types:
+        is_valid_image = True
+    elif file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg']:
+        is_valid_image = True
+        logger.info(f"Accepted image based on file extension: {file_ext}")
+    
+    if not is_valid_image:
+        logger.error(f"Rejected upload: not an image file. Content-Type: {file.content_type}, filename: {file.filename}, extension: {file_ext}")
+        raise HTTPException(status_code=400, detail=f"Only image files are allowed. Received content-type: {file.content_type}, filename: {file.filename}")
+
+    # Check file size (limit to 5MB for logos)
+    try:
+        file_content = await file.read()
+        file_size = len(file_content)
+        logger.info(f"Logo file size: {file_size} bytes")
+        
+        MAX_LOGO_SIZE = 5 * 1024 * 1024  # 5MB
+        if file_size > MAX_LOGO_SIZE:
+            raise HTTPException(status_code=400, detail=f"Logo file too large. Maximum size is 5MB, received {file_size} bytes")
+        
+        # Reset file pointer for later processing
+        await file.seek(0)
+    except Exception as e:
+        logger.error(f"Error reading file for size check: {e}")
+        raise HTTPException(status_code=400, detail="Error processing uploaded file")
 
     # Ensure static/logos/<tenant_id> directory exists
     static_dir = os.path.join(os.path.dirname(__file__), "..", "static", "logos")
@@ -828,22 +872,20 @@ async def upload_company_logo(
     os.makedirs(tenant_dir, exist_ok=True)
 
     # Use consistent filename for each tenant (overwrites existing logo)
-    ext = os.path.splitext(file.filename)[1] or ".png"
+    ext = os.path.splitext(file.filename)[1].lower() or ".png"
+    if ext not in [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"]:
+        ext = ".png" # Default to png if extension is something else
     filename = f"logo{ext}"
     file_path = os.path.join(tenant_dir, filename)
     
     print(f"Attempting to save logo to {file_path}")
 
     try:
-        file.file.seek(0)  # Ensure pointer is at the start
-        
-        # Read the uploaded file
-        file_content = file.file.read()
-        
+        # Use the file_content we already read for size validation
         # Open and resize the image using PIL
         image = Image.open(io.BytesIO(file_content))
         
-        # Resize to 100x100 while maintaining aspect ratio
+        # Resize to 200x200 while maintaining aspect ratio
         image.thumbnail((200, 200), Image.Resampling.LANCZOS)
         
         # Save the resized image
@@ -858,3 +900,35 @@ async def upload_company_logo(
     except Exception as e:
         print(f"Failed to save logo to {file_path}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save logo: {e}")
+
+
+@router.get("/logo/{tenant_id}")
+async def get_company_logo(
+    tenant_id: str,
+    master_db: Session = Depends(get_master_db)
+):
+    """Retrieve a company logo image by tenant ID."""
+    try:
+        # Manually get master database
+        tenant_record = master_db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant_record or not tenant_record.company_logo_url:
+            raise HTTPException(status_code=404, detail="Logo not found for this tenant.")
+        
+        # Construct the absolute path to the logo file
+        # Assuming company_logo_url is like /static/logos/<tenant_id>/logo.png
+        # We need to convert this to an absolute file system path
+        relative_path = tenant_record.company_logo_url.lstrip("/") # Remove leading slash
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        file_path = os.path.join(base_dir, relative_path)
+        
+        if not os.path.exists(file_path):
+            logger.error(f"Logo file not found on disk: {file_path}")
+            raise HTTPException(status_code=404, detail="Logo file not found on server.")
+        
+        return FileResponse(file_path)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving logo for tenant {tenant_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error while retrieving logo.")

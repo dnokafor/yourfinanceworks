@@ -38,14 +38,26 @@ import { NotificationBell } from "./components/notifications/NotificationBell";
 import { useNotifications } from "./hooks/useNotifications";
 import { useExpenseStatusPolling } from "./hooks/useExpenseStatusPolling";
 import { getCurrentUser } from "./utils/auth";
+import { Favicon } from "./components/ui/favicon";
+import { useQuery } from "@tanstack/react-query";
+import { settingsApi } from "@/lib/api";
+import { isAdmin } from "@/utils/auth";
 
 const queryClient = new QueryClient();
 
-const App = () => {
+const AppContent = () => {
   const { notifications, addNotification, markAsRead, clearAll } = useNotifications();
   const { startPolling } = useExpenseStatusPolling();
   const [bellHidden, setBellHidden] = React.useState(false);
   const isLoggedIn = getCurrentUser() !== null;
+  
+  // Get company branding for favicon
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: () => settingsApi.getSettings(),
+    enabled: isLoggedIn && isAdmin(),
+    retry: false,
+  });
 
   // Make notification functions available globally
   React.useEffect(() => {
@@ -61,8 +73,11 @@ const App = () => {
   }, [notifications]);
 
   return (
-  <QueryClientProvider client={queryClient}>
     <TooltipProvider>
+      <Favicon 
+        logoUrl={settings?.company_info?.logo}
+        companyName={settings?.company_info?.name}
+      />
 
       <BrowserRouter>
         <Routes>
@@ -115,7 +130,14 @@ const App = () => {
       )}
       <Toaster position="top-center" richColors />
     </TooltipProvider>
-  </QueryClientProvider>
+  );
+};
+
+const App = () => {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AppContent />
+    </QueryClientProvider>
   );
 };
 
