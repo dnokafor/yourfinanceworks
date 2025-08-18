@@ -7,9 +7,8 @@ import { InvoiceChart } from "@/components/dashboard/InvoiceChart";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { dashboardApi } from "@/lib/api";
 import { toast } from "sonner";
-import { CurrencyDisplay } from "@/components/ui/currency-display";
 import { useTranslation } from 'react-i18next';
-import { NotificationDemo } from "@/components/notifications/NotificationDemo";
+import { DisplayMD, BodyLG } from "@/components/ui/typography";
 
 const Dashboard = () => {
   const { t } = useTranslation();
@@ -161,12 +160,12 @@ const Dashboard = () => {
     <AppLayout>
       <div className="h-full space-y-6 fade-in">
         <div>
-          <h1 className="text-3xl font-bold">
+          <DisplayMD>
             {userName ? t('dashboard.welcome', { name: userName }) : t('dashboard.title')}
-          </h1>
-          <p className="text-muted-foreground">
+          </DisplayMD>
+          <BodyLG className="text-muted-foreground mt-2">
             {tenantName ? t('dashboard.tenant_overview', { tenant: tenantName }) : t('dashboard.overview')}
-          </p>
+          </BodyLG>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 slide-in">
@@ -215,7 +214,6 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 slide-in" style={{ animationDelay: '100ms' }}>
           <InvoiceChart />
           <RecentInvoices />
-          <NotificationDemo />
         </div>
       </div>
     </AppLayout>
