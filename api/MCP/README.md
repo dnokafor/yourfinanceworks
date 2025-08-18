@@ -32,6 +32,7 @@ graph TB
         CLIENT_TOOLS["Client Management<br/>• list_clients<br/>• search_clients<br/>• get_client<br/>• create_client"]
         INVOICE_TOOLS["Invoice Management<br/>• list_invoices<br/>• search_invoices<br/>• get_invoice<br/>• create_invoice"]
         EXPENSE_TOOLS["Expense Management<br/>• list_expenses<br/>• get_expense<br/>• create_expense<br/>• update_expense<br/>• delete_expense<br/>• upload_expense_receipt<br/>• list_expense_attachments<br/>• delete_expense_attachment"]
+        BANK_TOOLS["Bank Statement Management<br/>• list_bank_statements<br/>• get_bank_statement<br/>• reprocess_bank_statement<br/>• update_bank_statement_meta<br/>• delete_bank_statement"]
         ANALYTICS["Analytics<br/>• get_clients_with_outstanding_balance<br/>• get_overdue_invoices<br/>• get_invoice_stats"]
     end
     
@@ -48,6 +49,7 @@ graph TB
     MCP --> INVOICE_TOOLS
     MCP --> ANALYTICS
     MCP --> EXPENSE_TOOLS
+    MCP --> BANK_TOOLS
     
     TOOLS -.-> CLIENT_TOOLS
     TOOLS -.-> INVOICE_TOOLS
@@ -178,6 +180,14 @@ Would you like me to get more details about any of these clients or their invoic
 - *"Add a note to client John Doe about our meeting"*
 - *"Send invoice #123 via email"*
 - *"Test my email configuration"*
+- *"List all expenses from this quarter"*
+- *"Create an expense for office supplies costing $150"*
+- *"Upload a receipt for expense #456"*
+- *"Show me unlinked expenses that need categorization"*
+- *"List all imported bank statements"*
+- *"Get details for bank statement from January 2024"*
+- *"Reprocess bank statement for better transaction matching"*
+- *"Delete old bank statement that was imported incorrectly"*
 
 ## ✨ Key Benefits
 
@@ -201,6 +211,21 @@ Would you like me to get more details about any of these clients or their invoic
 - **Search Invoices**: Search invoices by number, client name, status, notes, or amount
 - **Get Invoice Details**: Retrieve detailed information for a specific invoice
 - **Create Invoice**: Generate new invoices for clients
+
+### Expense Management
+- **List Expenses**: Get paginated list of all expenses with filtering options
+- **Create Expenses**: Record business expenses with tax calculations
+- **Update Expenses**: Modify existing expense details and categorization
+- **Delete Expenses**: Remove expenses from the system
+- **Receipt Management**: Upload, list, and delete expense receipt attachments
+- **Expense Filtering**: Filter by category, invoice linkage, and other criteria
+
+### Bank Statement Management
+- **List Bank Statements**: Get all imported bank statements with pagination
+- **Statement Details**: Retrieve detailed bank statement information
+- **Reprocess Statements**: Reprocess statements for better transaction matching
+- **Update Metadata**: Modify bank statement names, periods, and notes
+- **Delete Statements**: Remove bank statements and associated transactions
 
 ### Analytics & Reporting
 - **Outstanding Balances**: Find clients with unpaid invoices (`get_clients_with_outstanding_balance`)
@@ -587,28 +612,51 @@ Convert amount from one currency to another using current or historical exchange
 ```
 
 ### Payment Management Tools
-### Expense Tools
+### Expense Management Tools
 
 #### `list_expenses`
 List expenses with optional filters and pagination.
 
-Parameters:
+**Parameters:**
 - `skip` (int, optional): Number of records to skip (default: 0)
 - `limit` (int, optional): Max records to return (default: 100)
 - `category` (string, optional): Filter by category
 - `invoice_id` (int, optional): Filter by linked invoice id
 - `unlinked_only` (bool, optional): Only expenses not linked to any invoice
 
+**Example:**
+```json
+{
+  "name": "list_expenses",
+  "arguments": {
+    "skip": 0,
+    "limit": 50,
+    "category": "office_supplies",
+    "unlinked_only": true
+  }
+}
+```
+
 #### `get_expense`
 Get a single expense by ID.
 
-Parameters:
+**Parameters:**
 - `expense_id` (int): Expense ID
+
+**Example:**
+```json
+{
+  "name": "get_expense",
+  "arguments": {
+    "expense_id": 123
+  }
+}
+```
 
 #### `create_expense`
 Create a new expense.
 
-Parameters:
+**Parameters:**
 - `amount` (float): Expense amount before tax
 - `currency` (string): Currency code (e.g., USD)
 - `expense_date` (string): ISO date (YYYY-MM-DD)
@@ -623,42 +671,219 @@ Parameters:
 - `notes` (string, optional)
 - `invoice_id` (int, optional)
 
+**Example:**
+```json
+{
+  "name": "create_expense",
+  "arguments": {
+    "amount": 150.00,
+    "currency": "USD",
+    "expense_date": "2024-01-15",
+    "category": "office_supplies",
+    "vendor": "Office Depot",
+    "tax_rate": 8.5,
+    "tax_amount": 12.75,
+    "total_amount": 162.75,
+    "payment_method": "credit_card",
+    "reference_number": "REF-12345",
+    "status": "approved",
+    "notes": "Monthly office supplies purchase"
+  }
+}
+```
+
 #### `update_expense`
 Update fields of an existing expense.
 
-Parameters:
+**Parameters:**
 - `expense_id` (int): ID of the expense to update
 - Other fields same as `create_expense`, all optional
+
+**Example:**
+```json
+{
+  "name": "update_expense",
+  "arguments": {
+    "expense_id": 123,
+    "category": "travel",
+    "notes": "Updated category to travel"
+  }
+}
+```
 
 #### `delete_expense`
 Delete an expense by ID.
 
-Parameters:
+**Parameters:**
 - `expense_id` (int): ID to delete
+
+**Example:**
+```json
+{
+  "name": "delete_expense",
+  "arguments": {
+    "expense_id": 123
+  }
+}
+```
 
 #### `upload_expense_receipt`
 Upload an attachment file for an expense.
 
-Parameters:
+**Parameters:**
 - `expense_id` (int)
 - `file_path` (string): Absolute path to local file to upload
 - `filename` (string, optional): Override filename
 - `content_type` (string, optional): Explicit MIME type
 
-Notes: Up to 5 attachments per expense. Allowed types: PDF, JPG, PNG. Max 10 MB as enforced by backend.
+**Notes:** Up to 5 attachments per expense. Allowed types: PDF, JPG, PNG. Max 10 MB as enforced by backend.
+
+**Example:**
+```json
+{
+  "name": "upload_expense_receipt",
+  "arguments": {
+    "expense_id": 123,
+    "file_path": "/path/to/receipt.pdf",
+    "filename": "office_supplies_receipt.pdf",
+    "content_type": "application/pdf"
+  }
+}
+```
 
 #### `list_expense_attachments`
 List attachments for an expense.
 
-Parameters:
+**Parameters:**
 - `expense_id` (int)
+
+**Example:**
+```json
+{
+  "name": "list_expense_attachments",
+  "arguments": {
+    "expense_id": 123
+  }
+}
+```
 
 #### `delete_expense_attachment`
 Delete an attachment of an expense.
 
-Parameters:
+**Parameters:**
 - `expense_id` (int)
 - `attachment_id` (int)
+
+**Example:**
+```json
+{
+  "name": "delete_expense_attachment",
+  "arguments": {
+    "expense_id": 123,
+    "attachment_id": 456
+  }
+}
+```
+
+### Bank Statement Management Tools
+
+#### `list_bank_statements`
+List all imported bank statements with pagination support.
+
+**Parameters:**
+- `skip` (int, optional): Number of records to skip (default: 0)
+- `limit` (int, optional): Max records to return (default: 100)
+- `account_name` (string, optional): Filter by bank account name
+- `status` (string, optional): Filter by processing status
+
+**Example:**
+```json
+{
+  "name": "list_bank_statements",
+  "arguments": {
+    "skip": 0,
+    "limit": 50,
+    "account_name": "Business Checking",
+    "status": "processed"
+  }
+}
+```
+
+#### `get_bank_statement`
+Get detailed information about a specific bank statement.
+
+**Parameters:**
+- `statement_id` (int): ID of the bank statement to retrieve
+
+**Example:**
+```json
+{
+  "name": "get_bank_statement",
+  "arguments": {
+    "statement_id": 123
+  }
+}
+```
+
+#### `reprocess_bank_statement`
+Reprocess a bank statement for better transaction matching and categorization.
+
+**Parameters:**
+- `statement_id` (int): ID of the bank statement to reprocess
+- `force_reprocess` (bool, optional): Force reprocessing even if already processed (default: false)
+
+**Example:**
+```json
+{
+  "name": "reprocess_bank_statement",
+  "arguments": {
+    "statement_id": 123,
+    "force_reprocess": true
+  }
+}
+```
+
+#### `update_bank_statement_meta`
+Update metadata for a bank statement (name, description, etc.).
+
+**Parameters:**
+- `statement_id` (int): ID of the bank statement to update
+- `account_name` (string, optional): Bank account name
+- `statement_period` (string, optional): Statement period description
+- `notes` (string, optional): Additional notes
+- `status` (string, optional): Processing status
+
+**Example:**
+```json
+{
+  "name": "update_bank_statement_meta",
+  "arguments": {
+    "statement_id": 123,
+    "account_name": "Business Checking - Updated",
+    "statement_period": "January 2024",
+    "notes": "Updated with correct account name",
+    "status": "reviewed"
+  }
+}
+```
+
+#### `delete_bank_statement`
+Delete a bank statement and all associated transactions.
+
+**Parameters:**
+- `statement_id` (int): ID of the bank statement to delete
+- `confirm_deletion` (bool, optional): Confirmation flag to prevent accidental deletion (default: false)
+
+**Example:**
+```json
+{
+  "name": "delete_bank_statement",
+  "arguments": {
+    "statement_id": 123,
+    "confirm_deletion": true
+  }
+}
+```
 
 
 #### `list_payments`
@@ -984,3 +1209,45 @@ FastMCP was chosen for this implementation because it:
 ## License
 
 This FastMCP server is part of the Invoice Application project. Please refer to the main project license.
+
+## Recent Updates
+
+### AI-Powered Intent Classification (Latest)
+- **Eliminated Hardcoded Patterns**: Replaced keyword pattern matching with AI-based intent classification
+- **Dynamic Tool Selection**: AI automatically determines which MCP tool to use based on message meaning
+- **Natural Language Understanding**: Supports natural language variations without maintaining pattern lists
+- **Improved Accuracy**: AI classification provides better understanding of user intent
+- **Automatic Default Config**: System automatically sets single active AI config as default
+- **Enhanced Debugging**: Added comprehensive logging for intent classification and tool selection
+
+### AI Intent Classification System
+
+The MCP server now uses AI-powered intent classification to route queries:
+
+1. **Intent Classification**: Uses AI to classify user messages into predefined business categories
+2. **Dynamic Tool Selection**: Automatically selects appropriate MCP tools based on classified intent
+3. **Business Categories**: Supports analyze_patterns, payments, clients, invoices, expenses, bank_statements, currencies, outstanding, overdue, statistics
+4. **LLM Fallback**: Uses LLM for general questions classified as non-business queries
+5. **Adaptive Understanding**: AI understands natural language variations without hardcoded patterns
+
+### Usage Examples with AI Classification
+
+```
+# These all get classified as "bank_statements" intent:
+"Show bank statements"
+"What statements do I have?"
+"Display my banking information"
+"List all my bank account statements"
+
+# These all get classified as "expenses" intent:
+"List all expenses"
+"What did I spend money on?"
+"Show my business expenses"
+"Display expense information"
+
+# These all get classified as "clients" intent:
+"List all my clients"
+"Who are my customers?"
+"Show me client information"
+"Display customer details"
+```

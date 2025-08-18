@@ -671,7 +671,8 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
       } else if (
         lowerText === paymentChartsText ||
         lowerText.includes(paymentChartsText) ||
-        lowerText.includes('payment') || lowerText.includes('payments')
+        (lowerText.includes('payment') || lowerText.includes('payments')) && 
+        !lowerText.includes('expense') && !lowerText.includes('statement')
       ) {
         // Handle payment data display with charts
         // console.log('AI Assistant: Using payments endpoint with charts');
@@ -704,6 +705,59 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
         } catch (error) {
           console.error('AI Assistant: Error calling payments endpoint:', error);
           throw error;
+        }
+      } else if (
+        lowerText.includes('expense') || lowerText.includes('expenses') ||
+        lowerText.includes('list expenses') || lowerText.includes('show expenses')
+      ) {
+        // Handle expense queries using the AI chat endpoint with MCP tools
+        console.log('AI Assistant: Detected expense query, using chat endpoint with MCP');
+        
+        // Check if we have a default AI configuration
+        if (!defaultAIConfig) {
+          const errorMessage = t('settings.no_ai_config_found');
+          setMessages((prev) => [...prev.slice(0, -1), { id: prev.length, sender: 'ai', text: errorMessage }]);
+          return;
+        }
+        
+        const response = await api.post('/ai/chat', {
+          message: textToSend,
+          config_id: defaultAIConfig.id
+        }) as any;
+
+        if (response.success) {
+          const aiResponse = response.data.response || response.data.message || "I'm sorry, I couldn't generate a response.";
+          setMessages((prev) => [...prev.slice(0, -1), { id: prev.length, sender: 'ai', text: <EnhancedAIResponse text={aiResponse} /> }]);
+        } else {
+          throw new Error('Failed to get AI response');
+        }
+      } else if (
+        lowerText.includes('statement') || lowerText.includes('statements') ||
+        lowerText.includes('bank statement') || lowerText.includes('show statements') ||
+        lowerText.includes('list statements')
+      ) {
+        // Handle bank statement queries using the AI chat endpoint with MCP tools
+        console.log('AI Assistant: Detected bank statement query, using chat endpoint with MCP');
+        console.log('AI Assistant: defaultAIConfig check:', { defaultAIConfig, aiConfigs, aiConfigsLoading });
+        
+        // Check if we have a default AI configuration
+        if (!defaultAIConfig) {
+          console.log('AI Assistant: No defaultAIConfig found for bank statement query');
+          const errorMessage = t('settings.no_ai_config_found');
+          setMessages((prev) => [...prev.slice(0, -1), { id: prev.length, sender: 'ai', text: errorMessage }]);
+          return;
+        }
+        
+        const response = await api.post('/ai/chat', {
+          message: textToSend,
+          config_id: defaultAIConfig.id
+        }) as any;
+
+        if (response.success) {
+          const aiResponse = response.data.response || response.data.message || "I'm sorry, I couldn't generate a response.";
+          setMessages((prev) => [...prev.slice(0, -1), { id: prev.length, sender: 'ai', text: <EnhancedAIResponse text={aiResponse} /> }]);
+        } else {
+          throw new Error('Failed to get AI response');
         }
       } else {
         // Use the regular chat endpoint

@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 from typing import Any, Dict, List
 from datetime import datetime, timedelta, timezone
-import asyncio
 import httpx
+import logging
 
 from models.database import get_master_db, get_db, set_tenant_context
 from routers.auth import get_current_user
@@ -17,6 +17,8 @@ from constants.recommendation_codes import (
     REVIEW_PAYMENT_TERMS_SLOW_CLIENTS,
     START_CREATING_INVOICES,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/ai",
@@ -72,12 +74,12 @@ async def analyze_patterns(
                 if currency not in total_revenue_by_currency:
                     total_revenue_by_currency[currency] = 0
                 total_revenue_by_currency[currency] += paid_amount
-            
+
             if inv.status in ["pending", "draft", "overdue"]:
                 if currency not in outstanding_revenue_by_currency:
                     outstanding_revenue_by_currency[currency] = 0
                 outstanding_revenue_by_currency[currency] += inv.amount
-        
+
         # Get client payment patterns (simplified to avoid Payment model issues)
         # For now, we'll skip detailed payment analysis to avoid database schema conflicts
         fastest_paying_clients = []
@@ -207,16 +209,25 @@ async def suggest_actions(
             "error": str(e)
         }
     
+from pydantic import BaseModel
+
+class ChatRequest(BaseModel):
+    message: str
+    config_id: int
+
 @router.post("/chat")
 async def ai_chat(
-    message: str,
-    config_id: int,
+    request: ChatRequest,
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     """
     Chat with AI assistant using specified configuration
     """
+    # Log the incoming request
+    logger.info(f"AI Chat endpoint called with message: '{request.message}' by user: {current_user.email}")
+    print(f"AI Chat endpoint called with message: '{request.message}' by user: {current_user.email}")
+    
     # Manually set tenant context and get tenant database
     try:
         # Get AI configuration
@@ -226,14 +237,72 @@ async def ai_chat(
             AIConfig.is_active == True
         ).first()
         
+        # If no default config, check if there's only one active config and set it as default
+        if not ai_config:
+            active_configs = db.query(AIConfig).filter(AIConfig.is_active == True).all()
+            if len(active_configs) == 1:
+                config = active_configs[0]
+                config.is_default = True
+                db.commit()
+                ai_config = config
+                print(f"Auto-set single active AI config as default: {config.provider_name}")
+        
         if not ai_config:
             return {
                 "success": False,
                 "error": "No active AI configuration found. Please configure an AI provider in Settings."
             }
         
-        # Check for MCP tool patterns and execute them directly
-        lower_message = message.lower()
+        # Use AI to classify user intent and determine MCP tool
+        logger.info(f"MCP Integration: Processing message: '{request.message}'")
+        
+        # Import litellm for intent classification
+        try:
+            from litellm import completion
+        except ImportError:
+            return {
+                "success": False,
+                "error": "LiteLLM not installed. Please install it with: pip install litellm"
+            }
+        
+        # Classify user intent using AI
+        intent_prompt = f"""Classify this user message into one of these business data categories. Respond with ONLY the category name:
+
+Categories:
+- analyze_patterns: analyzing invoice patterns, trends, insights
+- suggest_actions: suggesting actions, recommendations, next steps
+- payments: payment queries, payment history, payment information
+- clients: client management, customer information, client details
+- invoices: invoice management, invoice information, invoice details
+- expenses: expense management, expense information, expense details
+- bank_statements: bank statement management, statement information
+- currencies: currency information, exchange rates
+- outstanding: outstanding balances, unpaid amounts, debts
+- overdue: overdue invoices, late payments
+- statistics: statistics, summaries, totals, counts
+- general: general questions not related to business data
+
+User message: "{request.message}"
+
+Category:"""
+        
+        # Get intent classification
+        model_name = f"ollama/{ai_config.model_name}" if ai_config.provider_name == "ollama" else ai_config.model_name
+        kwargs = {"model": model_name, "messages": [{"role": "user", "content": intent_prompt}], "max_tokens": 50}
+        
+        if ai_config.provider_name == "ollama" and ai_config.provider_url:
+            kwargs["api_base"] = ai_config.provider_url
+        elif ai_config.api_key:
+            kwargs["api_key"] = ai_config.api_key
+        
+        try:
+            intent_response = completion(**kwargs)
+            intent = intent_response.choices[0].message.content.strip().lower()
+            print(f"MCP Integration: AI classified intent as: '{intent}'")
+            logger.info(f"MCP Integration: AI classified intent as: '{intent}'")
+        except Exception as e:
+            print(f"MCP Integration: Intent classification failed: {e}, falling back to general")
+            intent = "general"
         
         # Initialize MCP tools using current user's session
         from MCP.tools import InvoiceTools
@@ -368,6 +437,49 @@ async def ai_chat(
             async def suggest_invoice_actions(self) -> Dict[str, Any]:
                 return await self._make_request("GET", "/ai/suggest-actions")
             
+            # Expense Management Methods
+            async def list_expenses(self, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
+                return await self._make_request(
+                    "GET", 
+                    "/expenses/",
+                    params={"skip": skip, "limit": limit}
+                )
+            
+            async def search_expenses(self, query: str, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
+                # Get all expenses and filter locally
+                expenses = await self.list_expenses(skip=0, limit=1000)
+                query_lower = query.lower()
+                filtered_expenses = []
+                
+                for expense in expenses:
+                    searchable_fields = [
+                        expense.get('category', ''),
+                        expense.get('vendor', ''),
+                        expense.get('notes', ''),
+                        str(expense.get('amount', ''))
+                    ]
+                    
+                    if any(query_lower in str(field).lower() for field in searchable_fields if field):
+                        filtered_expenses.append(expense)
+                
+                end_idx = skip + limit
+                return {
+                    "success": True,
+                    "data": filtered_expenses[skip:end_idx]
+                }
+            
+            # Bank Statement Management Methods
+            async def list_bank_statements(self, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
+                result = await self._make_request(
+                    "GET", 
+                    "/bank-statements/",
+                    params={"skip": skip, "limit": limit}
+                )
+                return {
+                    "success": True,
+                    "data": result if isinstance(result, list) else result.get("statements", [])
+                }
+            
             async def close(self):
                 await self._client.aclose()
         
@@ -380,9 +492,9 @@ async def ai_chat(
         tools = InvoiceTools(api_client)
         print("MCP Integration: API client and tools initialized successfully")
         
-        # Pattern 1: Analyze invoice patterns
-        if any(phrase in lower_message for phrase in ["analyze", "analysis", "pattern", "trend", "insight"]):
-            print(f"MCP Integration: Detected analyze pattern in message: '{message}'")
+        # Execute MCP tool based on AI-classified intent
+        if intent == "analyze_patterns":
+            print(f"MCP Integration: Detected analyze pattern in message: '{request.message}'")
             try:
                 # Execute MCP tool directly
                 print("MCP Integration: Executing analyze_invoice_patterns...")
@@ -439,9 +551,8 @@ This comprehensive analysis was performed using your actual invoice data through
                 # Fallback to LLM
                 pass
         
-        # Pattern 2: Suggest actions
-        elif any(phrase in lower_message for phrase in ["suggest", "action", "recommend", "what should", "next step"]):
-            print(f"MCP Integration: Detected suggest pattern in message: '{message}'")
+        elif intent == "suggest_actions":
+            print(f"MCP Integration: Detected suggest pattern in message: '{request.message}'")
             try:
                 # Execute MCP tool directly
                 print("MCP Integration: Executing suggest_invoice_actions...")
@@ -495,12 +606,11 @@ These strategic recommendations are based on your actual invoice data and busine
                 # Fallback to LLM
                 pass
         
-        # Pattern 3: Payment queries (moved before client queries to prioritize payments)
-        elif any(phrase in lower_message for phrase in ["payment", "pay", "paid", "list payments", "payment from", "received payment"]):
-            print(f"MCP Integration: Detected payment pattern in message: '{message}'")
+        elif intent == "payments":
+            print(f"MCP Integration: Detected payment pattern in message: '{request.message}'")
             try:
                 print("MCP Integration: Querying payments with natural language...")
-                result = await tools.query_payments(query=message)
+                result = await tools.query_payments(query=request.message)
                 
                 if result.get("success"):
                     payments = result.get("data", [])
@@ -557,9 +667,8 @@ This comprehensive payment information was retrieved using your actual payment d
                 # Fallback to LLM
                 pass
         
-        # Pattern 4: Client management queries (moved after payment queries)
-        elif any(phrase in lower_message for phrase in ["client", "customer", "list clients", "search client", "find client", "show clients", "get clients"]) and not any(phrase in lower_message for phrase in ["payment", "pay", "paid"]):
-            print(f"MCP Integration: Detected client management pattern in message: '{message}'")
+        elif intent == "clients":
+            print(f"MCP Integration: Detected client management pattern in message: '{request.message}'")
             print(f"MCP Integration: lower_message: '{lower_message}'")
             print(f"MCP Integration: Checking patterns: {[phrase for phrase in ['client', 'customer', 'list clients', 'search client', 'find client', 'show clients', 'get clients'] if phrase in lower_message]}")
             try:
@@ -632,9 +741,8 @@ This comprehensive client information was retrieved using your actual client dat
                 # Fallback to LLM
                 pass
         
-        # Pattern 5: Invoice management queries
-        elif any(phrase in lower_message for phrase in ["invoice", "bill", "list invoices", "search invoice", "find invoice"]):
-            print(f"MCP Integration: Detected invoice management pattern in message: '{message}'")
+        elif intent == "invoices":
+            print(f"MCP Integration: Detected invoice management pattern in message: '{request.message}'")
             try:
                 if "search" in lower_message or "find" in lower_message:
                     # Extract search query from message
@@ -710,9 +818,8 @@ This comprehensive invoice information was retrieved using your actual invoice d
                 # Fallback to LLM
                 pass
         
-        # Pattern 6: Currency queries
-        elif any(phrase in lower_message for phrase in ["currency", "currencies", "list currencies", "exchange rate"]):
-            print(f"MCP Integration: Detected currency pattern in message: '{message}'")
+        elif intent == "currencies":
+            print(f"MCP Integration: Detected currency pattern in message: '{request.message}'")
             try:
                 print("MCP Integration: Listing currencies...")
                 result = await tools.list_currencies(active_only=True)
@@ -760,9 +867,8 @@ This comprehensive currency information was retrieved using your actual currency
                 # Fallback to LLM
                 pass
         
-        # Pattern 7: Outstanding balance queries
-        elif any(phrase in lower_message for phrase in ["outstanding", "balance", "unpaid", "owe", "debt"]):
-            print(f"MCP Integration: Detected outstanding balance pattern in message: '{message}'")
+        elif intent == "outstanding":
+            print(f"MCP Integration: Detected outstanding balance pattern in message: '{request.message}'")
             try:
                 print("MCP Integration: Getting clients with outstanding balance...")
                 result = await tools.get_clients_with_outstanding_balance()
@@ -815,9 +921,8 @@ This comprehensive outstanding balance information was retrieved using your actu
                 # Fallback to LLM
                 pass
         
-        # Pattern 8: Overdue invoice queries
-        elif any(phrase in lower_message for phrase in ["overdue", "late", "past due", "delinquent"]):
-            print(f"MCP Integration: Detected overdue invoice pattern in message: '{message}'")
+        elif intent == "overdue":
+            print(f"MCP Integration: Detected overdue invoice pattern in message: '{request.message}'")
             try:
                 print("MCP Integration: Getting overdue invoices...")
                 result = await tools.get_overdue_invoices()
@@ -873,9 +978,141 @@ This comprehensive overdue invoice information was retrieved using your actual i
                 # Fallback to LLM
                 pass
         
-        # Pattern 9: Invoice statistics queries
-        elif any(phrase in lower_message for phrase in ["stat", "statistic", "summary", "total", "count", "how many"]):
-            print(f"MCP Integration: Detected statistics pattern in message: '{message}'")
+        elif intent == "expenses":
+            print(f"MCP Integration: Detected expense management pattern in message: '{request.message}'")
+            try:
+                if "search" in lower_message or "find" in lower_message:
+                    # Extract search query from message
+                    import re
+                    search_match = re.search(r'(?:search|find)\s+(?:for\s+)?["\']?([^"\']+)["\']?', lower_message)
+                    if search_match:
+                        search_query = search_match.group(1)
+                        print(f"MCP Integration: Searching expenses with query: '{search_query}'")
+                        result = await tools.search_expenses(query=search_query)
+                    else:
+                        # Default search
+                        result = await tools.list_expenses(limit=10)
+                else:
+                    # List all expenses
+                    print("MCP Integration: Listing expenses...")
+                    result = await tools.list_expenses(limit=20)
+                
+                if result.get("success"):
+                    expenses = result.get("data", [])
+                    if expenses:
+                        # Calculate totals
+                        total_amount = sum(exp.get('amount', 0) for exp in expenses)
+                        total_tax = sum(exp.get('tax_amount', 0) for exp in expenses)
+                        total_with_tax = sum(exp.get('total_amount', exp.get('amount', 0)) for exp in expenses)
+                        
+                        # Format expense details for f-string
+                        expense_lines = '\n'.join([f"• **Expense #{exp.get('id', 'N/A')}**\n" +
+                                        f"  📝 Category: {exp.get('category', 'Unknown')}\n" +
+                                        f"  🏪 Vendor: {exp.get('vendor', 'N/A')}\n" +
+                                        f"  💰 Amount: ${exp.get('amount', 0):,.2f}\n" +
+                                        f"  📊 Tax: ${exp.get('tax_amount', 0):,.2f}\n" +
+                                        f"  💳 Total: ${exp.get('total_amount', exp.get('amount', 0)):,.2f}\n" +
+                                        f"  📅 Date: {exp.get('expense_date', 'N/A')}\n" +
+                                        "  -----------------------------------------\n"
+                                        for exp in expenses])
+                        mcp_response = f"""
+💸 **Expense Management Dashboard**
+
+📊 **📈 Expense Overview:**
+• **Total Expenses:** {len(expenses):,}
+• **Total Amount (Pre-Tax):** ${total_amount:,.2f}
+• **Total Tax:** ${total_tax:,.2f}
+• **Total Amount (With Tax):** ${total_with_tax:,.2f}
+• **Average Expense:** ${(total_amount / len(expenses)) if len(expenses) > 0 else 0:,.2f}
+
+💸 **💼 Expense Details:**
+{expense_lines}
+
+📋 **📊 Data Source:**
+This comprehensive expense information was retrieved using your actual expense data through our advanced MCP tools.
+                        """.strip()
+                    else:
+                        mcp_response = "No expenses found matching your query."
+                    
+                    return {
+                        "success": True,
+                        "data": {
+                            "response": mcp_response,
+                            "provider": ai_config.provider_name,
+                            "model": ai_config.model_name,
+                            "source": "mcp_tools"
+                        }
+                    }
+                else:
+                    print(f"MCP Integration: Tool execution failed: {result}")
+                    # Fallback to LLM if MCP fails
+                    pass
+            except Exception as e:
+                print(f"MCP Integration: Exception during tool execution: {e}")
+                # Fallback to LLM
+                pass
+        
+        elif intent == "bank_statements":
+            print(f"MCP Integration: Detected bank statement pattern in message: '{request.message}'")
+            logger.info(f"MCP Integration: Detected bank statement pattern in message: '{request.message}'")
+            try:
+                print("MCP Integration: Listing bank statements...")
+                logger.info("MCP Integration: Listing bank statements...")
+                result = await tools.list_bank_statements()
+                print(f"MCP Integration: Bank statements result: {result}")
+                logger.info(f"MCP Integration: Bank statements result: {result}")
+                
+                if result.get("success"):
+                    statements = result.get("data", [])
+                    print(f"MCP Integration: Retrieved {len(statements)} bank statements")
+                    logger.info(f"MCP Integration: Retrieved {len(statements)} bank statements")
+                    if statements:
+                        # Format statement details for f-string
+                        statement_lines = '\n'.join([f"• **Statement #{stmt.get('id', 'N/A')}**\n" +
+                                        f"  🏦 Account: {stmt.get('account_name', 'Unknown')}\n" +
+                                        f"  📅 Period: {stmt.get('statement_period', 'N/A')}\n" +
+                                        f"  📊 Status: {stmt.get('status', 'Unknown').title()}\n" +
+                                        f"  📄 Transactions: {stmt.get('transaction_count', 'N/A')}\n" +
+                                        f"  📅 Imported: {stmt.get('created_at', 'N/A')}\n" +
+                                        "  -----------------------------------------\n"
+                                        for stmt in statements])
+                        mcp_response = f"""
+🏦 **Bank Statement Management Dashboard**
+
+📊 **📈 Statement Overview:**
+• **Total Statements:** {len(statements):,}
+• **Processed Statements:** {len([s for s in statements if s.get('status') == 'processed']):,}
+• **Pending Statements:** {len([s for s in statements if s.get('status') == 'pending']):,}
+
+🏦 **💼 Statement Details:**
+{statement_lines}
+
+📋 **📊 Data Source:**
+This comprehensive bank statement information was retrieved using your actual bank statement data through our advanced MCP tools.
+                        """.strip()
+                    else:
+                        mcp_response = "No bank statements found."
+                    
+                    return {
+                        "success": True,
+                        "data": {
+                            "response": mcp_response,
+                            "provider": ai_config.provider_name,
+                            "model": ai_config.model_name,
+                            "source": "mcp_tools"
+                        }
+                    }
+                else:
+                    print(f"MCP Integration: Tool execution failed: {result}")
+                    # Fallback to LLM if MCP fails
+                    pass
+            except Exception as e:
+                print(f"MCP Integration: Exception during tool execution: {e}")
+                # Fallback to LLM
+                pass
+        
+        elif intent == "statistics":
+            print(f"MCP Integration: Detected statistics pattern in message: '{request.message}'")
             try:
                 print("MCP Integration: Getting invoice statistics...")
                 result = await tools.get_invoice_stats()
@@ -921,7 +1158,9 @@ This comprehensive statistical analysis was performed using your actual invoice 
                 # Fallback to LLM
                 pass
         
-        # For other messages, use the regular LLM
+        # For general queries or unmatched intents, use the regular LLM
+        else:
+            print(f"MCP Integration: Intent '{intent}' - falling back to LLM")
         # Import litellm here to avoid circular imports
         try:
             from litellm import completion
@@ -953,7 +1192,7 @@ This comprehensive statistical analysis was performed using your actual invoice 
         # Prepare the completion call
         kwargs = {
             "model": model_name,
-            "messages": [{"role": "user", "content": message}],
+            "messages": [{"role": "user", "content": request.message}],
             "max_tokens": 500
         }
         
