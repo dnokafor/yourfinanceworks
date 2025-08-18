@@ -76,6 +76,8 @@ const Settings = () => {
     is_active: true,
     is_default: false,
   });
+  const [testingNewConfig, setTestingNewConfig] = useState(false);
+  const [testResult, setTestResult] = useState<{success: boolean, message: string} | null>(null);
   
   const [invoiceSettings, setInvoiceSettings] = useState({
     prefix: "INV-",
@@ -715,6 +717,44 @@ const Settings = () => {
     }
   };
 
+  const handleTestNewAIConfig = async () => {
+    setTestingNewConfig(true);
+    setTestResult(null);
+    try {
+      // Create a temporary config for testing
+      const tempConfig = await aiConfigApi.createAIConfig(newAIConfig);
+      const result = await aiConfigApi.testAIConfig(tempConfig.id);
+      
+      if (result.success) {
+        setTestResult({success: true, message: result.message || t('settings.ai_config_test_successful')});
+        // Update the newAIConfig to mark it as tested
+        setNewAIConfig(prev => ({ ...prev, tested: true }));
+        
+        // Check if this is the first tested provider and set as default
+        const testedConfigs = aiConfigs.filter(c => c.tested);
+        if (testedConfigs.length === 0) {
+          setNewAIConfig(prev => ({ ...prev, tested: true, is_default: true }));
+          setTestResult({success: true, message: result.message + ' and set as default provider'});
+        }
+      } else {
+        setTestResult({success: false, message: result.message || t('settings.ai_config_test_failed')});
+      }
+      
+      // Always delete the temporary config after testing
+      await aiConfigApi.deleteAIConfig(tempConfig.id);
+      
+      // Refresh the AI configs list to reflect any changes
+      const configs = await aiConfigApi.getAIConfigs();
+      setAiConfigs(configs);
+      
+    } catch (error) {
+      console.error("Failed to test new AI config:", error);
+      setTestResult({success: false, message: getErrorMessage(error, t)});
+    } finally {
+      setTestingNewConfig(false);
+    }
+  };
+
   const handleMarkAsTested = async (id: number) => {
     try {
       await aiConfigApi.markAsTested(id);
@@ -753,6 +793,7 @@ const Settings = () => {
       is_default: false,
       tested: false,
     });
+    setTestResult(null);
     setShowAIConfigDialog(true);
   };
 
@@ -2206,18 +2247,52 @@ const Settings = () => {
                   <Label htmlFor="tested">{t('settings.mark_as_tested')}</Label>
                 </div>
               </div>
+              
+              {/* Test Result Display */}
+              {testResult && (
+                <div className={`p-3 rounded-lg border ${
+                  testResult.success 
+                    ? 'bg-green-50 border-green-200 text-green-800' 
+                    : 'bg-red-50 border-red-200 text-red-800'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${
+                      testResult.success ? 'bg-green-500' : 'bg-red-500'
+                    }`}></div>
+                    <span className="font-medium">
+                      {testResult.success ? 'Test Successful' : 'Test Failed'}
+                    </span>
+                  </div>
+                  <p className="text-sm mt-1">{testResult.message}</p>
+                </div>
+              )}
             </div>
             
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowAIConfigDialog(false)}>
                 {t('settings.cancel')}
               </Button>
-              {editingAIConfig && (
+              {editingAIConfig ? (
                 <Button
                   variant="outline"
                   onClick={() => handleTestAIConfig(editingAIConfig.id)}
                 >
                   {t('settings.test')}
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  onClick={handleTestNewAIConfig}
+                  disabled={testingNewConfig || !newAIConfig.api_key || !newAIConfig.model_name}
+                >
+                  {testingNewConfig ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {t('common.loading')}
+                    </>
+                  ) : (
+                    t('settings.test')
+                  )}
                 </Button>
               )}
               <Button

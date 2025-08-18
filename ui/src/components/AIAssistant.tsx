@@ -36,13 +36,13 @@ interface ApiCall {
 
 // Styled AI Response Component
 const StyledAIResponse = ({ children }: { children: React.ReactNode }) => (
-  <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 p-4 rounded-xl border border-indigo-200 shadow-lg">
+  <div className="bg-gradient-to-br from-primary/10 via-purple-500/10 to-pink-500/10 p-4 rounded-xl border border-border shadow-lg">
     <div className="flex items-start gap-3">
       <div className="bg-gradient-to-br from-indigo-500 to-purple-500 rounded-full p-2 shadow-md">
         <Sparkles className="h-4 w-4 text-white" />
       </div>
       <div className="flex-1">
-        <div className="text-gray-800 leading-relaxed">
+        <div className="text-foreground leading-relaxed">
           {children}
         </div>
       </div>
@@ -57,13 +57,13 @@ const EnhancedAIResponse = ({ text }: { text: string }) => {
   
   if (lowerText.includes('error') || lowerText.includes('sorry') || lowerText.includes('failed')) {
     return (
-      <div className="bg-gradient-to-br from-red-50 to-pink-50 p-4 rounded-xl border border-red-200 shadow-lg">
+      <div className="bg-gradient-to-br from-red-500/10 to-pink-500/10 p-4 rounded-xl border border-red-500/20 shadow-lg">
         <div className="flex items-start gap-3">
           <div className="bg-gradient-to-br from-red-500 to-pink-500 rounded-full p-2 shadow-md">
             <MessageCircle className="h-4 w-4 text-white" />
           </div>
           <div className="flex-1">
-            <div className="text-red-800 leading-relaxed font-medium">
+            <div className="text-red-600 dark:text-red-400 leading-relaxed font-medium">
               {text}
             </div>
           </div>
@@ -74,13 +74,13 @@ const EnhancedAIResponse = ({ text }: { text: string }) => {
   
   if (lowerText.includes('success') || lowerText.includes('great') || lowerText.includes('excellent')) {
     return (
-      <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-xl border border-green-200 shadow-lg">
+      <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 p-4 rounded-xl border border-green-500/20 shadow-lg">
         <div className="flex items-start gap-3">
           <div className="bg-gradient-to-br from-green-500 to-emerald-500 rounded-full p-2 shadow-md">
             <Sparkles className="h-4 w-4 text-white" />
           </div>
           <div className="flex-1">
-            <div className="text-green-800 leading-relaxed font-medium">
+            <div className="text-green-600 dark:text-green-400 leading-relaxed font-medium">
               {text}
             </div>
           </div>
@@ -91,13 +91,13 @@ const EnhancedAIResponse = ({ text }: { text: string }) => {
   
   if (lowerText.includes('configuration') || lowerText.includes('settings')) {
     return (
-      <div className="bg-gradient-to-br from-blue-50 to-cyan-50 p-4 rounded-xl border border-blue-200 shadow-lg">
+      <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 p-4 rounded-xl border border-blue-500/20 shadow-lg">
         <div className="flex items-start gap-3">
           <div className="bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full p-2 shadow-md">
             <MessageCircle className="h-4 w-4 text-white" />
           </div>
           <div className="flex-1">
-            <div className="text-blue-800 leading-relaxed">
+            <div className="text-blue-600 dark:text-blue-400 leading-relaxed">
               {text}
             </div>
           </div>
@@ -358,6 +358,15 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
   const [apiCallHistory, setApiCallHistory] = useState<ApiCall[]>([]);
   const [isThinking, setIsThinking] = useState(false);
 
+  // Reset loading states when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setIsGenerating(false);
+      setIsThinking(false);
+      setIsStreamingVisible(false);
+    }
+  }, [isOpen]);
+
   const addApiCall = useCallback((apiCall: ApiCall) => {
     setApiCallHistory(prev => [...prev, { ...apiCall, id: Date.now().toString() }]);
   }, []);
@@ -468,6 +477,43 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
 
   if (DEBUG_AI_ASSISTANT) console.log('AI Assistant: Rendering component - all checks passed');
 
+  // Separate API client for AI requests to avoid interfering with global loading states
+  const aiApiRequest = async (url: string, options: RequestInit = {}) => {
+    const token = localStorage.getItem('token');
+    const tenantId = localStorage.getItem('selected_tenant_id') || (() => {
+      try {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        return user.tenant_id?.toString();
+      } catch { return undefined; }
+    })();
+    
+    const requestUrl = url.startsWith('http') ? url : `${import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'}${url}`;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(tenantId && { 'X-Tenant-ID': tenantId }),
+    };
+    
+    const response = await fetch(requestUrl, {
+      ...options,
+      headers: { ...headers, ...options.headers },
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorMessage = 'Request failed';
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.detail || errorMessage;
+      } catch {
+        errorMessage = errorText || errorMessage;
+      }
+      throw new Error(errorMessage);
+    }
+    
+    return response.json();
+  };
+
   const handleSendMessage = async (messageText?: string) => {
     const textToSend = messageText || input.trim();
     if (textToSend === '') return;
@@ -477,6 +523,8 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
     if (!messageText) setInput('');
 
     // Show typing indicator
+    setIsThinking(true);
+    setIsGenerating(true);
     const typingMessage: Message = { id: messages.length + 2, sender: 'ai', text: <EnhancedAIResponse text={t('aiAssistant.thinking')} /> };
     setMessages((prev) => [...prev, typingMessage]);
 
@@ -499,7 +547,7 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
         // Use the analyze-patterns endpoint (MCP-like functionality)
         // console.log('AI Assistant: Using analyze-patterns endpoint');
         try {
-          const response = await api.get('/ai/analyze-patterns') as any;
+          const response = await aiApiRequest('/ai/analyze-patterns') as any;
           // console.log('AI Assistant: Analyze patterns response:', response);
           // console.log('AI Assistant: Response success:', response.success);
           // console.log('AI Assistant: Response data:', response.data);
@@ -584,6 +632,8 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
             );
 
             setMessages((prev) => [...prev.slice(0, -1), { id: prev.length, sender: 'ai', text: analysisComponent }]);
+            setIsThinking(false);
+            setIsGenerating(false);
           } else {
             throw new Error('Failed to analyze patterns');
           }
@@ -603,7 +653,7 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
         // Use the suggest-actions endpoint
         // console.log('AI Assistant: Using suggest-actions endpoint');
         try {
-          const response = await api.get('/ai/suggest-actions') as any;
+          const response = await aiApiRequest('/ai/suggest-actions') as any;
           // console.log('AI Assistant: Suggest actions response:', response);
           
           if (response.success) {
@@ -661,6 +711,8 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
             );
             
             setMessages((prev) => [...prev.slice(0, -1), { id: prev.length, sender: 'ai', text: actionsComponent }]);
+            setIsThinking(false);
+            setIsGenerating(false);
           } else {
             throw new Error('Failed to get suggestions');
           }
@@ -677,7 +729,7 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
         // Handle payment data display with charts
         // console.log('AI Assistant: Using payments endpoint with charts');
         try {
-          const response = await api.get('/payments/') as any;
+          const response = await aiApiRequest('/payments/') as any;
           // console.log('AI Assistant: Payments response:', response);
           
           if (response.success && response.chart_data && Array.isArray(response.data)) {
@@ -699,6 +751,8 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
                 </div>
               )
             }]);
+            setIsThinking(false);
+            setIsGenerating(false);
           } else {
             throw new Error('Failed to get payment data');
           }
@@ -717,6 +771,8 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
         if (!defaultAIConfig) {
           const errorMessage = t('settings.no_ai_config_found');
           setMessages((prev) => [...prev.slice(0, -1), { id: prev.length, sender: 'ai', text: errorMessage }]);
+          setIsThinking(false);
+          setIsGenerating(false);
           return;
         }
         
@@ -728,6 +784,8 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
         if (response.success) {
           const aiResponse = response.data.response || response.data.message || "I'm sorry, I couldn't generate a response.";
           setMessages((prev) => [...prev.slice(0, -1), { id: prev.length, sender: 'ai', text: <EnhancedAIResponse text={aiResponse} /> }]);
+          setIsThinking(false);
+          setIsGenerating(false);
         } else {
           throw new Error('Failed to get AI response');
         }
@@ -745,6 +803,8 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
           console.log('AI Assistant: No defaultAIConfig found for bank statement query');
           const errorMessage = t('settings.no_ai_config_found');
           setMessages((prev) => [...prev.slice(0, -1), { id: prev.length, sender: 'ai', text: errorMessage }]);
+          setIsThinking(false);
+          setIsGenerating(false);
           return;
         }
         
@@ -756,6 +816,8 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
         if (response.success) {
           const aiResponse = response.data.response || response.data.message || "I'm sorry, I couldn't generate a response.";
           setMessages((prev) => [...prev.slice(0, -1), { id: prev.length, sender: 'ai', text: <EnhancedAIResponse text={aiResponse} /> }]);
+          setIsThinking(false);
+          setIsGenerating(false);
         } else {
           throw new Error('Failed to get AI response');
         }
@@ -768,17 +830,24 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
           // console.log('AI Assistant: No default AI config found:', { aiConfigs, defaultAIConfig });
           const errorMessage = t('settings.no_ai_config_found');
           setMessages((prev) => [...prev.slice(0, -1), { id: prev.length, sender: 'ai', text: errorMessage }]);
+          setIsThinking(false);
+          setIsGenerating(false);
           return;
         }
         
-        const response = await api.post('/ai/chat', {
-          message: textToSend,
-          config_id: defaultAIConfig.id
+        const response = await aiApiRequest('/ai/chat', {
+          method: 'POST',
+          body: JSON.stringify({
+            message: textToSend,
+            config_id: defaultAIConfig.id
+          })
         }) as any;
 
         if (response.success) {
           const aiResponse = response.data.response || response.data.message || "I'm sorry, I couldn't generate a response.";
           setMessages((prev) => [...prev.slice(0, -1), { id: prev.length, sender: 'ai', text: <EnhancedAIResponse text={aiResponse} /> }]);
+          setIsThinking(false);
+          setIsGenerating(false);
         } else {
           throw new Error('Failed to get AI response');
         }
@@ -787,6 +856,8 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
       console.error("Error getting AI response:", error);
       const errorMessage = t("aiAssistant.error_message");
       setMessages((prev) => [...prev.slice(0, -1), { id: prev.length, sender: 'ai', text: <EnhancedAIResponse text={errorMessage} /> }]);
+      setIsThinking(false);
+      setIsGenerating(false);
     }
   };
 
@@ -820,7 +891,7 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
               />
               
               {/* Dialog */}
-              <div className={`relative w-full flex flex-col p-0 bg-white shadow-2xl border-0 overflow-hidden animate-fade-in rounded-3xl ${
+              <div className={`relative w-full flex flex-col p-0 bg-background shadow-2xl border-0 overflow-hidden animate-fade-in rounded-3xl ${
                 isFullscreen 
                   ? 'max-w-[95vw] h-[95vh] max-h-[95vh]' 
                   : 'max-w-[600px] h-[80vh] max-h-[800px]'
@@ -874,7 +945,7 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
                     {messages.map((msg) => (
                       <div
                         key={msg.id}
-                        className={`max-w-[80%] transition-all duration-200 ${msg.sender === 'user' ? 'bg-blue-100 text-blue-900 self-end px-4 py-3 rounded-2xl shadow-md' : 'bg-gray-100 text-gray-900 self-start px-4 py-3 rounded-2xl shadow-md'}`}
+                        className={`max-w-[80%] transition-all duration-200 ${msg.sender === 'user' ? 'bg-primary/10 text-primary self-end px-4 py-3 rounded-2xl shadow-md' : 'bg-muted text-muted-foreground self-start px-4 py-3 rounded-2xl shadow-md'}`}
                         style={{ wordBreak: 'break-word', whiteSpace: 'pre-line' }}
                       >
                         {msg.sender === 'user' ? (
@@ -896,21 +967,21 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
                 <div className="flex space-x-2 px-6 pb-3 pt-2 relative z-20">
                   <Button
                     variant="outline"
-                    className="rounded-xl bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 font-semibold shadow hover:from-blue-200 hover:to-purple-200"
+                    className="rounded-xl bg-gradient-to-r from-blue-500/10 to-purple-500/10 text-blue-600 dark:text-blue-400 font-semibold shadow hover:from-blue-500/20 hover:to-purple-500/20"
                     onClick={() => handleQuickAction(t('aiAssistant.analyzePatterns'))}
                   >
                     {t('aiAssistant.analyzePatterns')}
                   </Button>
                   <Button
                     variant="outline"
-                    className="rounded-xl bg-gradient-to-r from-pink-100 to-purple-100 text-pink-700 font-semibold shadow hover:from-pink-200 hover:to-purple-200"
+                    className="rounded-xl bg-gradient-to-r from-pink-500/10 to-purple-500/10 text-pink-600 dark:text-pink-400 font-semibold shadow hover:from-pink-500/20 hover:to-purple-500/20"
                     onClick={() => handleQuickAction(t('aiAssistant.suggestActions'))}
                   >
                     {t('aiAssistant.suggestActions')}
                   </Button>
                   <Button
                     variant="outline"
-                    className="rounded-xl bg-gradient-to-r from-green-100 to-blue-100 text-green-700 font-semibold shadow hover:from-green-200 hover:to-blue-200"
+                    className="rounded-xl bg-gradient-to-r from-green-500/10 to-blue-500/10 text-green-600 dark:text-green-400 font-semibold shadow hover:from-green-500/20 hover:to-blue-500/20"
                     onClick={() => handleQuickAction(t('aiAssistant.paymentCharts'))}
                   >
                     {t('aiAssistant.paymentCharts')}
@@ -926,7 +997,7 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
                         handleSendMessage();
                       }
                     }}
-                    className="flex-grow rounded-xl bg-white/80 border border-gray-300 shadow focus:ring-2 focus:ring-blue-400 focus:border-blue-400 text-lg px-4 py-3"
+                    className="flex-grow rounded-xl bg-background/80 border border-border shadow focus:ring-2 focus:ring-primary focus:border-primary text-lg px-4 py-3"
                   />
                   <Button
                     className="rounded-full w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-500 text-white shadow-lg hover:scale-105 transition-transform duration-200 flex items-center justify-center"

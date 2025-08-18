@@ -219,11 +219,23 @@ async def test_ai_config(
             
             # Mark as tested if successful
             db_config.tested = True
+            db.flush()  # Make the change visible to queries
+            
+            # Check if this is the only tested config and set as default if so
+            tested_count = db.query(AIConfigModel).filter(AIConfigModel.tested == True).count()
+            if tested_count == 1:
+                # Unset any existing defaults first
+                db.query(AIConfigModel).filter(
+                    AIConfigModel.is_default == True
+                ).update({"is_default": False})
+                # Set this as default
+                db_config.is_default = True
+            
             db.commit()
             
             return {
                 "success": True,
-                "message": "Configuration test successful",
+                "message": "Configuration test successful" + (" and set as default" if db_config.is_default else ""),
                 "response": response.choices[0].message.content if response.choices else "No response"
             }
             
@@ -263,12 +275,25 @@ async def mark_config_as_tested(
             raise HTTPException(status_code=404, detail="AI configuration not found")
         
         db_config.tested = True
+        db.flush()  # Make the change visible to queries
+        
+        # Check if this is the only tested config and set as default if so
+        tested_count = db.query(AIConfigModel).filter(AIConfigModel.tested == True).count()
+        if tested_count == 1:
+            # Unset any existing defaults first
+            db.query(AIConfigModel).filter(
+                AIConfigModel.is_default == True
+            ).update({"is_default": False})
+            # Set this as default
+            db_config.is_default = True
+        
         db.commit()
         
-        return {"message": "AI configuration marked as tested successfully"}
+        return {"message": "AI configuration marked as tested successfully" + (" and set as default" if db_config.is_default else "")}
     except HTTPException:
         raise
     except Exception as e:
+        db.rollback()
         raise HTTPException(
             status_code=500,
             detail=f"Failed to mark AI configuration as tested: {str(e)}"

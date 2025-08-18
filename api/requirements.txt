@@ -26,6 +26,7 @@ jinja2==3.1.6  # Email templating
 reportlab==4.4.3  # PDF generation for email attachments
 
 # AI/LLM dependencies
+openai==1.68.2  # OpenAI client (compatible with litellm)
 litellm==1.75.0  # Unified interface for multiple LLM providers
 langchain==0.3.27  # LangChain for PDF processing
 langchain-community==0.3.27  # LangChain community components

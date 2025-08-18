@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 from datetime import datetime, timedelta, timezone
 import httpx
 import logging
+import os
 
 from models.database import get_master_db, get_db, set_tenant_context
 from routers.auth import get_current_user
@@ -19,6 +20,7 @@ from constants.recommendation_codes import (
 )
 
 logger = logging.getLogger(__name__)
+logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
 
 router = APIRouter(
     prefix="/ai",
@@ -258,7 +260,7 @@ async def ai_chat(
         
         # Import litellm for intent classification
         try:
-            from litellm import completion
+            from litellm import acompletion as completion
         except ImportError:
             return {
                 "success": False,
@@ -272,11 +274,11 @@ Categories:
 - analyze_patterns: analyzing invoice patterns, trends, insights
 - suggest_actions: suggesting actions, recommendations, next steps
 - payments: payment queries, payment history, payment information
-- clients: client management, customer information, client details
-- invoices: invoice management, invoice information, invoice details
-- expenses: expense management, expense information, expense details
-- bank_statements: bank statement management, statement information
-- currencies: currency information, exchange rates
+- clients: client management, customer information, client details, show clients, list clients
+- invoices: invoice management, invoice information, invoice details, show invoices, list invoices, get invoices
+- expenses: expense management, expense information, expense details, show expenses, list expenses
+- bank_statements: bank statement management, statement information, show statements, list statements
+- currencies: currency information, exchange rates, show currencies
 - outstanding: outstanding balances, unpaid amounts, debts
 - overdue: overdue invoices, late payments
 - statistics: statistics, summaries, totals, counts
@@ -296,12 +298,38 @@ Category:"""
             kwargs["api_key"] = ai_config.api_key
         
         try:
-            intent_response = completion(**kwargs)
+            intent_response = await completion(**kwargs)
             intent = intent_response.choices[0].message.content.strip().lower()
-            print(f"MCP Integration: AI classified intent as: '{intent}'")
+            # Handle empty or invalid responses
+            if not intent or intent == "" or len(intent) > 50:
+                intent = "general"
+            # Simple keyword fallback for common patterns
+            if intent == "general":
+                msg_lower = request.message.lower()
+                if any(word in msg_lower for word in ["invoice", "invoices", "show invoice", "list invoice"]):
+                    intent = "invoices"
+                elif any(word in msg_lower for word in ["client", "clients", "customer", "customers"]):
+                    intent = "clients"
+                elif any(word in msg_lower for word in ["payment", "payments"]):
+                    intent = "payments"
+                elif any(word in msg_lower for word in ["expense", "expenses"]):
+                    intent = "expenses"
+                elif any(word in msg_lower for word in ["bank", "bank statements", "statements", "show statements", "list statements"]):
+                    intent = "bank_statements"
+                elif any(word in msg_lower for word in ["currency", "currencies", "exchange rate", "exchange rates", "show currencies", "list currencies"]):
+                    intent = "currencies"
+                elif any(word in msg_lower for word in ["outstanding", "outstanding balance", "unpaid", "unpaid amount", "show outstanding", "list outstanding"]):
+                    intent = "outstanding"
+                elif any(word in msg_lower for word in ["overdue", "late payment", "show overdue", "list overdue"]):
+                    intent = "overdue"
+                elif any(word in msg_lower for word in ["statistics", "summary", "total", "count", "show statistics", "list statistics"]):
+                    intent = "statistics"
+                else:
+                    intent = "general"
+
             logger.info(f"MCP Integration: AI classified intent as: '{intent}'")
         except Exception as e:
-            print(f"MCP Integration: Intent classification failed: {e}, falling back to general")
+            print(f"MCP Integration: Intent classification failed: {e}")
             intent = "general"
         
         # Initialize MCP tools using current user's session
@@ -438,11 +466,16 @@ Category:"""
                 return await self._make_request("GET", "/ai/suggest-actions")
             
             # Expense Management Methods
-            async def list_expenses(self, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
+            async def list_expenses(self, skip: int = 0, limit: int = 100, category: str = None, invoice_id: int = None, **kwargs) -> List[Dict[str, Any]]:
+                params = {"skip": skip, "limit": limit}
+                if category:
+                    params["category"] = category
+                if invoice_id:
+                    params["invoice_id"] = invoice_id
                 return await self._make_request(
                     "GET", 
                     "/expenses/",
-                    params={"skip": skip, "limit": limit}
+                    params=params
                 )
             
             async def search_expenses(self, query: str, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
@@ -668,6 +701,7 @@ This comprehensive payment information was retrieved using your actual payment d
                 pass
         
         elif intent == "clients":
+            lower_message = request.message.lower()
             print(f"MCP Integration: Detected client management pattern in message: '{request.message}'")
             print(f"MCP Integration: lower_message: '{lower_message}'")
             print(f"MCP Integration: Checking patterns: {[phrase for phrase in ['client', 'customer', 'list clients', 'search client', 'find client', 'show clients', 'get clients'] if phrase in lower_message]}")
@@ -742,6 +776,7 @@ This comprehensive client information was retrieved using your actual client dat
                 pass
         
         elif intent == "invoices":
+            lower_message = request.message.lower()
             print(f"MCP Integration: Detected invoice management pattern in message: '{request.message}'")
             try:
                 if "search" in lower_message or "find" in lower_message:
@@ -979,6 +1014,7 @@ This comprehensive overdue invoice information was retrieved using your actual i
                 pass
         
         elif intent == "expenses":
+            lower_message = request.message.lower()
             print(f"MCP Integration: Detected expense management pattern in message: '{request.message}'")
             try:
                 if "search" in lower_message or "find" in lower_message:
@@ -1001,17 +1037,17 @@ This comprehensive overdue invoice information was retrieved using your actual i
                     expenses = result.get("data", [])
                     if expenses:
                         # Calculate totals
-                        total_amount = sum(exp.get('amount', 0) for exp in expenses)
-                        total_tax = sum(exp.get('tax_amount', 0) for exp in expenses)
-                        total_with_tax = sum(exp.get('total_amount', exp.get('amount', 0)) for exp in expenses)
+                        total_amount = sum(exp.get('amount', 0) or 0 for exp in expenses)
+                        total_tax = sum(exp.get('tax_amount', 0) or 0 for exp in expenses)
+                        total_with_tax = sum((exp.get('total_amount') or exp.get('amount', 0) or 0) for exp in expenses)
                         
                         # Format expense details for f-string
                         expense_lines = '\n'.join([f"• **Expense #{exp.get('id', 'N/A')}**\n" +
                                         f"  📝 Category: {exp.get('category', 'Unknown')}\n" +
                                         f"  🏪 Vendor: {exp.get('vendor', 'N/A')}\n" +
-                                        f"  💰 Amount: ${exp.get('amount', 0):,.2f}\n" +
-                                        f"  📊 Tax: ${exp.get('tax_amount', 0):,.2f}\n" +
-                                        f"  💳 Total: ${exp.get('total_amount', exp.get('amount', 0)):,.2f}\n" +
+                                        f"  💰 Amount: ${(exp.get('amount') or 0):,.2f}\n" +
+                                        f"  📊 Tax: ${(exp.get('tax_amount') or 0):,.2f}\n" +
+                                        f"  💳 Total: ${(exp.get('total_amount') or exp.get('amount') or 0):,.2f}\n" +
                                         f"  📅 Date: {exp.get('expense_date', 'N/A')}\n" +
                                         "  -----------------------------------------\n"
                                         for exp in expenses])
@@ -1163,7 +1199,7 @@ This comprehensive statistical analysis was performed using your actual invoice 
             print(f"MCP Integration: Intent '{intent}' - falling back to LLM")
         # Import litellm here to avoid circular imports
         try:
-            from litellm import completion
+            from litellm import acompletion as completion
         except ImportError:
             return {
                 "success": False,
@@ -1218,7 +1254,7 @@ This comprehensive statistical analysis was performed using your actual invoice 
                 kwargs["api_base"] = ai_config.provider_url
         
         # Make the completion call
-        response = completion(**kwargs)
+        response = await completion(**kwargs)
         
         ai_response = response.choices[0].message.content if response.choices else "I'm sorry, I couldn't generate a response."
         
@@ -1272,43 +1308,21 @@ def save_ai_chat_message(
     
 @router.get("/chat/history")
 def get_ai_chat_history(
-    db: Session = Depends(get_master_db),
-    master_db: Session = Depends(get_master_db),
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
-    # Get tenant_id if available
-    tenant_id = getattr(current_user, 'tenant_id', None)
-    # Get retention days from settings (default 7, max 30)
-    settings = master_db.query(Settings).filter(Settings.tenant_id == tenant_id).first()
-    retention_days = 7
-    if settings and hasattr(settings, 'ai_chat_history_retention_days'):
-        retention_days = min(max(settings.ai_chat_history_retention_days or 7, 1), 30)
-    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
-
-    # Manually set tenant context and get tenant database
-    set_tenant_context(tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(tenant_id)
     try:
+        # Use tenant database for chat history
         history = db.query(AIChatHistory).filter(
-            AIChatHistory.user_id == current_user.id,
-            (AIChatHistory.tenant_id == tenant_id) if tenant_id is not None else True,
-            AIChatHistory.created_at >= cutoff
-        ).order_by(AIChatHistory.created_at.asc()).all()
-        # Purge old messages
-        db.query(AIChatHistory).filter(
-            AIChatHistory.user_id == current_user.id,
-            (AIChatHistory.tenant_id == tenant_id) if tenant_id is not None else True,
-            AIChatHistory.created_at < cutoff
-        ).delete()
-        db.commit()
+            AIChatHistory.user_id == current_user.id
+        ).order_by(AIChatHistory.created_at.asc()).limit(50).all()
+        
         return [{
             "id": msg.id,
             "message": msg.message,
             "sender": msg.sender,
             "created_at": msg.created_at.isoformat()
         } for msg in history]
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(
             status_code=500,
