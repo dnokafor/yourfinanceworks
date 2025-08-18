@@ -73,8 +73,7 @@ Custom hook for managing notification state:
 - `clearAll()` - Clear all notifications
 - `updateNotification(id, updates)` - Update existing notification
 
-#### 3. NotificationDemo.tsx
-Demo component for testing the notification system with sample notifications.
+
 
 ### Integration Points
 
@@ -179,12 +178,6 @@ addNotification?.('error', 'Expense Upload Failed', `Failed to upload all ${erro
 
 ## Testing
 
-### Demo Component
-A demo component is included on the dashboard that generates sample notifications:
-1. Processing notification (immediate)
-2. Success notification (after 2 seconds)
-3. Error notification (after 4 seconds)
-
 ### Manual Testing
 Test the system by:
 1. Uploading PDF invoices for processing
@@ -214,7 +207,6 @@ Test the system by:
 - `ui/src/components/notifications/NotificationBell.tsx`
 - `ui/src/hooks/useNotifications.ts`
 - `ui/src/hooks/useExpenseStatusPolling.ts`
-- `ui/src/components/notifications/NotificationDemo.tsx`
 - `docs/AI_NOTIFICATION_BELL_SYSTEM.md`
 
 ### Modified Files
