@@ -241,11 +241,19 @@ export default function BankStatements() {
     try {
       if (files.length === 0) { toast.error('Select up to 12 PDF files'); return; }
       setLoading(true);
+      
+      const addNotification = (window as any).addAINotification;
+      addNotification?.('processing', 'Processing Bank Statements', `Analyzing ${files.length} bank statement files with AI...`);
+      
       const resp = await bankStatementApi.uploadAndExtract(files);
-      toast.success(`Created ${resp.statements.length} statement(s)`);
+      
+      addNotification?.('success', 'Bank Statements Uploaded', `Successfully uploaded ${files.length} statement files. AI extraction in progress.`);
+      toast.success(`Uploaded ${files.length} statement(s)`);
       setFiles([]);
       await loadList();
     } catch (e: any) {
+      const addNotification = (window as any).addAINotification;
+      addNotification?.('error', 'Bank Statement Processing Failed', `Failed to process bank statements: ${e?.message || 'Unknown error'}`);
       toast.error(e?.message || 'Failed to extract transactions');
     } finally {
       setLoading(false);
@@ -499,10 +507,17 @@ export default function BankStatements() {
                     onClick={async () => {
                       if (!selected) return;
                       try {
+                        const addNotification = (window as any).addAINotification;
+                        addNotification?.('processing', 'Reprocessing Bank Statement', `Re-analyzing ${detail?.original_filename} with AI...`);
+                        
                         await bankStatementApi.reprocess(selected);
+                        
+                        addNotification?.('success', 'Bank Statement Reprocessing Started', `Successfully started reprocessing ${detail?.original_filename}`);
                         toast.success('Reprocessing started');
                         await openStatement(selected);
                       } catch (e: any) {
+                        const addNotification = (window as any).addAINotification;
+                        addNotification?.('error', 'Reprocessing Failed', `Failed to reprocess ${detail?.original_filename}: ${e?.message || 'Unknown error'}`);
                         toast.error(e?.message || 'Failed to start reprocessing');
                       }
                     }}

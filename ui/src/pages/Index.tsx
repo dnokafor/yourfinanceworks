@@ -9,6 +9,7 @@ import { dashboardApi } from "@/lib/api";
 import { toast } from "sonner";
 import { CurrencyDisplay } from "@/components/ui/currency-display";
 import { useTranslation } from 'react-i18next';
+import { NotificationDemo } from "@/components/notifications/NotificationDemo";
 
 const Dashboard = () => {
   const { t } = useTranslation();
@@ -214,6 +215,7 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 slide-in" style={{ animationDelay: '100ms' }}>
           <InvoiceChart />
           <RecentInvoices />
+          <NotificationDemo />
         </div>
       </div>
     </AppLayout>

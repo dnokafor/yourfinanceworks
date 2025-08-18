@@ -113,8 +113,27 @@ export default function ExpensesEdit() {
       try { currentList = await expenseApi.listAttachments(Number(id)); } catch {}
       const remainingSlots = Math.max(0, 10 - (currentList?.length || 0));
 
+      const addNotification = (window as any).addAINotification;
+      if (newFiles.length > 0) {
+        addNotification?.('processing', 'Processing Expense Receipts', `Analyzing ${Math.min(newFiles.length, remainingSlots)} receipt files with AI...`);
+      }
+      
+      let uploadedCount = 0;
       for (let i = 0; i < Math.min(newFiles.length, remainingSlots); i++) {
-        try { await expenseApi.uploadReceipt(Number(id), newFiles[i]); } catch (e) { console.error(e); }
+        try { 
+          await expenseApi.uploadReceipt(Number(id), newFiles[i]); 
+          uploadedCount++;
+        } catch (e) { 
+          console.error(e); 
+        }
+      }
+      
+      if (newFiles.length > 0) {
+        if (uploadedCount === Math.min(newFiles.length, remainingSlots)) {
+          addNotification?.('success', 'Expense Receipts Processed', `Successfully uploaded ${uploadedCount} receipt files. AI analysis in progress.`);
+        } else {
+          addNotification?.('error', 'Expense Upload Partial', `Uploaded ${uploadedCount} of ${Math.min(newFiles.length, remainingSlots)} receipt files.`);
+        }
       }
       toast.success(t('expenses.expense_updated'));
       setNewLabel('');
@@ -152,12 +171,19 @@ export default function ExpensesEdit() {
                   size="sm"
                   onClick={async () => {
                     try {
+                      const addNotification = (window as any).addAINotification;
+                      addNotification?.('processing', 'Reprocessing Expense', `Re-analyzing expense receipts with AI...`);
+                      
                       await expenseApi.reprocessExpense(Number(id));
+                      
+                      addNotification?.('success', 'Expense Reprocessed', `Successfully reprocessed expense receipts.`);
                       toast.success(t('expenses.reprocessing_started'));
                       // Refresh the expense data
                       const exp = await expenseApi.getExpense(Number(id));
                       setForm(exp);
                     } catch (e: any) {
+                      const addNotification = (window as any).addAINotification;
+                      addNotification?.('error', 'Expense Reprocessing Failed', `Failed to reprocess expense: ${e?.message || 'Unknown error'}`);
                       toast.error(e?.message || t('expenses.failed_to_reprocess'));
                     }
                   }}

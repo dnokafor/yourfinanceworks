@@ -59,6 +59,11 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport }: InvoiceCr
     if (!selectedFile) return;
 
     setProcessing(true);
+    
+    // Add processing notification
+    const addNotification = (window as any).addAINotification;
+    const notificationId = addNotification?.('processing', 'Processing Invoice PDF', `Analyzing ${selectedFile.name} with AI...`);
+    
     try {
       // Check LLM configuration status
       const status = await checkLlmConfiguration();
@@ -75,6 +80,8 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport }: InvoiceCr
       });
 
       if (response.success) {
+        // Update notification to success
+        addNotification?.('success', 'Invoice PDF Processed', `Successfully extracted data from ${selectedFile.name}`);
         toast.success('PDF processed successfully!');
         const payload = (response?.data?.invoice_data) ?? response?.data ?? response;
         onPdfImport(payload, selectedFile);
@@ -83,6 +90,8 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport }: InvoiceCr
       }
     } catch (error) {
       console.error('PDF processing error:', error);
+      // Update notification to error
+      addNotification?.('error', 'PDF Processing Failed', `Failed to process ${selectedFile.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       toast.error('Failed to process PDF. Proceeding with manual creation.');
       onManualCreate(selectedFile);
     } finally {

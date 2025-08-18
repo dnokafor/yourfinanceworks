@@ -1,4 +1,5 @@
 
+import React from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
@@ -33,10 +34,31 @@ import { Toaster } from "sonner";
 import AuditLog from "./pages/AuditLog";
 import RecycleBin from "./pages/RecycleBin";
 import Analytics from "./pages/Analytics";
+import { NotificationBell } from "./components/notifications/NotificationBell";
+import { useNotifications } from "./hooks/useNotifications";
+import { useExpenseStatusPolling } from "./hooks/useExpenseStatusPolling";
 
 const queryClient = new QueryClient();
 
-const App = () => (
+const App = () => {
+  const { notifications, addNotification, markAsRead, clearAll } = useNotifications();
+  const { startPolling } = useExpenseStatusPolling();
+  const [bellHidden, setBellHidden] = React.useState(false);
+
+  // Make notification functions available globally
+  React.useEffect(() => {
+    (window as any).addAINotification = addNotification;
+    (window as any).startExpensePolling = startPolling;
+  }, [addNotification, startPolling]);
+
+  // Show bell again when new notifications arrive
+  React.useEffect(() => {
+    if (notifications.length > 0 && notifications.some(n => !n.read)) {
+      setBellHidden(false);
+    }
+  }, [notifications]);
+
+  return (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
 
@@ -72,9 +94,27 @@ const App = () => (
         </Routes>
       </BrowserRouter>
       <AIAssistant />
-      <Toaster position="bottom-center" richColors />
+      {!bellHidden && (
+        <NotificationBell 
+          notifications={notifications}
+          onMarkAsRead={markAsRead}
+          onClearAll={clearAll}
+          onHide={() => setBellHidden(true)}
+        />
+      )}
+      {bellHidden && notifications.some(n => !n.read) && (
+        <div 
+          className="fixed top-4 right-4 z-50 cursor-pointer"
+          onClick={() => setBellHidden(false)}
+          title="Show AI notifications"
+        >
+          <div className="w-3 h-3 bg-blue-600 rounded-full animate-pulse"></div>
+        </div>
+      )}
+      <Toaster position="top-center" richColors />
     </TooltipProvider>
   </QueryClientProvider>
-);
+  );
+};
 
 export default App;

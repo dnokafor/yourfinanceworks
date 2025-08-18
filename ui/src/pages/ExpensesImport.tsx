@@ -30,7 +30,14 @@ export default function ExpensesImport() {
   const startImport = async () => {
     if (items.length === 0) return;
     setProcessing(true);
+    
+    const addNotification = (window as any).addAINotification;
+    addNotification?.('processing', 'Processing Expense Files', `Analyzing ${items.length} expense files with AI...`);
+    
     const next: ImportItem[] = [...items];
+    let successCount = 0;
+    let errorCount = 0;
+    
     for (let i = 0; i < next.length; i++) {
       try {
         next[i].status = 'creating';
@@ -54,13 +61,27 @@ export default function ExpensesImport() {
         // After upload, it will be queued/processed by backend
         next[i].status = 'queued';
         setItems([...next]);
+        (window as any).startExpensePolling?.(created.id);
+        successCount++;
       } catch (e: any) {
         next[i].status = 'error';
         next[i].error = e?.message || 'Failed to import';
         setItems([...next]);
+        errorCount++;
       }
     }
+    
     setProcessing(false);
+    
+    // Add completion notification based on upload success only
+    if (errorCount === 0) {
+      addNotification?.('success', 'Expense Files Uploaded', `Successfully uploaded ${successCount} expense files. AI analysis in progress.`);
+    } else if (successCount > 0) {
+      addNotification?.('error', 'Expense Upload Partial', `Uploaded ${successCount} files successfully, ${errorCount} failed.`);
+    } else {
+      addNotification?.('error', 'Expense Upload Failed', `Failed to upload all ${errorCount} expense files.`);
+    }
+    
     toast.success('Import completed');
   };
 

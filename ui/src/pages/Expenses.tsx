@@ -204,12 +204,19 @@ const Expenses = () => {
       // Upload receipt if provided
       let createdWithReceipt = created;
       if (newReceiptFile) {
+        const addNotification = (window as any).addAINotification;
+        addNotification?.('processing', 'Processing Expense Receipt', `Analyzing receipt file with AI...`);
+        
         try {
           setUploadingId(created.id);
           const uploadResp = await expenseApi.uploadReceipt(created.id, newReceiptFile);
           createdWithReceipt = { ...created, receipt_filename: uploadResp?.receipt_filename || created.receipt_filename } as Expense;
+          
+          addNotification?.('success', 'Expense Receipt Uploaded', `Successfully uploaded receipt file. AI analysis in progress.`);
+          (window as any).startExpensePolling?.(created.id);
         } catch (e) {
           console.error('Receipt upload failed on create:', e);
+          addNotification?.('error', 'Expense Receipt Failed', `Failed to upload receipt: ${e instanceof Error ? e.message : 'Unknown error'}`);
           toast.error('Receipt upload failed');
         } finally {
           setUploadingId(null);
@@ -235,14 +242,21 @@ const Expenses = () => {
   };
 
   const handleUpload = async (id: number, file: File) => {
+    const addNotification = (window as any).addAINotification;
+    addNotification?.('processing', 'Processing Expense Receipt', `Analyzing receipt file with AI...`);
+    
     try {
       setUploadingId(id);
       await expenseApi.uploadReceipt(id, file);
       // Refresh list
       const data = await expenseApi.getExpenses(categoryFilter);
       setExpenses(data);
+      
+      addNotification?.('success', 'Expense Receipt Uploaded', `Successfully uploaded receipt file. AI analysis in progress.`);
+      (window as any).startExpensePolling?.(id);
       toast.success('Receipt uploaded');
     } catch (e: any) {
+      addNotification?.('error', 'Expense Receipt Failed', `Failed to upload receipt: ${e?.message || 'Unknown error'}`);
       toast.error(e?.message || 'Failed to upload receipt');
     } finally {
       setUploadingId(null);
@@ -250,12 +264,18 @@ const Expenses = () => {
   };
 
   const handleRequeue = async (expenseId: number) => {
+    const addNotification = (window as any).addAINotification;
+    addNotification?.('processing', 'Reprocessing Expense', `Re-analyzing expense receipts with AI...`);
+    
     try {
       await expenseApi.reprocessExpense(expenseId);
+      
+      addNotification?.('success', 'Expense Reprocessing Started', `Successfully started reprocessing expense receipts.`);
       toast.success('Expense reprocessing started');
       const data = await expenseApi.getExpenses(categoryFilter);
       setExpenses(data);
     } catch (e: any) {
+      addNotification?.('error', 'Expense Reprocessing Failed', `Failed to reprocess expense: ${e?.message || 'Unknown error'}`);
       toast.error(e?.message || 'Failed to reprocess expense');
     }
   };
@@ -303,12 +323,19 @@ const Expenses = () => {
       const updated = await expenseApi.updateExpense(editExpense.id, payload);
       let finalUpdated = updated;
       if (editReceiptFile) {
+        const addNotification = (window as any).addAINotification;
+        addNotification?.('processing', 'Processing Expense Receipt', `Analyzing receipt file with AI...`);
+        
         try {
           setUploadingId(updated.id);
           const uploadResp = await expenseApi.uploadReceipt(updated.id, editReceiptFile);
           finalUpdated = { ...updated, receipt_filename: uploadResp?.receipt_filename || updated.receipt_filename } as Expense;
+          
+          addNotification?.('success', 'Expense Receipt Uploaded', `Successfully uploaded receipt file. AI analysis in progress.`);
+          (window as any).startExpensePolling?.(updated.id);
         } catch (e) {
           console.error('Receipt upload failed on update:', e);
+          addNotification?.('error', 'Expense Receipt Failed', `Failed to upload receipt: ${e instanceof Error ? e.message : 'Unknown error'}`);
           toast.error('Receipt upload failed');
         } finally {
           setUploadingId(null);

@@ -43,6 +43,12 @@ export default function ExpensesNew() {
         toast.error('Category is required');
         return;
       }
+      
+      const addNotification = (window as any).addAINotification;
+      if (files.length > 0) {
+        addNotification?.('processing', 'Processing Expense Receipts', `Analyzing ${files.length} receipt files with AI...`);
+      }
+      
       const payload = {
         amount: Number(form.amount),
         currency: form.currency || 'USD',
@@ -59,13 +65,33 @@ export default function ExpensesNew() {
         invoice_id: form.invoice_id ?? null,
       } as any;
       const created = await expenseApi.createExpense({ ...payload, imported_from_attachment: files.length > 0, analysis_status: files.length > 0 ? 'queued' : 'not_started' } as any);
+      
       // Upload up to 10 files
+      let uploadedCount = 0;
       for (let i = 0; i < Math.min(files.length, 10); i++) {
-        try { await expenseApi.uploadReceipt(created.id, files[i]); } catch (e) { console.error(e); }
+        try { 
+          await expenseApi.uploadReceipt(created.id, files[i]); 
+          uploadedCount++;
+        } catch (e) { 
+          console.error(e); 
+        }
       }
+      
+      if (files.length > 0) {
+        if (uploadedCount === files.length) {
+          addNotification?.('success', 'Expense Receipts Processed', `Successfully uploaded ${uploadedCount} receipt files. AI analysis in progress.`);
+        } else {
+          addNotification?.('error', 'Expense Upload Partial', `Uploaded ${uploadedCount} of ${files.length} receipt files.`);
+        }
+      }
+      
       toast.success('Expense created');
       window.history.back();
     } catch (e: any) {
+      const addNotification = (window as any).addAINotification;
+      if (files.length > 0) {
+        addNotification?.('error', 'Expense Processing Failed', `Failed to process expense receipts: ${e?.message || 'Unknown error'}`);
+      }
       toast.error(e?.message || 'Failed to create expense');
     } finally {
       setSaving(false);
