@@ -37,6 +37,7 @@ import Analytics from "./pages/Analytics";
 import { NotificationBell } from "./components/notifications/NotificationBell";
 import { useNotifications } from "./hooks/useNotifications";
 import { useExpenseStatusPolling } from "./hooks/useExpenseStatusPolling";
+import { getCurrentUser } from "./utils/auth";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +45,7 @@ const App = () => {
   const { notifications, addNotification, markAsRead, clearAll } = useNotifications();
   const { startPolling } = useExpenseStatusPolling();
   const [bellHidden, setBellHidden] = React.useState(false);
+  const isLoggedIn = getCurrentUser() !== null;
 
   // Make notification functions available globally
   React.useEffect(() => {
@@ -94,7 +96,7 @@ const App = () => {
         </Routes>
       </BrowserRouter>
       <AIAssistant />
-      {!bellHidden && (
+      {isLoggedIn && !bellHidden && (
         <NotificationBell 
           notifications={notifications}
           onMarkAsRead={markAsRead}
@@ -102,7 +104,7 @@ const App = () => {
           onHide={() => setBellHidden(true)}
         />
       )}
-      {bellHidden && notifications.some(n => !n.read) && (
+      {isLoggedIn && bellHidden && notifications.some(n => !n.read) && (
         <div 
           className="fixed top-4 right-4 z-50 cursor-pointer"
           onClick={() => setBellHidden(false)}
