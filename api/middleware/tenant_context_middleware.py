@@ -134,7 +134,7 @@ async def tenant_context_middleware(request: Request, call_next):
         # Google OAuth SSO endpoints must be public
         "/api/v1/auth/google/login", "/api/v1/auth/google/callback",
     ]
-    
+
     # SECURITY IMPROVEMENT 8: Secure static file handling
     if request.url.path.startswith("/static/") or request.url.path.startswith("/api/v1/static/"):
         # Normalize path for validation

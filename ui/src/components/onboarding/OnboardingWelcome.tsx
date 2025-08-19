@@ -1,99 +1,75 @@
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Play, BookOpen, Users, FileText, Settings } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Play, BookOpen, X } from 'lucide-react';
 import { useOnboarding } from './OnboardingProvider';
+import { useTranslation } from 'react-i18next';
 
-export function OnboardingWelcome() {
-  const { startTour, isFirstTime } = useOnboarding();
+interface OnboardingWelcomeProps {
+  open: boolean;
+  onClose: () => void;
+}
 
-  if (!isFirstTime) return null;
+export function OnboardingWelcome({ open, onClose }: OnboardingWelcomeProps) {
+  const { startTour, tours } = useOnboarding();
+  const { t } = useTranslation();
 
-  const tourOptions = [
-    {
-      id: 'dashboard',
-      title: 'Dashboard Overview',
-      description: 'Learn about your financial metrics and key insights',
-      icon: BookOpen,
-      duration: '2 min',
-      color: 'bg-blue-500'
-    },
-    {
-      id: 'navigation',
-      title: 'Navigation Tour',
-      description: 'Discover all the features and sections available',
-      icon: Users,
-      duration: '3 min',
-      color: 'bg-green-500'
-    }
-  ];
+  const handleStartTour = (tourId: string) => {
+    onClose();
+    startTour(tourId);
+  };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-2xl">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl mb-2">
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-2xl font-bold text-center">
             Welcome to Invoice Manager! 🎉
-          </CardTitle>
-          <p className="text-muted-foreground">
-            Let's get you started with a quick tour of your new invoice management system.
-            Choose a tour below or explore on your own.
-          </p>
-        </CardHeader>
+          </DialogTitle>
+        </DialogHeader>
         
-        <CardContent className="space-y-4">
+        <div className="space-y-6">
+          <div className="text-center">
+            <p className="text-muted-foreground">
+              Let's get you started with a quick tour of the key features
+            </p>
+          </div>
+          
           <div className="grid gap-4">
-            {tourOptions.map((tour) => (
-              <div
-                key={tour.id}
-                className="flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-              >
-                <div className={`p-2 rounded-lg ${tour.color} text-white`}>
-                  <tour.icon className="h-5 w-5" />
-                </div>
-                
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold">{tour.title}</h3>
-                    <Badge variant="secondary" className="text-xs">
-                      {tour.duration}
-                    </Badge>
+            {tours.map((tour) => (
+              <Card key={tour.id} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-primary/10 rounded-lg">
+                        <BookOpen className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold">{tour.name}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {tour.steps.length} steps • ~{Math.ceil(tour.steps.length * 0.5)} minutes
+                        </p>
+                      </div>
+                    </div>
+                    <Button onClick={() => handleStartTour(tour.id)} size="sm">
+                      <Play className="h-4 w-4 mr-1" />
+                      Start Tour
+                    </Button>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    {tour.description}
-                  </p>
-                </div>
-                
-                <Button
-                  onClick={() => startTour(tour.id)}
-                  size="sm"
-                  className="shrink-0"
-                >
-                  <Play className="h-4 w-4 mr-1" />
-                  Start Tour
-                </Button>
-              </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
           
-          <div className="flex items-center justify-between pt-4 border-t">
-            <p className="text-sm text-muted-foreground">
-              You can always access these tours later from the help menu
-            </p>
-            
-            <Button
-              variant="outline"
-              onClick={() => {
-                localStorage.setItem('first-time-user', 'true');
-                window.location.reload();
-              }}
-            >
+          <div className="flex justify-center gap-3">
+            <Button variant="outline" onClick={onClose}>
+              <X className="h-4 w-4 mr-1" />
               Skip for now
             </Button>
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -44,7 +44,7 @@ import { settingsApi } from "@/lib/api";
 import { isAdmin } from "@/utils/auth";
 import { OnboardingProvider } from "./components/onboarding/OnboardingProvider";
 import { TourOverlay } from "./components/onboarding/TourOverlay";
-import { OnboardingWelcome } from "./components/onboarding/OnboardingWelcome";
+
 
 const queryClient = new QueryClient();
 
@@ -76,14 +76,14 @@ const AppContent = () => {
   }, [notifications]);
 
   return (
-    <OnboardingProvider>
-      <TooltipProvider>
-        <Favicon 
-          logoUrl={settings?.company_info?.logo}
-          companyName={settings?.company_info?.name}
-        />
+    <TooltipProvider>
+      <Favicon 
+        logoUrl={settings?.company_info?.logo}
+        companyName={settings?.company_info?.name}
+      />
 
-        <BrowserRouter>
+      <BrowserRouter>
+        <OnboardingProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/oauth-callback" element={<OAuthCallback />} />
@@ -112,11 +112,12 @@ const AppContent = () => {
           <Route path="/recycle-bin" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><RecycleBin /></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/analytics" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'superuser']}><Analytics /></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
-        </Routes>
-        </BrowserRouter>
-        <TourOverlay />
-        <OnboardingWelcome />
-        <AIAssistant />
+          </Routes>
+          <TourOverlay />
+        </OnboardingProvider>
+      </BrowserRouter>
+      
+      <AIAssistant />
       {isLoggedIn && !bellHidden && (
         <NotificationBell 
           notifications={notifications}
@@ -134,9 +135,8 @@ const AppContent = () => {
           <div className="w-3 h-3 bg-blue-600 rounded-full animate-pulse"></div>
         </div>
       )}
-        <Toaster position="top-center" richColors />
-      </TooltipProvider>
-    </OnboardingProvider>
+      <Toaster position="top-center" richColors />
+    </TooltipProvider>
   );
 };
 

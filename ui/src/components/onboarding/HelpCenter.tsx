@@ -126,8 +126,8 @@ export function HelpCenter() {
                       
                       <Button
                         onClick={() => {
-                          startTour(tour.id);
                           setOpen(false);
+                          startTour(tour.id);
                         }}
                         size="sm"
                       >

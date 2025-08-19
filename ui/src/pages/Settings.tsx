@@ -139,6 +139,53 @@ const Settings = () => {
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [savingNotifications, setSavingNotifications] = useState(false);
 
+  // Get tab from URL parameters
+  const [activeTab, setActiveTab] = useState(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('tab') || 'company';
+  });
+
+  // Update active tab when URL changes
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tab = urlParams.get('tab');
+    if (tab && tab !== activeTab) {
+      setActiveTab(tab);
+    }
+  }, []);
+
+  // Handle highlighting for AI Assistant toggle
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tab = urlParams.get('tab');
+    const highlight = urlParams.get('highlight');
+    
+    console.log('Settings highlight check:', { tab, highlight, activeTab });
+    
+    if (tab === 'ai-config' && highlight === 'ai_assistant' && activeTab === 'ai-config') {
+      console.log('Attempting to highlight AI Assistant toggle');
+      // Wait for component to render and tab to switch, then highlight the AI Assistant toggle
+      setTimeout(() => {
+        const aiToggle = document.getElementById('ai_assistant');
+        console.log('Found AI toggle:', aiToggle);
+        if (aiToggle) {
+          const toggleContainer = aiToggle.closest('.flex');
+          console.log('Found toggle container:', toggleContainer);
+          if (toggleContainer) {
+            toggleContainer.classList.add('bg-yellow-100', 'dark:bg-yellow-900/30', 'border-2', 'border-yellow-400', 'dark:border-yellow-600', 'rounded-lg', 'p-3', 'transition-all', 'duration-300');
+            console.log('Applied highlighting styles');
+            
+            // Remove highlighting after 3 seconds
+            setTimeout(() => {
+              toggleContainer.classList.remove('bg-yellow-100', 'dark:bg-yellow-900/30', 'border-2', 'border-yellow-400', 'dark:border-yellow-600', 'rounded-lg', 'p-3', 'transition-all', 'duration-300');
+              console.log('Removed highlighting styles');
+            }, 3000);
+          }
+        }
+      }, 1500);
+    }
+  }, [activeTab]);
+
   // Fetch settings when component mounts
   useEffect(() => {
     const fetchSettings = async () => {
@@ -935,7 +982,7 @@ const Settings = () => {
           <p className="text-muted-foreground">{t('settings.description')}</p>
         </div>
 
-        <Tabs defaultValue="company" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
             <TabsTrigger value="company" className="text-xs md:text-sm">{t('settings.tabs.company')}</TabsTrigger>
             <TabsTrigger value="invoices" className="text-xs md:text-sm">{t('settings.tabs.invoices')}</TabsTrigger>

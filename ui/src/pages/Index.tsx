@@ -11,9 +11,11 @@ import { useTranslation } from 'react-i18next';
 import { DisplayMD, BodyLG } from "@/components/ui/typography";
 import { HelpTooltip } from "@/components/onboarding/HelpTooltip";
 import { ProgressiveDisclosure } from "@/components/onboarding/ProgressiveDisclosure";
+import { OnboardingWelcome, useOnboarding } from "@/components/onboarding";
 
 const Dashboard = () => {
   const { t } = useTranslation();
+  const { showWelcome, setShowWelcome, startTour } = useOnboarding();
   const [dashboardStats, setDashboardStats] = useState({
     totalIncome: {},
     pendingInvoices: {},
@@ -104,6 +106,21 @@ const Dashboard = () => {
       .join(' / ');
   };
 
+  // Check for tour parameter and start tour
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tourParam = urlParams.get('tour');
+    if (tourParam) {
+      setTimeout(() => {
+        startTour(tourParam);
+      }, 500);
+      // Clean up the URL parameter
+      const url = new URL(window.location.href);
+      url.searchParams.delete('tour');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [startTour]);
+
   useEffect(() => {
     const fetchDashboardStats = async () => {
       setLoading(true);
@@ -160,6 +177,10 @@ const Dashboard = () => {
 
   return (
     <AppLayout>
+      <OnboardingWelcome 
+        open={showWelcome} 
+        onClose={() => setShowWelcome(false)} 
+      />
       <div className="h-full space-y-6 fade-in">
         <div data-tour="dashboard-welcome">
           <div className="flex items-center gap-2">
@@ -233,12 +254,14 @@ const Dashboard = () => {
             {
               id: 'ai-assistant',
               title: 'AI Business Assistant',
-              description: 'Get intelligent insights about your business data and automate routine tasks.',
+              description: 'Get intelligent insights about your business data and automate routine tasks. Configure in Settings > AI Configuration (Admin only).',
               category: 'automation',
               difficulty: 'beginner',
               action: () => {
-                const aiButton = document.querySelector('[data-ai-assistant-trigger]') as HTMLElement;
-                if (aiButton) aiButton.click();
+                const url = new URL('/settings', window.location.origin);
+                url.searchParams.set('tab', 'ai-config');
+                url.searchParams.set('highlight', 'ai_assistant');
+                window.location.href = url.toString();
               }
             },
             {

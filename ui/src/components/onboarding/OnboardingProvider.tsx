@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 interface OnboardingStep {
   id: string;
@@ -26,6 +27,8 @@ interface OnboardingContextType {
   skipTour: () => void;
   endTour: () => void;
   isFirstTime: boolean;
+  showWelcome: boolean;
+  setShowWelcome: (show: boolean) => void;
   markAsCompleted: (tourId: string) => void;
 }
 
@@ -129,6 +132,9 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   const [currentStep, setCurrentStep] = useState(0);
   const [completedTours, setCompletedTours] = useState<string[]>([]);
   const [isFirstTime, setIsFirstTime] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const completed = localStorage.getItem('onboarding-completed');
@@ -140,11 +146,21 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     
     if (!firstTime) {
       setIsFirstTime(true);
+      setShowWelcome(true);
       localStorage.setItem('first-time-user', 'false');
     }
   }, []);
 
   const startTour = (tourId: string) => {
+    // Check if we're on the dashboard page (either / or /dashboard)
+    const isDashboardPage = location.pathname === '/' || location.pathname === '/dashboard';
+    
+    if (!isDashboardPage) {
+      // If we're not on the dashboard, redirect to dashboard with tour parameter
+      navigate(`/?tour=${tourId}`);
+      return;
+    }
+    
     setCurrentTour(tourId);
     setCurrentStep(0);
     setIsActive(true);
@@ -197,6 +213,8 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         skipTour,
         endTour,
         isFirstTime,
+        showWelcome,
+        setShowWelcome,
         markAsCompleted
       }}
     >
