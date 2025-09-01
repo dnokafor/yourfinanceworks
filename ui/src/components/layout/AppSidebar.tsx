@@ -21,20 +21,21 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 import { LanguageSwitcher } from "@/components/ui/language-switcher";
 import { HelpCenter } from "@/components/onboarding/HelpCenter";
-import { 
-  BarChart, 
-  ChevronLeft, 
-  DollarSign, 
-  FileText, 
+import {
+  BarChart,
+  ChevronLeft,
+  DollarSign,
+  FileText,
   LogOut,
-  Settings, 
+  Settings,
   Users,
   UserCheck,
   ShieldCheck,
   ListChecks,
   Moon,
   Sun,
-  Trash2
+  Trash2,
+  Bot
 } from "lucide-react";
 import { API_BASE_URL, settingsApi, apiRequest } from "@/lib/api";
 import { isAdmin, getCurrentUserRole, getCurrentUser } from "@/utils/auth";
@@ -435,8 +436,8 @@ export function AppSidebar() {
   const settingsMenuItems = [
     // Only show Settings for admin users in their owned organization
     ...((!roleLoading && isAdminEffective && isPrimaryTenant) ? [{ 
-      path: '/settings', 
-      label: t('navigation.settings'), 
+      path: '/settings',
+      label: t('navigation.settings'),
       icon: <Settings className="w-5 h-5" />,
       tourId: 'nav-settings'
     }] : []),

@@ -14,9 +14,6 @@ class AnalyticsService:
                        user_agent: str, ip_address: str, response_time_ms: int, status_code: int):
         """Track page view asynchronously to avoid blocking requests"""
         try:
-            # Disable analytics by default; enable only when explicitly configured
-            if os.getenv("ANALYTICS_ENABLED", "false").lower() != "true":
-                return
             # Run in background to avoid blocking the request
             asyncio.create_task(AnalyticsService._save_page_view(
                 user_email, tenant_id, path, method, user_agent, 

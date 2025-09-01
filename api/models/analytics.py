@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Text
 from sqlalchemy.orm import declarative_base
 from datetime import datetime, timezone
 
@@ -6,7 +6,7 @@ Base = declarative_base()
 
 class PageView(Base):
     __tablename__ = "page_views"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_email = Column(String(255), index=True)
     tenant_id = Column(Integer, index=True)

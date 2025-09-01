@@ -40,7 +40,6 @@
     "price": "Prix",
     "total": "Total",
     "subtotal": "Sous-total",
-    "discount": "Remise",
     "tax": "Taxe",
     "due_date": "Date d'échéance",
     "created_at": "Créé",
@@ -647,6 +646,7 @@
     "ai_assistant_enabled": "L'assistant IA est activé.",
     "ai_assistant_disabled": "L'assistant IA est désactivé.",
     "configure_ai_provider_for_enhanced_features": "Configurez le fournisseur d'IA pour des fonctionnalités améliorées",
+    "create_discount_rule": "Créer une Règle de Remise",
     "import_and_replace_data": "Importer et remplacer les données",
     "add_ai_configuration": "Ajouter une configuration IA",
     "ai_configuration_list": "Liste des configurations IA",
@@ -701,7 +701,14 @@
     "loading_settings": "Chargement des paramètres...",
     "profile_updated_successfully": "Profil mis à jour avec succès",
     "failed_to_load_settings": "Échec du chargement des paramètres",
-    "update": "Mettre à jour"
+    "update": "Mettre à jour",
+    "discount": "Remise",
+    "min_amount": "Montant Minimum",
+    "priority": "Priorité",
+    "discount_type": "Type de Remise",
+    "discount_value": "Valeur de la Remise",
+    "currency": "Devise",
+    "rule_active": "Actif"
   },
   "users": {
     "title": "Utilisateurs",

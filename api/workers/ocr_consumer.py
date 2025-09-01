@@ -221,10 +221,12 @@ def main() -> int:
                         except Exception:
                             db.rollback()
                         # Process with OCR (uses updated process_attachment_inline that fetches AI config)
+                        print(f"🟡 DEBUG: OCR consumer about to call process_attachment_inline for expense {expense_id}")
                         import asyncio
                         asyncio.get_event_loop().run_until_complete(
                             process_attachment_inline(db, expense_id, attachment_id, file_path)
                         )
+                        print(f"🟢 DEBUG: OCR consumer finished calling process_attachment_inline for expense {expense_id}")
                         # Refresh status and commit offset only if parsed as done
                         try:
                             db.refresh(exp)
@@ -327,7 +329,7 @@ def main() -> int:
                             # Pre-check LLM availability to distinguish outages from valid zero-transaction statements
                             llm_ok = is_bank_llm_reachable(ai_conf)
                             try:
-                                txns = process_bank_pdf_with_llm(file_path, ai_conf)
+                                txns = process_bank_pdf_with_llm(file_path, ai_conf, db)
                                 logger.info(f"Extracted {len(txns)} transactions for statement_id={statement_id}")
                             except BankLLMUnavailableError as llm_err:
                                 if attempts + 1 >= max_attempts:

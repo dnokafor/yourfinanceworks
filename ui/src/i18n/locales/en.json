@@ -40,7 +40,6 @@
     "price": "Price",
     "total": "Total",
     "subtotal": "Subtotal",
-    "discount": "Discount",
     "tax": "Tax",
     "due_date": "Due Date",
     "created_at": "Created",
@@ -524,6 +523,12 @@
       "email": "Email Settings",
       "export": "Data Management"
     },
+    "min_amount": "Minimum Amount",
+    "priority": "Priority",
+    "discount_type": "Discount Type",
+    "discount_value": "Discount Value",
+    "currency": "Currency",
+    "rule_active": "Active",
     "data_management": "Data Management",
     "data_management_description": "Backup, export, and restore all your organization’s data securely.",
     "currency_management": "Currency Management",
@@ -653,8 +658,6 @@
     "create_rule": "Create Rule",
     "update_rule": "Update Rule",
     "discount_rules": "Discount Rules",
-    "title": "Create New Invoice",
-    "description": "Fill in the details for your new invoice.",
     "client": "Client",
     "invoice_number": "Invoice Number",
     "ai_assistant_enabled": "AI Assistant is enabled.",
@@ -715,7 +718,8 @@
     "loading_settings": "Loading settings...",
     "profile_updated_successfully": "Profile updated successfully",
     "failed_to_load_settings": "Failed to load settings",
-    "update": "Update"
+    "update": "Update",
+    "discount": "Discount"
   },
   "users": {
     "title": "Users",

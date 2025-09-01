@@ -1,12 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
-from models.database import get_db, get_master_db
+from models.database import get_db
 from models.models_per_tenant import AuditLog as AuditLogModel
 from models.models import MasterUser
-from schemas import AuditLog, AuditLogCreate, AuditLogFilter, AuditLogResponse
+from schemas import AuditLog, AuditLogCreate, AuditLogResponse
 from datetime import datetime
-from services.tenant_database_manager import tenant_db_manager
 from routers.auth import get_current_user
 from utils.rbac import require_admin
 

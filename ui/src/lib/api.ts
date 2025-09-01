@@ -296,6 +296,7 @@ export interface Settings {
 // AI Configuration types
 export interface AIConfig {
   id: number;
+  tenant_id?: number;
   provider_name: string;
   provider_url?: string;
   api_key?: string;
@@ -303,6 +304,11 @@ export interface AIConfig {
   is_active: boolean;
   is_default: boolean;
   tested: boolean;
+  ocr_enabled: boolean;
+  max_tokens: number;
+  temperature: number;
+  usage_count: number;
+  last_used_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -315,6 +321,9 @@ export interface AIConfigCreate {
   is_active?: boolean;
   is_default?: boolean;
   tested?: boolean;
+  ocr_enabled?: boolean;
+  max_tokens?: number;
+  temperature?: number;
 }
 
 export interface AIConfigUpdate {
@@ -325,6 +334,34 @@ export interface AIConfigUpdate {
   is_active?: boolean;
   is_default?: boolean;
   tested?: boolean;
+  ocr_enabled?: boolean;
+  max_tokens?: number;
+  temperature?: number;
+}
+
+export interface AIConfigTestRequest {
+  custom_prompt?: string;
+  test_text?: string;
+}
+
+export interface AIConfigTestResponse {
+  success: boolean;
+  message: string;
+  response_time_ms?: number;
+  response?: string;
+  error?: string;
+}
+
+export interface AIProviderInfo {
+  name: string;
+  display_name: string;
+  description: string;
+  website?: string;
+  models: string[];
+  supports_ocr: boolean;
+  requires_api_key: boolean;
+  default_model: string;
+  default_max_tokens: number;
 }
 
 // Discount rule types
@@ -1376,22 +1413,33 @@ export const discountRulesApi = {
 export const aiConfigApi = {
   getAIConfigs: () => apiRequest<AIConfig[]>("/ai-config/"),
   getAIConfig: (id: number) => apiRequest<AIConfig>(`/ai-config/${id}`),
-  createAIConfig: (config: AIConfigCreate) => 
+  createAIConfig: (config: AIConfigCreate) =>
     apiRequest<AIConfig>("/ai-config/", {
       method: 'POST',
       body: JSON.stringify(config),
     }),
-  updateAIConfig: (id: number, config: AIConfigUpdate) => 
+  updateAIConfig: (id: number, config: AIConfigUpdate) =>
     apiRequest<AIConfig>(`/ai-config/${id}`, {
       method: 'PUT',
       body: JSON.stringify(config),
     }),
-  deleteAIConfig: (id: number) => 
+  deleteAIConfig: (id: number) =>
     apiRequest(`/ai-config/${id}`, {
       method: 'DELETE',
     }),
-  testAIConfig: (id: number) => 
-    apiRequest<{success: boolean, message: string, response?: string}>(`/ai-config/test/${id}`),
+  testAIConfig: (id: number, testRequest?: AIConfigTestRequest) =>
+    apiRequest<AIConfigTestResponse>(`/ai-config/${id}/test`, {
+      method: 'POST',
+      body: JSON.stringify(testRequest || {}),
+    }),
+  getSupportedProviders: () => apiRequest<{providers: Record<string, AIProviderInfo>, count: number}>("/ai-config/providers"),
+  getConfigUsage: (id: number) => apiRequest<{
+    config_id: number,
+    usage_count: number,
+    last_used_at?: string,
+    created_at: string,
+    updated_at: string
+  }>(`/ai-config/${id}/usage`),
   markAsTested: (id: number) =>
     apiRequest<{message: string}>(`/ai-config/mark-tested/${id}`, {
       method: 'POST',

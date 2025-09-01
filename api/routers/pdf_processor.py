@@ -11,6 +11,7 @@ from models.database import get_db
 from models.models import MasterUser
 from models.models_per_tenant import AIConfig as AIConfigModel, Client
 from routers.auth import get_current_user
+from services.ocr_service import track_ai_usage
 
 router = APIRouter(prefix="/invoices", tags=["pdf-processing"])
 logger = logging.getLogger(__name__)
@@ -318,6 +319,17 @@ async def process_pdf(
             # Process PDF with AI
             extracted_data = await process_pdf_with_ai(temp_pdf_path, active_config)
             logger.info(f"PDF processed successfully with AI (config source: {config_source})")
+
+            # Track AI usage if we used a database AI config
+            if config_source == "ai_config" and hasattr(active_config, 'provider_name'):
+                ai_config_dict = {
+                    'provider_name': active_config.provider_name,
+                    'model_name': active_config.model_name,
+                    'provider_url': getattr(active_config, 'provider_url', None),
+                    'api_key': getattr(active_config, 'api_key', None)
+                }
+                track_ai_usage(db, ai_config_dict)
+
         except Exception as e:
             logger.error(f"PDF processing failed with {config_source} config: {str(e)}")
             

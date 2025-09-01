@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 
 from sqlalchemy.orm import Session
+from models.models_per_tenant import AIConfig as AIConfigModel
 
 def _resolve_log_level(name: str) -> int:
     try:
@@ -15,6 +16,41 @@ def _resolve_log_level(name: str) -> int:
 
 logging.basicConfig(level=_resolve_log_level(os.getenv("LOG_LEVEL", "INFO")))
 logger = logging.getLogger(__name__)
+
+
+def track_ai_usage(db: Session, ai_config: Dict[str, Any]) -> None:
+    """Track AI usage by incrementing the usage_count for the given AI config."""
+    try:
+        logger.info(f"🎯 track_ai_usage called with: {ai_config}")
+        if not ai_config or 'provider_name' not in ai_config:
+            logger.warning("❌ ai_config is None or missing provider_name")
+            return
+
+        # Find the AI config by provider_name and model_name to match the one being used
+        provider_name = ai_config.get('provider_name')
+        model_name = ai_config.get('model_name')
+        logger.info(f"🔍 Looking for AI config: {provider_name}/{model_name}")
+
+        db_config = db.query(AIConfigModel).filter(
+            AIConfigModel.provider_name == provider_name,
+            AIConfigModel.model_name == model_name,
+            AIConfigModel.is_active == True
+        ).first()
+
+        if db_config:
+            old_count = db_config.usage_count
+            db_config.usage_count += 1
+            db_config.last_used_at = datetime.now(timezone.utc)
+            db.commit()
+            logger.info(f"✅ Tracked AI usage for {provider_name}/{model_name}: {old_count} → {db_config.usage_count}")
+        else:
+            logger.warning(f"❌ Could not find AI config to track usage: {provider_name}/{model_name}")
+            # Log all available configs for debugging
+            all_configs = db.query(AIConfigModel).all()
+            logger.info(f"📋 Available AI configs: {[(c.provider_name, c.model_name, c.is_active) for c in all_configs]}")
+    except Exception as e:
+        logger.error(f"❌ Failed to track AI usage: {e}")
+        # Don't raise exception to avoid breaking the main functionality
 
 # Keep producers alive across calls so messages can be delivered before process exit
 _PRODUCER_CACHE: dict[str, dict[str, any]] = {}
@@ -316,6 +352,7 @@ async def _run_ollama_ocr(file_path: str, custom_prompt: Optional[str] = None, a
 
 async def process_attachment_inline(db: Session, expense_id: int, attachment_id: int, file_path: str) -> None:
     """Fallback inline processing when Kafka is not configured."""
+    print(f"🔴 DEBUG: process_attachment_inline called for expense {expense_id}")  # DEBUG
     from models.models_per_tenant import Expense, AIConfig as AIConfigModel  # local import to avoid circulars
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
@@ -351,6 +388,12 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
 
     logger.info(f"Processing attachment inline: expense_id={expense_id} attachment_id={attachment_id} file={file_path}")
     result = await _run_ollama_ocr(file_path, ai_config=ai_config)
+
+    # Track AI usage if ai_config was used
+    if ai_config:
+        logger.info(f"🔍 About to track AI usage for config: {ai_config}")
+        track_ai_usage(db, ai_config)
+        logger.info("✅ AI usage tracking completed")
 
     # Update DB with result if still not overridden
     expense = db.query(Expense).filter(Expense.id == expense_id).first()

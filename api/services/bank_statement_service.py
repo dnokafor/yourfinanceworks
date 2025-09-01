@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import requests
+from services.ocr_service import track_ai_usage
 
 logger = logging.getLogger(__name__)
 # Custom error to signal LLM unavailability to callers that want to retry
@@ -1194,7 +1195,7 @@ def _clean_and_deduplicate_transactions(transactions: List[Dict[str, Any]]) -> L
     return unique_transactions
 
 
-def process_bank_pdf_with_llm(pdf_path: str, ai_config: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+def process_bank_pdf_with_llm(pdf_path: str, ai_config: Optional[Dict[str, Any]] = None, db: Optional[Any] = None) -> List[Dict[str, Any]]:
     """Enhanced LLM-based extraction using BankTransactionExtractor from test-main.py
 
     Raises BankLLMUnavailableError if LLM is unavailable and fallback extraction yields no transactions,
@@ -1283,6 +1284,11 @@ def process_bank_pdf_with_llm(pdf_path: str, ai_config: Optional[Dict[str, Any]]
             for txn in transactions:
                 if 'date' in txn and hasattr(txn['date'], 'strftime'):
                     txn['date'] = txn['date'].strftime('%Y-%m-%d')
+
+            # Track AI usage if ai_config was used and we have a db session
+            if ai_config and db:
+                track_ai_usage(db, ai_config)
+
             return transactions
         else:
             return []

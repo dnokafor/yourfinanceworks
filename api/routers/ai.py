@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
-from typing import Any, Dict, List
+from sqlalchemy import and_
+from typing import Any, Dict
 from datetime import datetime, timedelta, timezone
 import httpx
 import logging

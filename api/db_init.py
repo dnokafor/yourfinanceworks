@@ -115,26 +115,12 @@ def init_db():
         engine = create_engine(SQLALCHEMY_DATABASE_URL)
     
     # Create all tables in the main (master) DB
+    # Note: Schema creation is now handled by Alembic migrations
+    # The following ALTER TABLE operations have been moved to proper migrations:
+    # - must_reset_password column: 2b1a_must_reset_password_master.py
+    # - show_analytics column: add_show_analytics_column.py
     Base.metadata.create_all(bind=engine)
-    # Ensure critical columns exist on fresh/empty DBs (idempotent)
-    try:
-        from sqlalchemy import text as _text
-        with engine.begin() as conn:
-            conn.execute(_text(
-                """
-                ALTER TABLE master_users
-                ADD COLUMN IF NOT EXISTS must_reset_password BOOLEAN NOT NULL DEFAULT FALSE;
-                """
-            ))
-            conn.execute(_text(
-                """
-                ALTER TABLE master_users
-                ADD COLUMN IF NOT EXISTS show_analytics BOOLEAN NOT NULL DEFAULT FALSE;
-                """
-            ))
-    except Exception as e:
-        logger.warning(f"Master column ensure skipped: {e}")
-    
+
     # Create analytics table in master DB
     from models.analytics import Base as AnalyticsBase
     AnalyticsBase.metadata.create_all(bind=engine)
@@ -160,6 +146,9 @@ def init_db():
         tenant_engine = create_engine(tenant_db_url)
         logger.info(f"Tables to be created for tenant {tenant.id}: {TenantBase.metadata.tables.keys()}")
         try:
+            # Create tenant database tables
+            # Note: For tenant databases, metadata.create_all is still used since
+            # databases are created dynamically and need immediate schema setup
             TenantBase.metadata.create_all(bind=tenant_engine)
             logger.info(f"Tables created for tenant {tenant.id}")
         except Exception as e:

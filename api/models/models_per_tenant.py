@@ -1,7 +1,6 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Date, Table, DateTime, Boolean, JSON, Text
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Date, DateTime, Boolean, JSON, Text
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
-from datetime import datetime, date, timezone
+from datetime import datetime, timezone
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -273,18 +272,29 @@ class InvoiceHistory(Base):
 
 class AIConfig(Base):
     __tablename__ = "ai_configs"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     # No tenant_id needed since each tenant has its own database
     provider_name = Column(String, nullable=False)  # e.g., "openai", "ollama"
     provider_url = Column(String, nullable=True)  # For custom endpoints
-    api_key = Column(String, nullable=True)  # API key/token
+    api_key = Column(Text, nullable=True)  # API key/token - changed to Text for longer keys
     model_name = Column(String, nullable=False)  # e.g., "gpt-4", "llama2"
     is_active = Column(Boolean, default=True)
     is_default = Column(Boolean, default=False)  # Only one default per tenant
     tested = Column(Boolean, default=False)  # Track if configuration has been successfully tested
-    created_at = Column(DateTime, default=datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
+
+    # OCR specific settings
+    ocr_enabled = Column(Boolean, default=False, nullable=False)
+    max_tokens = Column(Integer, default=4096, nullable=False)
+    temperature = Column(Float, default=0.1, nullable=False)
+
+    # Usage tracking
+    usage_count = Column(Integer, default=0, nullable=False)
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Audit fields
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"

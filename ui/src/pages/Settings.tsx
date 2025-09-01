@@ -1293,13 +1293,15 @@ const Settings = () => {
                             <Badge variant={rule.is_active ? "default" : "secondary"}>
                               {rule.is_active ? t('settings.rule_active') : t('settings.rule_inactive')}
                             </Badge>
-                            <Badge variant="outline">{t('settings.priority')}: {rule.priority}</Badge>
+                            <Badge variant="outline" className="font-semibold">
+                              {t('settings.priority')}: {rule.priority}
+                            </Badge>
                             {/* Show currency badge */}
                             <Badge variant="secondary">{rule.currency || "USD"}</Badge>
                           </div>
                           <p className="text-sm text-muted-foreground">
-                            {rule.discount_type === "percentage" 
-                              ? `${rule.discount_value}% ${t('settings.discount')}` 
+                            {rule.discount_type === "percentage"
+                              ? `${rule.discount_value}% ${t('settings.discount')}`
                               : `$${rule.discount_value} ${t('settings.discount')}`
                             } {t('settings.when_total')} ≥ ${rule.min_amount}
                           </p>

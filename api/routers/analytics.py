@@ -6,7 +6,7 @@ from models.analytics import PageView
 from .auth import get_current_user
 from models.models import MasterUser
 from datetime import datetime, timedelta
-from typing import Optional, List
+from typing import Optional
 import logging
 
 logger = logging.getLogger(__name__)

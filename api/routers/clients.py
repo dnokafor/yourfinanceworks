@@ -1,18 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func, distinct, case
-from typing import List, Optional
+from sqlalchemy import func
+from typing import List
 import logging
 import traceback
 from datetime import datetime, timezone
 
 from models.database import get_db, get_master_db
-from models.models_per_tenant import Client, User, Invoice
+from models.models_per_tenant import Client, Invoice
 from models.models import MasterUser, Tenant
 from routers.payments import Payment
 from schemas.client import ClientCreate, ClientUpdate, Client as ClientSchema
 from routers.auth import get_current_user
-from services.tenant_database_manager import tenant_db_manager
 from utils.rbac import require_non_viewer
 from utils.audit import log_audit_event
 from constants.error_codes import CLIENT_ALREADY_EXISTS, CLIENT_NOT_FOUND, CLIENT_HAS_INVOICES, FAILED_TO_CREATE_CLIENT, FAILED_TO_UPDATE_CLIENT, FAILED_TO_FETCH_CLIENTS, FAILED_TO_FETCH_CLIENT

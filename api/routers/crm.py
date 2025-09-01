@@ -1,10 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime, timezone
 from fastapi import status
 
-from models.database import get_master_db, set_tenant_context
+from models.database import set_tenant_context
 from models.models import MasterUser
 from models.models_per_tenant import ClientNote, Client
 from schemas.crm import ClientNoteCreate, ClientNote as ClientNoteSchema

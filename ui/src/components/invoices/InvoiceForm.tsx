@@ -1023,6 +1023,43 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
     }
   }, [form.watch("items"), isEdit]);
 
+  // Update discount rule when currency changes and discount type is "rule"
+  useEffect(() => {
+    const discountType = form.watch("discountType");
+    const currentCurrency = form.watch("currency");
+
+    if (discountType === "rule" && currentCurrency && availableDiscountRules.length > 0) {
+      const subtotal = calculateSubtotal();
+
+      // Find the first available rule that matches the new currency and minimum amount
+      const availableRule = availableDiscountRules
+        .filter(rule =>
+          rule.is_active &&
+          (rule.currency || '').trim().toUpperCase() === currentCurrency.trim().toUpperCase() &&
+          subtotal >= rule.min_amount
+        )
+        .sort((a, b) => b.priority - a.priority || b.min_amount - a.min_amount)[0];
+
+      if (availableRule) {
+        // Check if we need to update the applied rule
+        if (!appliedDiscountRule || appliedDiscountRule.id !== availableRule.id) {
+          setAppliedDiscountRule({
+            id: availableRule.id,
+            name: availableRule.name,
+            min_amount: availableRule.min_amount,
+            discount_type: availableRule.discount_type,
+            discount_value: availableRule.discount_value
+          });
+          form.setValue("discountValue", availableRule.discount_value);
+        }
+      } else {
+        // No suitable rule found for the new currency
+        setAppliedDiscountRule(null);
+        form.setValue("discountValue", 0);
+      }
+    }
+  }, [form.watch("currency"), availableDiscountRules, appliedDiscountRule, form]);
+
   const items = form.watch("items");
   const currentStatus = form.watch("status");
   // For new invoices, isInvoicePaid should always be false
@@ -2219,7 +2256,52 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{t('invoices.discount_type')}</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} disabled={isInvoicePaid}>
+                    <Select
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        // Clear applied rule when switching away from rule type
+                        if (value !== "rule") {
+                          setAppliedDiscountRule(null);
+                        } else {
+                          // When switching TO rule type, automatically select the first available rule
+                          if (availableDiscountRules.length > 0) {
+                            const currentCurrency = form.watch("currency") || "USD";
+                            const subtotal = calculateSubtotal();
+
+                            // Find the first available rule that matches currency and minimum amount
+                            const availableRule = availableDiscountRules
+                              .filter(rule =>
+                                rule.is_active &&
+                                (rule.currency || '').trim().toUpperCase() === currentCurrency.trim().toUpperCase() &&
+                                subtotal >= rule.min_amount
+                              )
+                              .sort((a, b) => b.priority - a.priority || b.min_amount - a.min_amount)[0];
+
+                            if (availableRule) {
+                              setAppliedDiscountRule({
+                                id: availableRule.id,
+                                name: availableRule.name,
+                                min_amount: availableRule.min_amount,
+                                discount_type: availableRule.discount_type,
+                                discount_value: availableRule.discount_value
+                              });
+                              // Set the discount value to the rule's value
+                              form.setValue("discountValue", availableRule.discount_value);
+                            } else {
+                              // No suitable rule found, clear the applied rule
+                              setAppliedDiscountRule(null);
+                              form.setValue("discountValue", 0);
+                            }
+                          } else {
+                            // No discount rules available yet
+                            setAppliedDiscountRule(null);
+                            form.setValue("discountValue", 0);
+                          }
+                        }
+                      }}
+                      value={field.value}
+                      disabled={isInvoicePaid}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder={t('invoices.select_discount_type')} />
@@ -2723,7 +2805,51 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>{t('invoices.discount_type')}</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
+                            <Select
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        // Clear applied rule when switching away from rule type
+                        if (value !== "rule") {
+                          setAppliedDiscountRule(null);
+                        } else {
+                          // When switching TO rule type, automatically select the first available rule
+                          if (availableDiscountRules.length > 0) {
+                            const currentCurrency = form.watch("currency") || "USD";
+                            const subtotal = calculateSubtotal();
+
+                            // Find the first available rule that matches currency and minimum amount
+                            const availableRule = availableDiscountRules
+                              .filter(rule =>
+                                rule.is_active &&
+                                (rule.currency || '').trim().toUpperCase() === currentCurrency.trim().toUpperCase() &&
+                                subtotal >= rule.min_amount
+                              )
+                              .sort((a, b) => b.priority - a.priority || b.min_amount - a.min_amount)[0];
+
+                            if (availableRule) {
+                              setAppliedDiscountRule({
+                                id: availableRule.id,
+                                name: availableRule.name,
+                                min_amount: availableRule.min_amount,
+                                discount_type: availableRule.discount_type,
+                                discount_value: availableRule.discount_value
+                              });
+                              // Set the discount value to the rule's value
+                              form.setValue("discountValue", availableRule.discount_value);
+                            } else {
+                              // No suitable rule found, clear the applied rule
+                              setAppliedDiscountRule(null);
+                              form.setValue("discountValue", 0);
+                            }
+                          } else {
+                            // No discount rules available yet
+                            setAppliedDiscountRule(null);
+                            form.setValue("discountValue", 0);
+                          }
+                        }
+                      }}
+                      value={field.value}
+                    >
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder={t('invoices.select_discount_type')} />
@@ -2747,21 +2873,118 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                           <FormItem>
                             <FormLabel>{t('invoices.discount_value')}</FormLabel>
                             <FormControl>
-                              <Input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                placeholder="0.00"
-                                {...field}
-                              />
+                              {form.watch("discountType") === "rule" ? (
+                                <Select
+                                  value={appliedDiscountRule?.id?.toString() || ""}
+                                  onValueChange={(value) => {
+                                    const selectedRule = availableDiscountRules.find(
+                                      rule => rule.id.toString() === value
+                                    );
+                                    if (
+                                      selectedRule &&
+                                      (selectedRule.currency || '').trim().toUpperCase() === (form.watch("currency") || '').trim().toUpperCase()
+                                    ) {
+                                      field.onChange(selectedRule.discount_value);
+                                      setAppliedDiscountRule({
+                                        id: selectedRule.id,
+                                        name: selectedRule.name,
+                                        min_amount: selectedRule.min_amount,
+                                        discount_type: selectedRule.discount_type,
+                                        discount_value: selectedRule.discount_value
+                                      });
+                                    } else {
+                                      field.onChange(0);
+                                      setAppliedDiscountRule(null);
+                                      toast.error("Selected discount rule does not match the invoice currency.");
+                                    }
+                                  }}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder={t('invoices.select_a_discount_rule')} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {availableDiscountRules
+                                      .sort((a, b) => b.priority - a.priority || b.min_amount - a.min_amount)
+                                      .map((rule) => {
+                                        const dropdownCurrency = form.watch("currency");
+                                        console.log("DiscountRule currency:", rule.currency, "Dropdown value:", dropdownCurrency);
+                                        return (
+                                          <SelectItem
+                                            key={rule.id}
+                                            value={rule.id.toString()}
+                                            disabled={(rule.currency || '').trim().toUpperCase() !== (dropdownCurrency || '').trim().toUpperCase()}
+                                          >
+                                            {rule.name} - {rule.discount_value}{rule.discount_type === 'percentage' ? '%' : '$'} ({t('invoices.min', { amount: rule.min_amount })})
+                                            {(rule.currency || '').trim().toUpperCase() !== (dropdownCurrency || '').trim().toUpperCase() && (
+                                              <span style={{ color: '#888', fontSize: '0.85em', marginLeft: 8 }}>
+                                                ({t('invoices.not_available_for', { currency: dropdownCurrency })}
+                                              </span>
+                                            )}
+                                          </SelectItem>
+                                        );
+                                      })}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  placeholder={form.watch("discountType") === "percentage" ? "0.00" : "0.00"}
+                                  {...field}
+                                  onChange={(e) => {
+                                    const value = parseFloat(e.target.value) || 0;
+                                    const discountType = form.watch("discountType");
+
+                                    if (discountType === "percentage" && value > 100) {
+                                      field.onChange(100);
+                                    } else {
+                                      field.onChange(value);
+                                    }
+                                  }}
+                                />
+                              )}
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
                     </div>
+
+                    {/* Discount Rule Indicator */}
+                    {form.watch("discountType") === "rule" && appliedDiscountRule && (
+                      <div className={`text-sm p-4 rounded-md border ${
+                        calculateSubtotal() >= appliedDiscountRule.min_amount
+                          ? "text-blue-600 bg-blue-50 border-blue-200"
+                          : "text-orange-600 bg-orange-50 border-orange-200"
+                      }`}>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="font-medium">{t('invoices.applied_rule')}:</span> {appliedDiscountRule.name}
+                          </div>
+                          <div className="text-xs">
+                            {appliedDiscountRule.discount_value}{appliedDiscountRule.discount_type === 'percentage' ? '%' : '$'} {t('invoices.discount')}
+                          </div>
+                        </div>
+                        <div className="mt-2 text-xs opacity-75">
+                          {t('invoices.min_amount')}: ${appliedDiscountRule.min_amount}
+                          {calculateSubtotal() < appliedDiscountRule.min_amount && (
+                            <span className="ml-2 text-orange-600">
+                              ({t('invoices.current_subtotal')}: ${calculateSubtotal().toFixed(2)})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Legacy discount indicator for non-rule discounts */}
+                    {form.watch("discountValue") > 0 && form.watch("discountType") !== "rule" && (
+                      <div className="text-sm text-blue-600 bg-blue-50 p-2 rounded-md border border-blue-200">
+                        <span className="font-medium">{t('invoices.discount_applied')}:</span> {form.watch("discountValue")}{form.watch("discountType") === "percentage" ? "%" : "$"} {t('invoices.discount')}
+                      </div>
+                    )}
                   </div>
-                  
+
                   <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg space-y-2">
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">{t('invoices.subtotal')}:</span>
@@ -3369,15 +3592,44 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>{t('invoices.discount_type')}</FormLabel>
-                            <Select 
+                            <Select
                               onValueChange={(value) => {
                                 field.onChange(value);
                                 // Clear applied rule when switching away from rule type
                                 if (value !== "rule") {
                                   setAppliedDiscountRule(null);
+                                } else {
+                                  // When switching TO rule type, automatically select the first available rule
+                                  const currentCurrency = form.watch("currency") || "USD";
+                                  const subtotal = calculateSubtotal();
+
+                                  // Find the first available rule that matches currency and minimum amount
+                                  const availableRule = availableDiscountRules
+                                    .filter(rule =>
+                                      rule.is_active &&
+                                      (rule.currency || '').trim().toUpperCase() === currentCurrency.trim().toUpperCase() &&
+                                      subtotal >= rule.min_amount
+                                    )
+                                    .sort((a, b) => b.priority - a.priority || b.min_amount - a.min_amount)[0];
+
+                                  if (availableRule) {
+                                    setAppliedDiscountRule({
+                                      id: availableRule.id,
+                                      name: availableRule.name,
+                                      min_amount: availableRule.min_amount,
+                                      discount_type: availableRule.discount_type,
+                                      discount_value: availableRule.discount_value
+                                    });
+                                    // Set the discount value to the rule's value
+                                    form.setValue("discountValue", availableRule.discount_value);
+                                  } else {
+                                    // No suitable rule found, clear the applied rule
+                                    setAppliedDiscountRule(null);
+                                    form.setValue("discountValue", 0);
+                                  }
                                 }
-                              }} 
-                              value={field.value} 
+                              }}
+                              value={field.value}
                               disabled={isInvoicePaid}
                             >
                               <FormControl>

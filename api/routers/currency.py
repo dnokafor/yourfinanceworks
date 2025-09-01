@@ -1,20 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
+from sqlalchemy import and_
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
-import requests
-import json
 import os
 import logging
 
-from models.database import get_master_db, get_db, set_tenant_context
+from models.database import get_db
 from models.models import MasterUser
 from models.models_per_tenant import SupportedCurrency, CurrencyRate
 from schemas.currency import SupportedCurrency as SupportedCurrencySchema, CurrencyRate as CurrencyRateSchema, CurrencyConversion
 from routers.auth import get_current_user
-from services.tenant_database_manager import tenant_db_manager
-from utils.rbac import require_admin
 
 logger = logging.getLogger(__name__)
 

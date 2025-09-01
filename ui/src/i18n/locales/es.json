@@ -40,7 +40,6 @@
     "price": "Precio",
     "total": "Total",
     "subtotal": "Subtotal",
-    "discount": "Descuento",
     "tax": "Impuesto",
     "due_date": "Fecha de Vencimiento",
     "created_at": "Creado",
@@ -709,6 +708,13 @@
     "profile_updated_successfully": "Perfil actualizado exitosamente",
     "failed_to_load_settings": "Error al cargar la configuración",
     "update": "Actualizar",
+    "discount": "Descuento",
+    "min_amount": "Monto Mínimo",
+    "priority": "Prioridad",
+    "discount_type": "Tipo de Descuento",
+    "discount_value": "Valor del Descuento",
+    "currency": "Moneda",
+    "rule_active": "Activo",
     "error_message": "Lo sentimos, encontramos un error. Por favor intenta de nuevo o verifica tu configuración de IA.",
     "no_ai_config_found": "No se encontró configuración de IA. Por favor configura un proveedor de IA en Configuración > Configuraciones de Proveedor de IA.",
     "suggestActions": "Sugerencias",
@@ -1513,4 +1519,4 @@
     "viewDocs": "Ver Documentación",
     "contactSupport": "Contactar Soporte"
   }
-} 
+}

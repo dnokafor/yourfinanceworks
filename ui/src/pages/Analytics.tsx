@@ -3,8 +3,8 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { BarChart3, TrendingUp, Users, Clock, RefreshCw } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
+import { BarChart3, TrendingUp, Users, Clock, RefreshCw, Bot, Activity } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { formatDate } from '@/lib/utils';
@@ -26,9 +26,24 @@ interface AnalyticsData {
   total_views: number;
 }
 
+interface AIProviderData {
+  ai_configs: Array<{
+    id: number;
+    provider_name: string;
+    usage_count: number;
+    last_used_at?: string;
+    is_active: boolean;
+    is_default: boolean;
+  }>;
+  total_usage: number;
+  active_providers: number;
+}
+
 const Analytics = () => {
   const [data, setData] = useState<AnalyticsData | null>(null);
+  const [aiData, setAIData] = useState<AIProviderData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [aiLoading, setAILoading] = useState(true);
   const [days, setDays] = useState("7");
 
   const fetchAnalytics = async () => {
@@ -44,8 +59,30 @@ const Analytics = () => {
     }
   };
 
+  const fetchAIAnalytics = async () => {
+    try {
+      setAILoading(true);
+      const response = await api.get('/ai-config/');
+      const configs = response;
+      const totalUsage = configs.reduce((sum: number, config: any) => sum + (config.usage_count || 0), 0);
+      const activeProviders = configs.filter((config: any) => config.is_active).length;
+
+      setAIData({
+        ai_configs: configs,
+        total_usage: totalUsage,
+        active_providers: activeProviders
+      });
+    } catch (error) {
+      console.error('Failed to fetch AI analytics:', error);
+      // Don't show error toast for AI data as it's secondary
+    } finally {
+      setAILoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchAnalytics();
+    fetchAIAnalytics();
   }, [days]);
 
   if (loading) {
@@ -92,7 +129,7 @@ const Analytics = () => {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Views</CardTitle>
@@ -102,22 +139,7 @@ const Analytics = () => {
               <div className="text-2xl font-bold">{data?.total_views || 0}</div>
             </CardContent>
           </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Most Popular</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-sm font-medium">
-                {data?.path_stats[0]?.path.split('/').pop() || 'N/A'}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {data?.path_stats[0]?.views || 0} views
-              </div>
-            </CardContent>
-          </Card>
-          
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Active Users</CardTitle>
@@ -127,7 +149,20 @@ const Analytics = () => {
               <div className="text-2xl font-bold">{data?.user_stats.length || 0}</div>
             </CardContent>
           </Card>
-          
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">AI Usage</CardTitle>
+              <Bot className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{aiData?.total_usage || 0}</div>
+              <div className="text-xs text-muted-foreground">
+                {aiData?.active_providers || 0} active providers
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Avg Response</CardTitle>
@@ -190,6 +225,34 @@ const Analytics = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* AI Provider Usage Chart */}
+        {!aiLoading && aiData && aiData.ai_configs.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bot className="h-5 w-5" />
+                AI Provider Usage
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={aiData.ai_configs}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="provider_name"
+                    tickFormatter={(value) => value || 'Unknown'}
+                  />
+                  <YAxis />
+                  <Tooltip
+                    labelFormatter={(value) => `${value || 'Unknown'} Provider`}
+                  />
+                  <Bar dataKey="usage_count" fill="#8884d8" name="Usage Count" />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Tables */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
