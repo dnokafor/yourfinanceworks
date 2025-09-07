@@ -21,7 +21,7 @@ interface DashboardScreenProps {
   onNavigateToClients: () => void;
   onNavigateToPayments: () => void;
   onNavigateToExpenses: () => void;
-  onNavigateToBankStatements: () => void;
+  onNavigateToStatements: () => void;
   onNavigateToAnalytics: () => void;
   onNavigateToSettings: () => void;
   onSignOut: () => void;
@@ -37,7 +37,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
   onNavigateToClients,
   onNavigateToPayments,
   onNavigateToExpenses,
-  onNavigateToBankStatements,
+  onNavigateToStatements,
   onNavigateToAnalytics,
   onNavigateToSettings,
   onSignOut,
@@ -351,9 +351,9 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
               color="#8B5CF6"
             />
             <QuickAction
-              title={t('bankStatements.title')}
+              title={t('statements.title')}
               icon="document-text-outline"
-              onPress={onNavigateToBankStatements}
+              onPress={onNavigateToStatements}
               color="#06B6D4"
             />
             <QuickAction

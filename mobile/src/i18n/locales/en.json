@@ -49,7 +49,7 @@
     "dashboard": "Dashboard",
     "invoices": "Invoices",
     "expenses": "Expenses",
-    "bank_statements": "Bank Statements",
+    "bank_statements": "Statements",
     "clients": "Clients",
     "payments": "Payments",
     "settings": "Settings",
@@ -1321,13 +1321,13 @@
     "custom_currencies_description": "Add your own currencies like Bitcoin, Ethereum, or other cryptocurrencies",
     "add_currency": "Add Currency"
   },
-  "bankStatements": {
-    "title": "Bank Statements",
+  "statements": {
+    "title": "Statements",
     "description": "Each entry is a PDF or CSV. Open to view or edit its transactions.",
+    "list_title": "Statement List",
     "select_files": "Select PDFs or CSVs",
     "upload": "Upload",
     "processing": "Processing...",
-    "statements": "Statements",
     "filename": "Filename",
     "labels": "Labels",
     "status": "Status",

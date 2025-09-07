@@ -64,6 +64,7 @@ export default function AIProviderManagement() {
   const fetchSupportedProviders = async () => {
     try {
       const response = await aiConfigApi.getSupportedProviders()
+      console.log('Supported providers loaded:', response.providers)
       setSupportedProviders(response.providers)
     } catch (error) {
       console.error('Error fetching supported providers:', error)
@@ -208,6 +209,7 @@ export default function AIProviderManagement() {
 
   const getProviderInfo = (providerName: string) => {
     return supportedProviders[providerName] || {
+      name: providerName,
       display_name: providerName,
       description: 'Unknown provider',
       requires_api_key: true
@@ -398,7 +400,7 @@ export default function AIProviderManagement() {
               </div>
 
               {/* Provider URL */}
-              {formData.provider_name && getProviderInfo(formData.provider_name).name === 'custom' && (
+              {formData.provider_name && formData.provider_name === 'custom' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Provider URL
@@ -415,20 +417,23 @@ export default function AIProviderManagement() {
               )}
 
               {/* API Key */}
-              {formData.provider_name && getProviderInfo(formData.provider_name).requires_api_key && (
+              {formData.provider_name && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    API Key
+                    API Key {getProviderInfo(formData.provider_name).requires_api_key ? '' : '(Optional)'}
+                    <span className="text-xs text-gray-500 ml-2">
+                      (Debug: {formData.provider_name} - requires_api_key: {getProviderInfo(formData.provider_name).requires_api_key ? 'true' : 'false'})
+                    </span>
                   </label>
                   <div className="relative">
-                    <input
-                      type="password"
-                      value={formData.api_key}
-                      onChange={(e) => setFormData(prev => ({ ...prev, api_key: e.target.value }))}
-                      placeholder="Enter your API key"
-                      className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
+                  <input
+                    type="password"
+                    value={formData.api_key}
+                    onChange={(e) => setFormData(prev => ({ ...prev, api_key: e.target.value }))}
+                    placeholder={getProviderInfo(formData.provider_name).requires_api_key ? "Enter your API key" : "API key (optional)"}
+                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required={getProviderInfo(formData.provider_name).requires_api_key}
+                  />
                     <button
                       type="button"
                       className="absolute inset-y-0 right-0 pr-3 flex items-center"
@@ -443,7 +448,6 @@ export default function AIProviderManagement() {
                 </div>
               )}
 
-              {/* Model Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Model Name
@@ -572,18 +576,18 @@ export default function AIProviderManagement() {
               </div>
 
               {/* API Key */}
-              {getProviderInfo(formData.provider_name).requires_api_key && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    API Key
-                  </label>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  API Key {getProviderInfo(formData.provider_name).requires_api_key ? '' : '(Optional)'}
+                </label>
                   <div className="relative">
                     <input
                       type="password"
                       value={formData.api_key}
                       onChange={(e) => setFormData(prev => ({ ...prev, api_key: e.target.value }))}
-                      placeholder="Enter your API key"
+                      placeholder={getProviderInfo(formData.provider_name).requires_api_key ? "Enter your API key" : "API key (optional)"}
                       className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required={getProviderInfo(formData.provider_name).requires_api_key}
                     />
                     <button
                       type="button"
@@ -600,7 +604,6 @@ export default function AIProviderManagement() {
                     </button>
                   </div>
                 </div>
-              )}
 
               {/* Model Name */}
               <div>

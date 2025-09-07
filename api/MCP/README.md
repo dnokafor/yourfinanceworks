@@ -32,7 +32,7 @@ graph TB
         CLIENT_TOOLS["Client Management<br/>• list_clients<br/>• search_clients<br/>• get_client<br/>• create_client"]
         INVOICE_TOOLS["Invoice Management<br/>• list_invoices<br/>• search_invoices<br/>• get_invoice<br/>• create_invoice"]
         EXPENSE_TOOLS["Expense Management<br/>• list_expenses<br/>• get_expense<br/>• create_expense<br/>• update_expense<br/>• delete_expense<br/>• upload_expense_receipt<br/>• list_expense_attachments<br/>• delete_expense_attachment"]
-        BANK_TOOLS["Bank Statement Management<br/>• list_bank_statements<br/>• get_bank_statement<br/>• reprocess_bank_statement<br/>• update_bank_statement_meta<br/>• delete_bank_statement"]
+        BANK_TOOLS["Statement Management<br/>• list_statements<br/>• get_bank_statement<br/>• reprocess_bank_statement<br/>• update_bank_statement_meta<br/>• delete_bank_statement"]
         ANALYTICS["Analytics<br/>• get_clients_with_outstanding_balance<br/>• get_overdue_invoices<br/>• get_invoice_stats"]
     end
     
@@ -184,10 +184,10 @@ Would you like me to get more details about any of these clients or their invoic
 - *"Create an expense for office supplies costing $150"*
 - *"Upload a receipt for expense #456"*
 - *"Show me unlinked expenses that need categorization"*
-- *"List all imported bank statements"*
-- *"Get details for bank statement from January 2024"*
-- *"Reprocess bank statement for better transaction matching"*
-- *"Delete old bank statement that was imported incorrectly"*
+- *"List all imported statements"*
+- *"Get details for statement from January 2024"*
+- *"Reprocess statement for better transaction matching"*
+- *"Delete old statement that was imported incorrectly"*
 
 ## ✨ Key Benefits
 
@@ -220,12 +220,12 @@ Would you like me to get more details about any of these clients or their invoic
 - **Receipt Management**: Upload, list, and delete expense receipt attachments
 - **Expense Filtering**: Filter by category, invoice linkage, and other criteria
 
-### Bank Statement Management
-- **List Bank Statements**: Get all imported bank statements with pagination
-- **Statement Details**: Retrieve detailed bank statement information
+### Statement Management
+- **List Statements**: Get all imported statements with pagination
+- **Statement Details**: Retrieve detailed statement information
 - **Reprocess Statements**: Reprocess statements for better transaction matching
-- **Update Metadata**: Modify bank statement names, periods, and notes
-- **Delete Statements**: Remove bank statements and associated transactions
+- **Update Metadata**: Modify statement names, periods, and notes
+- **Delete Statements**: Remove statements and associated transactions
 
 ### Analytics & Reporting
 - **Outstanding Balances**: Find clients with unpaid invoices (`get_clients_with_outstanding_balance`)
@@ -785,10 +785,10 @@ Delete an attachment of an expense.
 }
 ```
 
-### Bank Statement Management Tools
+### Statement Management Tools
 
-#### `list_bank_statements`
-List all imported bank statements with pagination support.
+#### `list_statements`
+List all imported statements with pagination support.
 
 **Parameters:**
 - `skip` (int, optional): Number of records to skip (default: 0)
@@ -799,7 +799,7 @@ List all imported bank statements with pagination support.
 **Example:**
 ```json
 {
-  "name": "list_bank_statements",
+  "name": "list_statements",
   "arguments": {
     "skip": 0,
     "limit": 50,
@@ -810,10 +810,10 @@ List all imported bank statements with pagination support.
 ```
 
 #### `get_bank_statement`
-Get detailed information about a specific bank statement.
+Get detailed information about a specific statement.
 
 **Parameters:**
-- `statement_id` (int): ID of the bank statement to retrieve
+- `statement_id` (int): ID of the statement to retrieve
 
 **Example:**
 ```json
@@ -826,10 +826,10 @@ Get detailed information about a specific bank statement.
 ```
 
 #### `reprocess_bank_statement`
-Reprocess a bank statement for better transaction matching and categorization.
+Reprocess a statement for better transaction matching and categorization.
 
 **Parameters:**
-- `statement_id` (int): ID of the bank statement to reprocess
+- `statement_id` (int): ID of the statement to reprocess
 - `force_reprocess` (bool, optional): Force reprocessing even if already processed (default: false)
 
 **Example:**
@@ -844,10 +844,10 @@ Reprocess a bank statement for better transaction matching and categorization.
 ```
 
 #### `update_bank_statement_meta`
-Update metadata for a bank statement (name, description, etc.).
+Update metadata for a statement (name, description, etc.).
 
 **Parameters:**
-- `statement_id` (int): ID of the bank statement to update
+- `statement_id` (int): ID of the statement to update
 - `account_name` (string, optional): Bank account name
 - `statement_period` (string, optional): Statement period description
 - `notes` (string, optional): Additional notes
@@ -868,10 +868,10 @@ Update metadata for a bank statement (name, description, etc.).
 ```
 
 #### `delete_bank_statement`
-Delete a bank statement and all associated transactions.
+Delete a statement and all associated transactions.
 
 **Parameters:**
-- `statement_id` (int): ID of the bank statement to delete
+- `statement_id` (int): ID of the statement to delete
 - `confirm_deletion` (bool, optional): Confirmation flag to prevent accidental deletion (default: false)
 
 **Example:**
@@ -1226,15 +1226,15 @@ The MCP server now uses AI-powered intent classification to route queries:
 
 1. **Intent Classification**: Uses AI to classify user messages into predefined business categories
 2. **Dynamic Tool Selection**: Automatically selects appropriate MCP tools based on classified intent
-3. **Business Categories**: Supports analyze_patterns, payments, clients, invoices, expenses, bank_statements, currencies, outstanding, overdue, statistics
+3. **Business Categories**: Supports analyze_patterns, payments, clients, invoices, expenses, statements, currencies, outstanding, overdue, statistics
 4. **LLM Fallback**: Uses LLM for general questions classified as non-business queries
 5. **Adaptive Understanding**: AI understands natural language variations without hardcoded patterns
 
 ### Usage Examples with AI Classification
 
 ```
-# These all get classified as "bank_statements" intent:
-"Show bank statements"
+# These all get classified as "statements" intent:
+"Show statements"
 "What statements do I have?"
 "Display my banking information"
 "List all my bank account statements"

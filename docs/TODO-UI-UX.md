@@ -31,5 +31,5 @@ Acceptance criteria
 - All new UI elements pass basic a11y checks and have tests.
 
 Tracking
-- Files: `ui/src/pages/BankStatements.tsx`, `ui/src/components/...`, `ui/src/lib/api.ts`.
+- Files: `ui/src/pages/Statements.tsx`, `ui/src/components/...`, `ui/src/lib/api.ts`.
 - Backend: ensure APIs return identifiers needed for UI (invoice number, expense id/number, link flags).

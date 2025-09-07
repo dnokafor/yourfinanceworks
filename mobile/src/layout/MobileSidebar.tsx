@@ -18,6 +18,7 @@ interface User {
   role: string;
   tenant_id: number;
   is_superuser?: boolean;
+  organizations?: Organization[];
 }
 
 interface MobileSidebarProps {
@@ -53,8 +54,8 @@ export function MobileSidebar({
   const fetchUserOrganizations = async () => {
     try {
       const response = await apiService.getCurrentUser();
-      if (response.organizations && response.organizations.length > 0) {
-        setOrganizations(response.organizations);
+      if (response?.organizations && response?.organizations.length > 0) {
+        setOrganizations(response?.organizations);
         
         // Get selected tenant from storage or use user's primary tenant
         const selectedTenantId = await AsyncStorage.getItem('selected_tenant_id');
@@ -129,34 +130,34 @@ export function MobileSidebar({
   const isPrimaryTenant = currentOrgId === user?.tenant_id?.toString();
 
   const mainMenuItems = [
-    { icon: 'home-outline', label: t('navigation.dashboard'), screen: 'Dashboard' },
-    { icon: 'people-outline', label: t('navigation.clients'), screen: 'Clients' },
-    { icon: 'document-text-outline', label: t('navigation.invoices'), screen: 'Invoices' },
-    { icon: 'card-outline', label: t('navigation.payments'), screen: 'Payments' },
-    { icon: 'receipt-outline', label: t('navigation.expenses'), screen: 'Expenses' },
-    { icon: 'document-outline', label: t('navigation.bank_statements'), screen: 'BankStatements' },
+    { icon: 'home-outline', label: t('navigation.dashboard'), screen: 'dashboard' },
+    { icon: 'people-outline', label: t('navigation.clients'), screen: 'clients' },
+    { icon: 'document-text-outline', label: t('navigation.invoices'), screen: 'invoices' },
+    { icon: 'card-outline', label: t('navigation.payments'), screen: 'payments' },
+    { icon: 'receipt-outline', label: t('navigation.expenses'), screen: 'expenses' },
+    { icon: 'document-outline', label: t('navigation.bank_statements'), screen: 'statements' },
   ];
 
   const settingsMenuItems = [
-    ...(isAdmin && isPrimaryTenant ? [{ 
-      icon: 'settings-outline', 
-      label: t('navigation.settings'), 
-      screen: 'Settings' 
+    ...(isAdmin && isPrimaryTenant ? [{
+      icon: 'settings-outline',
+      label: t('navigation.settings'),
+      screen: 'settings'
     }] : []),
     ...(isAdmin ? [{
       icon: 'people-circle-outline',
       label: t('navigation.users'),
-      screen: 'Users'
+      screen: 'users'
     }] : []),
     ...((isAdmin || isSuperUser) ? [{
       icon: 'list-outline',
       label: t('navigation.audit_log'),
-      screen: 'AuditLog'
+      screen: 'auditLog'
     }] : []),
-    ...(isSuperUser && isPrimaryTenant ? [{ 
-      icon: 'shield-checkmark-outline', 
-      label: t('navigation.super_admin'), 
-      screen: 'SuperAdmin' 
+    ...(isSuperUser && isPrimaryTenant ? [{
+      icon: 'shield-checkmark-outline',
+      label: t('navigation.super_admin'),
+      screen: 'superAdmin'
     }] : [])
   ];
 

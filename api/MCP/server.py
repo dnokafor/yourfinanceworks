@@ -465,14 +465,14 @@ async def delete_expense_attachment(expense_id: int, attachment_id: int) -> dict
         return {"success": False, "error": "Server not properly initialized"}
     return await server_context.tools.delete_expense_attachment(expense_id=expense_id, attachment_id=attachment_id)
 
-# Bank Statement Management Tools
+# Statement Management Tools
 
 @mcp.tool()
-async def list_bank_statements() -> dict:
-    """List all bank statements with their processing status and metadata."""
+async def list_statements() -> dict:
+    """List all statements with their processing status and metadata."""
     if server_context.tools is None:
         return {"success": False, "error": "Server not properly initialized"}
-    return await server_context.tools.list_bank_statements()
+    return await server_context.tools.list_statements()
 
 @mcp.tool()
 async def get_bank_statement(statement_id: int) -> dict:
@@ -652,7 +652,7 @@ Available Tools:
   - upload_expense_receipt: Upload a receipt for an expense
   - list_expense_attachments: List attachments for an expense
   - delete_expense_attachment: Delete an attachment for an expense
-  - list_bank_statements: List all bank statements
+  - list_statements: List all statements
   - get_bank_statement: Get bank statement with transactions
   - reprocess_bank_statement: Reprocess a bank statement
   - update_bank_statement_meta: Update bank statement metadata

@@ -2,7 +2,7 @@
 
 Context
 - Bank statement transactions (`BankStatementTransaction.category`) and Expenses (`Expense.category`) use loosely aligned category strings.
-- The UI currently maps bank categories to expense categories ad-hoc (e.g., `BankStatements.tsx` has a local `categoryMap`).
+- The UI currently maps bank categories to expense categories ad-hoc (e.g., `Statements.tsx` has a local `categoryMap`).
 - This leads to drift, hard-to-maintain mappings, and inconsistent reporting/i18n.
 
 Goals
@@ -18,7 +18,7 @@ Plan
 
 2) Mapping layer for bank statements
    - Create a reusable mapping function (backend or frontend) that maps raw bank categories (LLM/regex outputs) to canonical categories.
-   - Move current inline mapping in `BankStatements.tsx` to a shared helper.
+   - Move current inline mapping in `Statements.tsx` to a shared helper.
    - Consider tenant-specific mappings in DB (optional future), with default fallback.
 
 3) Validation & persistence
@@ -50,10 +50,10 @@ Related Files
 - Backend
   - `api/models/models_per_tenant.py` (Expense, BankStatementTransaction)
   - `api/routers/expenses.py`
-  - `api/routers/bank_statements.py`
+  - `api/routers/statements.py`
   - New: `api/constants/categories.py`, optional `api/routers/category.py`
 - Frontend
-  - `ui/src/pages/BankStatements.tsx` (remove inline mapping)
+  - `ui/src/pages/Statements.tsx` (remove inline mapping)
   - `ui/src/constants/expenses.ts` (or fetch from API)
   - `ui/src/pages/Expenses*.tsx` (selectors)
   - `ui/src/i18n/locales/*.json` (labels)

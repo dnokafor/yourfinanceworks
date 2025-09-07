@@ -424,10 +424,10 @@ export function AppSidebar() {
       tourId: 'nav-expenses'
     },
     { 
-      path: '/bank-statements', 
+      path: '/statements', 
       label: t('navigation.bank_statements'),
       icon: <FileText className="w-5 h-5" />,
-      tourId: 'nav-bank-statements'
+      tourId: 'nav-statements'
     },
 
     // Users, Audit Log, and Analytics moved under Settings; remove from main nav
@@ -474,9 +474,9 @@ export function AppSidebar() {
   return (
     <>
       <Sidebar data-tour="sidebar" className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border-r border-slate-700/50 shadow-2xl">
-        <SidebarHeader className="py-8 px-6 border-b border-slate-700/50 bg-gradient-to-r from-slate-800/50 to-slate-700/50">
+        <SidebarHeader className="py-2 px-3 border-b border-slate-700/50 bg-gradient-to-r from-slate-800/50 to-slate-700/50">
           {/* Professional Company Logo Section */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-4">
               {companyLogoUrl ? (
                 <img
@@ -498,7 +498,7 @@ export function AppSidebar() {
                   {companyName}
                 </span>
                 <span className="text-sm text-slate-300 font-medium">
-                  Invoice Management
+                  Invoice Management App
                 </span>
               </div>
             </div>
@@ -515,7 +515,7 @@ export function AppSidebar() {
           </div>
           
           {/* Professional User Profile Section */}
-          <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
+          <div className="bg-slate-800/50 rounded-xl p-2 border border-slate-700/50">
             <div className="flex items-center gap-3">
               <Avatar className="h-10 w-10 ring-2 ring-slate-600/50">
                 <AvatarImage src={undefined as any} alt={user?.email || 'User'} />
@@ -546,10 +546,10 @@ export function AppSidebar() {
             </div>
           </div>
         </SidebarHeader>
-        <SidebarContent className="pt-8 px-4">
+        <SidebarContent className="pt-2 px-3">
           {/* Organization Selector */}
           {userOrganizations.length > 0 && (
-            <div className="mb-6">
+            <div className="mb-3">
               <div className="px-3 mb-3">
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                   Organization {userOrganizations.length > 1 ? `(${userOrganizations.length} available)` : ''}
@@ -589,10 +589,10 @@ export function AppSidebar() {
             </div>
           )}
           
-          <SidebarMenu className="space-y-2">
+          <SidebarMenu className="space-y-1">
             {/* Main Navigation Section */}
-            <div className="mb-6">
-              <div className="px-3 mb-3">
+            <div className="mb-3">
+              <div className="px-3 mb-2">
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                   Main Navigation
                 </h3>
@@ -627,13 +627,13 @@ export function AppSidebar() {
             </div>
 
             {/* Professional Separator */}
-            <div className="my-6 px-3">
+            <div className="my-2 px-3">
               <div className="border-t border-slate-700/50"></div>
             </div>
             
             {/* Settings Section */}
             <div>
-              <div className="px-3 mb-3">
+              <div className="px-3 mb-2">
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                   System
                 </h3>
@@ -668,9 +668,9 @@ export function AppSidebar() {
             </div>
           </SidebarMenu>
         </SidebarContent>
-        <SidebarFooter className="py-6 px-6 border-t border-slate-700/50 bg-gradient-to-r from-slate-800/50 to-slate-700/50">
+        <SidebarFooter className="py-2 px-3 border-t border-slate-700/50 bg-gradient-to-r from-slate-800/50 to-slate-700/50">
           {/* Professional Controls Section */}
-          <div className="space-y-4">
+          <div className="space-y-2">
             <div className="flex items-center justify-between gap-3">
               <div className="flex-1">
                 <LanguageSwitcher />

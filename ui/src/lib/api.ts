@@ -169,7 +169,7 @@ export const bankStatementApi = {
     if (token) headers['Authorization'] = `Bearer ${token}`;
     if (tenantId) headers['X-Tenant-ID'] = tenantId;
 
-    const url = `${API_BASE_URL}/bank-statements/upload`;
+    const url = `${API_BASE_URL}/statements/upload`;
     const resp = await fetch(url, { method: 'POST', headers, body: formData });
     const text = await resp.text();
     if (!resp.ok) {
@@ -181,7 +181,7 @@ export const bankStatementApi = {
 
   list: async (): Promise<BankStatementSummary[]> => {
     const data = await apiRequest<{ success: boolean; statements: BankStatementSummary[] }>(
-      '/bank-statements',
+      '/statements',
       { method: 'GET' }
     );
     return data.statements;
@@ -189,7 +189,7 @@ export const bankStatementApi = {
 
   get: async (statementId: number): Promise<BankStatementDetail> => {
     const data = await apiRequest<{ success: boolean; statement: BankStatementDetail }>(
-      `/bank-statements/${statementId}`,
+      `/statements/${statementId}`,
       { method: 'GET' }
     );
     return data.statement;
@@ -200,7 +200,7 @@ export const bankStatementApi = {
     updates: { labels?: string[] | null; notes?: string | null }
   ): Promise<{ success: boolean; statement: BankStatementSummary }> => {
     return apiRequest<{ success: boolean; statement: BankStatementSummary }>(
-      `/bank-statements/${statementId}`,
+      `/statements/${statementId}`,
       { method: 'PUT', body: JSON.stringify(updates) }
     );
   },
@@ -210,14 +210,14 @@ export const bankStatementApi = {
     transactions: BankTransactionEntry[]
   ): Promise<{ success: boolean; updated_count: number }> => {
     return apiRequest<{ success: boolean; updated_count: number }>(
-      `/bank-statements/${statementId}/transactions`,
+      `/statements/${statementId}/transactions`,
       { method: 'PUT', body: JSON.stringify({ transactions }) }
     );
   },
 
   reprocess: async (statementId: number): Promise<{ success: boolean; message: string }> => {
     return apiRequest<{ success: boolean; message: string }>(
-      `/bank-statements/${statementId}/reprocess`,
+      `/statements/${statementId}/reprocess`,
       { method: 'POST' }
     );
   },
@@ -225,7 +225,7 @@ export const bankStatementApi = {
   // Build URLs for preview/download (relative if API_BASE_URL is relative)
   fileUrl: (statementId: number, inline = true): string => {
     const base = API_BASE_URL.replace(/\/$/, '');
-    return `${base}/bank-statements/${statementId}/file${inline ? '?inline=true' : ''}`;
+    return `${base}/statements/${statementId}/file${inline ? '?inline=true' : ''}`;
   },
 
   fetchFileBlob: async (
@@ -237,7 +237,7 @@ export const bankStatementApi = {
       try { const user = JSON.parse(localStorage.getItem('user') || '{}'); return user.tenant_id?.toString(); } catch { return undefined; }
     })();
     const base = API_BASE_URL.replace(/\/$/, '');
-    const url = `${base}/bank-statements/${statementId}/file${inline ? '?inline=true' : ''}`;
+    const url = `${base}/statements/${statementId}/file${inline ? '?inline=true' : ''}`;
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
     if (tenantId) headers['X-Tenant-ID'] = tenantId;
@@ -262,7 +262,7 @@ export const bankStatementApi = {
 
   delete: async (statementId: number): Promise<void> => {
     await apiRequest<{ success: boolean }>(
-      `/bank-statements/${statementId}`,
+      `/statements/${statementId}`,
       { method: 'DELETE' }
     );
   },

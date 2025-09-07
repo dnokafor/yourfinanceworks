@@ -49,7 +49,7 @@
     "dashboard": "Tableau de Bord",
     "invoices": "Factures",
     "expenses": "Dépenses",
-    "bank_statements": "Relevés Bancaires",
+    "bank_statements": "Relevés",
     "clients": "Clients",
     "payments": "Paiements",
     "settings": "Paramètres",
@@ -1395,13 +1395,13 @@
       "copy_json": "Copier le JSON"
     }
   },
-  "bankStatements": {
-    "title": "Relevés Bancaires",
+  "statements": {
+    "title": "Relevés",
     "description": "Chaque entrée est un PDF ou CSV. Ouvrir pour voir ou modifier ses transactions.",
+    "list_title": "Liste des relevés",
     "select_files": "Sélectionner des PDFs ou CSVs",
     "upload": "Téléverser",
     "processing": "Traitement...",
-    "statements": "Relevés",
     "filename": "Nom du fichier",
     "labels": "Étiquettes",
     "status": "Statut",

@@ -18,7 +18,7 @@ This document summarizes the implementation of the bank statements feature (one 
 
 ### Backend: API Endpoints
 
-- `api/routers/bank_statements.py`
+- `api/routers/statements.py`
   - `POST /bank-statements/upload`: Creates a statement in `processing`, stores the PDF, enqueues Kafka task (async-only; no sync fallback)
   - `GET /bank-statements` and alias without trailing slash: List statements
   - `GET /bank-statements/{id}`: Detail with transactions
@@ -41,7 +41,7 @@ This document summarizes the implementation of the bank statements feature (one 
 
 ### PDF Extraction & LLM
 
-- `api/services/bank_statement_service.py`
+- `api/services/statement_service.py`
   - Loader: `SimplePDFLoader` tries `pdfplumber`, `pymupdf`, `pypdf`, then falls back to `pypdf`
   - Preprocessing: remove page headers/noise and collapse whitespace
   - Prompt: clear rules and JSON-only output with examples (aligned for local models)
@@ -60,7 +60,7 @@ This document summarizes the implementation of the bank statements feature (one 
   - Types: `BankStatementSummary`, `BankStatementDetail`
   - Methods: `list`, `get`, `replaceTransactions`, `delete`, `uploadAndExtract` (returns created statements), `fetchFileBlob` (auth fetch for preview/download)
   - Base URL strictly from `VITE_API_URL` (no implicit ports)
-- `ui/src/pages/BankStatements.tsx`
+- `ui/src/pages/Statements.tsx`
   - List view with actions: Open, Preview (modal), Download, Delete
   - Detail view: transactions table editor; disabled when status is `processing`
   - Shared `handlePreview`/`handleDownload` using `fetchFileBlob` to include auth headers, `blob:` URL for modal and download
@@ -114,14 +114,14 @@ This document summarizes the implementation of the bank statements feature (one 
 ### Files of Interest
 
 - `api/models/models_per_tenant.py`
-- `api/routers/bank_statements.py`
-- `api/services/bank_statement_service.py`
+- `api/routers/statements.py`
+- `api/services/statement_service.py`
 - `api/services/ocr_service.py`
 - `api/workers/ocr_consumer.py`
 - `api/routers/pdf_processor.py`
 - `api/db_init.py`
 - `ui/src/lib/api.ts`
-- `ui/src/pages/BankStatements.tsx`
+- `ui/src/pages/Statements.tsx`
 - `ui/src/components/invoices/InvoiceCreationChoice.tsx`
 - `docs/bank_statement_bmo_regex.md`
 

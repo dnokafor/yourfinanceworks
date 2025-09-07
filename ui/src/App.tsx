@@ -24,7 +24,7 @@ import ExpensesNew from "./pages/ExpensesNew";
 import ExpensesImport from "./pages/ExpensesImport";
 import ExpensesEdit from "./pages/ExpensesEdit";
 import Expenses from "./pages/Expenses";
-import BankStatements from "./pages/BankStatements";
+import Statements from "./pages/Statements";
 import Settings from "./pages/Settings";
 import Users from "./pages/Users";
 import SuperAdmin from "./pages/SuperAdmin";
@@ -105,7 +105,7 @@ const AppContent = () => {
           <Route path="/expenses/import" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><ExpensesImport /></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/expenses/edit/:id" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><ExpensesEdit /></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
-          <Route path="/bank-statements" element={<ProtectedRoute><BankStatements /></ProtectedRoute>} />
+          <Route path="/statements" element={<ProtectedRoute><Statements /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin']}><TenantProtectedRoute requirePrimaryTenant={true}><Settings /></TenantProtectedRoute></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/ai-providers" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin']}><TenantProtectedRoute requirePrimaryTenant={true}><AIProviderManagement /></TenantProtectedRoute></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin']}><Users /></RoleProtectedRoute></ProtectedRoute>} />

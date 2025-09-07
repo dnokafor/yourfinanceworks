@@ -277,7 +277,7 @@ Categories:
 - clients: client management, customer information, client details, show clients, list clients
 - invoices: invoice management, invoice information, invoice details, show invoices, list invoices, get invoices
 - expenses: expense management, expense information, expense details, show expenses, list expenses
-- bank_statements: bank statement management, statement information, show statements, list statements
+- statements: statement management, statement information, show statements, list statements
 - currencies: currency information, exchange rates, show currencies
 - outstanding: outstanding balances, unpaid amounts, debts
 - overdue: overdue invoices, late payments
@@ -314,8 +314,8 @@ Category:"""
                     intent = "payments"
                 elif any(word in msg_lower for word in ["expense", "expenses"]):
                     intent = "expenses"
-                elif any(word in msg_lower for word in ["bank", "bank statements", "statements", "show statements", "list statements"]):
-                    intent = "bank_statements"
+                elif any(word in msg_lower for word in ["bank", "statements", "show statements", "list statements"]):
+                    intent = "statements"
                 elif any(word in msg_lower for word in ["currency", "currencies", "exchange rate", "exchange rates", "show currencies", "list currencies"]):
                     intent = "currencies"
                 elif any(word in msg_lower for word in ["outstanding", "outstanding balance", "unpaid", "unpaid amount", "show outstanding", "list outstanding"]):
@@ -501,11 +501,11 @@ Category:"""
                     "data": filtered_expenses[skip:end_idx]
                 }
             
-            # Bank Statement Management Methods
-            async def list_bank_statements(self, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
+            # Statement Management Methods
+            async def list_statements(self, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
                 result = await self._make_request(
                     "GET", 
-                    "/bank-statements/",
+                    "/statements/",
                     params={"skip": skip, "limit": limit}
                 )
                 return {
@@ -1088,20 +1088,20 @@ This comprehensive expense information was retrieved using your actual expense d
                 # Fallback to LLM
                 pass
         
-        elif intent == "bank_statements":
-            print(f"MCP Integration: Detected bank statement pattern in message: '{request.message}'")
-            logger.info(f"MCP Integration: Detected bank statement pattern in message: '{request.message}'")
+        elif intent == "statements":
+            print(f"MCP Integration: Detected statement pattern in message: '{request.message}'")
+            logger.info(f"MCP Integration: Detected statement pattern in message: '{request.message}'")
             try:
-                print("MCP Integration: Listing bank statements...")
-                logger.info("MCP Integration: Listing bank statements...")
-                result = await tools.list_bank_statements()
-                print(f"MCP Integration: Bank statements result: {result}")
-                logger.info(f"MCP Integration: Bank statements result: {result}")
+                print("MCP Integration: Listing statements...")
+                logger.info("MCP Integration: Listing statements...")
+                result = await tools.list_statements()
+                print(f"MCP Integration: Statements result: {result}")
+                logger.info(f"MCP Integration: Statements result: {result}")
                 
                 if result.get("success"):
                     statements = result.get("data", [])
-                    print(f"MCP Integration: Retrieved {len(statements)} bank statements")
-                    logger.info(f"MCP Integration: Retrieved {len(statements)} bank statements")
+                    print(f"MCP Integration: Retrieved {len(statements)} statements")
+                    logger.info(f"MCP Integration: Retrieved {len(statements)} statements")
                     if statements:
                         # Format statement details for f-string
                         statement_lines = '\n'.join([f"• **Statement #{stmt.get('id', 'N/A')}**\n" +
@@ -1113,7 +1113,7 @@ This comprehensive expense information was retrieved using your actual expense d
                                         "  -----------------------------------------\n"
                                         for stmt in statements])
                         mcp_response = f"""
-🏦 **Bank Statement Management Dashboard**
+🏦 **Statement Management Dashboard**
 
 📊 **📈 Statement Overview:**
 • **Total Statements:** {len(statements):,}

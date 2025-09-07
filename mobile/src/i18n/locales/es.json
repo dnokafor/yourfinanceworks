@@ -49,7 +49,7 @@
     "dashboard": "Panel de Control",
     "invoices": "Facturas",
     "expenses": "Gastos",
-    "bank_statements": "Estados Bancarios",
+    "bank_statements": "Estados de Cuenta",
     "clients": "Clientes",
     "payments": "Pagos",
     "settings": "Configuración",
@@ -1410,13 +1410,13 @@
       "copy_json": "Copiar JSON"
     }
   },
-  "bankStatements": {
-    "title": "Estados Bancarios",
+  "statements": {
+    "title": "Estados de Cuenta",
     "description": "Cada entrada es un PDF o CSV. Abrir para ver o editar sus transacciones.",
+    "list_title": "Lista de estados de cuenta",
     "select_files": "Seleccionar PDFs o CSVs",
     "upload": "Subir",
     "processing": "Procesando...",
-    "statements": "Estados",
     "filename": "Nombre del archivo",
     "labels": "Etiquetas",
     "status": "Estado",

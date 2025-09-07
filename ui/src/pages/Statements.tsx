@@ -23,6 +23,15 @@ const CATEGORY_OPTIONS = [
   'Income', 'Food', 'Transportation', 'Shopping', 'Bills', 'Healthcare', 'Entertainment', 'Financial', 'Travel', 'Other'
 ];
 
+const STATEMENT_PROVIDERS = [
+  { value: 'bank', label: 'Bank', icon: '🏦' },
+  { value: 'paypal', label: 'PayPal', icon: '💰' },
+  { value: 'wise', label: 'Wise', icon: '🌍' },
+  { value: 'stripe', label: 'Stripe', icon: '💳' },
+  { value: 'square', label: 'Square', icon: '🔲' },
+  { value: 'other', label: 'Other', icon: '📄' }
+];
+
 type BankRow = BankTransactionEntry & { id?: number; invoice_id?: number | null; expense_id?: number | null; backend_id?: number | null };
 
 // Helper function to format date without timezone issues
@@ -46,7 +55,7 @@ const safeParseDateString = (dateString?: string): Date => {
   }
 };
 
-export default function BankStatements() {
+export default function Statements() {
   const { t } = useTranslation();
   const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
@@ -67,6 +76,8 @@ export default function BankStatements() {
   const [statementLabels, setStatementLabels] = useState<string[]>([]);
   const [newStatementLabel, setNewStatementLabel] = useState<string>('');
   const [editingRow, setEditingRow] = useState<number | null>(null);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<string>('bank');
   const readOnly = detail?.status === 'processing';
 
   const formatStatus = (value?: string | null) => {
@@ -266,21 +277,23 @@ export default function BankStatements() {
 
   const onUpload = async () => {
     try {
-      if (files.length === 0) { toast.error('Select up to 12 PDF files'); return; }
+      if (files.length === 0) { toast.error(t('statements.select_files')); return; }
       setLoading(true);
-      
+
       const addNotification = (window as any).addAINotification;
-      addNotification?.('processing', 'Processing Bank Statements', `Analyzing ${files.length} bank statement files with AI...`);
-      
+      const providerName = STATEMENT_PROVIDERS.find(p => p.value === selectedProvider)?.label || 'Statement';
+      addNotification?.('processing', t('statements.processing'), `Analyzing ${files.length} ${providerName.toLowerCase()} statement files with AI...`);
+
       const resp = await bankStatementApi.uploadAndExtract(files);
-      
-      addNotification?.('success', 'Bank Statements Uploaded', `Successfully uploaded ${files.length} statement files. AI extraction in progress.`);
-      toast.success(`Uploaded ${files.length} statement(s)`);
+
+      addNotification?.('success', `${providerName} ${t('statements.upload')}`, `Successfully uploaded ${files.length} statement files. AI extraction in progress.`);
+      toast.success(`Uploaded ${files.length} ${providerName.toLowerCase()} ${t('statements.statements').toLowerCase()}`);
       setFiles([]);
+      setUploadModalOpen(false);
       await loadList();
     } catch (e: any) {
       const addNotification = (window as any).addAINotification;
-      addNotification?.('error', 'Bank Statement Processing Failed', `Failed to process bank statements: ${e?.message || 'Unknown error'}`);
+      addNotification?.('error', t('statements.failed_to_delete'), `Failed to process statements: ${e?.message || 'Unknown error'}`);
       toast.error(e?.message || 'Failed to extract transactions');
     } finally {
       setLoading(false);
@@ -377,7 +390,7 @@ export default function BankStatements() {
       }
       setPreviewOpen(true);
     } catch (e: any) {
-      toast.error(e?.message || t('bankStatements.failed_to_preview'));
+      toast.error(e?.message || t('statements.failed_to_preview'));
     }
   };
 
@@ -393,7 +406,7 @@ export default function BankStatements() {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e: any) {
-      toast.error(e?.message || t('bankStatements.failed_to_download'));
+      toast.error(e?.message || t('statements.failed_to_download'));
     }
   };
 
@@ -402,39 +415,32 @@ export default function BankStatements() {
       <div className="h-full space-y-6 fade-in">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">{t('bankStatements.title')}</h1>
-            <p className="text-muted-foreground">{t('bankStatements.description')}</p>
+            <h1 className="text-3xl font-bold">{t('statements.title')}</h1>
+            <p className="text-muted-foreground">{t('statements.description')}</p>
           </div>
           {!selected && (
-            <div className="flex items-center gap-2">
-              <label className="inline-flex items-center gap-2 cursor-pointer">
-                <Upload className="w-4 h-4" />
-                <input type="file" accept=".pdf,.csv,application/pdf,text/csv,application/vnd.ms-excel" multiple className="hidden" onChange={(e) => {
-                  const list = Array.from(e.target.files || []).slice(0, 12);
-                  setFiles(list);
-                }} />
-                {files.length > 0 ? `${files.length} file(s)` : t('bankStatements.select_files')}
-              </label>
-              <Button onClick={onUpload} disabled={loading || files.length === 0}>{loading ? t('bankStatements.processing') : t('bankStatements.upload')}</Button>
-            </div>
+            <Button onClick={() => setUploadModalOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              {t('statements.new_statement', { defaultValue: 'New Statement' })}
+            </Button>
           )}
         </div>
 
         {!selected && (
           <Card className="slide-in">
             <CardHeader>
-              <CardTitle>{t('bankStatements.statements')}</CardTitle>
+              <CardTitle>{t('statements.list_title')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="rounded-md border overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>{t('bankStatements.filename')}</TableHead>
-                      <TableHead>{t('bankStatements.labels')}</TableHead>
-                      <TableHead>{t('bankStatements.status')}</TableHead>
-                      <TableHead>{t('bankStatements.transactions')}</TableHead>
-                      <TableHead>{t('bankStatements.uploaded')}</TableHead>
+                      <TableHead>{t('statements.filename')}</TableHead>
+                      <TableHead>{t('statements.labels')}</TableHead>
+                      <TableHead>{t('statements.status')}</TableHead>
+                      <TableHead>{t('statements.transactions')}</TableHead>
+                      <TableHead>{t('statements.uploaded')}</TableHead>
                       <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -450,22 +456,22 @@ export default function BankStatements() {
                         <TableCell>{s.created_at ? format(new Date(s.created_at), 'PP p') : ''}</TableCell>
                         <TableCell className="text-right flex gap-2 justify-end">
                           <Button size="sm" variant="outline" onClick={() => openStatement(s.id)}>
-                            <Eye className="w-4 h-4 mr-1" /> {t('bankStatements.open')}
+                            <Eye className="w-4 h-4 mr-1" /> {t('statements.open')}
                           </Button>
                           <Button size="sm" variant="outline" onClick={() => handlePreview(s.id)}>
-                            <ExternalLink className="w-4 h-4 mr-1" /> {t('bankStatements.preview')}
+                            <ExternalLink className="w-4 h-4 mr-1" /> {t('statements.preview')}
                           </Button>
                           <Button size="sm" variant="outline" onClick={() => handleDownload(s.id, s.original_filename)}>
-                            <Download className="w-4 h-4 mr-1" /> {t('bankStatements.download')}
+                            <Download className="w-4 h-4 mr-1" /> {t('statements.download')}
                           </Button>
                           <Button
                             size="sm"
                             variant="destructive"
                             onClick={async () => {
-                              if (!confirm(t('bankStatements.delete_confirm'))) return;
+                              if (!confirm(t('statements.delete_confirm'))) return;
                               try {
                                 await bankStatementApi.delete(s.id);
-                                toast.success(t('bankStatements.statement_deleted'));
+                                toast.success(t('statements.statement_deleted'));
                                 await loadList();
                                 if (selected === s.id) {
                                   setSelected(null);
@@ -473,18 +479,18 @@ export default function BankStatements() {
                                   setRows([]);
                                 }
                               } catch (e: any) {
-                                toast.error(e?.message || t('bankStatements.failed_to_delete'));
+                                toast.error(e?.message || t('statements.failed_to_delete'));
                               }
                             }}
                           >
-                            <Trash2 className="w-4 h-4 mr-1" /> {t('bankStatements.delete')}
+                            <Trash2 className="w-4 h-4 mr-1" /> {t('statements.delete')}
                           </Button>
                         </TableCell>
                       </TableRow>
                     ))}
                     {statements.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center text-muted-foreground">{t('bankStatements.no_statements')}</TableCell>
+                        <TableCell colSpan={6} className="text-center text-muted-foreground">{t('statements.no_statements')}</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
@@ -508,7 +514,7 @@ export default function BankStatements() {
         }}>
           <DialogContent className="max-w-5xl w-full h-[80vh] flex flex-col">
             <DialogHeader>
-              <DialogTitle>{t('bankStatements.preview_title')}</DialogTitle>
+              <DialogTitle>{t('statements.preview_title')}</DialogTitle>
             </DialogHeader>
             <div className="w-full flex-1 min-h-0 mt-2">
               {previewText && (
@@ -520,8 +526,8 @@ export default function BankStatements() {
                 <>
                   <embed src={previewUrl} type={previewType || 'application/pdf'} className="w-full h-full rounded-md border" />
                   <div className="mt-2 text-xs text-muted-foreground">
-                    {t('bankStatements.preview_blank_note')}{' '}
-                    <a className="underline" href={previewUrl} target="_blank" rel="noopener noreferrer">{t('bankStatements.open_new_tab')}</a> or use Download.
+                    {t('statements.preview_blank_note')}{' '}
+                    <a className="underline" href={previewUrl} target="_blank" rel="noopener noreferrer">{t('statements.open_new_tab')}</a> or use Download.
                   </div>
                 </>
               )}
@@ -537,9 +543,9 @@ export default function BankStatements() {
                   <Button variant="ghost" size="icon" onClick={() => { setSelected(null); setDetail(null); setRows([]); }}>
                     <ArrowLeft className="w-5 h-5" />
                   </Button>
-                  <CardTitle>{t('bankStatements.transactions_title', { filename: detail?.original_filename || '' })}</CardTitle>
+                  <CardTitle>{t('statements.transactions_title', { filename: detail?.original_filename || '' })}</CardTitle>
                 </div>
-                <p className="text-muted-foreground text-sm">{t('bankStatements.transactions_description')}</p>
+                <p className="text-muted-foreground text-sm">{t('statements.transactions_description')}</p>
                 <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mt-2">
                   <p className="text-sm text-blue-800">
                     <strong>Note:</strong> Transaction information should match the uploaded bank statement file. Only edit if corrections are needed.
@@ -548,13 +554,13 @@ export default function BankStatements() {
               </div>
               <div className="flex items-center gap-2">
                 {readOnly && (
-                  <span className="text-sm text-muted-foreground">{t('bankStatements.processing_disabled')}</span>
+                  <span className="text-sm text-muted-foreground">{t('statements.processing_disabled')}</span>
                 )}
                 <Button variant="outline" onClick={() => selected && handlePreview(selected)}>
-                  <ExternalLink className="w-4 h-4 mr-1" /> {t('bankStatements.preview')}
+                  <ExternalLink className="w-4 h-4 mr-1" /> {t('statements.preview')}
                 </Button>
                 <Button variant="outline" onClick={() => selected && handleDownload(selected, detail?.original_filename)}>
-                  <Download className="w-4 h-4 mr-1" /> {t('bankStatements.download')}
+                  <Download className="w-4 h-4 mr-1" /> {t('statements.download')}
                 </Button>
                 {(detail?.status === 'failed' || (detail?.status === 'processed' && (detail?.extracted_count || 0) === 0)) && (
                   <Button
@@ -563,11 +569,11 @@ export default function BankStatements() {
                       if (!selected) return;
                       try {
                         const addNotification = (window as any).addAINotification;
-                        addNotification?.('processing', 'Reprocessing Bank Statement', `Re-analyzing ${detail?.original_filename} with AI...`);
-                        
+                        addNotification?.('processing', 'Reprocessing Statement', `Re-analyzing ${detail?.original_filename} with AI...`);
+
                         await bankStatementApi.reprocess(selected);
-                        
-                        addNotification?.('success', 'Bank Statement Reprocessing Started', `Successfully started reprocessing ${detail?.original_filename}`);
+
+                        addNotification?.('success', 'Statement Reprocessing Started', `Successfully started reprocessing ${detail?.original_filename}`);
                         toast.success('Reprocessing started');
                         await openStatement(selected);
                       } catch (e: any) {
@@ -763,12 +769,12 @@ export default function BankStatements() {
                             <Select value={r.transaction_type} onValueChange={(v) => setRows(prev => prev.map((x, i) => i === idx ? { ...x, transaction_type: v as 'debit' | 'credit' } : x))}>
                               <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="debit">debit (expense)</SelectItem>
-                                <SelectItem value="credit">credit (income)</SelectItem>
+                                <SelectItem value="debit">Debit (expense)</SelectItem>
+                                <SelectItem value="credit">Credit (income)</SelectItem>
                               </SelectContent>
                             </Select>
                           ) : (
-                            <span className="text-sm">{r.transaction_type === 'debit' ? 'debit (expense)' : 'credit (income)'}</span>
+                            <span className="text-sm">{r.transaction_type === 'debit' ? 'Debit (expense)' : 'Credit (income)'}</span>
                           )}
                         </TableCell>
                         <TableCell>
@@ -1008,6 +1014,111 @@ export default function BankStatements() {
             </CardContent>
           </Card>
         )}
+
+        {/* Upload Modal */}
+        <Dialog open={uploadModalOpen} onOpenChange={(open) => {
+          setUploadModalOpen(open);
+          if (!open) {
+            setFiles([]);
+            setSelectedProvider('bank');
+          }
+        }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{t('statements.upload_statement', { defaultValue: 'Upload Statement' })}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">
+                  {t('statements.select_provider', { defaultValue: 'Statement Provider' })}
+                </label>
+                <Select value={selectedProvider} onValueChange={setSelectedProvider}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATEMENT_PROVIDERS.map((provider) => (
+                      <SelectItem key={provider.value} value={provider.value}>
+                        <div className="flex items-center gap-2">
+                          <span>{provider.icon}</span>
+                          <span>{provider.label}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-2 block">
+                  {t('statements.select_files')}
+                </label>
+                <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center">
+                  <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                  <div className="text-sm text-muted-foreground mb-2">
+                    {files.length > 0
+                      ? `${files.length} file(s) selected`
+                      : 'Drop files here or click to browse'
+                    }
+                  </div>
+                  <input
+                    type="file"
+                    accept=".pdf,.csv,application/pdf,text/csv,application/vnd.ms-excel"
+                    multiple
+                    className="hidden"
+                    id="file-upload"
+                    onChange={(e) => {
+                      const list = Array.from(e.target.files || []).slice(0, 12);
+                      setFiles(list);
+                    }}
+                  />
+                  <label
+                    htmlFor="file-upload"
+                    className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium cursor-pointer hover:bg-primary/90 transition-colors"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Choose Files
+                  </label>
+                  <div className="text-xs text-muted-foreground mt-2">
+                    Supports PDF and CSV files (max 12 files)
+                  </div>
+                </div>
+                {files.length > 0 && (
+                  <div className="mt-4">
+                    <div className="text-sm font-medium mb-2">Selected Files:</div>
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {files.map((file, index) => (
+                        <div key={index} className="flex items-center justify-between text-sm bg-muted p-2 rounded">
+                          <span className="truncate">{file.name}</span>
+                          <span className="text-muted-foreground">({Math.round(file.size / 1024)} KB)</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button variant="outline" onClick={() => setUploadModalOpen(false)}>
+                  {t('cancel', { defaultValue: 'Cancel' })}
+                </Button>
+                <Button onClick={onUpload} disabled={loading || files.length === 0}>
+                  {loading ? (
+                    <>
+                      <div className="w-4 h-4 mr-2 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      {t('statements.processing')}
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 mr-2" />
+                      {t('statements.upload')}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
   );

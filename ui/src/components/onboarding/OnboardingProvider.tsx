@@ -110,9 +110,9 @@ const TOURS: OnboardingTour[] = [
       },
       {
         id: 'bank-statements',
-        title: 'Bank Statement Management',
+        title: 'Statement Management',
         content: 'Import and manage bank statements to reconcile transactions and maintain accurate financial records.',
-        target: '[data-tour="nav-bank-statements"]',
+        target: '[data-tour="nav-statements"]',
         placement: 'right'
       },
       {

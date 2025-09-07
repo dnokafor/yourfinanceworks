@@ -528,11 +528,11 @@ class InvoiceTools:
         except Exception as e:
             return {"success": False, "error": f"Failed to delete expense attachment: {e}"}
     
-    # Bank Statement Management
-    async def list_bank_statements(self) -> Dict[str, Any]:
-        """List all bank statements"""
+    # Statement Management
+    async def list_statements(self) -> Dict[str, Any]:
+        """List all statements"""
         try:
-            statements = await self.api_client.list_bank_statements()
+            statements = await self.api_client.list_statements()
             return {
                 "success": True,
                 "data": statements.get("statements", []),

@@ -1,6 +1,6 @@
 ## BMO Bank Statement Regex Extraction (Fallback)
 
-This document describes the BMO-specific regex fallback used to extract transactions when the LLM returns no results. The implementation resides in `api/services/bank_statement_service.py` inside `_regex_extract_transactions`.
+This document describes the BMO-specific regex fallback used to extract transactions when the LLM returns no results. The implementation resides in `api/services/statement_service.py` inside `_regex_extract_transactions`.
 
 ### Targeted Layout
 
@@ -91,6 +91,6 @@ Each extracted transaction has:
 
 ### Implementation Reference
 
-See `api/services/bank_statement_service.py`, function `_regex_extract_transactions` for the latest implementation.
+See `api/services/statement_service.py`, function `_regex_extract_transactions` for the latest implementation.
 
 

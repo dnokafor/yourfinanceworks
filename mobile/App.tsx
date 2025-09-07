@@ -14,7 +14,7 @@ import EditClientScreen from './src/screens/EditClientScreen';
 import PaymentsScreen from './src/screens/PaymentsScreen';
 import ExpensesScreen from './src/screens/ExpensesScreen';
 import NewExpenseScreen from './src/screens/NewExpenseScreen';
-import BankStatementsScreen from './src/screens/BankStatementsScreen';
+import StatementsScreen from './src/screens/StatementsScreen';
 import AnalyticsScreen from './src/screens/AnalyticsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import UsersScreen from './src/screens/UsersScreen';
@@ -23,7 +23,7 @@ import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
 import apiService, { User, Client, Invoice, CreateInvoiceData, UpdateInvoiceData, InvoiceItemCreate, InvoiceItemUpdate, Expense, BankStatement } from './src/services/api';
 
-type Screen = 'login' | 'signup' | 'forgotPassword' | 'resetPassword' | 'dashboard' | 'invoices' | 'newInvoice' | 'editInvoice' | 'clients' | 'newClient' | 'editClient' | 'payments' | 'expenses' | 'newExpense' | 'bankStatements' | 'analytics' | 'settings' | 'users' | 'auditLog';
+type Screen = 'login' | 'signup' | 'forgotPassword' | 'resetPassword' | 'dashboard' | 'invoices' | 'newInvoice' | 'editInvoice' | 'clients' | 'newClient' | 'editClient' | 'payments' | 'expenses' | 'newExpense' | 'statements' | 'analytics' | 'settings' | 'users' | 'auditLog';
 
 const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<Screen>('login');
@@ -121,8 +121,8 @@ const App: React.FC = () => {
     setCurrentScreen('newExpense');
   };
 
-  const handleNavigateToBankStatements = () => {
-    setCurrentScreen('bankStatements');
+  const handleNavigateToStatements = () => {
+    setCurrentScreen('statements');
   };
 
   const handleNavigateToAnalytics = () => {
@@ -344,7 +344,7 @@ const App: React.FC = () => {
             onNavigateToClients={handleNavigateToClients}
             onNavigateToPayments={handleNavigateToPayments}
             onNavigateToExpenses={handleNavigateToExpenses}
-            onNavigateToBankStatements={handleNavigateToBankStatements}
+            onNavigateToStatements={handleNavigateToStatements}
             onNavigateToAnalytics={handleNavigateToAnalytics}
             onNavigateToSettings={handleNavigateToSettings}
             onSignOut={handleSignOut}
@@ -446,12 +446,12 @@ const App: React.FC = () => {
             }}
           />
         );
-      case 'bankStatements':
+      case 'statements':
         return (
-          <BankStatementsScreen
+          <StatementsScreen
             onNavigateBack={handleNavigateBack}
             onNavigateToStatement={(statement: BankStatement) => {
-              // Add bank statement detail navigation later
+              // Add statement detail navigation later
               console.log('Open statement:', statement);
             }}
           />

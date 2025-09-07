@@ -52,7 +52,7 @@
     "dashboard": "Dashboard",
     "invoices": "Rechnungen",
     "expenses": "Ausgaben",
-    "bank_statements": "Bankauszüge",
+    "bank_statements": "Auszüge",
     "clients": "Kunden",
     "payments": "Zahlungen",
     "settings": "Einstellungen",
@@ -1388,13 +1388,13 @@
     "custom_currencies_description": "Fügen Sie Ihre eigenen Währungen wie Bitcoin, Ethereum oder andere Kryptowährungen hinzu",
     "add_currency": "Währung hinzufügen"
   },
-  "bankStatements": {
-    "title": "Bankauszüge",
+  "statements": {
+    "title": "Auszüge",
     "description": "Jeder Eintrag ist ein PDF oder CSV. Öffnen Sie, um dessen Transaktionen anzuzeigen oder zu bearbeiten.",
+    "list_title": "Auszugsliste",
     "select_files": "PDFs oder CSVs auswählen",
     "upload": "Hochladen",
     "processing": "Wird verarbeitet...",
-    "statements": "Auszüge",
     "filename": "Dateiname",
     "labels": "Labels",
     "status": "Status",

@@ -10,15 +10,15 @@ from datetime import datetime
 # Add the parent directory to the path so we can import from the API
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from services.bank_statement_service import process_bank_pdf_with_llm
+from services.statement_service import process_bank_pdf_with_llm
 from services.ocr_service import publish_bank_statement_task
 from models.database import get_tenant_context, set_tenant_context
 from services.tenant_database_manager import tenant_db_manager
 from models.models_per_tenant import BankStatement, BankStatementTransaction
 from sqlalchemy.orm import Session
 
-def reprocess_bank_statement(tenant_id: int, statement_id: int):
-    """Reprocess a specific bank statement."""
+def reprocess_statement(tenant_id: int, statement_id: int):
+    """Reprocess a specific statement."""
     try:
         set_tenant_context(tenant_id)
         SessionLocalTenant = tenant_db_manager.get_tenant_session(tenant_id)
@@ -83,12 +83,12 @@ def reprocess_bank_statement(tenant_id: int, statement_id: int):
             db.close()
             
     except Exception as e:
-        print(f"Error reprocessing bank statement: {e}")
+        print(f"Error reprocessing statement: {e}")
         import traceback
         traceback.print_exc()
 
-def list_bank_statements(tenant_id: int):
-    """List all bank statements for a tenant."""
+def list_statements(tenant_id: int):
+    """List all statements for a tenant."""
     try:
         set_tenant_context(tenant_id)
         SessionLocalTenant = tenant_db_manager.get_tenant_session(tenant_id)
@@ -103,31 +103,31 @@ def list_bank_statements(tenant_id: int):
             db.close()
             
     except Exception as e:
-        print(f"Error listing bank statements: {e}")
+        print(f"Error listing statements: {e}")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage:")
-        print("  python reprocess_bank_statements.py list <tenant_id>")
-        print("  python reprocess_bank_statements.py reprocess <tenant_id> <statement_id>")
+        print("  python reprocess_statements.py list <tenant_id>")
+        print("  python reprocess_statements.py reprocess <tenant_id> <statement_id>")
         sys.exit(1)
     
     command = sys.argv[1]
     
     if command == "list":
         if len(sys.argv) != 3:
-            print("Usage: python reprocess_bank_statements.py list <tenant_id>")
+            print("Usage: python reprocess_statements.py list <tenant_id>")
             sys.exit(1)
         tenant_id = int(sys.argv[2])
-        list_bank_statements(tenant_id)
+        list_statements(tenant_id)
         
     elif command == "reprocess":
         if len(sys.argv) != 4:
-            print("Usage: python reprocess_bank_statements.py reprocess <tenant_id> <statement_id>")
+            print("Usage: python reprocess_statements.py reprocess <tenant_id> <statement_id>")
             sys.exit(1)
         tenant_id = int(sys.argv[2])
         statement_id = int(sys.argv[3])
-        reprocess_bank_statement(tenant_id, statement_id)
+        reprocess_statement(tenant_id, statement_id)
         
     else:
         print(f"Unknown command: {command}")

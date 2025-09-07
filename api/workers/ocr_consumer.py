@@ -298,7 +298,7 @@ def main() -> int:
                 elif topic_name == bank_topic:
                     try:
                         from models.models_per_tenant import BankStatement, BankStatementTransaction, AIConfig as AIConfigModel
-                        from services.bank_statement_service import process_bank_pdf_with_llm, BankLLMUnavailableError, is_bank_llm_reachable
+                        from services.statement_service import process_bank_pdf_with_llm, BankLLMUnavailableError, is_bank_llm_reachable
                         statement_id = int(payload.get("statement_id"))
                         file_path = str(payload.get("file_path"))
                         logger.info(f"Processing bank statement: id={statement_id} tenant_id={tenant_id} file={file_path}")

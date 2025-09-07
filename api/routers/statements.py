@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from routers.auth import get_current_user
 from models.models import MasterUser
 from utils.rbac import require_non_viewer
-from services.bank_statement_service import extract_transactions_from_pdf_paths
+from services.statement_service import extract_transactions_from_pdf_paths
 from models.models_per_tenant import BankStatement, BankStatementTransaction
 from datetime import datetime
 from fastapi.responses import FileResponse
@@ -19,18 +19,18 @@ from services.ocr_service import publish_bank_statement_task
 from utils.audit import log_audit_event
 
 
-router = APIRouter(prefix="/bank-statements", tags=["bank-statements"])
+router = APIRouter(prefix="/statements", tags=["statements"])
 logger = logging.getLogger(__name__)
 
 
 @router.post("/upload", response_model=Dict[str, Any])
-async def upload_bank_statements(
-    files: List[UploadFile] = File(..., description="Up to 12 PDF or CSV bank statements"),
+async def upload_statements(
+    files: List[UploadFile] = File(..., description="Up to 12 PDF or CSV statements"),
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user),
 ):
-    """Accept up to 12 PDF/CSV files, create one BankStatement per file, enqueue processing, and return created statements."""
-    require_non_viewer(current_user, "upload bank statements")
+    """Accept up to 12 PDF/CSV files, create one Statement per file, enqueue processing, and return created statements."""
+    require_non_viewer(current_user, "upload statements")
 
     if not files:
         raise HTTPException(status_code=400, detail="At least one file is required")
@@ -137,11 +137,11 @@ async def upload_bank_statements(
 
 @router.get("/", response_model=Dict[str, Any])
 @router.get("", response_model=Dict[str, Any])
-async def list_bank_statements(
+async def list_statements(
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user),
 ):
-    require_non_viewer(current_user, "list bank statements")
+    require_non_viewer(current_user, "list statements")
     try:
         from models.database import get_tenant_context
         tenant_id = get_tenant_context()
@@ -176,12 +176,12 @@ async def list_bank_statements(
 
 
 @router.get("/{statement_id}", response_model=Dict[str, Any])
-async def get_bank_statement(
+async def get_statement(
     statement_id: int,
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user),
 ):
-    require_non_viewer(current_user, "view bank statement")
+    require_non_viewer(current_user, "view statement")
     try:
         from models.database import get_tenant_context
         tenant_id = get_tenant_context()
@@ -235,7 +235,7 @@ async def get_bank_statement(
 
 
 @router.post("/{statement_id}/reprocess", response_model=Dict[str, Any])
-async def reprocess_bank_statement(
+async def reprocess_statement(
     statement_id: int,
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user),
@@ -280,7 +280,7 @@ async def reprocess_bank_statement(
 
 
 @router.put("/{statement_id}", response_model=Dict[str, Any])
-async def update_bank_statement_meta(
+async def update_statement_meta(
     statement_id: int,
     payload: Dict[str, Any],
     db: Session = Depends(get_db),
@@ -371,7 +371,7 @@ async def update_bank_statement_meta(
 
 
 @router.put("/{statement_id}/transactions", response_model=Dict[str, Any])
-async def replace_bank_statement_transactions(
+async def replace_statement_transactions(
     statement_id: int,
     payload: Dict[str, Any],
     db: Session = Depends(get_db),
@@ -470,7 +470,7 @@ async def replace_bank_statement_transactions(
 
 
 @router.get("/{statement_id}/file")
-async def download_bank_statement_file(
+async def download_statement_file(
     statement_id: int,
     inline: bool = False,
     db: Session = Depends(get_db),
@@ -512,12 +512,12 @@ async def download_bank_statement_file(
 
 
 @router.delete("/{statement_id}", response_model=Dict[str, Any])
-async def delete_bank_statement(
+async def delete_statement(
     statement_id: int,
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user),
 ):
-    require_non_viewer(current_user, "delete bank statement")
+    require_non_viewer(current_user, "delete statement")
     try:
         from models.database import get_tenant_context
         tenant_id = get_tenant_context()

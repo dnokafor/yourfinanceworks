@@ -2,7 +2,7 @@
 
 ## Current State
 
-The `BankTransactionExtractor` class in `api/services/bank_statement_service.py` has been refactored to follow `test-main.py` patterns but is currently **Ollama-only**. The service is production-ready for Ollama deployments but lacks support for other LLM vendors.
+The `BankTransactionExtractor` class in `api/services/statement_service.py` has been refactored to follow `test-main.py` patterns but is currently **Ollama-only**. The service is production-ready for Ollama deployments but lacks support for other LLM vendors.
 
 ## TODO: Multi-Vendor LLM Support
 
@@ -230,7 +230,7 @@ llm_providers:
 
 ### Related Files
 
-- `api/services/bank_statement_service.py` - Current implementation
+- `api/services/statement_service.py` - Current implementation
 - `test-main.py` - Reference patterns
 - `api/routers/settings.py` - Configuration management
 - `docs/` - Additional documentation

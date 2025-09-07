@@ -393,4 +393,4 @@ async def process_pdf(
             os.unlink(temp_pdf_path)
 
 
-# Note: Bank statement extraction moved to services/bank_statement_service.py
+# Note: Bank statement extraction moved to services/statement_service.py

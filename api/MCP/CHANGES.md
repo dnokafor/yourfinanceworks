@@ -13,14 +13,14 @@
 - **✅ Enhanced Debugging**: Added comprehensive logging for intent classification and tool selection
 
 #### 🔧 Technical Implementation
-- **AI Intent Classification**: Uses AI to classify user messages into business categories (analyze_patterns, payments, clients, invoices, expenses, bank_statements, currencies, outstanding, overdue, statistics, general)
+  - **AI Intent Classification**: Uses AI to classify user messages into business categories (analyze_patterns, payments, clients, invoices, expenses, statements, currencies, outstanding, overdue, statistics, general)
 - **Dynamic MCP Tool Routing**: Based on AI classification, automatically routes to appropriate MCP tools
 - **Fallback to LLM**: General queries not related to business data use configured LLM
 - **Request Format Fix**: Fixed 422 error by updating AI chat endpoint to accept JSON request body
 
 #### 📝 Usage Examples
 ```
-# These all get classified as "bank_statements" intent:
+# These all get classified as "statements" intent:
 "Show bank statements"
 "What statements do I have?"
 "Display my banking information"
@@ -96,8 +96,8 @@ The MCP server has been expanded with comprehensive new tools to support the ful
 - **`list_expense_attachments`**: List all attachments for an expense
 - **`delete_expense_attachment`**: Remove specific expense attachments
 
-### Bank Statement Management Tools
-- **`list_bank_statements`**: List all imported bank statements
+### Statement Management Tools
+- **`list_statements`**: List all imported statements
 - **`get_bank_statement`**: Get detailed bank statement information
 - **`reprocess_bank_statement`**: Reprocess bank statement for transaction matching
 - **`update_bank_statement_meta`**: Update bank statement metadata
@@ -124,7 +124,7 @@ python -m MCP --email user@example.com --password password
 # - "Show me unlinked expenses"
 # - "Update expense #789 with new category"
 
-# Bank Statement Management
+# Statement Management
 # - "List all imported bank statements"
 # - "Get details for bank statement #123"
 # - "Reprocess bank statement for better matching"
@@ -160,8 +160,8 @@ The complete list of available tools now includes:
 - `list_expenses`, `get_expense`, `create_expense`, `update_expense`, `delete_expense`
 - `upload_expense_receipt`, `list_expense_attachments`, `delete_expense_attachment`
 
-**Bank Statement Management:**
-- `list_bank_statements`, `get_bank_statement`, `reprocess_bank_statement`
+**Statement Management:**
+- `list_statements`, `get_bank_statement`, `reprocess_bank_statement`
 - `update_bank_statement_meta`, `delete_bank_statement`
 
 **Analytics:**

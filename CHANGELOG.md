@@ -6,7 +6,7 @@ Enhanced bank statement extraction service and added CSV export + expense creati
 ## Changes Made
 
 ### 1. Bank Statement Service Refactor
-- **File**: `api/services/bank_statement_service.py`
+- **File**: `api/services/statement_service.py`
 - **Issue**: Bank statement extraction was not finding all 14 transactions from test PDF
 - **Solution**: Refactored service using proven patterns from `test-main.py`
 - **Key Changes**:
@@ -17,7 +17,7 @@ Enhanced bank statement extraction service and added CSV export + expense creati
   - Enhanced LLM response parsing with proper fallback to regex extraction
 
 ### 2. CSV Export Feature
-- **File**: `ui/src/pages/BankStatements.tsx`
+- **File**: `ui/src/pages/Statements.tsx`
 - **Feature**: Added CSV export functionality for transaction data
 - **Implementation**:
   - Export button with FileText icon
@@ -26,7 +26,7 @@ Enhanced bank statement extraction service and added CSV export + expense creati
   - Handles all transaction fields (Date, Description, Amount, Type, Balance, Category)
 
 ### 3. Financial Summary Display
-- **File**: `ui/src/pages/BankStatements.tsx`
+- **File**: `ui/src/pages/Statements.tsx`
 - **Feature**: Added income/expense totals above transaction table
 - **Implementation**:
   - Three-column grid showing Total Income, Total Expenses, Net Amount
@@ -35,7 +35,7 @@ Enhanced bank statement extraction service and added CSV export + expense creati
   - Only displays when transactions exist
 
 ### 4. Expense Creation from Transactions
-- **File**: `ui/src/pages/BankStatements.tsx`
+- **File**: `ui/src/pages/Statements.tsx`
 - **Feature**: Create expense records from debit transactions
 - **Implementation**:
   - "Expense" button in Actions column for debit transactions only
@@ -66,8 +66,8 @@ const categoryMap = {
 ```
 
 ## Files Modified
-- `api/services/bank_statement_service.py` - Complete refactor
-- `ui/src/pages/BankStatements.tsx` - Added CSV export, totals, expense creation
+- `api/services/statement_service.py` - Complete refactor
+- `ui/src/pages/Statements.tsx` - Added CSV export, totals, expense creation
 
 ## Testing
 - Verified with test PDF that all 14 transactions are now extracted

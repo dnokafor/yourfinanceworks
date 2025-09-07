@@ -604,6 +604,8 @@ JSON:"""
                 continue
         
         logger.info(f"Total transactions found: {len(all_transactions)}")
+        if all_transactions:
+            logger.info(f"Sample transaction: {all_transactions[0]}")
         return all_transactions
     
     def _parse_ollama_response(self, response: str) -> List[Dict]:
@@ -742,6 +744,10 @@ JSON:"""
         
         df = pd.DataFrame(transactions)
         initial_count = len(df)
+        logger.info(f"DataFrame created with {initial_count} transactions")
+        if initial_count > 0:
+            logger.info(f"DataFrame columns: {list(df.columns)}")
+            logger.info(f"First row: {df.iloc[0].to_dict()}")
         
         # Standardize columns
         column_mapping = {
@@ -768,19 +774,35 @@ JSON:"""
         
         # Data type conversions
         if 'date' in df.columns:
+            logger.info(f"Converting dates. Sample values: {df['date'].head().tolist()}")
             df['date'] = pd.to_datetime(df['date'], errors='coerce', infer_datetime_format=True)
-        
+            invalid_dates = df['date'].isna().sum()
+            if invalid_dates > 0:
+                logger.info(f"Found {invalid_dates} invalid dates that will be removed")
+
         if 'amount' in df.columns:
+            logger.info(f"Converting amounts. Sample values: {df['amount'].head().tolist()}")
             df['amount'] = pd.to_numeric(df['amount'], errors='coerce')
-        
+            invalid_amounts = df['amount'].isna().sum()
+            if invalid_amounts > 0:
+                logger.info(f"Found {invalid_amounts} invalid amounts that will be removed")
+
         if 'balance' in df.columns:
             df['balance'] = pd.to_numeric(df['balance'], errors='coerce')
         
         # Remove invalid rows
+        before_dropna = len(df)
         df = df.dropna(subset=['date', 'amount'])
-        
+        after_dropna = len(df)
+        if before_dropna != after_dropna:
+            logger.info(f"Removed {before_dropna - after_dropna} transactions with missing date/amount")
+
         # Remove duplicates
+        before_dedup = len(df)
         df = df.drop_duplicates(subset=['date', 'description', 'amount']).reset_index(drop=True)
+        after_dedup = len(df)
+        if before_dedup != after_dedup:
+            logger.info(f"Removed {before_dedup - after_dedup} duplicate transactions")
         
         # Sort by date
         if not df.empty:
@@ -870,6 +892,9 @@ JSON:"""
                 transactions = self.categorize_transactions(transactions)
             
             # Validate and clean data
+            logger.info(f"About to validate {len(transactions)} transactions")
+            if transactions:
+                logger.info(f"First transaction before validation: {transactions[0]}")
             result = self.validate_and_clean_data(transactions)
             
             # Print performance stats

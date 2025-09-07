@@ -2,7 +2,7 @@
 
 Context
 - Current reachability helper `is_bank_llm_reachable` is implemented for Ollama-only (via `GET /api/tags`).
-- Location: `api/services/bank_statement_service.py`.
+- Location: `api/services/statement_service.py`.
 - Goal: Support multiple LLM vendors (OpenAI, Anthropic, Azure OpenAI, Google Vertex AI, AWS Bedrock, Ollama) via a unified interface.
 
 Refactor Plan
@@ -35,7 +35,7 @@ Acceptance Criteria
 - Update `docs/BANK_STATEMENT_LLM_VENDOR_SUPPORT.md` with reachability design.
 
 Related Files
-- `api/services/bank_statement_service.py`
+- `api/services/statement_service.py`
 - `api/workers/ocr_consumer.py`
 - `api/models/models_per_tenant.py`
 - `docs/BANK_STATEMENT_LLM_VENDOR_SUPPORT.md`

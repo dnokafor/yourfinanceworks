@@ -214,7 +214,7 @@ Test the system by:
 - `ui/src/components/invoices/InvoiceCreationChoice.tsx` - Added PDF processing notifications
 - `ui/src/pages/ExpensesImport.tsx` - Added expense import notifications
 - `ui/src/pages/ExpensesNew.tsx` - Added expense receipt processing notifications
-- `ui/src/pages/BankStatements.tsx` - Added bank statement processing notifications
+- `ui/src/pages/Statements.tsx` - Added statement processing notifications
 - `ui/src/pages/Index.tsx` - Added demo component (temporary)
 
 ## Conclusion

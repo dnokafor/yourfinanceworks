@@ -111,6 +111,9 @@ services:
     networks:
       - invoice_app_network
     restart: unless-stopped
+    volumes:
+      - ./ui:/app
+      - /app/node_modules
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
       interval: 5s

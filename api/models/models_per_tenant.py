@@ -313,7 +313,7 @@ class AuditLog(Base):
     error_message = Column(String, nullable=True)  # Error message if status is error
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
-# --- Bank Statements ---
+# --- Statements ---
 
 class BankStatement(Base):
     __tablename__ = "bank_statements"
