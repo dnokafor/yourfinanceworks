@@ -454,21 +454,219 @@ class InvoiceAPIClient:
         """Test email configuration"""
         return await self._make_request("POST", "/email/test", json={"test_email": test_email})
     
+    # AI Configuration Methods
+    async def list_ai_configs(self) -> List[Dict[str, Any]]:
+        """List all AI configurations"""
+        return await self._make_request("GET", "/ai-config/")
+
+    async def get_ai_config(self, config_id: int) -> Dict[str, Any]:
+        """Get a specific AI configuration"""
+        return await self._make_request("GET", f"/ai-config/{config_id}")
+
+    async def create_ai_config(self, config_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new AI configuration"""
+        return await self._make_request("POST", "/ai-config/", json=config_data)
+
+    async def update_ai_config(self, config_id: int, config_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update an AI configuration"""
+        return await self._make_request("PUT", f"/ai-config/{config_id}", json=config_data)
+
+    async def delete_ai_config(self, config_id: int) -> bool:
+        """Delete an AI configuration"""
+        try:
+            await self._make_request("DELETE", f"/ai-config/{config_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete AI config {config_id}: {e}")
+            return False
+
+    async def test_ai_config(self, config_id: int, test_data: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Test an AI configuration"""
+        test_data = test_data or {}
+        return await self._make_request("POST", f"/ai-config/{config_id}/test", json=test_data)
+
+    # Analytics Methods
+    async def get_page_views_analytics(self, days: int = 7, path_filter: str = None) -> Dict[str, Any]:
+        """Get page view analytics"""
+        params = {"days": days}
+        if path_filter:
+            params["path_filter"] = path_filter
+        return await self._make_request("GET", "/analytics/page-views", params=params)
+
+    # Audit Log Methods
+    async def get_audit_logs(
+        self,
+        user_id: int = None,
+        user_email: str = None,
+        action: str = None,
+        resource_type: str = None,
+        resource_id: str = None,
+        status: str = None,
+        start_date: str = None,
+        end_date: str = None,
+        limit: int = 100,
+        offset: int = 0
+    ) -> Dict[str, Any]:
+        """Get audit logs with optional filters"""
+        params = {"limit": limit, "offset": offset}
+        if user_id is not None:
+            params["user_id"] = user_id
+        if user_email:
+            params["user_email"] = user_email
+        if action:
+            params["action"] = action
+        if resource_type:
+            params["resource_type"] = resource_type
+        if resource_id:
+            params["resource_id"] = resource_id
+        if status:
+            params["status"] = status
+        if start_date:
+            params["start_date"] = start_date
+        if end_date:
+            params["end_date"] = end_date
+
+        return await self._make_request("GET", "/audit-logs", params=params)
+
+    # Notification Methods
+    async def get_notification_settings(self) -> Dict[str, Any]:
+        """Get current user's notification settings"""
+        return await self._make_request("GET", "/notifications/settings")
+
+    async def update_notification_settings(self, settings_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update current user's notification settings"""
+        return await self._make_request("PUT", "/notifications/settings", json=settings_data)
+
+    # PDF Processing Methods
+    async def get_ai_status(self) -> Dict[str, Any]:
+        """Get AI status for PDF processing"""
+        return await self._make_request("GET", "/invoices/ai-status")
+
+    async def process_pdf_upload(self, file_path: str, filename: str = None) -> Dict[str, Any]:
+        """Upload and process a PDF file"""
+        headers = await self.auth_client.get_auth_headers()
+        # httpx requires no Content-Type header set for multipart; remove if present
+        headers.pop("Content-Type", None)
+
+        with open(file_path, "rb") as fp:
+            files = {"file": (filename or os.path.basename(file_path), fp, "application/pdf")}
+            resp = await self._client.post(
+                url=f"{self.base_url}/invoices/upload-pdf",
+                headers=headers,
+                files=files,
+            )
+            resp.raise_for_status()
+            return resp.json()
+
+    # Tax Integration Methods
+    async def get_tax_integration_status(self) -> Dict[str, Any]:
+        """Get tax service integration status"""
+        return await self._make_request("GET", "/tax-integration/status")
+
+    async def send_to_tax_service(self, item_id: int, item_type: str) -> Dict[str, Any]:
+        """Send item to tax service"""
+        data = {"item_id": item_id, "item_type": item_type}
+        return await self._make_request("POST", "/tax-integration/send", json=data)
+
+    async def bulk_send_to_tax_service(self, item_ids: List[int], item_type: str) -> Dict[str, Any]:
+        """Bulk send items to tax service"""
+        data = {"item_ids": item_ids, "item_type": item_type}
+        return await self._make_request("POST", "/tax-integration/bulk-send", json=data)
+
+    async def get_tax_service_transactions(self) -> List[Dict[str, Any]]:
+        """Get tax service transactions"""
+        return await self._make_request("GET", "/tax-integration/transactions")
+
     # Tenant Methods
     async def get_tenant_info(self) -> Dict[str, Any]:
         """Get current tenant information"""
         return await self._make_request("GET", "/tenants/me")
-    
+
     async def list_tenants(self, skip: int = 0, limit: int = None) -> List[Dict[str, Any]]:
         """List all tenants (superuser only)"""
         limit = limit or config.DEFAULT_PAGE_SIZE
         limit = min(limit, config.MAX_PAGE_SIZE)
-        
+
         return await self._make_request(
-            "GET", 
+            "GET",
             "/tenants/",
             params={"skip": skip, "limit": limit}
         )
+
+    async def get_tenant_stats(self, tenant_id: int) -> Dict[str, Any]:
+        """Get detailed statistics for a specific tenant"""
+        return await self._make_request("GET", f"/super-admin/tenants/{tenant_id}/stats")
+
+    async def create_tenant(self, tenant_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new tenant"""
+        return await self._make_request("POST", "/super-admin/tenants", json=tenant_data)
+
+    async def update_tenant(self, tenant_id: int, tenant_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update tenant information"""
+        return await self._make_request("PUT", f"/super-admin/tenants/{tenant_id}", json=tenant_data)
+
+    async def delete_tenant(self, tenant_id: int) -> bool:
+        """Delete a tenant"""
+        try:
+            await self._make_request("DELETE", f"/super-admin/tenants/{tenant_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete tenant {tenant_id}: {e}")
+            return False
+
+    async def list_tenant_users(self, tenant_id: int, skip: int = 0, limit: int = None) -> List[Dict[str, Any]]:
+        """List users in a specific tenant"""
+        limit = limit or config.DEFAULT_PAGE_SIZE
+        limit = min(limit, config.MAX_PAGE_SIZE)
+
+        return await self._make_request(
+            "GET",
+            f"/super-admin/tenants/{tenant_id}/users",
+            params={"skip": skip, "limit": limit}
+        )
+
+    async def create_tenant_user(self, tenant_id: int, user_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a user in a specific tenant"""
+        return await self._make_request("POST", f"/super-admin/tenants/{tenant_id}/users", json=user_data)
+
+    async def update_tenant_user(self, tenant_id: int, user_id: int, user_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update a user in a specific tenant"""
+        return await self._make_request("PUT", f"/super-admin/tenants/{tenant_id}/users/{user_id}", json=user_data)
+
+    async def delete_tenant_user(self, tenant_id: int, user_id: int) -> bool:
+        """Delete a user from a specific tenant"""
+        try:
+            await self._make_request("DELETE", f"/super-admin/tenants/{tenant_id}/users/{user_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete user {user_id} from tenant {tenant_id}: {e}")
+            return False
+
+    async def promote_user_to_admin(self, email: str) -> Dict[str, Any]:
+        """Promote a user to admin"""
+        return await self._make_request("POST", "/super-admin/promote", json={"email": email})
+
+    async def reset_user_password(self, user_id: int, new_password: str, confirm_password: str, force_reset_on_login: bool = False) -> Dict[str, Any]:
+        """Reset a user's password"""
+        data = {
+            "new_password": new_password,
+            "confirm_password": confirm_password,
+            "force_reset_on_login": force_reset_on_login
+        }
+        return await self._make_request("POST", f"/super-admin/users/{user_id}/reset-password", json=data)
+
+    async def get_system_stats(self) -> Dict[str, Any]:
+        """Get system-wide statistics"""
+        return await self._make_request("GET", "/super-admin/system/stats")
+
+    async def export_tenant_data(self, tenant_id: int, include_attachments: bool = False) -> Dict[str, Any]:
+        """Export tenant data"""
+        params = {"include_attachments": include_attachments}
+        return await self._make_request("GET", f"/super-admin/tenants/{tenant_id}/export", params=params)
+
+    async def import_tenant_data(self, tenant_id: int, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Import data into a tenant"""
+        return await self._make_request("POST", f"/super-admin/tenants/{tenant_id}/import", json=data)
     
     # Statistics and Reporting
     async def get_invoice_stats(self) -> Dict[str, Any]:

@@ -611,6 +611,422 @@ async def get_tenant_info() -> dict:
     
     return await server_context.tools.get_tenant_info()
 
+# AI Configuration Tools
+
+@mcp.tool()
+async def list_ai_configs() -> dict:
+    """
+    List all AI configurations for the current tenant. Returns configuration details including providers, models, and settings.
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.list_ai_configs()
+
+@mcp.tool()
+async def create_ai_config(provider_name: str, model_name: str, provider_url: Optional[str] = None, api_key: Optional[str] = None, is_active: bool = True, is_default: bool = False, ocr_enabled: bool = False, max_tokens: int = 4096, temperature: float = 0.1) -> dict:
+    """
+    Create a new AI configuration for the tenant.
+
+    Args:
+        provider_name: AI provider name (openai, anthropic, ollama, google, custom)
+        model_name: Model name to use
+        provider_url: Provider URL (for custom providers)
+        api_key: API key for the provider
+        is_active: Whether the config is active (default: True)
+        is_default: Whether this is the default config (default: False)
+        ocr_enabled: Whether OCR is enabled for this config (default: False)
+        max_tokens: Maximum tokens for requests (default: 4096)
+        temperature: Temperature for AI responses (default: 0.1)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.create_ai_config(provider_name=provider_name, model_name=model_name, provider_url=provider_url, api_key=api_key, is_active=is_active, is_default=is_default, ocr_enabled=ocr_enabled, max_tokens=max_tokens, temperature=temperature)
+
+@mcp.tool()
+async def update_ai_config(config_id: int, provider_name: Optional[str] = None, model_name: Optional[str] = None, provider_url: Optional[str] = None, api_key: Optional[str] = None, is_active: Optional[bool] = None, is_default: Optional[bool] = None, ocr_enabled: Optional[bool] = None, max_tokens: Optional[int] = None, temperature: Optional[float] = None) -> dict:
+    """
+    Update an existing AI configuration.
+
+    Args:
+        config_id: ID of the AI config to update
+        provider_name: AI provider name (optional)
+        model_name: Model name to use (optional)
+        provider_url: Provider URL (optional)
+        api_key: API key for the provider (optional)
+        is_active: Whether the config is active (optional)
+        is_default: Whether this is the default config (optional)
+        ocr_enabled: Whether OCR is enabled for this config (optional)
+        max_tokens: Maximum tokens for requests (optional)
+        temperature: Temperature for AI responses (optional)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.update_ai_config(config_id=config_id, provider_name=provider_name, model_name=model_name, provider_url=provider_url, api_key=api_key, is_active=is_active, is_default=is_default, ocr_enabled=ocr_enabled, max_tokens=max_tokens, temperature=temperature)
+
+@mcp.tool()
+async def test_ai_config(config_id: int, custom_prompt: Optional[str] = None, test_text: Optional[str] = None) -> dict:
+    """
+    Test an AI configuration to ensure it's working properly.
+
+    Args:
+        config_id: ID of the AI config to test
+        custom_prompt: Custom test prompt (optional)
+        test_text: Test text for processing (optional)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.test_ai_config(config_id=config_id, custom_prompt=custom_prompt, test_text=test_text)
+
+# Analytics Tools
+
+@mcp.tool()
+async def get_page_views_analytics(days: int = 7, path_filter: Optional[str] = None) -> dict:
+    """
+    Get page view analytics for the current tenant.
+
+    Args:
+        days: Number of days to look back (default: 7)
+        path_filter: Filter by path (optional)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.get_page_views_analytics(days=days, path_filter=path_filter)
+
+# Audit Log Tools
+
+@mcp.tool()
+async def get_audit_logs(user_id: Optional[int] = None, user_email: Optional[str] = None, action: Optional[str] = None, resource_type: Optional[str] = None, resource_id: Optional[str] = None, status: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, limit: int = 100, offset: int = 0) -> dict:
+    """
+    Get audit logs with optional filters for tracking system activities.
+
+    Args:
+        user_id: Filter by user ID (optional)
+        user_email: Filter by user email (optional)
+        action: Filter by action (optional)
+        resource_type: Filter by resource type (optional)
+        resource_id: Filter by resource ID (optional)
+        status: Filter by status (optional)
+        start_date: Start date (YYYY-MM-DD) (optional)
+        end_date: End date (YYYY-MM-DD) (optional)
+        limit: Maximum number of results (default: 100)
+        offset: Number of results to skip (default: 0)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.get_audit_logs(user_id=user_id, user_email=user_email, action=action, resource_type=resource_type, resource_id=resource_id, status=status, start_date=start_date, end_date=end_date, limit=limit, offset=offset)
+
+# Notification Tools
+
+@mcp.tool()
+async def get_notification_settings() -> dict:
+    """
+    Get current user's notification settings.
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.get_notification_settings()
+
+@mcp.tool()
+async def update_notification_settings(invoice_created: bool = True, invoice_paid: bool = True, payment_received: bool = True, client_created: bool = False, overdue_invoice: bool = True, email_enabled: bool = True) -> dict:
+    """
+    Update current user's notification settings.
+
+    Args:
+        invoice_created: Notify when invoices are created (default: True)
+        invoice_paid: Notify when invoices are paid (default: True)
+        payment_received: Notify when payments are received (default: True)
+        client_created: Notify when clients are created (default: False)
+        overdue_invoice: Notify about overdue invoices (default: True)
+        email_enabled: Enable email notifications (default: True)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.update_notification_settings(invoice_created=invoice_created, invoice_paid=invoice_paid, payment_received=payment_received, client_created=client_created, overdue_invoice=overdue_invoice, email_enabled=email_enabled)
+
+# PDF Processing Tools
+
+@mcp.tool()
+async def get_ai_status() -> dict:
+    """
+    Get AI status for PDF processing to check if AI is configured and available.
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.get_ai_status()
+
+@mcp.tool()
+async def process_pdf_upload(file_path: str, filename: Optional[str] = None) -> dict:
+    """
+    Upload and process a PDF file using AI for invoice data extraction.
+
+    Args:
+        file_path: Path to the PDF file to upload
+        filename: Override filename (optional)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.process_pdf_upload(file_path=file_path, filename=filename)
+
+# Tax Integration Tools
+
+@mcp.tool()
+async def get_tax_integration_status() -> dict:
+    """
+    Get tax service integration status to check if tax service is configured and connected.
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.get_tax_integration_status()
+
+@mcp.tool()
+async def send_to_tax_service(item_id: int, item_type: str) -> dict:
+    """
+    Send an item (expense or invoice) to the tax service for processing.
+
+    Args:
+        item_id: ID of the item to send
+        item_type: Type of item (expense or invoice)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.send_to_tax_service(item_id=item_id, item_type=item_type)
+
+@mcp.tool()
+async def bulk_send_to_tax_service(item_ids: List[int], item_type: str) -> dict:
+    """
+    Bulk send multiple items to the tax service for processing.
+
+    Args:
+        item_ids: List of item IDs to send
+        item_type: Type of items (expense or invoice)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.bulk_send_to_tax_service(item_ids=item_ids, item_type=item_type)
+
+@mcp.tool()
+async def get_tax_service_transactions() -> dict:
+    """
+    Get tax service transactions to view items that have been sent to the tax service.
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.get_tax_service_transactions()
+
+# Super Admin Tools
+
+@mcp.tool()
+async def get_tenant_stats(tenant_id: int) -> dict:
+    """
+    Get detailed statistics for a specific tenant including user count, clients, invoices, and payments.
+
+    Args:
+        tenant_id: ID of the tenant to get statistics for
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.get_tenant_stats(tenant_id=tenant_id)
+
+@mcp.tool()
+async def create_tenant(name: str, domain: str, company_name: Optional[str] = None, logo_url: Optional[str] = None, is_active: bool = True, max_users: Optional[int] = None, subscription_plan: Optional[str] = None) -> dict:
+    """
+    Create a new tenant with the specified configuration.
+
+    Args:
+        name: Tenant name
+        domain: Tenant domain
+        company_name: Company name (optional)
+        logo_url: Logo URL (optional)
+        is_active: Whether tenant is active (default: True)
+        max_users: Maximum number of users (optional)
+        subscription_plan: Subscription plan (optional)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.create_tenant(name=name, domain=domain, company_name=company_name, logo_url=logo_url, is_active=is_active, max_users=max_users, subscription_plan=subscription_plan)
+
+@mcp.tool()
+async def update_tenant(tenant_id: int, name: Optional[str] = None, domain: Optional[str] = None, company_name: Optional[str] = None, logo_url: Optional[str] = None, is_active: Optional[bool] = None, max_users: Optional[int] = None, subscription_plan: Optional[str] = None) -> dict:
+    """
+    Update tenant information.
+
+    Args:
+        tenant_id: ID of the tenant to update
+        name: Tenant name (optional)
+        domain: Tenant domain (optional)
+        company_name: Company name (optional)
+        logo_url: Logo URL (optional)
+        is_active: Whether tenant is active (optional)
+        max_users: Maximum number of users (optional)
+        subscription_plan: Subscription plan (optional)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.update_tenant(tenant_id=tenant_id, name=name, domain=domain, company_name=company_name, logo_url=logo_url, is_active=is_active, max_users=max_users, subscription_plan=subscription_plan)
+
+@mcp.tool()
+async def delete_tenant(tenant_id: int) -> dict:
+    """
+    Delete a tenant and all associated data.
+
+    Args:
+        tenant_id: ID of the tenant to delete
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.delete_tenant(tenant_id=tenant_id)
+
+@mcp.tool()
+async def list_tenant_users(tenant_id: int, skip: int = 0, limit: int = 100) -> dict:
+    """
+    List all users in a specific tenant.
+
+    Args:
+        tenant_id: ID of the tenant
+        skip: Number of users to skip for pagination (default: 0)
+        limit: Maximum number of users to return (default: 100)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.list_tenant_users(tenant_id=tenant_id, skip=skip, limit=limit)
+
+@mcp.tool()
+async def create_tenant_user(tenant_id: int, email: str, first_name: str, last_name: str, role: str = "user", is_active: bool = True) -> dict:
+    """
+    Create a new user in a specific tenant.
+
+    Args:
+        tenant_id: ID of the tenant
+        email: User email address
+        first_name: User's first name
+        last_name: User's last name
+        role: User role (default: "user")
+        is_active: Whether user is active (default: True)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.create_tenant_user(tenant_id=tenant_id, email=email, first_name=first_name, last_name=last_name, role=role, is_active=is_active)
+
+@mcp.tool()
+async def update_tenant_user(tenant_id: int, user_id: int, email: Optional[str] = None, first_name: Optional[str] = None, last_name: Optional[str] = None, role: Optional[str] = None, is_active: Optional[bool] = None) -> dict:
+    """
+    Update a user in a specific tenant.
+
+    Args:
+        tenant_id: ID of the tenant
+        user_id: ID of the user to update
+        email: User email address (optional)
+        first_name: User's first name (optional)
+        last_name: User's last name (optional)
+        role: User role (optional)
+        is_active: Whether user is active (optional)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.update_tenant_user(tenant_id=tenant_id, user_id=user_id, email=email, first_name=first_name, last_name=last_name, role=role, is_active=is_active)
+
+@mcp.tool()
+async def delete_tenant_user(tenant_id: int, user_id: int) -> dict:
+    """
+    Delete a user from a specific tenant.
+
+    Args:
+        tenant_id: ID of the tenant
+        user_id: ID of the user to delete
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.delete_tenant_user(tenant_id=tenant_id, user_id=user_id)
+
+@mcp.tool()
+async def promote_user_to_admin(email: str) -> dict:
+    """
+    Promote a user to admin role.
+
+    Args:
+        email: Email address of the user to promote
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.promote_user_to_admin(email=email)
+
+@mcp.tool()
+async def reset_user_password(user_id: int, new_password: str, confirm_password: str, force_reset_on_login: bool = False) -> dict:
+    """
+    Reset a user's password.
+
+    Args:
+        user_id: ID of the user
+        new_password: New password
+        confirm_password: Confirm new password
+        force_reset_on_login: Force password reset on login (default: False)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.reset_user_password(user_id=user_id, new_password=new_password, confirm_password=confirm_password, force_reset_on_login=force_reset_on_login)
+
+@mcp.tool()
+async def get_system_stats() -> dict:
+    """
+    Get system-wide statistics across all tenants.
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.get_system_stats()
+
+@mcp.tool()
+async def export_tenant_data(tenant_id: int, include_attachments: bool = False) -> dict:
+    """
+    Export all data for a specific tenant.
+
+    Args:
+        tenant_id: ID of the tenant to export
+        include_attachments: Include attachments in export (default: False)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.export_tenant_data(tenant_id=tenant_id, include_attachments=include_attachments)
+
+@mcp.tool()
+async def import_tenant_data(tenant_id: int, data: Dict[str, Any]) -> dict:
+    """
+    Import data into a specific tenant.
+
+    Args:
+        tenant_id: ID of the tenant to import into
+        data: Data to import (JSON format)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.import_tenant_data(tenant_id=tenant_id, data=data)
+
 def parse_arguments():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(
@@ -672,6 +1088,33 @@ Available Tools:
   - send_invoice_email: Send an invoice via email
   - test_email_configuration: Test email configuration
   - get_tenant_info: Get current tenant information
+  - list_ai_configs: List all AI configurations
+  - create_ai_config: Create a new AI configuration
+  - update_ai_config: Update an AI configuration
+  - test_ai_config: Test an AI configuration
+  - get_page_views_analytics: Get page view analytics
+  - get_audit_logs: Get audit logs with filters
+  - get_notification_settings: Get notification settings
+  - update_notification_settings: Update notification settings
+  - get_ai_status: Get AI status for PDF processing
+  - process_pdf_upload: Upload and process PDF files
+  - get_tax_integration_status: Get tax integration status
+  - send_to_tax_service: Send items to tax service
+  - bulk_send_to_tax_service: Bulk send items to tax service
+  - get_tax_service_transactions: Get tax service transactions
+  - get_tenant_stats: Get detailed tenant statistics
+  - create_tenant: Create a new tenant
+  - update_tenant: Update tenant information
+  - delete_tenant: Delete a tenant
+  - list_tenant_users: List users in a tenant
+  - create_tenant_user: Create a user in a tenant
+  - update_tenant_user: Update a user in a tenant
+  - delete_tenant_user: Delete a user from a tenant
+  - promote_user_to_admin: Promote user to admin
+  - reset_user_password: Reset user password
+  - get_system_stats: Get system-wide statistics
+  - export_tenant_data: Export tenant data
+  - import_tenant_data: Import data into tenant
         """
     )
     

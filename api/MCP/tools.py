@@ -190,6 +190,173 @@ class GetTenantArgs(BaseModel):
     pass  # No arguments needed for getting tenant info
 
 
+# AI Configuration
+class ListAIConfigsArgs(BaseModel):
+    pass  # No arguments needed for listing AI configs
+
+
+class CreateAIConfigArgs(BaseModel):
+    provider_name: str = Field(description="AI provider name (openai, anthropic, ollama, google, custom)")
+    provider_url: Optional[str] = Field(default=None, description="Provider URL (for custom providers)")
+    api_key: Optional[str] = Field(default=None, description="API key for the provider")
+    model_name: str = Field(description="Model name to use")
+    is_active: bool = Field(default=True, description="Whether the config is active")
+    is_default: bool = Field(default=False, description="Whether this is the default config")
+    ocr_enabled: bool = Field(default=False, description="Whether OCR is enabled for this config")
+    max_tokens: int = Field(default=4096, description="Maximum tokens for requests")
+    temperature: float = Field(default=0.1, description="Temperature for AI responses")
+
+
+class UpdateAIConfigArgs(BaseModel):
+    config_id: int = Field(description="ID of the AI config to update")
+    provider_name: Optional[str] = Field(default=None, description="AI provider name")
+    provider_url: Optional[str] = Field(default=None, description="Provider URL")
+    api_key: Optional[str] = Field(default=None, description="API key")
+    model_name: Optional[str] = Field(default=None, description="Model name")
+    is_active: Optional[bool] = Field(default=None, description="Whether active")
+    is_default: Optional[bool] = Field(default=None, description="Whether default")
+    ocr_enabled: Optional[bool] = Field(default=None, description="OCR enabled")
+    max_tokens: Optional[int] = Field(default=None, description="Max tokens")
+    temperature: Optional[float] = Field(default=None, description="Temperature")
+
+
+class TestAIConfigArgs(BaseModel):
+    config_id: int = Field(description="ID of the AI config to test")
+    custom_prompt: Optional[str] = Field(default=None, description="Custom test prompt")
+    test_text: Optional[str] = Field(default=None, description="Test text for processing")
+
+
+# Analytics
+class GetPageViewsAnalyticsArgs(BaseModel):
+    days: int = Field(default=7, description="Number of days to look back")
+    path_filter: Optional[str] = Field(default=None, description="Filter by path")
+
+
+# Audit Logs
+class GetAuditLogsArgs(BaseModel):
+    user_id: Optional[int] = Field(default=None, description="Filter by user ID")
+    user_email: Optional[str] = Field(default=None, description="Filter by user email")
+    action: Optional[str] = Field(default=None, description="Filter by action")
+    resource_type: Optional[str] = Field(default=None, description="Filter by resource type")
+    resource_id: Optional[str] = Field(default=None, description="Filter by resource ID")
+    status: Optional[str] = Field(default=None, description="Filter by status")
+    start_date: Optional[str] = Field(default=None, description="Start date (YYYY-MM-DD)")
+    end_date: Optional[str] = Field(default=None, description="End date (YYYY-MM-DD)")
+    limit: int = Field(default=100, description="Maximum number of results")
+    offset: int = Field(default=0, description="Number of results to skip")
+
+
+# Notifications
+class GetNotificationSettingsArgs(BaseModel):
+    pass  # No arguments needed
+
+
+class UpdateNotificationSettingsArgs(BaseModel):
+    invoice_created: bool = Field(default=True, description="Notify when invoices are created")
+    invoice_paid: bool = Field(default=True, description="Notify when invoices are paid")
+    payment_received: bool = Field(default=True, description="Notify when payments are received")
+    client_created: bool = Field(default=False, description="Notify when clients are created")
+    overdue_invoice: bool = Field(default=True, description="Notify about overdue invoices")
+    email_enabled: bool = Field(default=True, description="Enable email notifications")
+
+
+# PDF Processing
+class GetAIStatusArgs(BaseModel):
+    pass  # No arguments needed
+
+
+class ProcessPDFUploadArgs(BaseModel):
+    file_path: str = Field(description="Path to the PDF file to upload")
+    filename: Optional[str] = Field(default=None, description="Override filename")
+
+
+# Tax Integration
+class GetTaxIntegrationStatusArgs(BaseModel):
+    pass  # No arguments needed
+
+
+class SendToTaxServiceArgs(BaseModel):
+    item_id: int = Field(description="ID of the item to send")
+    item_type: str = Field(description="Type of item (expense or invoice)")
+
+
+class BulkSendToTaxServiceArgs(BaseModel):
+    item_ids: List[int] = Field(description="List of item IDs to send")
+    item_type: str = Field(description="Type of items (expense or invoice)")
+
+
+# Super Admin Tools
+class GetTenantStatsArgs(BaseModel):
+    tenant_id: int = Field(description="ID of the tenant to get stats for")
+
+
+class CreateTenantArgs(BaseModel):
+    name: str = Field(description="Tenant name")
+    domain: str = Field(description="Tenant domain")
+    company_name: Optional[str] = Field(default=None, description="Company name")
+    logo_url: Optional[str] = Field(default=None, description="Logo URL")
+    is_active: bool = Field(default=True, description="Whether tenant is active")
+    max_users: Optional[int] = Field(default=None, description="Maximum number of users")
+    subscription_plan: Optional[str] = Field(default=None, description="Subscription plan")
+
+
+class UpdateTenantArgs(BaseModel):
+    tenant_id: int = Field(description="ID of the tenant to update")
+    name: Optional[str] = Field(default=None, description="Tenant name")
+    domain: Optional[str] = Field(default=None, description="Tenant domain")
+    company_name: Optional[str] = Field(default=None, description="Company name")
+    logo_url: Optional[str] = Field(default=None, description="Logo URL")
+    is_active: Optional[bool] = Field(default=None, description="Whether tenant is active")
+    max_users: Optional[int] = Field(default=None, description="Maximum number of users")
+    subscription_plan: Optional[str] = Field(default=None, description="Subscription plan")
+
+
+class ListTenantUsersArgs(BaseModel):
+    tenant_id: int = Field(description="ID of the tenant")
+    skip: int = Field(default=0, description="Number of users to skip")
+    limit: int = Field(default=100, description="Maximum number of users to return")
+
+
+class CreateTenantUserArgs(BaseModel):
+    tenant_id: int = Field(description="ID of the tenant")
+    email: str = Field(description="User email")
+    first_name: str = Field(description="First name")
+    last_name: str = Field(description="Last name")
+    role: str = Field(default="user", description="User role")
+    is_active: bool = Field(default=True, description="Whether user is active")
+
+
+class UpdateTenantUserArgs(BaseModel):
+    tenant_id: int = Field(description="ID of the tenant")
+    user_id: int = Field(description="ID of the user to update")
+    email: Optional[str] = Field(default=None, description="User email")
+    first_name: Optional[str] = Field(default=None, description="First name")
+    last_name: Optional[str] = Field(default=None, description="Last name")
+    role: Optional[str] = Field(default=None, description="User role")
+    is_active: Optional[bool] = Field(default=None, description="Whether user is active")
+
+
+class PromoteUserToAdminArgs(BaseModel):
+    email: str = Field(description="Email of the user to promote")
+
+
+class ResetUserPasswordArgs(BaseModel):
+    user_id: int = Field(description="ID of the user")
+    new_password: str = Field(description="New password")
+    confirm_password: str = Field(description="Confirm new password")
+    force_reset_on_login: bool = Field(default=False, description="Force password reset on login")
+
+
+class ExportTenantDataArgs(BaseModel):
+    tenant_id: int = Field(description="ID of the tenant to export")
+    include_attachments: bool = Field(default=False, description="Include attachments in export")
+
+
+class ImportTenantDataArgs(BaseModel):
+    tenant_id: int = Field(description="ID of the tenant to import into")
+    data: Dict[str, Any] = Field(description="Data to import")
+
+
 # Tool argument schemas will be used directly with FastMCP decorators
 
 
@@ -1157,4 +1324,532 @@ class InvoiceTools:
             return {"success": True, "data": {"suggested_actions": actions, "raw_analysis": analysis_data}}
 
         except Exception as e:
-            return {"success": False, "error": f"Failed to suggest invoice actions: {e}"} 
+            return {"success": False, "error": f"Failed to suggest invoice actions: {e}"}
+
+    # AI Configuration Tools
+    async def list_ai_configs(self) -> Dict[str, Any]:
+        """List all AI configurations"""
+        try:
+            configs = await self.api_client.list_ai_configs()
+            return {
+                "success": True,
+                "data": configs,
+                "count": len(configs),
+                "message": f"Found {len(configs)} AI configurations"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to list AI configs: {e}"}
+
+    async def create_ai_config(
+        self,
+        provider_name: str,
+        model_name: str,
+        provider_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        is_active: bool = True,
+        is_default: bool = False,
+        ocr_enabled: bool = False,
+        max_tokens: int = 4096,
+        temperature: float = 0.1
+    ) -> Dict[str, Any]:
+        """Create a new AI configuration"""
+        try:
+            config_data = {
+                "provider_name": provider_name,
+                "model_name": model_name,
+                "is_active": is_active,
+                "is_default": is_default,
+                "ocr_enabled": ocr_enabled,
+                "max_tokens": max_tokens,
+                "temperature": temperature
+            }
+            if provider_url:
+                config_data["provider_url"] = provider_url
+            if api_key:
+                config_data["api_key"] = api_key
+
+            config = await self.api_client.create_ai_config(config_data)
+            return {
+                "success": True,
+                "data": config,
+                "message": "AI configuration created successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to create AI config: {e}"}
+
+    async def update_ai_config(
+        self,
+        config_id: int,
+        provider_name: Optional[str] = None,
+        model_name: Optional[str] = None,
+        provider_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        is_default: Optional[bool] = None,
+        ocr_enabled: Optional[bool] = None,
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """Update an AI configuration"""
+        try:
+            update_data = {}
+            if provider_name is not None:
+                update_data["provider_name"] = provider_name
+            if model_name is not None:
+                update_data["model_name"] = model_name
+            if provider_url is not None:
+                update_data["provider_url"] = provider_url
+            if api_key is not None:
+                update_data["api_key"] = api_key
+            if is_active is not None:
+                update_data["is_active"] = is_active
+            if is_default is not None:
+                update_data["is_default"] = is_default
+            if ocr_enabled is not None:
+                update_data["ocr_enabled"] = ocr_enabled
+            if max_tokens is not None:
+                update_data["max_tokens"] = max_tokens
+            if temperature is not None:
+                update_data["temperature"] = temperature
+
+            config = await self.api_client.update_ai_config(config_id, update_data)
+            return {
+                "success": True,
+                "data": config,
+                "message": "AI configuration updated successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to update AI config: {e}"}
+
+    async def test_ai_config(self, config_id: int, custom_prompt: Optional[str] = None, test_text: Optional[str] = None) -> Dict[str, Any]:
+        """Test an AI configuration"""
+        try:
+            test_data = {}
+            if custom_prompt:
+                test_data["custom_prompt"] = custom_prompt
+            if test_text:
+                test_data["test_text"] = test_text
+
+            result = await self.api_client.test_ai_config(config_id, test_data)
+            return {
+                "success": True,
+                "data": result,
+                "message": "AI configuration test completed"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to test AI config: {e}"}
+
+    # Analytics Tools
+    async def get_page_views_analytics(self, days: int = 7, path_filter: Optional[str] = None) -> Dict[str, Any]:
+        """Get page view analytics"""
+        try:
+            analytics = await self.api_client.get_page_views_analytics(days=days, path_filter=path_filter)
+            return {
+                "success": True,
+                "data": analytics,
+                "message": f"Analytics for the past {days} days"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to get analytics: {e}"}
+
+    # Audit Log Tools
+    async def get_audit_logs(
+        self,
+        user_id: Optional[int] = None,
+        user_email: Optional[str] = None,
+        action: Optional[str] = None,
+        resource_type: Optional[str] = None,
+        resource_id: Optional[str] = None,
+        status: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0
+    ) -> Dict[str, Any]:
+        """Get audit logs with optional filters"""
+        try:
+            logs = await self.api_client.get_audit_logs(
+                user_id=user_id,
+                user_email=user_email,
+                action=action,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                status=status,
+                start_date=start_date,
+                end_date=end_date,
+                limit=limit,
+                offset=offset
+            )
+            return {
+                "success": True,
+                "data": logs,
+                "message": f"Found audit logs"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to get audit logs: {e}"}
+
+    # Notification Tools
+    async def get_notification_settings(self) -> Dict[str, Any]:
+        """Get current user's notification settings"""
+        try:
+            settings = await self.api_client.get_notification_settings()
+            return {
+                "success": True,
+                "data": settings,
+                "message": "Notification settings retrieved"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to get notification settings: {e}"}
+
+    async def update_notification_settings(
+        self,
+        invoice_created: bool = True,
+        invoice_paid: bool = True,
+        payment_received: bool = True,
+        client_created: bool = False,
+        overdue_invoice: bool = True,
+        email_enabled: bool = True
+    ) -> Dict[str, Any]:
+        """Update current user's notification settings"""
+        try:
+            settings_data = {
+                "invoice_created": invoice_created,
+                "invoice_paid": invoice_paid,
+                "payment_received": payment_received,
+                "client_created": client_created,
+                "overdue_invoice": overdue_invoice,
+                "email_enabled": email_enabled
+            }
+
+            settings = await self.api_client.update_notification_settings(settings_data)
+            return {
+                "success": True,
+                "data": settings,
+                "message": "Notification settings updated successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to update notification settings: {e}"}
+
+    # PDF Processing Tools
+    async def get_ai_status(self) -> Dict[str, Any]:
+        """Get AI status for PDF processing"""
+        try:
+            status = await self.api_client.get_ai_status()
+            return {
+                "success": True,
+                "data": status,
+                "message": "AI status retrieved"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to get AI status: {e}"}
+
+    async def process_pdf_upload(self, file_path: str, filename: Optional[str] = None) -> Dict[str, Any]:
+        """Upload and process a PDF file"""
+        try:
+            result = await self.api_client.process_pdf_upload(file_path=file_path, filename=filename)
+            return {
+                "success": True,
+                "data": result,
+                "message": "PDF uploaded and processing started"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to process PDF upload: {e}"}
+
+    # Tax Integration Tools
+    async def get_tax_integration_status(self) -> Dict[str, Any]:
+        """Get tax service integration status"""
+        try:
+            status = await self.api_client.get_tax_integration_status()
+            return {
+                "success": True,
+                "data": status,
+                "message": "Tax integration status retrieved"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to get tax integration status: {e}"}
+
+    async def send_to_tax_service(self, item_id: int, item_type: str) -> Dict[str, Any]:
+        """Send item to tax service"""
+        try:
+            result = await self.api_client.send_to_tax_service(item_id=item_id, item_type=item_type)
+            return {
+                "success": True,
+                "data": result,
+                "message": f"Item {item_id} sent to tax service"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to send item to tax service: {e}"}
+
+    async def bulk_send_to_tax_service(self, item_ids: List[int], item_type: str) -> Dict[str, Any]:
+        """Bulk send items to tax service"""
+        try:
+            result = await self.api_client.bulk_send_to_tax_service(item_ids=item_ids, item_type=item_type)
+            return {
+                "success": True,
+                "data": result,
+                "message": f"Bulk sent {len(item_ids)} items to tax service"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to bulk send items to tax service: {e}"}
+
+    async def get_tax_service_transactions(self) -> Dict[str, Any]:
+        """Get tax service transactions"""
+        try:
+            transactions = await self.api_client.get_tax_service_transactions()
+            return {
+                "success": True,
+                "data": transactions,
+                "count": len(transactions),
+                "message": f"Found {len(transactions)} tax service transactions"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to get tax service transactions: {e}"}
+
+    # Super Admin Tools
+    async def get_tenant_stats(self, tenant_id: int) -> Dict[str, Any]:
+        """Get detailed statistics for a specific tenant"""
+        try:
+            stats = await self.api_client.get_tenant_stats(tenant_id)
+            return {
+                "success": True,
+                "data": stats,
+                "message": f"Retrieved stats for tenant {tenant_id}"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to get tenant stats: {e}"}
+
+    async def create_tenant(
+        self,
+        name: str,
+        domain: str,
+        company_name: Optional[str] = None,
+        logo_url: Optional[str] = None,
+        is_active: bool = True,
+        max_users: Optional[int] = None,
+        subscription_plan: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Create a new tenant"""
+        try:
+            tenant_data = {
+                "name": name,
+                "domain": domain,
+                "is_active": is_active
+            }
+            if company_name:
+                tenant_data["company_name"] = company_name
+            if logo_url:
+                tenant_data["logo_url"] = logo_url
+            if max_users is not None:
+                tenant_data["max_users"] = max_users
+            if subscription_plan:
+                tenant_data["subscription_plan"] = subscription_plan
+
+            tenant = await self.api_client.create_tenant(tenant_data)
+            return {
+                "success": True,
+                "data": tenant,
+                "message": "Tenant created successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to create tenant: {e}"}
+
+    async def update_tenant(
+        self,
+        tenant_id: int,
+        name: Optional[str] = None,
+        domain: Optional[str] = None,
+        company_name: Optional[str] = None,
+        logo_url: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        max_users: Optional[int] = None,
+        subscription_plan: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Update tenant information"""
+        try:
+            update_data = {}
+            if name is not None:
+                update_data["name"] = name
+            if domain is not None:
+                update_data["domain"] = domain
+            if company_name is not None:
+                update_data["company_name"] = company_name
+            if logo_url is not None:
+                update_data["logo_url"] = logo_url
+            if is_active is not None:
+                update_data["is_active"] = is_active
+            if max_users is not None:
+                update_data["max_users"] = max_users
+            if subscription_plan is not None:
+                update_data["subscription_plan"] = subscription_plan
+
+            tenant = await self.api_client.update_tenant(tenant_id, update_data)
+            return {
+                "success": True,
+                "data": tenant,
+                "message": f"Tenant {tenant_id} updated successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to update tenant: {e}"}
+
+    async def delete_tenant(self, tenant_id: int) -> Dict[str, Any]:
+        """Delete a tenant"""
+        try:
+            success = await self.api_client.delete_tenant(tenant_id)
+            if success:
+                return {
+                    "success": True,
+                    "message": f"Tenant {tenant_id} deleted successfully"
+                }
+            else:
+                return {"success": False, "error": "Failed to delete tenant"}
+        except Exception as e:
+            return {"success": False, "error": f"Failed to delete tenant: {e}"}
+
+    async def list_tenant_users(self, tenant_id: int, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
+        """List users in a specific tenant"""
+        try:
+            users = await self.api_client.list_tenant_users(tenant_id, skip=skip, limit=limit)
+            return {
+                "success": True,
+                "data": users,
+                "count": len(users),
+                "pagination": {"skip": skip, "limit": limit},
+                "message": f"Found {len(users)} users in tenant {tenant_id}"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to list tenant users: {e}"}
+
+    async def create_tenant_user(
+        self,
+        tenant_id: int,
+        email: str,
+        first_name: str,
+        last_name: str,
+        role: str = "user",
+        is_active: bool = True
+    ) -> Dict[str, Any]:
+        """Create a user in a specific tenant"""
+        try:
+            user_data = {
+                "email": email,
+                "first_name": first_name,
+                "last_name": last_name,
+                "role": role,
+                "is_active": is_active
+            }
+
+            user = await self.api_client.create_tenant_user(tenant_id, user_data)
+            return {
+                "success": True,
+                "data": user,
+                "message": f"User created successfully in tenant {tenant_id}"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to create tenant user: {e}"}
+
+    async def update_tenant_user(
+        self,
+        tenant_id: int,
+        user_id: int,
+        email: Optional[str] = None,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+        role: Optional[str] = None,
+        is_active: Optional[bool] = None
+    ) -> Dict[str, Any]:
+        """Update a user in a specific tenant"""
+        try:
+            update_data = {}
+            if email is not None:
+                update_data["email"] = email
+            if first_name is not None:
+                update_data["first_name"] = first_name
+            if last_name is not None:
+                update_data["last_name"] = last_name
+            if role is not None:
+                update_data["role"] = role
+            if is_active is not None:
+                update_data["is_active"] = is_active
+
+            user = await self.api_client.update_tenant_user(tenant_id, user_id, update_data)
+            return {
+                "success": True,
+                "data": user,
+                "message": f"User {user_id} updated successfully in tenant {tenant_id}"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to update tenant user: {e}"}
+
+    async def delete_tenant_user(self, tenant_id: int, user_id: int) -> Dict[str, Any]:
+        """Delete a user from a specific tenant"""
+        try:
+            success = await self.api_client.delete_tenant_user(tenant_id, user_id)
+            if success:
+                return {
+                    "success": True,
+                    "message": f"User {user_id} deleted successfully from tenant {tenant_id}"
+                }
+            else:
+                return {"success": False, "error": "Failed to delete tenant user"}
+        except Exception as e:
+            return {"success": False, "error": f"Failed to delete tenant user: {e}"}
+
+    async def promote_user_to_admin(self, email: str) -> Dict[str, Any]:
+        """Promote a user to admin"""
+        try:
+            result = await self.api_client.promote_user_to_admin(email)
+            return {
+                "success": True,
+                "data": result,
+                "message": f"User {email} promoted to admin successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to promote user to admin: {e}"}
+
+    async def reset_user_password(self, user_id: int, new_password: str, confirm_password: str, force_reset_on_login: bool = False) -> Dict[str, Any]:
+        """Reset a user's password"""
+        try:
+            result = await self.api_client.reset_user_password(user_id, new_password, confirm_password, force_reset_on_login)
+            return {
+                "success": True,
+                "data": result,
+                "message": f"Password reset successfully for user {user_id}"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to reset user password: {e}"}
+
+    async def get_system_stats(self) -> Dict[str, Any]:
+        """Get system-wide statistics"""
+        try:
+            stats = await self.api_client.get_system_stats()
+            return {
+                "success": True,
+                "data": stats,
+                "message": "System statistics retrieved"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to get system stats: {e}"}
+
+    async def export_tenant_data(self, tenant_id: int, include_attachments: bool = False) -> Dict[str, Any]:
+        """Export tenant data"""
+        try:
+            result = await self.api_client.export_tenant_data(tenant_id, include_attachments)
+            return {
+                "success": True,
+                "data": result,
+                "message": f"Tenant {tenant_id} data exported successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to export tenant data: {e}"}
+
+    async def import_tenant_data(self, tenant_id: int, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Import data into a tenant"""
+        try:
+            result = await self.api_client.import_tenant_data(tenant_id, data)
+            return {
+                "success": True,
+                "data": result,
+                "message": f"Data imported successfully into tenant {tenant_id}"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to import tenant data: {e}"} 
