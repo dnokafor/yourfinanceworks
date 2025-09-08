@@ -3,7 +3,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Filter, FileText, Loader2, Pencil, Trash2, RotateCcw, ChevronDown, ChevronUp, Upload, Edit, Copy, Grid3X3, List } from "lucide-react";
+import { Plus, Search, Filter, FileText, Loader2, Pencil, Trash2, RotateCcw, ChevronDown, ChevronUp, Upload, Edit, Copy, Grid3X3, List, Send } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -18,6 +18,13 @@ import { formatDate } from '@/lib/utils';
 import { canPerformActions } from "@/utils/auth";
 import { useTranslation } from 'react-i18next';
 import { InvoiceCard } from "@/components/invoices/InvoiceCard";
+
+// Import Tax Integration Components
+import {
+  SendToTaxServiceButton,
+  TaxIntegrationStatus,
+  BulkSendToTaxServiceDialog,
+} from '@/components/tax-integration';
 
 const formatStatus = (status: string) => {
   return status.split('_').map(word => 
@@ -48,6 +55,10 @@ const Invoices = () => {
   const [deletedInvoices, setDeletedInvoices] = useState<DeletedInvoice[]>([]);
   const [recycleBinLoading, setRecycleBinLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+
+  // Tax Integration State
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [bulkSendDialogOpen, setBulkSendDialogOpen] = useState(false);
 
   // Check if user can perform actions (not a viewer)
   const canPerformAction = canPerformActions();
@@ -260,7 +271,10 @@ const Invoices = () => {
             </div>
           )}
         </div>
-        
+
+        {/* Tax Integration Status */}
+        <TaxIntegrationStatus />
+
         <Collapsible open={showRecycleBin} onOpenChange={setShowRecycleBin}>
           <CollapsibleContent>
             <Card className="slide-in mb-6">
@@ -508,6 +522,20 @@ const Invoices = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Bulk Send to Tax Service Dialog */}
+        <BulkSendToTaxServiceDialog
+          open={bulkSendDialogOpen}
+          onOpenChange={setBulkSendDialogOpen}
+          items={filteredInvoices.filter(invoice => selectedIds.includes(invoice.id))}
+          itemType="invoice"
+          onSuccess={() => {
+            // Refresh invoices and clear selection after successful bulk send
+            setInvoices(prev => [...prev]); // Trigger re-render
+            setSelectedIds([]);
+            setBulkSendDialogOpen(false);
+          }}
+        />
       </div>
     </AppLayout>
   );

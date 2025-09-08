@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '2b1b_must_reset_password_tenant'
-down_revision = '2b1a_must_reset_password_master'
+down_revision = 'add_show_analytics_001'
 branch_labels = None
 depends_on = None
 

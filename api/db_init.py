@@ -1,10 +1,15 @@
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, event, text, inspect
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine import Engine
 from datetime import datetime, timezone
 import logging
 from sqlalchemy.engine.url import make_url
 import os
+import time
+from alembic.config import Config
+from alembic import command
+from alembic.script import ScriptDirectory
+from alembic.runtime.migration import MigrationContext
 
 from models.models import Base
 from models.models_per_tenant import Base as TenantBase, User as TenantUser
@@ -23,6 +28,130 @@ if make_url(SQLALCHEMY_DATABASE_URL).get_backend_name() == "sqlite":
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
+
+def wait_for_database(database_url, max_retries=30, retry_delay=2):
+    """Wait for database to be available."""
+    logger.info("Waiting for database to be available...")
+    
+    for attempt in range(max_retries):
+        try:
+            engine = create_engine(database_url)
+            with engine.connect() as conn:
+                conn.execute(text('SELECT 1'))
+            logger.info("Database is available")
+            return True
+        except Exception as e:
+            logger.info(f"Database not ready (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+    
+    logger.error("Database did not become available within the timeout period")
+    return False
+
+def ensure_alembic_version_table_structure(database_url):
+    """Ensure alembic_version table has correct column length."""
+    try:
+        engine = create_engine(database_url)
+        
+        with engine.connect() as conn:
+            inspector = inspect(conn)
+            
+            # Check if alembic_version table exists
+            if 'alembic_version' in inspector.get_table_names():
+                # Check column length
+                result = conn.execute(text(
+                    "SELECT character_maximum_length FROM information_schema.columns "
+                    "WHERE table_name = 'alembic_version' AND column_name = 'version_num'"
+                ))
+                current_length = result.fetchone()
+                
+                if current_length and current_length[0] < 128:
+                    logger.info(f"Expanding alembic_version.version_num column from {current_length[0]} to 128 characters")
+                    conn.execute(text('ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(128)'))
+                    conn.commit()
+                    logger.info("Successfully expanded alembic_version column")
+                else:
+                    logger.info("alembic_version column already has correct length")
+            else:
+                logger.info("alembic_version table does not exist yet")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error ensuring alembic_version table structure: {e}")
+        return False
+
+def ensure_required_columns(database_url):
+    """Ensure required columns exist in master_users table."""
+    try:
+        engine = create_engine(database_url)
+        
+        with engine.connect() as conn:
+            inspector = inspect(conn)
+            
+            # Check if master_users table exists
+            if 'master_users' not in inspector.get_table_names():
+                logger.info("master_users table does not exist yet")
+                return True
+            
+            # Get existing columns
+            columns = inspector.get_columns('master_users')
+            existing_columns = {col['name'] for col in columns}
+            
+            # Required columns that should exist
+            required_columns = {
+                'must_reset_password': 'BOOLEAN NOT NULL DEFAULT FALSE',
+                'show_analytics': 'BOOLEAN NOT NULL DEFAULT FALSE'
+            }
+            
+            # Add missing columns
+            for col_name, col_definition in required_columns.items():
+                if col_name not in existing_columns:
+                    logger.info(f"Adding missing column: {col_name}")
+                    conn.execute(text(f'ALTER TABLE master_users ADD COLUMN {col_name} {col_definition}'))
+                    conn.commit()
+                    logger.info(f"Successfully added column: {col_name}")
+                else:
+                    logger.info(f"Column {col_name} already exists")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error ensuring required columns: {e}")
+        return False
+
+def run_database_migrations():
+    """Run alembic migrations to ensure database is up to date."""
+    try:
+        # Create alembic config
+        alembic_cfg = Config('alembic.ini')
+        
+        # Check current revision
+        engine = create_engine(SQLALCHEMY_DATABASE_URL)
+        
+        with engine.connect() as conn:
+            context = MigrationContext.configure(conn)
+            current_rev = context.get_current_revision()
+            
+            # Get script directory
+            script = ScriptDirectory.from_config(alembic_cfg)
+            head_rev = script.get_current_head()
+            
+            logger.info(f"Current revision: {current_rev}")
+            logger.info(f"Head revision: {head_rev}")
+            
+            if current_rev != head_rev:
+                logger.info("Running migrations to bring database up to date...")
+                command.upgrade(alembic_cfg, 'head')
+                logger.info("Migrations completed successfully")
+            else:
+                logger.info("Database is already up to date")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error running migrations: {e}")
+        return False
 
 def sync_users_to_tenant_db(tenant_id: int):
     """Sync only admin users from master database to tenant database"""
@@ -104,7 +233,32 @@ def sync_users_to_tenant_db(tenant_id: int):
         logger.error(f"Error syncing admin user to tenant database {tenant_id}: {str(e)}")
         raise e
 
-def init_db():
+def init_db(skip_migrations=True):
+    """Initialize database with essential setup, optionally skipping migrations."""
+    logger.info("Starting essential database initialization...")
+
+    # Step 1: Wait for database to be available
+    if not wait_for_database(SQLALCHEMY_DATABASE_URL):
+        logger.error("Database is not available")
+        raise Exception("Database connection failed")
+
+    # Step 2: Ensure required columns exist (fallback for manual fixes)
+    if not ensure_required_columns(SQLALCHEMY_DATABASE_URL):
+        logger.error("Failed to ensure required columns")
+        # Continue anyway as tables might not exist yet
+
+    # Step 3: Skip migrations if requested (to avoid hanging)
+    if not skip_migrations:
+        # Step 3a: Ensure alembic_version table has correct structure
+        if not ensure_alembic_version_table_structure(SQLALCHEMY_DATABASE_URL):
+            logger.error("Failed to ensure alembic_version table structure")
+            # Continue anyway as this might be first run
+
+        # Step 3b: Run migrations to ensure database is up to date
+        if not run_database_migrations():
+            logger.error("Failed to run migrations")
+            # Continue anyway to allow basic table creation
+    
     # Create database engine
     if make_url(SQLALCHEMY_DATABASE_URL).get_backend_name() == "sqlite":
         engine = create_engine(

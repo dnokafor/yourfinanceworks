@@ -26,7 +26,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 // removed duplicate useEffect import
-import { Loader2, Plus, Search, Trash2, Upload, ChevronDown, MoreHorizontal, Edit } from 'lucide-react';
+import { Loader2, Plus, Search, Trash2, Upload, ChevronDown, MoreHorizontal, Edit, Send } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Link } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
@@ -36,6 +36,13 @@ import { Badge } from '@/components/ui/badge';
 import { CurrencySelector } from '@/components/ui/currency-selector';
 import { EXPENSE_CATEGORY_OPTIONS } from '@/constants/expenses';
 import { canPerformActions } from '@/utils/auth';
+
+// Import Tax Integration Components
+import {
+  SendToTaxServiceButton,
+  TaxIntegrationStatus,
+  BulkSendToTaxServiceDialog,
+} from '@/components/tax-integration';
 
 // Helper function to format date without timezone issues
 const formatDateToISO = (date: Date): string => {
@@ -94,6 +101,9 @@ const Expenses = () => {
   const [attachments, setAttachments] = useState<Record<number, ExpenseAttachmentMeta[]>>({});
   const [preview, setPreview] = useState<{ open: boolean; url: string | null; contentType: string | null; filename: string | null }>({ open: false, url: null, contentType: null, filename: null });
 
+  // Tax Integration State
+  const [bulkSendDialogOpen, setBulkSendDialogOpen] = useState(false);
+
   useEffect(() => {
     return () => {
       if (preview.url) URL.revokeObjectURL(preview.url);
@@ -125,26 +135,27 @@ const Expenses = () => {
     return () => window.removeEventListener('storage', onStorage);
   }, [currentTenantId]);
 
-  useEffect(() => {
-    const fetchExpenses = async () => {
-      setLoading(true);
+  const fetchExpenses = async () => {
+    setLoading(true);
+    try {
+      const skip = (page - 1) * pageSize;
+      const data = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip, limit: pageSize });
+      setExpenses(data);
+      // Probe next page existence precisely
       try {
-        const skip = (page - 1) * pageSize;
-        const data = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip, limit: pageSize });
-        setExpenses(data);
-        // Probe next page existence precisely
-        try {
-          const probe = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip: skip + pageSize, limit: 1 });
-          setHasNextPage(Array.isArray(probe) && probe.length > 0);
-        } catch {
-          setHasNextPage(data.length === pageSize);
-        }
-      } catch (e) {
-        toast.error('Failed to load expenses');
-      } finally {
-        setLoading(false);
+        const probe = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip: skip + pageSize, limit: 1 });
+        setHasNextPage(Array.isArray(probe) && probe.length > 0);
+      } catch {
+        setHasNextPage(data.length === pageSize);
       }
-    };
+    } catch (e) {
+      toast.error('Failed to load expenses');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchExpenses();
   }, [categoryFilter, labelFilter, unlinkedOnly, page, pageSize, currentTenantId]);
 
@@ -405,6 +416,9 @@ const Expenses = () => {
           )}
         </div>
 
+        {/* Tax Integration Status */}
+        <TaxIntegrationStatus />
+
         <Card className="slide-in">
           <CardHeader className="pb-3">
             <div className="flex flex-col sm:flex-row justify-between gap-4">
@@ -473,6 +487,17 @@ const Expenses = () => {
                 {selectedIds.length > 0 ? `${selectedIds.length} selected` : `${expenses.length} ${t('expenses.results', { defaultValue: 'results' })}`}
               </div>
               <div className="flex items-center gap-2 md:ml-auto">
+                {selectedIds.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBulkSendDialogOpen(true)}
+                    className="flex items-center gap-2"
+                  >
+                    <Send className="w-4 h-4" />
+                    Send Selected ({selectedIds.length})
+                  </Button>
+                )}
                 <Input
                   placeholder={t('expenses.bulk_label_placeholder', { defaultValue: 'Label' })}
                   value={bulkLabel}
@@ -695,7 +720,22 @@ const Expenses = () => {
                                     {t('edit', { defaultValue: 'Edit' })}
                                   </Link>
                                 </DropdownMenuItem>
-                                
+
+                                <DropdownMenuItem asChild>
+                                  <div className="w-full">
+                                    <SendToTaxServiceButton
+                                      itemId={e.id}
+                                      itemType="expense"
+                                      onSuccess={() => {
+                                        // Refresh expenses after successful send
+                                        fetchExpenses();
+                                      }}
+                                      size="sm"
+                                      variant="ghost"
+                                    />
+                                  </div>
+                                </DropdownMenuItem>
+
                                 <DropdownMenuSeparator />
                                 
                                 <AlertDialog>
@@ -1023,6 +1063,20 @@ const Expenses = () => {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Bulk Send to Tax Service Dialog */}
+        <BulkSendToTaxServiceDialog
+          open={bulkSendDialogOpen}
+          onOpenChange={setBulkSendDialogOpen}
+          items={expenses.filter(expense => selectedIds.includes(expense.id))}
+          itemType="expense"
+          onSuccess={() => {
+            // Refresh expenses and clear selection after successful bulk send
+            fetchExpenses();
+            setSelectedIds([]);
+            setBulkSendDialogOpen(false);
+          }}
+        />
       </div>
     </AppLayout>
   );

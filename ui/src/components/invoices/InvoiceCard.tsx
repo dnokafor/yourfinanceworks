@@ -8,6 +8,9 @@ import { Invoice } from "@/lib/api";
 import { Calendar, Clock, FileText, MoreVertical, Pencil, Copy, Trash2, User, DollarSign } from "lucide-react";
 import { Link } from "react-router-dom";
 
+// Import Tax Integration Components
+import { SendToTaxServiceButton } from '@/components/tax-integration';
+
 interface InvoiceCardProps {
   invoice: Invoice;
   onClone?: (id: number) => void;
@@ -103,7 +106,21 @@ export function InvoiceCard({ invoice, onClone, onDelete, canPerformActions = tr
                     <Copy className="mr-2 h-4 w-4" />
                     Clone
                   </DropdownMenuItem>
-                  <DropdownMenuItem 
+                  <DropdownMenuItem asChild>
+                    <div className="w-full">
+                      <SendToTaxServiceButton
+                        itemId={invoice.id}
+                        itemType="invoice"
+                        onSuccess={() => {
+                          // Could add refresh logic here if needed
+                          console.log('Invoice sent to tax service successfully');
+                        }}
+                        size="sm"
+                        variant="ghost"
+                      />
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
                     onClick={() => onDelete?.(invoice.id)}
                     className="text-destructive focus:text-destructive"
                   >

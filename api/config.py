@@ -1,0 +1,57 @@
+"""
+Configuration settings for the Invoice Application
+"""
+import os
+from typing import Optional
+
+
+class Config:
+    """Main configuration for the invoice application"""
+
+    # Database settings
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./invoice_app.db")
+
+    # API settings
+    API_HOST: str = os.getenv("API_HOST", "0.0.0.0")
+    API_PORT: int = int(os.getenv("API_PORT", "8000"))
+
+    # Tax Service Integration settings
+    TAX_SERVICE_ENABLED: bool = os.getenv("TAX_SERVICE_ENABLED", "false").lower() == "true"
+    TAX_SERVICE_BASE_URL: str = os.getenv("TAX_SERVICE_BASE_URL", "http://localhost:8000")
+    TAX_SERVICE_API_KEY: str = os.getenv("TAX_SERVICE_API_KEY", "")
+    TAX_SERVICE_TIMEOUT: int = int(os.getenv("TAX_SERVICE_TIMEOUT", "30"))
+    TAX_SERVICE_RETRY_ATTEMPTS: int = int(os.getenv("TAX_SERVICE_RETRY_ATTEMPTS", "3"))
+
+    # Email settings (for notifications)
+    SMTP_SERVER: Optional[str] = os.getenv("SMTP_SERVER")
+    SMTP_PORT: Optional[int] = int(os.getenv("SMTP_PORT", "587")) if os.getenv("SMTP_PORT") else None
+    SMTP_USERNAME: Optional[str] = os.getenv("SMTP_USERNAME")
+    SMTP_PASSWORD: Optional[str] = os.getenv("SMTP_PASSWORD")
+    FROM_EMAIL: Optional[str] = os.getenv("FROM_EMAIL")
+
+    # File upload settings
+    MAX_UPLOAD_SIZE: int = int(os.getenv("MAX_UPLOAD_SIZE", "10485760"))  # 10MB default
+    UPLOAD_PATH: str = os.getenv("UPLOAD_PATH", "./attachments")
+
+    # Security settings
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-here")
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your-jwt-secret-key")
+
+    # Tenant settings
+    MULTI_TENANT: bool = os.getenv("MULTI_TENANT", "true").lower() == "true"
+
+    @property
+    def tax_service_config(self):
+        """Get tax service configuration as dict"""
+        from services.tax_integration_service import TaxServiceConfig
+        return TaxServiceConfig(
+            base_url=self.TAX_SERVICE_BASE_URL,
+            api_key=self.TAX_SERVICE_API_KEY,
+            timeout=self.TAX_SERVICE_TIMEOUT,
+            retry_attempts=self.TAX_SERVICE_RETRY_ATTEMPTS,
+            enabled=self.TAX_SERVICE_ENABLED
+        )
+
+
+# Global config instance
+config = Config()

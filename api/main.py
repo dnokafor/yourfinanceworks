@@ -28,7 +28,8 @@ from routers import (
     notifications, # Add the new notifications router
     analytics, # Add the new analytics router
     pdf_processor, # Add the new PDF processor router
-    statements
+    statements,
+    tax_integration  # Add the new tax integration router
 )
 from models.database import engine
 from models import models
@@ -42,7 +43,7 @@ logger = logging.getLogger(__name__)
 # Initialize database (create tables and populate initial data)
 try:
     logger.info("Starting database initialization...")
-    init_db()
+    init_db(skip_migrations=True)  # Skip migrations to avoid hanging during startup
     logger.info("Database initialization completed successfully.")
 except Exception as e:
     logger.error(f"Database initialization failed: {str(e)}")
@@ -51,14 +52,36 @@ except Exception as e:
 
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
-    # Startup logic can go here if needed
+    # Startup logic
     try:
+        # Initialize tax integration service
+        try:
+            from config import config
+            from services.tax_integration_service import initialize_tax_integration_service
+
+            if config.TAX_SERVICE_ENABLED and config.TAX_SERVICE_API_KEY:
+                tax_config = config.tax_service_config
+                initialize_tax_integration_service(tax_config)
+                logger.info("Tax integration service initialized successfully")
+            else:
+                logger.info("Tax integration service not enabled or not configured")
+
+        except Exception as e:
+            logger.warning(f"Failed to initialize tax integration service: {str(e)}")
+
         yield
     finally:
         # Shutdown: flush Kafka producers
         try:
             from services.ocr_service import flush_all_producers
             flush_all_producers(10.0)
+        except Exception:
+            pass
+
+        # Cleanup tax integration service
+        try:
+            from services.tax_integration_service import cleanup_tax_integration_service
+            await cleanup_tax_integration_service()
         except Exception:
             pass
 
@@ -152,6 +175,7 @@ app.include_router(notifications.router, prefix="/api/v1") # Include the new not
 app.include_router(analytics.router, prefix="/api/v1") # Include the new analytics router
 app.include_router(pdf_processor.router, prefix="/api/v1") # Include the new PDF processor router
 app.include_router(statements.router, prefix="/api/v1")
+app.include_router(tax_integration.router, prefix="/api/v1") # Include the new tax integration router
 
 @app.get("/")
 def read_root():

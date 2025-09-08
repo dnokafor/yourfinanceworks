@@ -46,7 +46,68 @@
     "updated_at": "Updated",
     "navigation": "Navigation",
     "current_language": "Current Language",
-    "available_languages": "Available Languages"
+    "available_languages": "Available Languages",
+    "expense": "Expense",
+    "expenses": "Expenses",
+    "invoice": "Invoice",
+    "invoices": "Invoices",
+    "item": "Item",
+    "selected": "selected",
+    "unknownVendor": "Unknown Vendor",
+    "refresh": "Refresh"
+  },
+  "taxIntegration": {
+    "title": "Tax Service Integration",
+    "sendToTaxService": "Send to Tax Service",
+    "testConnection": "Test Connection",
+    "sendSelected": "Send Selected ({{count}})",
+    "bulkSendTitle": "Send {{itemType}} to Tax Service",
+    "selectAll": "Select All",
+    "results": "Results",
+    "status": {
+      "unknown": "Unknown",
+      "disabled": "Disabled",
+      "notConfigured": "Not Configured",
+      "connectionFailed": "Connection Failed",
+      "connected": "Connected",
+      "lastTestResult": "Last test result"
+    },
+    "warnings": {
+      "notEnabled": "Tax service integration is not enabled. Enable it in your environment configuration.",
+      "notConfigured": "Tax service integration is not properly configured. Check your API key and base URL."
+    },
+    "success": {
+      "sentToTaxService": "{{itemType}} sent to tax service successfully (Transaction ID: {{transactionId}})",
+      "connectionTestSuccessful": "Connection test successful",
+      "bulkSendCompleted": "Successfully sent {{successful}} out of {{total}} items to tax service"
+    },
+    "errors": {
+      "invalidItemId": "Invalid item ID",
+      "sendFailed": "Failed to send to tax service",
+      "fetchStatusFailed": "Failed to fetch integration status",
+      "connectionTestFailed": "Connection test failed",
+      "fetchSettingsFailed": "Failed to fetch integration settings",
+      "noItemsSelected": "No items selected",
+      "bulkSendFailed": "Bulk send failed",
+      "bulkSendPartialFailure": "Failed to send {{failed}} out of {{total}} items"
+    },
+    "settings": {
+      "title": "Tax Integration Settings",
+      "configured": "Configured",
+      "notConfigured": "Not Configured",
+      "disabled": "Disabled",
+      "notAvailable": "Settings not available",
+      "baseUrl": "Base URL",
+      "apiKey": "API Key",
+      "timeout": "Timeout",
+      "retryAttempts": "Retry Attempts",
+      "configurationHelp": "Configuration Help",
+      "help": {
+        "apiKey": "Configure your tax service API key in the TAX_SERVICE_API_KEY environment variable",
+        "baseUrl": "Set the tax service base URL in the TAX_SERVICE_BASE_URL environment variable",
+        "environment": "Use the setup script to configure these settings interactively"
+      }
+    }
   },
   "navigation": {
     "dashboard": "Dashboard",

@@ -70,6 +70,12 @@ services:
       # OCR Configuration
       - OLLAMA_OCR_ENDPOINT=http://host.docker.internal:11434/api/generate
       - OLLAMA_OCR_MODEL=llama3.2-vision:11b
+      # Tax Service Integration
+      - TAX_SERVICE_ENABLED=${TAX_SERVICE_ENABLED:-true}
+      - TAX_SERVICE_BASE_URL=${TAX_SERVICE_BASE_URL:-http://192.168.86.39:8001}
+      - TAX_SERVICE_API_KEY=${TAX_SERVICE_API_KEY:-ak_Pw0viX75yYrLT8tUmS2c912gDDrLsR4qvtIO8XRrruU}
+      - TAX_SERVICE_TIMEOUT=${TAX_SERVICE_TIMEOUT:-30}
+      - TAX_SERVICE_RETRY_ATTEMPTS=${TAX_SERVICE_RETRY_ATTEMPTS:-3}
     ports:
       - "8000:8000"
     depends_on:
@@ -92,8 +98,6 @@ services:
       retries: 3
     command: >
       sh -c "/wait-for-it.sh postgres-master:5432 -- \
-        echo 'Initializing database...' && \
-        python db_init.py && \
         echo 'Starting API server...' && \
         uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
 
