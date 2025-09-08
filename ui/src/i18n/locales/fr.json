@@ -1502,5 +1502,59 @@
     "startTour": "Commencer la Visite",
     "viewDocs": "Voir la Documentation",
     "contactSupport": "Contacter le Support"
+  },
+  "taxIntegration": {
+    "title": "Intégration du Service Fiscal",
+    "sendToTaxService": "Envoyer au Service Fiscal",
+    "testConnection": "Tester la Connexion",
+    "sendSelected": "Envoyer Sélectionnés ({{count}})",
+    "bulkSendTitle": "Envoyer {{itemType}} au Service Fiscal",
+    "selectAll": "Tout Sélectionner",
+    "results": "Résultats",
+    "refresh": "Actualiser",
+    "status": {
+      "unknown": "Inconnu",
+      "disabled": "Désactivé",
+      "notConfigured": "Non Configuré",
+      "connectionFailed": "Connexion Échouée",
+      "connected": "Connecté",
+      "lastTestResult": "Dernier résultat de test"
+    },
+    "warnings": {
+      "notEnabled": "L'intégration du service fiscal n'est pas activée. Activez-la dans votre configuration d'environnement.",
+      "notConfigured": "L'intégration du service fiscal n'est pas correctement configurée. Vérifiez votre clé API et l'URL de base."
+    },
+    "success": {
+      "sentToTaxService": "{{itemType}} envoyé au service fiscal avec succès (ID de Transaction: {{transactionId}})",
+      "connectionTestSuccessful": "Test de connexion réussi",
+      "bulkSendCompleted": "Envoyé avec succès {{successful}} sur {{total}} éléments au service fiscal"
+    },
+    "errors": {
+      "invalidItemId": "ID d'élément invalide",
+      "sendFailed": "Échec de l'envoi au service fiscal",
+      "fetchStatusFailed": "Échec de récupération du statut d'intégration",
+      "connectionTestFailed": "Test de connexion échoué",
+      "fetchSettingsFailed": "Échec de récupération des paramètres d'intégration",
+      "noItemsSelected": "Aucun élément sélectionné",
+      "bulkSendFailed": "Envoi en masse échoué",
+      "bulkSendPartialFailure": "Échec d'envoi de {{failed}} sur {{total}} éléments"
+    },
+    "settings": {
+      "title": "Paramètres d'Intégration Fiscale",
+      "configured": "Configuré",
+      "notConfigured": "Non Configuré",
+      "disabled": "Désactivé",
+      "notAvailable": "Paramètres non disponibles",
+      "baseUrl": "URL de Base",
+      "apiKey": "Clé API",
+      "timeout": "Délai d'Attente",
+      "retryAttempts": "Tentatives de Réessai",
+      "configurationHelp": "Aide à la Configuration",
+      "help": {
+        "apiKey": "Configurez votre clé API du service fiscal dans la variable d'environnement TAX_SERVICE_API_KEY",
+        "baseUrl": "Définissez l'URL de base du service fiscal dans la variable d'environnement TAX_SERVICE_BASE_URL",
+        "environment": "Utilisez le script de configuration pour configurer ces options de manière interactive"
+      }
+    }
   }
 } 

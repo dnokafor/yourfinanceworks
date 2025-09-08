@@ -91,6 +91,7 @@
       "bulkSendFailed": "Bulk send failed",
       "bulkSendPartialFailure": "Failed to send {{failed}} out of {{total}} items"
     },
+    "refresh": "Refresh",
     "settings": {
       "title": "Tax Integration Settings",
       "configured": "Configured",
