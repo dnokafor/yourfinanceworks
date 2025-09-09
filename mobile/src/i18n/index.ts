@@ -1,4 +1,5 @@
 import i18n from 'i18next';
+import { logger } from '../utils/logger';
 import { initReactI18next } from 'react-i18next';
 import * as Localization from 'expo-localization';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -33,10 +34,10 @@ const languageDetector = {
       }
       
       // Fall back to device locale
-      const deviceLanguage = Localization.locale?.split('-')[0] || 'en';
+      const deviceLanguage = Localization.getLocales?.()?.[0]?.languageCode || 'en';
       callback(deviceLanguage);
     } catch (error) {
-      if (__DEV__) console.error('Error detecting language:', error);
+      if (__DEV__) logger.error('Error detecting language', error);
       callback('en'); // fallback to English
     }
   },
@@ -68,12 +69,12 @@ i18n
     },
   })
   .then(() => {
-    console.log('i18n initialized successfully');
-    console.log('Current language:', i18n.language);
-    console.log('Available resources:', Object.keys(resources));
+    logger.info('i18n initialized successfully');
+    logger.info('Current language', i18n.language);
+    logger.debug('Available resources', Object.keys(resources));
   })
   .catch((error) => {
-    console.error('i18n initialization failed:', error);
+    logger.error('i18n initialization failed', error);
   });
 
 export default i18n;

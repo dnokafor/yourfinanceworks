@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { logger } from '../utils/logger';
 import {
   View,
   Text,
@@ -11,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useTranslation } from 'react-i18next';
 
 export interface FileData {
@@ -39,6 +40,7 @@ interface FileUploadProps {
   selectedFiles?: FileData[];
   onRemoveFile?: (index: number) => void;
   uploading?: boolean;
+  filesToDelete?: Set<number>;
 }
 
 const FileUpload: React.FC<FileUploadProps> = ({
@@ -52,18 +54,21 @@ const FileUpload: React.FC<FileUploadProps> = ({
   selectedFiles = [],
   onRemoveFile,
   uploading = false,
+  filesToDelete = new Set(),
 }) => {
   const { t } = useTranslation();
   const [showOptions, setShowOptions] = useState(false);
   const [requestingPermission, setRequestingPermission] = useState(false);
   const [previewFile, setPreviewFile] = useState<FileData | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [previewError, setPreviewError] = useState(false);
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
 
   // File Preview Functions
   const handleFilePreview = (file: FileData) => {
     setPreviewFile(file);
+    setPreviewError(false); // Reset error state for new preview
     setShowPreview(true);
   };
 
@@ -116,12 +121,12 @@ const FileUpload: React.FC<FileUploadProps> = ({
       }
 
       // Compress the image
-      const compressedResult = await ImageManipulator.manipulateAsync(
+      const compressedResult = await manipulateAsync(
         uri,
         [{ resize: { width: 1200 } }], // Resize to max width of 1200px
         {
           compress: 0.8, // 80% quality
-          format: ImageManipulator.SaveFormat.JPEG,
+          format: SaveFormat.JPEG,
         }
       );
 
@@ -139,7 +144,8 @@ const FileUpload: React.FC<FileUploadProps> = ({
         compressionRatio,
       };
     } catch (error) {
-      console.error('Image compression failed:', error);
+      logger.error('Image compression failed', error);
+      logger.info('Falling back to original image without compression');
       // Return original if compression fails
       return { uri, size: originalSize || 0, compressed: false };
     }
@@ -147,16 +153,21 @@ const FileUpload: React.FC<FileUploadProps> = ({
 
   const requestCameraPermission = async (): Promise<boolean> => {
     try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      const { status, canAskAgain } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
+        const message = canAskAgain
+          ? 'Camera access is required to take photos. Please grant permission when prompted.'
+          : 'Camera access is required to take photos. Please enable it in your device settings.';
+
         Alert.alert(
           'Camera Permission Required',
-          'Camera access is required to take photos. Please enable it in your device settings.',
+          message,
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Settings', onPress: () => {
+            ...(canAskAgain ? [] : [{ text: 'Settings', onPress: () => {
               // You can add deep linking to settings here if needed
-            }},
+              logger.info('User should go to settings manually');
+            }}]),
           ]
         );
         return false;
@@ -164,22 +175,31 @@ const FileUpload: React.FC<FileUploadProps> = ({
       return true;
     } catch (error) {
       console.error('Error requesting camera permission:', error);
+      Alert.alert(
+        'Permission Error',
+        'Unable to request camera permission. Please check your device settings.',
+        [{ text: 'OK', style: 'default' }]
+      );
       return false;
     }
   };
 
   const requestMediaLibraryPermission = async (): Promise<boolean> => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const { status, canAskAgain } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
+        const message = canAskAgain
+          ? 'Photo library access is required to select images. Please grant permission when prompted.'
+          : 'Photo library access is required to select images. Please enable it in your device settings.';
+
         Alert.alert(
           'Photo Library Permission Required',
-          'Photo library access is required to select images. Please enable it in your device settings.',
+          message,
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Settings', onPress: () => {
-              // You can add deep linking to settings here if needed
-            }},
+            ...(canAskAgain ? [] : [{ text: 'Settings', onPress: () => {
+              logger.info('User should go to settings manually');
+            }}]),
           ]
         );
         return false;
@@ -187,6 +207,11 @@ const FileUpload: React.FC<FileUploadProps> = ({
       return true;
     } catch (error) {
       console.error('Error requesting media library permission:', error);
+      Alert.alert(
+        'Permission Error',
+        'Unable to request photo library permission. Please check your device settings.',
+        [{ text: 'OK', style: 'default' }]
+      );
       return false;
     }
   };
@@ -230,10 +255,21 @@ const FileUpload: React.FC<FileUploadProps> = ({
           }
         }
 
+        const fileType = asset.mimeType || 'image/jpeg';
+
+        // Validate file type
+        if (!validateFileType(fileType)) {
+          Alert.alert(
+            'Invalid File Type',
+            `File type ${fileType} is not allowed. Allowed types: ${allowedTypes.join(', ')}`
+          );
+          return;
+        }
+
         const fileData: FileData = {
           uri: finalUri,
           name: asset.fileName || `camera_${Date.now()}.jpg`,
-          type: asset.mimeType || 'image/jpeg',
+          type: fileType,
           size: finalSize,
           originalSize: compressed ? originalSize : undefined,
           compressed,
@@ -250,7 +286,12 @@ const FileUpload: React.FC<FileUploadProps> = ({
       }
     } catch (error) {
       console.error('Error capturing image:', error);
-      Alert.alert('Error', 'Failed to capture image. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      Alert.alert(
+        'Camera Error',
+        `Failed to capture image: ${errorMessage}. Please try again.`,
+        [{ text: 'OK', style: 'default' }]
+      );
     } finally {
       setRequestingPermission(false);
       setShowOptions(false);
@@ -278,6 +319,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
         const filesData: FileData[] = await Promise.all(
           result.assets.map(async (asset) => {
             const originalSize = asset.fileSize;
+            const fileType = asset.mimeType || 'image/jpeg';
 
             // Compress images
             let finalUri = asset.uri;
@@ -300,7 +342,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
             return {
               uri: finalUri,
               name: asset.fileName || `gallery_${Date.now()}.jpg`,
-              type: asset.mimeType || 'image/jpeg',
+              type: fileType,
               size: finalSize,
               originalSize: compressed ? originalSize : undefined,
               compressed,
@@ -308,6 +350,17 @@ const FileUpload: React.FC<FileUploadProps> = ({
             };
           })
         );
+
+        // Validate file types
+        const invalidFiles = filesData.filter(file => !validateFileType(file.type));
+        if (invalidFiles.length > 0) {
+          const invalidTypes = invalidFiles.map(file => file.type).join(', ');
+          Alert.alert(
+            'Invalid File Types',
+            `Some files have invalid types (${invalidTypes}). Only these types are allowed: ${allowedTypes.join(', ')}`
+          );
+          return;
+        }
 
         // Check file sizes
         const oversizedFiles = filesData.filter(file =>
@@ -329,7 +382,12 @@ const FileUpload: React.FC<FileUploadProps> = ({
       }
     } catch (error) {
       console.error('Error selecting from gallery:', error);
-      Alert.alert('Error', 'Failed to select images. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      Alert.alert(
+        'Gallery Error',
+        `Failed to select images: ${errorMessage}. Please try again.`,
+        [{ text: 'OK', style: 'default' }]
+      );
     } finally {
       setRequestingPermission(false);
       setShowOptions(false);
@@ -355,17 +413,40 @@ const FileUpload: React.FC<FileUploadProps> = ({
     return 'document-outline';
   };
 
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{title}</Text>
+  const validateFileType = (fileType: string): boolean => {
+    if (allowedTypes.length === 0) return true; // Allow all types if none specified
 
-      {/* Selected Files Preview */}
-      {selectedFiles.length > 0 && (
-        <View style={styles.filesList}>
-          {selectedFiles.map((file, index) => (
-            <View key={index} style={[styles.fileItem, bulkMode && selectedIndices.has(index) && styles.fileItemSelected]}>
-              {bulkMode && (
-                <TouchableOpacity
+    return allowedTypes.some(allowedType => {
+      if (allowedType.includes('*')) {
+        // Handle wildcards like 'image/*'
+        const [mainType] = allowedType.split('/');
+        return fileType.startsWith(`${mainType}/`);
+      }
+      return fileType === allowedType;
+    });
+  };
+
+  return (
+    <React.Fragment>
+      <View style={styles.container}>
+        <Text style={styles.title}>{title}</Text>
+
+        {/* Selected Files Preview */}
+        {selectedFiles.length > 0 && (
+          <View style={styles.filesList}>
+            {selectedFiles.map((file, index) => {
+              const isMarkedForDeletion = filesToDelete.has(index);
+              return (
+                <View
+                  key={index}
+                  style={[
+                    styles.fileItem,
+                    bulkMode && selectedIndices.has(index) && styles.fileItemSelected,
+                    isMarkedForDeletion && styles.fileItemMarkedForDeletion
+                  ]}
+                >
+                {bulkMode && (
+                  <TouchableOpacity
                   style={styles.checkbox}
                   onPress={() => toggleFileSelection(index)}
                 >
@@ -380,6 +461,10 @@ const FileUpload: React.FC<FileUploadProps> = ({
                 style={styles.fileInfo}
                 onPress={() => !bulkMode && handleFilePreview(file)}
                 disabled={bulkMode}
+                accessibilityRole="button"
+                accessibilityLabel={`Preview file: ${file.name}`}
+                accessibilityHint="Opens a preview of the selected file"
+                accessibilityState={{ disabled: bulkMode }}
               >
                 <Ionicons
                   name={getFileTypeIcon(file.type)}
@@ -403,7 +488,14 @@ const FileUpload: React.FC<FileUploadProps> = ({
                 </View>
               </TouchableOpacity>
               {file.uri ? (
-                <TouchableOpacity onPress={() => !bulkMode && handleFilePreview(file)} disabled={bulkMode}>
+                <TouchableOpacity
+                  onPress={() => !bulkMode && handleFilePreview(file)}
+                  disabled={bulkMode}
+                  accessibilityRole="image"
+                  accessibilityLabel={`Preview image: ${file.name}`}
+                  accessibilityHint="Opens a larger preview of this image"
+                  accessibilityState={{ disabled: bulkMode }}
+                >
                   <Image source={{ uri: file.uri }} style={styles.filePreview} />
                 </TouchableOpacity>
               ) : (
@@ -411,6 +503,10 @@ const FileUpload: React.FC<FileUploadProps> = ({
                   style={[styles.filePreview, styles.filePreviewPlaceholder]}
                   onPress={() => !bulkMode && handleFilePreview(file)}
                   disabled={bulkMode}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Preview file: ${file.name} (no preview available)`}
+                  accessibilityHint="Opens file information since preview is not available"
+                  accessibilityState={{ disabled: bulkMode }}
                 >
                   <Ionicons name="document-outline" size={24} color="#6B7280" />
                 </TouchableOpacity>
@@ -420,12 +516,25 @@ const FileUpload: React.FC<FileUploadProps> = ({
                   style={styles.removeButton}
                   onPress={() => onRemoveFile(index)}
                   disabled={uploading}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove file: ${file.name}`}
+                  accessibilityHint="Removes this file from the selection"
+                  accessibilityState={{ disabled: uploading }}
                 >
                   <Ionicons name="close-circle" size={20} color="#EF4444" />
                 </TouchableOpacity>
               )}
+
+              {/* Deletion indicator */}
+              {isMarkedForDeletion && (
+                <View style={styles.deletionIndicator}>
+                  <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                  <Text style={styles.deletionText}>Will be deleted when saved</Text>
+                </View>
+              )}
             </View>
-          ))}
+              );
+            })}
         </View>
       )}
 
@@ -435,6 +544,10 @@ const FileUpload: React.FC<FileUploadProps> = ({
           <TouchableOpacity
             style={[styles.bulkButton, bulkMode && styles.bulkButtonActive]}
             onPress={toggleBulkMode}
+            accessibilityRole="button"
+            accessibilityLabel={bulkMode ? "Exit bulk selection mode" : "Enter bulk selection mode"}
+            accessibilityHint={bulkMode ? "Cancels selection and returns to normal view" : "Allows selecting multiple files for bulk operations"}
+            accessibilityState={{ selected: bulkMode }}
           >
             <Ionicons
               name={bulkMode ? "close" : "checkmark-circle-outline"}
@@ -450,6 +563,9 @@ const FileUpload: React.FC<FileUploadProps> = ({
             <TouchableOpacity
               style={[styles.bulkButton, styles.bulkButtonDelete]}
               onPress={bulkDelete}
+              accessibilityRole="button"
+              accessibilityLabel={`Delete ${selectedIndices.size} selected files`}
+              accessibilityHint="Permanently removes the selected files from the list"
             >
               <Ionicons name="trash" size={20} color="#FFFFFF" />
               <Text style={[styles.bulkButtonText, styles.bulkButtonTextActive]}>
@@ -469,6 +585,17 @@ const FileUpload: React.FC<FileUploadProps> = ({
         ]}
         onPress={handleOpenOptions}
         disabled={uploading || selectedFiles.length >= maxFiles}
+        accessibilityRole="button"
+        accessibilityLabel={uploading ? "Uploading files" : "Select files to upload"}
+        accessibilityHint={
+          selectedFiles.length === 0
+            ? "Opens menu to choose files from camera or gallery"
+            : `Add more files. Currently ${selectedFiles.length} of ${maxFiles} selected`
+        }
+        accessibilityState={{
+          disabled: uploading || selectedFiles.length >= maxFiles,
+          busy: uploading
+        }}
       >
         {uploading ? (
           <ActivityIndicator size="small" color="#FFFFFF" />
@@ -501,6 +628,10 @@ const FileUpload: React.FC<FileUploadProps> = ({
                 style={styles.modalOption}
                 onPress={handleCameraCapture}
                 disabled={requestingPermission}
+                accessibilityRole="button"
+                accessibilityLabel="Take photo with camera"
+                accessibilityHint="Opens camera to capture a new photo"
+                accessibilityState={{ disabled: requestingPermission, busy: requestingPermission }}
               >
                 {requestingPermission ? (
                   <ActivityIndicator size="small" color="#3B82F6" />
@@ -516,6 +647,10 @@ const FileUpload: React.FC<FileUploadProps> = ({
                 style={styles.modalOption}
                 onPress={handleGallerySelect}
                 disabled={requestingPermission}
+                accessibilityRole="button"
+                accessibilityLabel={`Select from gallery ${maxFiles > 1 ? '(multiple files allowed)' : '(single file)'}`}
+                accessibilityHint="Opens photo gallery to select existing photos"
+                accessibilityState={{ disabled: requestingPermission, busy: requestingPermission }}
               >
                 {requestingPermission ? (
                   <ActivityIndicator size="small" color="#3B82F6" />
@@ -531,15 +666,18 @@ const FileUpload: React.FC<FileUploadProps> = ({
             <TouchableOpacity
               style={styles.modalCancel}
               onPress={() => setShowOptions(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel file selection"
+              accessibilityHint="Closes the upload options menu"
             >
               <Text style={styles.modalCancelText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
-    </View>
+      </View>
 
-    {/* File Preview Modal */}
+      {/* File Preview Modal */}
     <Modal
       visible={showPreview}
       animationType="fade"
@@ -561,17 +699,29 @@ const FileUpload: React.FC<FileUploadProps> = ({
           </View>
 
           <View style={styles.previewBody}>
-            {previewFile?.uri ? (
+            {previewFile?.uri && !previewError ? (
               <Image
                 source={{ uri: previewFile.uri }}
                 style={styles.previewImage}
                 resizeMode="contain"
+                onError={() => {
+                  // Handle image load errors (e.g., attachment was deleted)
+                  logger.warn('Failed to load preview image, attachment may have been deleted');
+                  setPreviewError(true);
+                }}
               />
             ) : (
               <View style={styles.previewPlaceholder}>
-                <Ionicons name="document-outline" size={48} color="#9CA3AF" />
+                <Ionicons
+                  name={previewError ? "alert-circle-outline" : "document-outline"}
+                  size={48}
+                  color={previewError ? "#EF4444" : "#9CA3AF"}
+                />
                 <Text style={styles.previewPlaceholderText}>
-                  Preview not available
+                  {previewError
+                    ? "Preview not available\n(File may have been deleted)"
+                    : "Preview not available"
+                  }
                 </Text>
               </View>
             )}
@@ -604,6 +754,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
         </View>
       </View>
     </Modal>
+    </React.Fragment>
   );
 };
 
@@ -845,6 +996,28 @@ const styles = StyleSheet.create({
   previewInfoText: {
     fontSize: 14,
     color: '#6B7280',
+  },
+  fileItemMarkedForDeletion: {
+    borderColor: '#EF4444',
+    borderWidth: 2,
+    backgroundColor: '#FEF2F2',
+  },
+  deletionIndicator: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#EF4444',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  deletionText: {
+    fontSize: 10,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
 });
 

@@ -21,6 +21,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn, formatDateTime } from "@/lib/utils";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { isAdmin } from "@/utils/auth";
 import { clientApi, Client, invoiceApi, paymentApi, Invoice, InvoiceItem, InvoiceStatus, settingsApi, discountRulesApi, DiscountCalculation, DiscountRule, tenantApi, API_BASE_URL, expenseApi, Expense } from "@/lib/api";
@@ -4049,6 +4050,79 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                             >
                               {t('invoices.download')}
                             </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="destructive"
+                                  className="bg-red-600 hover:bg-red-700 text-white"
+                                >
+                                  <Trash className="h-4 w-4 mr-1" />
+                                  {t('invoices.delete_attachment', { defaultValue: 'Delete' })}
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>
+                                    {t('invoices.confirm_delete_attachment_title', { defaultValue: 'Delete Attachment' })}
+                                  </AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    {t('invoices.confirm_delete_attachment_description', {
+                                      defaultValue: 'Are you sure you want to delete this attachment? This action cannot be undone.',
+                                      filename: attachmentInfo?.filename || invoice?.attachment_filename || previewInvoice?.attachment_filename || 'this attachment'
+                                    })}
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>
+                                    {t('common.cancel', { defaultValue: 'Cancel' })}
+                                  </AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={async () => {
+                                      try {
+                                        const id = invoice?.id || previewInvoice?.id;
+                                        if (!id) {
+                                          toast.error(t('invoices.delete_failed_no_id', { defaultValue: 'Failed to delete attachment: Invoice ID not found' }));
+                                          return;
+                                        }
+
+                                        // Call the API to delete the attachment
+                                        await invoiceApi.updateInvoice(id, { attachment_filename: null });
+
+                                        // Update local state to reflect the deletion
+                                        setAttachmentInfo(null);
+                                        setInvoiceAttachment(null);
+
+                                        // Update preview invoice if it exists
+                                        if (previewInvoice) {
+                                          setPreviewInvoice(prev => ({
+                                            ...prev,
+                                            has_attachment: false,
+                                            attachment_filename: null
+                                          }));
+                                        }
+
+                                        // Notify parent component about the update
+                                        if (onInvoiceUpdate && invoice) {
+                                          const updatedInvoice = await invoiceApi.getInvoice(invoice.id);
+                                          onInvoiceUpdate(updatedInvoice);
+                                        }
+
+                                        toast.success(t('invoices.attachment_deleted', { defaultValue: 'Attachment deleted successfully' }));
+
+                                      } catch (error) {
+                                        console.error('Failed to delete attachment:', error);
+                                        toast.error(t('invoices.delete_attachment_failed', { defaultValue: 'Failed to delete attachment' }));
+                                      }
+                                    }}
+                                    className="bg-red-600 hover:bg-red-700"
+                                  >
+                                    {t('common.delete', { defaultValue: 'Delete' })}
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </div>
                         </div>
                       </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { logger } from '../utils/logger';
 import {
   View,
   Text,
@@ -147,12 +148,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         invoice_settings: invoiceSettings
       };
       
-      console.log('Saving settings:', settingsData);
+      logger.debug('Saving settings', settingsData);
       const result = await apiService.updateSettings(settingsData);
-      console.log('Settings save result:', result);
+      logger.debug('Settings save result', result);
       Alert.alert('Success', 'Settings saved successfully!');
     } catch (error) {
-      console.error('Failed to save settings:', error);
+      logger.error('Failed to save settings', error);
       Alert.alert('Error', `Failed to save settings: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setSaving(false);

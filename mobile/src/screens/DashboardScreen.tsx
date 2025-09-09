@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { logger } from '../utils/logger';
 import {
   View,
   Text,
@@ -104,7 +105,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
         recentInvoiceIds.map(inv => apiService.getInvoice(inv.id))
       );
       
-      console.log('Fetched detailed invoices:', detailedInvoices.map(inv => ({
+      logger.debug('Fetched detailed invoices', detailedInvoices.map(inv => ({
         id: inv.id,
         items: JSON.stringify(inv.items),
         currency: inv.currency,
@@ -327,19 +328,19 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
           <Text style={styles.sectionTitle}>{t('dashboard.quick_actions')}</Text>
           <View style={styles.quickActionsGrid}>
             <QuickAction
-              title={t('invoices.new_invoice')}
-              icon="add-circle-outline"
-              onPress={onNavigateToInvoices}
-              color="#10B981"
-            />
-            <QuickAction
-              title={t('clients.add_client')}
-              icon="person-add-outline"
+              title={t('navigation.clients')}
+              icon="people-outline"
               onPress={onNavigateToClients}
               color="#3B82F6"
             />
             <QuickAction
-              title={t('payments.record_payment')}
+              title={t('navigation.invoices')}
+              icon="document-text-outline"
+              onPress={onNavigateToInvoices}
+              color="#10B981"
+            />
+            <QuickAction
+              title={t('navigation.payments')}
               icon="card-outline"
               onPress={onNavigateToPayments}
               color="#F59E0B"

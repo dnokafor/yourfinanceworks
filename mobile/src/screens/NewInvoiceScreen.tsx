@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { logger } from '../utils/logger';
+import { Invoice } from '../services/api';
 import {
   View,
   Text,
@@ -48,7 +50,7 @@ interface NewInvoiceFormData {
 
 interface NewInvoiceScreenProps {
   clients: Client[];
-  onSaveInvoice: (formData: CreateInvoiceData) => Promise<void>;
+  onSaveInvoice: (formData: CreateInvoiceData) => Promise<Invoice>;
   onNavigateBack: () => void;
 }
 
@@ -468,10 +470,10 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
         ...addClientForm,
         preferred_currency: addClientForm.preferred_currency || tenantInfo?.default_currency || 'USD'
       };
-      console.log("Creating client with data:", clientData);
+      logger.debug("Creating client with data", clientData);
       
       const newClient = await apiService.createClient(clientData);
-      console.log("Created client:", newClient);
+      logger.debug("Created client", newClient);
       
       setClients(prev => [...prev, newClient]);
       setShowAddClientModal(false);
@@ -482,7 +484,7 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
       
       // Set currency to client's preferred currency when client is created
       if (newClient.preferred_currency) {
-        console.log("Setting currency to newly created client's preferred currency:", newClient.preferred_currency);
+        logger.debug("Setting currency to newly created client's preferred currency", newClient.preferred_currency);
         handleChange('currency', newClient.preferred_currency);
       }
     } catch (error: any) {
@@ -919,7 +921,7 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
                         
                         // Set currency to client's preferred currency when client is selected
                         if (client.preferred_currency) {
-                          console.log("Setting currency to selected client's preferred currency:", client.preferred_currency);
+                          logger.debug("Setting currency to selected client's preferred currency", client.preferred_currency);
                           handleChange('currency', client.preferred_currency);
                         }
                         

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { logger } from '../utils/logger';
 import {
   View,
   Text,
@@ -15,7 +16,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import apiService, { CreateClientData } from '../services/api';
+import apiService, { CreateClientData, Invoice } from '../services/api';
 import FileUpload, { FileData } from '../components/FileUpload';
 
 interface InvoiceItem {
@@ -32,20 +33,6 @@ interface Client {
   email: string;
 }
 
-interface Invoice {
-  id: number;
-  number: string;
-  client_name: string;
-  client_id: number;
-  date: string;
-  due_date: string;
-  amount: number;
-  total_paid: number;
-  status: string;
-  currency: string;
-  notes?: string;
-  items?: InvoiceItem[];
-}
 
 interface EditInvoiceFormData {
   client: string;
@@ -57,6 +44,7 @@ interface EditInvoiceFormData {
   paidAmount: number;
   items: InvoiceItem[];
   notes: string;
+  attachment_filename?: string | null;
 }
 
 interface EditInvoiceScreenProps {
@@ -86,17 +74,31 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
     paidAmount: invoice.total_paid || 0,
     items: (() => {
       const items = invoice.items || [];
+      logger.debug('Processing invoice items for formData', {
+        originalItems: items,
+        itemsCount: items.length,
+        descriptions: items.map(item => item.description)
+      });
+
       // If no items or all items have invalid prices, create a default item
       if (items.length === 0 || items.every(item => !item.price || item.price <= 0)) {
+        logger.debug('Creating default item due to no items or invalid prices');
         return [{ id: Date.now(), description: '', quantity: 1, price: 1, amount: 1 }];
       }
       // Otherwise, ensure all items have valid values
-      return items.map(item => ({
+      const processedItems = items.map(item => ({
         ...item,
         quantity: item.quantity || 1,
         price: item.price || 1, // Ensure price is at least 1
         amount: (item.quantity || 1) * (item.price || 1) // Ensure amount is calculated
       }));
+
+      logger.debug('Processed items for formData', {
+        processedItemsCount: processedItems.length,
+        descriptions: processedItems.map(item => item.description)
+      });
+
+      return processedItems;
     })(),
     notes: invoice.notes || '',
   });
@@ -104,10 +106,53 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
   // Attachment file management
   const [attachmentFiles, setAttachmentFiles] = useState<FileData[]>([]);
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
+  const [filesToDelete, setFilesToDelete] = useState<Set<number>>(new Set()); // Track files marked for deletion by index
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [fileToDeleteIndex, setFileToDeleteIndex] = useState<number | null>(null);
+
+  // Function to refresh invoice data from server
+  const refreshInvoiceData = async () => {
+    try {
+      const updatedInvoice = await apiService.getInvoice(invoice.id);
+      logger.debug('Refreshed invoice data after update:', updatedInvoice);
+
+      // Update form data with refreshed invoice
+      setFormData(prev => ({
+        ...prev,
+        client: updatedInvoice.client_id.toString(),
+        invoiceNumber: updatedInvoice.number,
+        currency: updatedInvoice.currency || 'USD',
+        date: (updatedInvoice.date || new Date().toISOString()).split('T')[0],
+        dueDate: (updatedInvoice.due_date || new Date().toISOString()).split('T')[0],
+        status: updatedInvoice.status,
+        paidAmount: updatedInvoice.total_paid || 0,
+        items: updatedInvoice.items || [],
+        notes: updatedInvoice.notes || '',
+      }));
+
+      // Clear files to delete and reset attachment state
+      setFilesToDelete(new Set());
+      setAttachmentFiles([]);
+
+      // Update attachment info
+      if (updatedInvoice.has_attachment || updatedInvoice.attachment_filename) {
+        setAttachmentInfo({
+          has_attachment: true,
+          filename: updatedInvoice.attachment_filename
+        });
+      } else {
+        setAttachmentInfo(null);
+      }
+
+      logger.debug('Invoice data refreshed successfully');
+    } catch (error) {
+      logger.error('Failed to refresh invoice data:', error);
+    }
+  };
 
   // Debug invoice data
   useEffect(() => {
-    console.log('Invoice data received:', {
+    logger.debug('Invoice data received', {
       id: invoice.id,
       notes: invoice.notes,
       notesType: typeof invoice.notes,
@@ -123,7 +168,20 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
         amount: item.amount
       }))
     });
+
   }, [invoice]);
+
+  // Debug formData changes
+  useEffect(() => {
+    logger.debug('FormData updated', {
+      formDataItemsCount: formData.items.length,
+      formDataItemDescriptions: formData.items.map(item => ({
+        id: item.id,
+        description: item.description,
+        descriptionLength: item.description?.length || 0
+      }))
+    });
+  }, [formData.items]);
 
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -139,15 +197,59 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
   const [addClientForm, setAddClientForm] = useState({ name: '', email: '', phone: '', address: '' });
   const [addClientLoading, setAddClientLoading] = useState(false);
   const [addClientError, setAddClientError] = useState<string | null>(null);
+  const [loadingAttachments, setLoadingAttachments] = useState(false);
 
   // Debug modal states
   useEffect(() => {
-    console.log('Modal states changed:', {
+    logger.debug('Modal states changed', {
       showClientModal,
       showAddClientModal,
       clientsCount: clients.length
     });
   }, [showClientModal, showAddClientModal, clients.length]);
+
+  // Load existing attachment when invoice changes
+  useEffect(() => {
+    const loadAttachment = async () => {
+      if (invoice.id) {
+        try {
+          setLoadingAttachments(true);
+          const attachmentInfo = await apiService.getInvoiceAttachmentInfo(invoice.id);
+          logger.debug('Loaded attachment info', attachmentInfo);
+
+          // Check if invoice has an attachment
+          if (attachmentInfo.has_attachment) {
+            // Convert API attachment format to FileData format
+            const fileData: FileData = {
+              uri: `/invoices/${invoice.id}/download-attachment`, // Use download endpoint as URI
+              name: attachmentInfo.filename,
+              type: attachmentInfo.content_type,
+              size: attachmentInfo.size_bytes,
+              isExisting: true,
+              attachmentId: invoice.id // Use invoice ID as attachment ID for single attachment
+            };
+
+            setAttachmentFiles([fileData]); // Single attachment, so array with one item
+          } else {
+            // No attachment exists
+            setAttachmentFiles([]);
+          }
+
+          // Clear any pending deletions when loading fresh data
+          setFilesToDelete(new Set());
+        } catch (error) {
+          logger.error('Failed to load attachment', error);
+          // Don't show error to user, just log it - attachment loading failure shouldn't block invoice editing
+          setAttachmentFiles([]);
+          setFilesToDelete(new Set());
+        } finally {
+          setLoadingAttachments(false);
+        }
+      }
+    };
+
+    loadAttachment();
+  }, [invoice.id]);
 
 
 
@@ -160,7 +262,7 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
   };
 
   const handleItemChange = (index: number, field: keyof InvoiceItem, value: any) => {
-    console.log('handleItemChange called:', { index, field, value, currentItems: formData.items });
+    logger.debug('handleItemChange called', { index, field, value, currentItems: formData.items });
     
     const newItems = [...formData.items];
     newItems[index] = {
@@ -175,7 +277,13 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
       newItems[index].amount = quantity * price;
     }
 
-    console.log('Updated item:', newItems[index]);
+    logger.debug('Updated item', newItems[index]);
+    logger.debug('All items after change', newItems.map(item => ({
+      id: item.id,
+      description: item.description,
+      quantity: item.quantity,
+      price: item.price
+    })));
     handleChange('items', newItems);
   };
 
@@ -215,7 +323,7 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
   };
 
   const validateForm = (): boolean => {
-    console.log('Validating form:', {
+    logger.debug('Validating form', {
       client: formData.client,
       invoiceNumber: formData.invoiceNumber,
       date: formData.date,
@@ -276,7 +384,7 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
     try {
       setSubmitting(true);
       setError(null);
-      console.log('Sending update data:', {
+      logger.debug('Sending update data', {
         invoiceId: invoice.id,
         formData: formData,
         items: formData.items,
@@ -288,25 +396,60 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
         }))
       });
 
-      await onUpdateInvoice(invoice.id, formData);
+      // Prepare update data - include attachment deletion if needed
+      let updateData = { ...formData };
 
-      // Upload attachments if any
-      if (attachmentFiles.length > 0) {
+      // If we have files marked for deletion, include attachment_filename: null in the update
+      if (filesToDelete.size > 0) {
+        updateData = {
+          ...updateData,
+          attachment_filename: null
+        };
+      }
+
+      logger.debug('Sending update to API', {
+        invoiceId: invoice.id,
+        updateData: updateData,
+        itemsInUpdate: updateData.items?.map(item => ({
+          id: item.id,
+          description: item.description,
+          quantity: item.quantity,
+          price: item.price
+        }))
+      });
+
+      await onUpdateInvoice(invoice.id, updateData);
+
+      // Upload attachments if any (excluding files marked for deletion)
+      const filesToUpload = attachmentFiles.filter((_, index) => !filesToDelete.has(index));
+      if (filesToUpload.length > 0) {
         setUploadingAttachments(true);
         try {
           await Promise.all(
-            attachmentFiles.map(file => uploadAttachmentToInvoice(invoice.id, file))
+            filesToUpload.map(file => uploadAttachmentToInvoice(invoice.id, file))
           );
         } catch (uploadError) {
-          console.error('Failed to upload attachments:', uploadError);
+          logger.error('Failed to upload attachments', uploadError);
           Alert.alert('Warning', 'Invoice updated but some attachments failed to upload. You can upload them later.');
         } finally {
           setUploadingAttachments(false);
         }
       }
+
+      // Log successful attachment deletion (if any)
+      if (filesToDelete.size > 0) {
+        logger.info('Successfully marked attachments for deletion in invoice update');
+        // Clear the deletion marks after successful update
+        setFilesToDelete(new Set());
+      }
+
+      // Refresh invoice data from server to show the latest state
+      await refreshInvoiceData();
     } catch (error: any) {
-      console.error('Update error:', error);
+      logger.error('Update error', error);
       setError(error.message || 'Failed to update invoice');
+      // Clear filesToDelete on error so user can try again
+      setFilesToDelete(new Set());
     } finally {
       setSubmitting(false);
     }
@@ -348,11 +491,37 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
   };
 
   const handleFilesSelected = (files: FileData[]) => {
-    setAttachmentFiles(prev => [...prev, ...files]);
+    // For invoices, only allow one attachment - replace existing with new
+    if (files.length > 0) {
+      setAttachmentFiles([files[0]]); // Take only the first file
+    }
   };
 
   const handleRemoveFile = (index: number) => {
-    setAttachmentFiles(prev => prev.filter((_, i) => i !== index));
+    // Show confirmation modal instead of immediately deleting
+    setFileToDeleteIndex(index);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteFile = () => {
+    if (fileToDeleteIndex === null) return;
+
+    const index = fileToDeleteIndex;
+    const fileToRemove = attachmentFiles[index];
+
+    // Mark file for deletion (don't actually delete from backend yet)
+    setFilesToDelete(prev => new Set([...prev, index]));
+
+    // Close modal and reset state
+    setShowDeleteConfirm(false);
+    setFileToDeleteIndex(null);
+
+    logger.info('File marked for deletion', { fileName: fileToRemove?.name, index });
+  };
+
+  const cancelDeleteFile = () => {
+    setShowDeleteConfirm(false);
+    setFileToDeleteIndex(null);
   };
 
   const formatCurrency = (amount: number) => {
@@ -389,7 +558,7 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
   };
 
   const renderAddClientModal = () => {
-    console.log('Rendering add client modal, visible:', showAddClientModal);
+    logger.debug('Rendering add client modal', { visible: showAddClientModal });
     return (
       <Modal
         visible={showAddClientModal}
@@ -453,7 +622,7 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
   };
 
   const renderClientSelector = () => {
-    console.log('Rendering client selector modal, visible:', showClientModal, 'clients count:', clients.length);
+    logger.debug('Rendering client selector modal', { visible: showClientModal, clientsCount: clients.length });
     return (
       <Modal
         visible={showClientModal}
@@ -806,13 +975,14 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
 
         {/* Attachments */}
         <FileUpload
-          title="Attachments"
-          maxFiles={5}
+          title="Attachment"
+          maxFiles={1}
           allowedTypes={['image/jpeg', 'image/png', 'image/jpg', 'application/pdf']}
           onFilesSelected={handleFilesSelected}
           selectedFiles={attachmentFiles}
           onRemoveFile={handleRemoveFile}
           uploading={uploadingAttachments}
+          filesToDelete={filesToDelete}
         />
 
         <View style={styles.summarySection}>
@@ -898,6 +1068,39 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={showDeleteConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={cancelDeleteFile}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.deleteModalContent}>
+            <Text style={styles.deleteModalTitle}>Delete Attachment</Text>
+            <Text style={styles.deleteModalMessage}>
+              Are you sure you want to delete this attachment? It will be permanently removed when you save the invoice.
+            </Text>
+
+            <View style={styles.deleteModalButtons}>
+              <TouchableOpacity
+                style={[styles.deleteModalButton, styles.cancelButton]}
+                onPress={cancelDeleteFile}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.deleteModalButton, styles.confirmButton]}
+                onPress={confirmDeleteFile}
+              >
+                <Text style={styles.confirmButtonText}>Mark for Deletion</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </KeyboardAvoidingView>
   );
@@ -1231,6 +1434,53 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#007AFF',
     fontWeight: '600',
+  },
+  deleteModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 24,
+    marginHorizontal: 32,
+    alignItems: 'center',
+  },
+  deleteModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 12,
+  },
+  deleteModalMessage: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  deleteModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  deleteModalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#F3F4F6',
+  },
+  confirmButton: {
+    backgroundColor: '#EF4444',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  confirmButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });
 

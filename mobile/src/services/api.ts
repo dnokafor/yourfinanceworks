@@ -1,26 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
-
-// Logger utility to conditionally show logs only in development or when explicitly enabled
-const isLoggingEnabled = __DEV__ || Constants.expoConfig?.extra?.enableConsoleLogs === 'true';
-
-const logger = {
-  log: (...args: any[]) => {
-    if (isLoggingEnabled) {
-      console.log(...args);
-    }
-  },
-  error: (...args: any[]) => {
-    if (isLoggingEnabled) {
-      console.error(...args);
-    }
-  },
-  warn: (...args: any[]) => {
-    if (isLoggingEnabled) {
-      console.warn(...args);
-    }
-  }
-};
+import { logger } from '../utils/logger';
 
 // 401 Error Handler - will be set by the main App component
 let on401Error: (() => void) | null = null;
@@ -62,7 +42,7 @@ const getApiBaseUrl = (): string => {
 const API_BASE_URL = getApiBaseUrl();
 
 // Log API URL for debugging (only in development)
-logger.log('🌐 API Base URL:', API_BASE_URL);
+logger.log(`🌐 API Base URL: ${API_BASE_URL}`);
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'user_data';
 
@@ -154,6 +134,10 @@ export interface Invoice {
   discount_value?: number;
   subtotal?: number;
   items?: InvoiceItem[];
+  attachments?: any[];
+  has_attachment?: boolean;
+  attachment_filename?: string;
+  attachment_path?: string;
 }
 
 export interface Payment {
@@ -283,6 +267,7 @@ export interface UpdateInvoiceData {
   items: InvoiceItemUpdate[];
   is_recurring?: boolean;
   recurring_frequency?: string;
+  attachment_filename?: string | null;
   discount_type?: string;
   discount_value?: number;
   paid_amount?: number;
@@ -323,7 +308,7 @@ export async function apiRequest<T>(
     const tenantId = user?.tenant_id;
     
     const requestUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
-    logger.log(`Making API request to ${requestUrl}`, options);
+    logger.debug(`Making API request to ${requestUrl}`, options);
     
     const response = await fetch(requestUrl, {
       ...options,
@@ -634,6 +619,10 @@ class ApiService {
       items: response.items || [],
       currency: response.currency || 'USD'
     };
+  }
+
+  async getInvoiceAttachmentInfo(invoiceId: number): Promise<any> {
+    return await this.request<any>(`/invoices/${invoiceId}/attachment-info`);
   }
 
   async createInvoice(invoiceData: CreateInvoiceData): Promise<Invoice> {

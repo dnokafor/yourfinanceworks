@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { logger } from './src/utils/logger';
 import { View, StyleSheet, Alert, Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import './src/i18n'; // Initialize i18n
@@ -41,7 +42,7 @@ const App: React.FC = () => {
   useEffect(() => {
     // Set up 401 error handler to redirect to login
     set401ErrorHandler(() => {
-      console.log('401 error detected, redirecting to login');
+      logger.info('401 error detected, redirecting to login');
       setIsAuthenticated(false);
       setUser(null);
       setCurrentScreen('login');
@@ -263,12 +264,14 @@ const App: React.FC = () => {
           price: item.price,
         })),
       };
-      
+
       const newInvoice = await apiService.createInvoice(invoiceData);
       setInvoices(prev => [newInvoice, ...prev]);
-      
+
       Alert.alert('Success', 'Invoice created successfully!');
       setCurrentScreen('invoices');
+
+      return newInvoice; // Return the created invoice
     } catch (error: any) {
       throw new Error(error.message || 'Failed to create invoice');
     }
@@ -290,11 +293,12 @@ const App: React.FC = () => {
       amount: number;
     }>;
     notes: string;
+    attachment_filename?: string | null;
   }) => {
     try {
       const totalAmount = formData.items.reduce((sum, item) => sum + item.amount, 0);
       const dueDate = new Date(formData.dueDate).toISOString();
-      console.log('dueDate', dueDate);
+      logger.debug('dueDate', dueDate);
       
       const invoiceData: UpdateInvoiceData = {
         client_id: parseInt(formData.client),
@@ -311,15 +315,19 @@ const App: React.FC = () => {
           price: item.price,
         })),
       };
+
+      // Include attachment_filename if it's present (for deletion)
+      if (formData.attachment_filename !== undefined) {
+        invoiceData.attachment_filename = formData.attachment_filename;
+      }
       
       const updatedInvoice = await apiService.updateInvoice(invoiceId, invoiceData);
-      setInvoices(prev => prev.map(invoice => 
+      setInvoices(prev => prev.map(invoice =>
         invoice.id === invoiceId ? updatedInvoice : invoice
       ));
-      
+
+      // Stay on the edit screen to see the updated data
       Alert.alert('Success', 'Invoice updated successfully!');
-      setSelectedInvoice(null);
-      setCurrentScreen('invoices');
     } catch (error: any) {
       console.error('App: Update error:', error);
       throw new Error(error.message || 'Failed to update invoice');
@@ -328,7 +336,7 @@ const App: React.FC = () => {
 
   const handleUpdateExpense = async (expenseId: number, formData: Partial<Expense>) => {
     try {
-      console.log('Updating expense:', expenseId, formData);
+      logger.debug('Updating expense', { expenseId, formData });
       const updatedExpense = await apiService.updateExpense(expenseId, formData);
 
       // Update the expense in the local state (if needed for the list)
@@ -473,7 +481,7 @@ const App: React.FC = () => {
           <NewExpenseScreen
             onNavigateBack={handleNavigateBack}
             onExpenseCreated={async (expense: Expense) => {
-              console.log('Expense created:', expense);
+              logger.info('Expense created', expense);
               setCurrentScreen('expenses');
               await loadData(); // Refresh data if needed
             }}
@@ -502,7 +510,7 @@ const App: React.FC = () => {
             onNavigateBack={handleNavigateBack}
             onNavigateToStatement={(statement: BankStatement) => {
               // Add statement detail navigation later
-              console.log('Open statement:', statement);
+              logger.debug('Open statement', statement);
             }}
           />
         );

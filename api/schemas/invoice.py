@@ -63,6 +63,7 @@ class InvoiceUpdate(BaseModel):
     subtotal: Optional[float] = Field(None, description="Subtotal before discount")
     custom_fields: Optional[Dict[str, Any]] = None
     show_discount_in_pdf: Optional[bool] = None
+    attachment_filename: Optional[str] = Field(None, description="Attachment filename; set to null to delete attachment")
 
 class Invoice(InvoiceBase):
     id: int

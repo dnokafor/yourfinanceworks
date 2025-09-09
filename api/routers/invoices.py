@@ -867,8 +867,13 @@ async def read_invoice(
         logger.info(f"[DEBUG] Invoice from DB - custom_fields: {invoice.custom_fields}")
         logger.info(f"[DEBUG] Invoice from DB - type of custom_fields: {type(invoice.custom_fields)}")
         
+        # Force refresh of database session to ensure we get latest data
+        db.expire_all()
+
         # Get invoice items
         items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).all()
+        logger.info(f"Raw items from database query: {[(item.id, item.description) for item in items]}")
+
         items_data = [
             {
                 "id": item.id,
@@ -880,7 +885,7 @@ async def read_invoice(
             }
             for item in items
         ]
-        
+
         logger.info(f"Returning {len(items_data)} items for invoice {invoice_id}: {[{'id': item['id'], 'description': item['description'], 'description_length': len(item['description']) if item['description'] else 0} for item in items_data]}")
         
         invoice_dict = {
@@ -1017,6 +1022,17 @@ async def update_invoice(
                     db_invoice.created_at = normalize_to_midnight_utc(value)
                     db_invoice.updated_at = db_invoice.created_at
                     continue  # don't setattr a non-existent column 'date'
+                elif key == 'attachment_filename' and value is None:
+                    # Handle attachment deletion
+                    if db_invoice.attachment_path and os.path.exists(db_invoice.attachment_path):
+                        try:
+                            os.remove(db_invoice.attachment_path)
+                            logger.info(f"Deleted attachment file: {db_invoice.attachment_path}")
+                        except Exception as e:
+                            logger.warning(f"Failed to delete attachment file: {e}")
+                    db_invoice.attachment_path = None
+                    db_invoice.attachment_filename = None
+                    continue
                 elif key == 'paid_amount' and value is not None:
                     # Create a payment adjustment if allowed
                     if db_invoice.status == "paid":
@@ -1090,7 +1106,19 @@ async def update_invoice(
             for item_id, item in existing_items_dict.items():
                 if item_id not in updated_item_ids:
                     db.delete(item)
-        
+
+        # Commit all item changes (updates, creates, deletes) to the database
+        db.commit()
+        logger.info(f"Committed all item changes for invoice {invoice_id}")
+
+        # Refresh the database session to ensure we see the latest changes
+        db.refresh(db_invoice)
+        logger.info(f"Refreshed invoice object after item changes")
+
+        # Verify items were saved by fetching them again
+        updated_items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).all()
+        logger.info(f"Verified {len(updated_items)} items in database after commit: {[(item.id, item.description[:30] + '...' if len(item.description) > 30 else item.description) for item in updated_items]}")
+
         # Create history entry for the update only if there are actual changes
         from models.models_per_tenant import InvoiceHistory as InvoiceHistoryModel
         changes = []
@@ -1249,7 +1277,20 @@ async def update_invoice(
             }
             return invoice_dict
         else:
-            # If no changes, just return the current state
+            # If no changes, just return the current state with actual items
+            items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).all()
+            items_data = [
+                {
+                    "id": item.id,
+                    "invoice_id": item.invoice_id,
+                    "description": item.description,
+                    "quantity": item.quantity,
+                    "price": item.price,
+                    "amount": item.amount
+                }
+                for item in items
+            ]
+            
             return {
                 "id": db_invoice.id,
                 "number": db_invoice.number,
@@ -1266,7 +1307,7 @@ async def update_invoice(
                 "discount_type": db_invoice.discount_type,
                 "discount_value": float(db_invoice.discount_value) if db_invoice.discount_value else 0,
                 "subtotal": float(db_invoice.subtotal) if db_invoice.subtotal else float(db_invoice.amount),
-                "items": [], # No items if no changes
+                "items": items_data,
                 "show_discount_in_pdf": db_invoice.show_discount_in_pdf,
                 "has_attachment": bool(db_invoice.attachment_filename),
                 "attachment_filename": db_invoice.attachment_filename
