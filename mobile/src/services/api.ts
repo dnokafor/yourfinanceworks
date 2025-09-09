@@ -365,10 +365,14 @@ export async function apiRequest<T>(
 
 // API Service Class
 class ApiService {
-  private baseURL: string;
+  private _baseURL: string;
 
   constructor(baseURL: string = API_BASE_URL) {
-    this.baseURL = baseURL;
+    this._baseURL = baseURL;
+  }
+
+  get baseURL(): string {
+    return this._baseURL;
   }
 
   // Token Management
@@ -433,7 +437,7 @@ class ApiService {
     const userData = await AsyncStorage.getItem(USER_KEY);
     const user = userData ? JSON.parse(userData) : null;
     const tenantId = user?.tenant_id;
-    const url = `${this.baseURL}${endpoint}`;
+    const url = `${this._baseURL}${endpoint}`;
 
     const requestOptions: RequestInit = {
       headers: {
@@ -928,11 +932,11 @@ class ApiService {
 
   // Bank Statement Methods
   async getBankStatements(): Promise<BankStatement[]> {
-    return await this.request<BankStatement[]>('/bank-statements/');
+    return await this.request<BankStatement[]>('/statements/');
   }
 
   async getBankStatement(statementId: number): Promise<BankStatementDetail> {
-    return await this.request<BankStatementDetail>(`/bank-statements/${statementId}`);
+    return await this.request<BankStatementDetail>(`/statements/${statementId}`);
   }
 
   async uploadBankStatements(files: any[]): Promise<{ statements: BankStatement[] }> {
@@ -950,7 +954,7 @@ class ApiService {
     const user = userData ? JSON.parse(userData) : null;
     const tenantId = user?.tenant_id;
 
-    const response = await fetch(`${this.baseURL}/bank-statements/upload`, {
+    const response = await fetch(`${this._baseURL}/statements/upload`, {
       method: 'POST',
       headers: {
         ...(token && { Authorization: `Bearer ${token}` }),
@@ -968,9 +972,14 @@ class ApiService {
   }
 
   async deleteBankStatement(statementId: number): Promise<void> {
-    await this.request(`/bank-statements/${statementId}`, {
+    await this.request(`/statements/${statementId}`, {
       method: 'DELETE',
     });
+  }
+
+  // Expense Attachments Methods
+  async getExpenseAttachments(expenseId: number): Promise<any[]> {
+    return await this.request<any[]>(`/expenses/${expenseId}/attachments`);
   }
 }
 
@@ -995,6 +1004,7 @@ export interface Expense {
   tenant_id: number;
   created_at: string;
   updated_at: string;
+  attachments_count?: number;
 }
 
 export interface BankStatement {

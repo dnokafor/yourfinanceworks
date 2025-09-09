@@ -12,6 +12,7 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { expenseApi, Expense, linkApi } from '@/lib/api';
 import { EXPENSE_CATEGORY_OPTIONS } from '@/constants/expenses';
+import { FileUpload, FileData } from '@/components/ui/file-upload';
 
 export default function ExpensesNew() {
   const categoryOptions = EXPENSE_CATEGORY_OPTIONS;
@@ -22,7 +23,7 @@ export default function ExpensesNew() {
     category: 'General',
     status: 'recorded',
   });
-  const [files, setFiles] = useState<File[]>([]);
+  const [files, setFiles] = useState<FileData[]>([]);
   const [saving, setSaving] = useState(false);
   const [invoiceOptions, setInvoiceOptions] = useState<Array<{ id: number; number: string; client_name: string }>>([]);
 
@@ -69,10 +70,10 @@ export default function ExpensesNew() {
       // Upload up to 10 files
       let uploadedCount = 0;
       for (let i = 0; i < Math.min(files.length, 10); i++) {
-        try { 
-          await expenseApi.uploadReceipt(created.id, files[i]); 
+        try {
+          await expenseApi.uploadReceipt(created.id, files[i].file);
           uploadedCount++;
-        } catch (e) { 
+        } catch (e) {
           console.error(e); 
         }
       }
@@ -188,19 +189,20 @@ export default function ExpensesNew() {
               <Input value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} />
             </div>
             <div className="sm:col-span-2">
-             <label className="text-sm">Attachments (max 10)</label>
-              <div className="flex items-center gap-3">
-                <label className="inline-flex items-center gap-2 cursor-pointer">
-                  <Upload className="w-4 h-4" />
-                   <input multiple type="file" accept="application/pdf,image/jpeg,image/png" className="hidden" onChange={(e) => {
-                    const selected = Array.from(e.target.files || []);
-                     const combined = [...files, ...selected].slice(0, 10);
-                    setFiles(combined);
-                  }} />
-                  Upload
-                </label>
-                <div className="text-sm text-muted-foreground">{files.length} file(s) selected</div>
-              </div>
+              <FileUpload
+                title="Receipt Attachments (max 10)"
+                maxFiles={10}
+                allowedTypes={['application/pdf', 'image/jpeg', 'image/png']}
+                selectedFiles={files}
+                onFilesSelected={(newFiles) => {
+                  const combined = [...files, ...newFiles].slice(0, 10);
+                  setFiles(combined);
+                }}
+                onRemoveFile={(index) => setFiles(files.filter((_, i) => i !== index))}
+                uploading={saving}
+                enableCompression={true}
+                enableBulkOperations={true}
+              />
             </div>
           </CardContent>
         </Card>

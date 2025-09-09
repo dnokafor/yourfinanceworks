@@ -14,6 +14,7 @@ import EditClientScreen from './src/screens/EditClientScreen';
 import PaymentsScreen from './src/screens/PaymentsScreen';
 import ExpensesScreen from './src/screens/ExpensesScreen';
 import NewExpenseScreen from './src/screens/NewExpenseScreen';
+import EditExpenseScreen from './src/screens/EditExpenseScreen';
 import StatementsScreen from './src/screens/StatementsScreen';
 import AnalyticsScreen from './src/screens/AnalyticsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
@@ -23,13 +24,14 @@ import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
 import apiService, { User, Client, Invoice, CreateInvoiceData, UpdateInvoiceData, InvoiceItemCreate, InvoiceItemUpdate, Expense, BankStatement, set401ErrorHandler } from './src/services/api';
 
-type Screen = 'login' | 'signup' | 'forgotPassword' | 'resetPassword' | 'dashboard' | 'invoices' | 'newInvoice' | 'editInvoice' | 'clients' | 'newClient' | 'editClient' | 'payments' | 'expenses' | 'newExpense' | 'statements' | 'analytics' | 'settings' | 'users' | 'auditLog';
+type Screen = 'login' | 'signup' | 'forgotPassword' | 'resetPassword' | 'dashboard' | 'invoices' | 'newInvoice' | 'editInvoice' | 'clients' | 'newClient' | 'editClient' | 'payments' | 'expenses' | 'newExpense' | 'editExpense' | 'statements' | 'analytics' | 'settings' | 'users' | 'auditLog';
 
 const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<Screen>('login');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<number | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [resetToken, setResetToken] = useState<string>('');
   const [user, setUser] = useState<User | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
@@ -131,6 +133,11 @@ const App: React.FC = () => {
 
   const handleNavigateToNewExpense = () => {
     setCurrentScreen('newExpense');
+  };
+
+  const handleNavigateToEditExpense = (expense: Expense) => {
+    setSelectedExpense(expense);
+    setCurrentScreen('editExpense');
   };
 
   const handleNavigateToStatements = () => {
@@ -319,6 +326,23 @@ const App: React.FC = () => {
     }
   };
 
+  const handleUpdateExpense = async (expenseId: number, formData: Partial<Expense>) => {
+    try {
+      console.log('Updating expense:', expenseId, formData);
+      const updatedExpense = await apiService.updateExpense(expenseId, formData);
+
+      // Update the expense in the local state (if needed for the list)
+      // For now, we'll just navigate back since the expense list will refresh
+
+      Alert.alert('Success', 'Expense updated successfully!');
+      setSelectedExpense(null);
+      setCurrentScreen('expenses');
+    } catch (error: any) {
+      console.error('App: Update expense error:', error);
+      throw new Error(error.message || 'Failed to update expense');
+    }
+  };
+
   const renderScreen = () => {
     switch (currentScreen) {
       case 'login':
@@ -441,10 +465,7 @@ const App: React.FC = () => {
           <ExpensesScreen
             onNavigateBack={handleNavigateBack}
             onNavigateToNewExpense={handleNavigateToNewExpense}
-            onNavigateToEditExpense={(expense: Expense) => {
-              // Add edit expense navigation later
-              console.log('Edit expense:', expense);
-            }}
+            onNavigateToEditExpense={handleNavigateToEditExpense}
           />
         );
       case 'newExpense':
@@ -457,6 +478,23 @@ const App: React.FC = () => {
               await loadData(); // Refresh data if needed
             }}
           />
+        );
+      case 'editExpense':
+        return (
+          selectedExpense ? (
+            <EditExpenseScreen
+              expense={selectedExpense}
+              onUpdateExpense={handleUpdateExpense}
+              onNavigateBack={() => {
+                setSelectedExpense(null);
+                setCurrentScreen('expenses');
+              }}
+            />
+          ) : (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+              <Text>No expense selected</Text>
+            </View>
+          )
         );
       case 'statements':
         return (

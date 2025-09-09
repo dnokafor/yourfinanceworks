@@ -1008,18 +1008,6 @@ const Expenses = () => {
                         >
                           {t('expenses.preview')}
                         </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={async () => {
-                            if (!attachmentPreviewOpen.expenseId) return;
-                            await expenseApi.deleteAttachment(attachmentPreviewOpen.expenseId, att.id);
-                            const list = await expenseApi.listAttachments(attachmentPreviewOpen.expenseId);
-                            setAttachments(prev => ({ ...prev, [attachmentPreviewOpen.expenseId!]: list }));
-                          }}
-                        >
-                           {t('delete')}
-                        </Button>
                       </div>
                     </li>
                   ))}

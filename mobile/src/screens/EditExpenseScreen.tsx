@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,9 +17,17 @@ import { useTranslation } from 'react-i18next';
 import apiService, { Expense } from '../services/api';
 import FileUpload, { FileData } from '../components/FileUpload';
 
-interface NewExpenseScreenProps {
+// Extended FileData for existing attachments
+interface ExistingFileData extends FileData {
+  isExisting?: boolean;
+  attachmentId?: number;
+  uploaded_at?: string;
+}
+
+interface EditExpenseScreenProps {
+  expense: Expense;
+  onUpdateExpense: (expenseId: number, formData: Partial<Expense>) => Promise<void>;
   onNavigateBack: () => void;
-  onExpenseCreated: (expense: Expense) => void;
 }
 
 const EXPENSE_CATEGORIES = [
@@ -33,9 +41,10 @@ const PAYMENT_METHODS = [
   'Cash', 'Credit Card', 'Debit Card', 'Bank Transfer', 'Check', 'Other'
 ];
 
-const NewExpenseScreen: React.FC<NewExpenseScreenProps> = ({
+const EditExpenseScreen: React.FC<EditExpenseScreenProps> = ({
+  expense,
+  onUpdateExpense,
   onNavigateBack,
-  onExpenseCreated,
 }) => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
@@ -43,19 +52,48 @@ const NewExpenseScreen: React.FC<NewExpenseScreenProps> = ({
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
-  const [receiptFiles, setReceiptFiles] = useState<FileData[]>([]);
+  const [receiptFiles, setReceiptFiles] = useState<ExistingFileData[]>([]);
+  const [loadingAttachments, setLoadingAttachments] = useState(false);
 
   const [formData, setFormData] = useState({
-    amount: '',
-    currency: 'USD',
-    expense_date: new Date().toISOString().split('T')[0],
-    category: 'General',
-    vendor: '',
-    payment_method: '',
-    reference_number: '',
-    notes: '',
-    status: 'recorded' as const,
+    amount: expense.amount?.toString() || '',
+    currency: expense.currency || 'USD',
+    expense_date: expense.expense_date || new Date().toISOString().split('T')[0],
+    category: expense.category || 'General',
+    vendor: expense.vendor || '',
+    payment_method: expense.payment_method || '',
+    reference_number: expense.reference_number || '',
+    notes: expense.notes || '',
+    status: expense.status || 'recorded',
   });
+
+  // Load existing attachments on component mount
+  useEffect(() => {
+    const loadExistingAttachments = async () => {
+      if (expense.attachments_count && expense.attachments_count > 0) {
+        setLoadingAttachments(true);
+        try {
+          const attachments = await apiService.getExpenseAttachments(expense.id);
+          const existingFiles: ExistingFileData[] = attachments.map(att => ({
+            uri: '', // No local URI for existing files
+            name: att.filename,
+            type: att.content_type,
+            size: att.size_bytes,
+            isExisting: true,
+            attachmentId: att.id,
+            uploaded_at: att.uploaded_at,
+          }));
+          setReceiptFiles(existingFiles);
+        } catch (error) {
+          console.error('Failed to load existing attachments:', error);
+        } finally {
+          setLoadingAttachments(false);
+        }
+      }
+    };
+
+    loadExistingAttachments();
+  }, [expense.id, expense.attachments_count]);
 
   const handleSubmit = async () => {
     if (!formData.amount || parseFloat(formData.amount) <= 0) {
@@ -70,46 +108,43 @@ const NewExpenseScreen: React.FC<NewExpenseScreenProps> = ({
 
     setLoading(true);
     try {
-      const expenseData = {
+      const updateData = {
         ...formData,
         amount: parseFloat(formData.amount),
       };
 
-      const newExpense = await apiService.createExpense(expenseData);
+      await onUpdateExpense(expense.id, updateData);
 
       // Upload receipt if selected
       if (receiptFiles.length > 0) {
         setUploadingReceipt(true);
         try {
-          await uploadReceiptToExpense(newExpense.id, receiptFiles[0]);
+          await uploadReceiptToExpense(expense.id, receiptFiles[0]);
         } catch (uploadError) {
           console.error('Failed to upload receipt:', uploadError);
-          // Don't block the success flow for upload failures
-          Alert.alert('Warning', 'Expense created but receipt upload failed. You can upload it later.');
+          Alert.alert('Warning', 'Expense updated but receipt upload failed. You can upload it later.');
         } finally {
           setUploadingReceipt(false);
         }
       }
 
-      Alert.alert('Success', 'Expense created successfully', [
+      Alert.alert('Success', 'Expense updated successfully', [
         {
           text: 'OK',
           onPress: () => {
-            onExpenseCreated(newExpense);
             onNavigateBack();
           },
         },
       ]);
     } catch (error) {
-      console.error('Failed to create expense:', error);
-      Alert.alert('Error', 'Failed to create expense');
+      console.error('Failed to update expense:', error);
+      Alert.alert('Error', 'Failed to update expense');
     } finally {
       setLoading(false);
     }
   };
 
   const uploadReceiptToExpense = async (expenseId: number, file: FileData) => {
-    // Use the same API service for consistency
     const formData = new FormData();
     formData.append('file', {
       uri: file.uri,
@@ -117,15 +152,13 @@ const NewExpenseScreen: React.FC<NewExpenseScreenProps> = ({
       type: file.type,
     } as any);
 
-    // Make direct fetch call since we need FormData
     const token = await AsyncStorage.getItem('auth_token');
     const userData = await AsyncStorage.getItem('user_data');
     const user = userData ? JSON.parse(userData) : null;
     const tenantId = user?.tenant_id;
 
-    // Get the API base URL from the apiService
-    const apiService = await import('../services/api');
-    const API_BASE_URL = apiService.default.baseURL;
+    const apiServiceImport = await import('../services/api');
+    const API_BASE_URL = apiServiceImport.default.baseURL;
 
     const response = await fetch(`${API_BASE_URL}/expenses/${expenseId}/upload-receipt`, {
       method: 'POST',
@@ -145,13 +178,38 @@ const NewExpenseScreen: React.FC<NewExpenseScreenProps> = ({
   };
 
   const handleFilesSelected = (files: FileData[]) => {
-    setReceiptFiles(files);
+    // Add new files to existing ones
+    const newFiles: ExistingFileData[] = files.map(file => ({
+      ...file,
+      isExisting: false,
+    }));
+    setReceiptFiles(prev => [...prev, ...newFiles]);
   };
 
   const handleRemoveFile = (index: number) => {
-    setReceiptFiles(prev => prev.filter((_, i) => i !== index));
+    const fileToRemove = receiptFiles[index];
+    if (fileToRemove.isExisting && fileToRemove.attachmentId) {
+      // For existing files, we might need to delete them from the server
+      Alert.alert(
+        'Remove Attachment',
+        'Are you sure you want to remove this attachment?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: () => {
+              // TODO: Implement server-side deletion of existing attachments
+              setReceiptFiles(prev => prev.filter((_, i) => i !== index));
+            }
+          }
+        ]
+      );
+    } else {
+      // For newly added files, just remove from state
+      setReceiptFiles(prev => prev.filter((_, i) => i !== index));
+    }
   };
-
 
   const CategoryModal = () => (
     <Modal
@@ -163,7 +221,7 @@ const NewExpenseScreen: React.FC<NewExpenseScreenProps> = ({
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Select Category</Text>
-          
+
           {EXPENSE_CATEGORIES.map((category) => (
             <TouchableOpacity
               key={category}
@@ -204,7 +262,7 @@ const NewExpenseScreen: React.FC<NewExpenseScreenProps> = ({
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Select Currency</Text>
-          
+
           {CURRENCIES.map((currency) => (
             <TouchableOpacity
               key={currency}
@@ -245,7 +303,7 @@ const NewExpenseScreen: React.FC<NewExpenseScreenProps> = ({
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Select Payment Method</Text>
-          
+
           {PAYMENT_METHODS.map((method) => (
             <TouchableOpacity
               key={method}
@@ -279,12 +337,12 @@ const NewExpenseScreen: React.FC<NewExpenseScreenProps> = ({
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
-      
+
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onNavigateBack}>
           <Ionicons name="arrow-back" size={24} color="#374151" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>New Expense</Text>
+        <Text style={styles.headerTitle}>Edit Expense</Text>
         <TouchableOpacity
           style={[styles.saveButton, loading && styles.saveButtonDisabled]}
           onPress={handleSubmit}
@@ -293,7 +351,7 @@ const NewExpenseScreen: React.FC<NewExpenseScreenProps> = ({
           {loading ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
-            <Text style={styles.saveButtonText}>Save</Text>
+            <Text style={styles.saveButtonText}>Update</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -400,12 +458,12 @@ const NewExpenseScreen: React.FC<NewExpenseScreenProps> = ({
           {/* Receipt Upload */}
           <FileUpload
             title="Receipt"
-            maxFiles={1}
+            maxFiles={5}
             allowedTypes={['image/jpeg', 'image/png', 'image/jpg']}
             onFilesSelected={handleFilesSelected}
             selectedFiles={receiptFiles}
             onRemoveFile={handleRemoveFile}
-            uploading={uploadingReceipt}
+            uploading={uploadingReceipt || loadingAttachments}
           />
         </View>
       </ScrollView>
@@ -556,4 +614,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default NewExpenseScreen;
+export default EditExpenseScreen;

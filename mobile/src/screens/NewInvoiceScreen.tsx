@@ -14,11 +14,13 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import apiService, { CreateClientData, CreateInvoiceData, Client, Settings, DiscountRule } from '../services/api';
 import { formatCurrency, getCurrencySymbol, parseCurrencyAmount } from '../utils/currency';
 import { formatDate, safeParseDateString } from '../utils/date';
+import FileUpload, { FileData } from '../components/FileUpload';
 
 interface InvoiceItem {
   id?: number;
@@ -119,6 +121,10 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
   const [discountRules, setDiscountRules] = useState<DiscountRule[]>([]);
   const [tenantInfo, setTenantInfo] = useState<{ default_currency: string } | null>(null);
   const [appliedDiscountRule, setAppliedDiscountRule] = useState<DiscountRule | null>(null);
+
+  // Attachment file management
+  const [attachmentFiles, setAttachmentFiles] = useState<FileData[]>([]);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
 
   // Load settings and discount rules
   useEffect(() => {
@@ -357,7 +363,7 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
     try {
       setSubmitting(true);
       setError(null);
-      
+
       const invoiceData: CreateInvoiceData = {
         client_id: formData.client_id,
         amount: calculateTotal(),
@@ -377,13 +383,71 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
         discount_value: formData.discount_value || 0,
         paid_amount: formData.paid_amount,
       };
-      
-      await onSaveInvoice(invoiceData);
+
+      const newInvoice = await onSaveInvoice(invoiceData);
+
+      // Upload attachments if any
+      if (attachmentFiles.length > 0) {
+        setUploadingAttachments(true);
+        try {
+          await Promise.all(
+            attachmentFiles.map(file => uploadAttachmentToInvoice(newInvoice.id, file))
+          );
+        } catch (uploadError) {
+          console.error('Failed to upload attachments:', uploadError);
+          Alert.alert('Warning', 'Invoice created but some attachments failed to upload. You can upload them later.');
+        } finally {
+          setUploadingAttachments(false);
+        }
+      }
     } catch (error: any) {
       setError(error.message || 'Failed to save invoice');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const uploadAttachmentToInvoice = async (invoiceId: number, file: FileData) => {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: file.uri,
+      name: file.name,
+      type: file.type,
+    } as any);
+
+    // Make direct API call since we need to handle FormData
+    const token = await AsyncStorage.getItem('auth_token');
+    const userData = await AsyncStorage.getItem('user_data');
+    const user = userData ? JSON.parse(userData) : null;
+    const tenantId = user?.tenant_id;
+
+    // Get the API base URL from the apiService
+    const apiService = await import('../services/api');
+    const API_BASE_URL = apiService.default.baseURL;
+
+    const response = await fetch(`${API_BASE_URL}/invoices/${invoiceId}/upload-attachment`, {
+      method: 'POST',
+      headers: {
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+        ...(tenantId && { 'X-Tenant-ID': tenantId }),
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  };
+
+  const handleFilesSelected = (files: FileData[]) => {
+    setAttachmentFiles(prev => [...prev, ...files]);
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setAttachmentFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const formatCurrencyDisplay = (amount: number) => {
@@ -794,6 +858,17 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
             numberOfLines={3}
           />
         </View>
+
+        {/* Attachments */}
+        <FileUpload
+          title="Attachments"
+          maxFiles={5}
+          allowedTypes={['image/jpeg', 'image/png', 'image/jpg', 'application/pdf']}
+          onFilesSelected={handleFilesSelected}
+          selectedFiles={attachmentFiles}
+          onRemoveFile={handleRemoveFile}
+          uploading={uploadingAttachments}
+        />
       </ScrollView>
 
       {renderAddClientModal()}
