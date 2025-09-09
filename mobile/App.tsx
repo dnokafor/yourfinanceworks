@@ -21,7 +21,7 @@ import UsersScreen from './src/screens/UsersScreen';
 import AuditLogScreen from './src/screens/AuditLogScreen';
 import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
-import apiService, { User, Client, Invoice, CreateInvoiceData, UpdateInvoiceData, InvoiceItemCreate, InvoiceItemUpdate, Expense, BankStatement } from './src/services/api';
+import apiService, { User, Client, Invoice, CreateInvoiceData, UpdateInvoiceData, InvoiceItemCreate, InvoiceItemUpdate, Expense, BankStatement, set401ErrorHandler } from './src/services/api';
 
 type Screen = 'login' | 'signup' | 'forgotPassword' | 'resetPassword' | 'dashboard' | 'invoices' | 'newInvoice' | 'editInvoice' | 'clients' | 'newClient' | 'editClient' | 'payments' | 'expenses' | 'newExpense' | 'statements' | 'analytics' | 'settings' | 'users' | 'auditLog';
 
@@ -37,6 +37,14 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Set up 401 error handler to redirect to login
+    set401ErrorHandler(() => {
+      console.log('401 error detected, redirecting to login');
+      setIsAuthenticated(false);
+      setUser(null);
+      setCurrentScreen('login');
+    });
+
     checkAuthStatus();
   }, []);
 
@@ -50,8 +58,10 @@ const App: React.FC = () => {
         setCurrentScreen('dashboard');
         await loadData();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Auth check failed:', error);
+      // If it's a 401 error, the handler will already redirect to login
+      // Otherwise, stay on login screen
     } finally {
       setLoading(false);
     }
@@ -63,16 +73,18 @@ const App: React.FC = () => {
         apiService.getClients(),
         apiService.getInvoices(),
       ]);
-      
+
       // Fetch detailed invoice data with items
       const detailedInvoices = await Promise.all(
         invoicesData.map(inv => apiService.getInvoice(inv.id))
       );
-      
+
       setClients(clientsData);
       setInvoices(detailedInvoices);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load data:', error);
+      // If it's a 401 error, the handler will redirect to login
+      // Otherwise, show error but don't crash the app
     }
   };
 

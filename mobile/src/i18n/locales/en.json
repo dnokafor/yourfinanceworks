@@ -43,7 +43,8 @@
     "updated_at": "Updated",
     "navigation": "Navigation",
     "current_language": "Current Language",
-    "available_languages": "Available Languages"
+    "available_languages": "Available Languages",
+    "view_all": "View All"
   },
   "navigation": {
     "dashboard": "Dashboard",

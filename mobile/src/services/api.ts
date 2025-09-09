@@ -1,35 +1,68 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
+// Logger utility to conditionally show logs only in development or when explicitly enabled
+const isLoggingEnabled = __DEV__ || Constants.expoConfig?.extra?.enableConsoleLogs === 'true';
+
+const logger = {
+  log: (...args: any[]) => {
+    if (isLoggingEnabled) {
+      console.log(...args);
+    }
+  },
+  error: (...args: any[]) => {
+    if (isLoggingEnabled) {
+      console.error(...args);
+    }
+  },
+  warn: (...args: any[]) => {
+    if (isLoggingEnabled) {
+      console.warn(...args);
+    }
+  }
+};
+
+// 401 Error Handler - will be set by the main App component
+let on401Error: (() => void) | null = null;
+
+export const set401ErrorHandler = (handler: () => void) => {
+  on401Error = handler;
+};
+
 // API Configuration
 // Get API base URL from environment variables
 const getApiBaseUrl = (): string => {
   // Try to get from environment variable first
   const envApiUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
   if (envApiUrl) {
+    logger.log(`Using API URL from environment: ${envApiUrl}`);
     return envApiUrl;
   }
-  
+
   // Fallback to expo config
   const expoApiUrl = Constants.expoConfig?.extra?.apiBaseUrl;
-  if (expoApiUrl) {
+  if (expoApiUrl && expoApiUrl !== '${EXPO_PUBLIC_API_BASE_URL}') {
+    logger.log(`Using API URL from Expo config: ${expoApiUrl}`);
     return expoApiUrl;
   }
-  
-  // Final fallback based on dev/prod environment
+
+  // Environment-aware fallbacks
+  const environment = process.env.EXPO_PUBLIC_ENVIRONMENT || (__DEV__ ? 'development' : 'production');
+
   if (__DEV__) {
-    console.warn('No API_BASE_URL environment variable found, using fallback development URL');
-    return 'http://192.168.86.32:8000/api/v1'; // Fallback development URL
+    logger.warn(`No API_BASE_URL found for ${environment} environment, using fallback development URL`);
+    // Try localhost first for local development
+    return 'http://localhost:8000/api/v1';
   } else {
-    console.warn('No API_BASE_URL environment variable found, using fallback production URL');
-    return 'https://your-production-api.com/api'; // Replace with your production URL
+    logger.warn(`No API_BASE_URL found for ${environment} environment, using fallback production URL`);
+    return 'https://your-production-api.com/api/v1';
   }
 };
 
 const API_BASE_URL = getApiBaseUrl();
 
-// Log API URL for debugging
-console.log('🌐 API Base URL:', API_BASE_URL);
+// Log API URL for debugging (only in development)
+logger.log('🌐 API Base URL:', API_BASE_URL);
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'user_data';
 
@@ -290,7 +323,7 @@ export async function apiRequest<T>(
     const tenantId = user?.tenant_id;
     
     const requestUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
-    console.log(`Making API request to ${requestUrl}`, options);
+    logger.log(`Making API request to ${requestUrl}`, options);
     
     const response = await fetch(requestUrl, {
       ...options,
@@ -325,7 +358,7 @@ export async function apiRequest<T>(
 
     return await response.json();
   } catch (error) {
-    console.error(`API request failed for ${url}:`, error);
+    logger.error(`API request failed for ${url}:`, error);
     throw error;
   }
 }
@@ -343,7 +376,7 @@ class ApiService {
     try {
       return await AsyncStorage.getItem(TOKEN_KEY);
     } catch (error) {
-      console.error('Error getting token:', error);
+      logger.error('Error getting token:', error);
       return null;
     }
   }
@@ -352,7 +385,7 @@ class ApiService {
     try {
       await AsyncStorage.setItem(TOKEN_KEY, token);
     } catch (error) {
-      console.error('Error setting token:', error);
+      logger.error('Error setting token:', error);
     }
   }
 
@@ -360,7 +393,7 @@ class ApiService {
     try {
       await AsyncStorage.removeItem(TOKEN_KEY);
     } catch (error) {
-      console.error('Error removing token:', error);
+      logger.error('Error removing token:', error);
     }
   }
 
@@ -369,7 +402,7 @@ class ApiService {
       const userData = await AsyncStorage.getItem(USER_KEY);
       return userData ? JSON.parse(userData) : null;
     } catch (error) {
-      console.error('Error getting user:', error);
+      logger.error('Error getting user:', error);
       return null;
     }
   }
@@ -378,7 +411,7 @@ class ApiService {
     try {
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
     } catch (error) {
-      console.error('Error setting user:', error);
+      logger.error('Error setting user:', error);
     }
   }
 
@@ -386,7 +419,7 @@ class ApiService {
     try {
       await AsyncStorage.removeItem(USER_KEY);
     } catch (error) {
-      console.error('Error removing user:', error);
+      logger.error('Error removing user:', error);
     }
   }
 
@@ -424,11 +457,21 @@ class ApiService {
           if (errorData.detail && errorData.detail.includes('Tenant context required')) {
             await this.removeToken();
             await this.removeUser();
+            // Trigger redirect to login page
+            if (on401Error) {
+              on401Error();
+              throw new Error('Session expired. Please log in again.');
+            }
             throw new Error('Session expired. Please log in again.');
           } else if (response.status === 401) {
             // 401 Unauthorized - token is invalid/expired
             await this.removeToken();
             await this.removeUser();
+            // Trigger redirect to login page
+            if (on401Error) {
+              on401Error();
+              throw new Error('Authentication failed. Please log in again.');
+            }
             throw new Error('Authentication failed. Please log in again.');
           } else {
             // 403 Forbidden - user lacks permissions
@@ -440,6 +483,11 @@ class ApiService {
         if (response.status === 400 && errorData.detail && errorData.detail.includes('Tenant context required')) {
           await this.removeToken();
           await this.removeUser();
+          // Trigger redirect to login page
+          if (on401Error) {
+            on401Error();
+            throw new Error('Session expired. Please log in again.');
+          }
           throw new Error('Session expired. Please log in again.');
         }
 
@@ -455,12 +503,12 @@ class ApiService {
       try {
         return JSON.parse(text);
       } catch (parseError) {
-        console.error(`JSON parse error for ${endpoint}:`, parseError);
-        console.error(`Response text:`, text);
+        logger.error(`JSON parse error for ${endpoint}:`, parseError);
+        logger.error(`Response text:`, text);
         throw new Error(`Invalid JSON response from server`);
       }
     } catch (error) {
-      console.error(`API request failed for ${endpoint}:`, error);
+      logger.error(`API request failed for ${endpoint}:`, error);
       throw error;
     }
   }
@@ -530,7 +578,7 @@ class ApiService {
     try {
       return await this.request<User>('/auth/me');
     } catch (error) {
-      console.error('Failed to get current user:', error);
+      logger.error('Failed to get current user:', error);
       return null;
     }
   }
@@ -811,7 +859,7 @@ class ApiService {
         }
       };
     } catch (error) {
-      console.error('Failed to fetch dashboard stats:', error);
+      logger.error('Failed to fetch dashboard stats:', error);
       // Return default stats if API fails
       return {
         totalIncome: {},

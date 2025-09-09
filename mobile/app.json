@@ -21,7 +21,15 @@
       "eas": {
         "projectId": "your-project-id-here"
       },
-      "apiBaseUrl": "${EXPO_PUBLIC_API_BASE_URL}"
+      "apiBaseUrl": "${EXPO_PUBLIC_API_BASE_URL}",
+      "enableConsoleLogs": "${EXPO_PUBLIC_ENABLE_CONSOLE_LOGS:-false}"
+    },
+    "web": {
+      "build": {
+        "babel": {
+          "include": ["@babel/preset-react"]
+        }
+      }
     }
   }
 } 

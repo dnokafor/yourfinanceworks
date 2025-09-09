@@ -36,7 +36,7 @@ const languageDetector = {
       const deviceLanguage = Localization.locale?.split('-')[0] || 'en';
       callback(deviceLanguage);
     } catch (error) {
-      console.error('Error detecting language:', error);
+      if (__DEV__) console.error('Error detecting language:', error);
       callback('en'); // fallback to English
     }
   },
@@ -45,7 +45,7 @@ const languageDetector = {
     try {
       await AsyncStorage.setItem('user-language', lng);
     } catch (error) {
-      console.error('Error saving language:', error);
+      if (__DEV__) console.error('Error saving language:', error);
     }
   },
 };

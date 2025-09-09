@@ -43,7 +43,8 @@
     "updated_at": "Mis à jour",
     "navigation": "Navigation",
     "current_language": "Langue Actuelle",
-    "available_languages": "Langues Disponibles"
+    "available_languages": "Langues Disponibles",
+    "view_all": "Voir Tout"
   },
   "navigation": {
     "dashboard": "Tableau de Bord",

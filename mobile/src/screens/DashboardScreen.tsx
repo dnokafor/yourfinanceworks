@@ -277,11 +277,11 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({
       >
         <View style={styles.header}>
           <View style={styles.headerTop}>
-            <View>
+            <View style={styles.textContainer}>
               <Text style={styles.welcomeText}>
                 {userName ? t('dashboard.welcome', { name: userName }) : t('dashboard.title')}
               </Text>
-              <Text style={styles.subtitle}>
+              <Text style={styles.subtitle} numberOfLines={2}>
                 {tenantName ? `${tenantName} - Overview of your invoicing activity` : 'Overview of your invoicing activity'}
               </Text>
             </View>
@@ -422,15 +422,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
-  languageRow: {
-    alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 20,
-  },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    minHeight: 60, // Ensure minimum height for touch targets
+  },
+  textContainer: {
+    flex: 1,
+    marginRight: 16, // Add margin to ensure logout button doesn't get too close
+  },
+  languageRow: {
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 20,
   },
   welcomeText: {
     fontSize: 24,
@@ -441,7 +446,8 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     color: '#6B7280',
-    maxWidth: '80%',
+    flexWrap: 'wrap',
+    lineHeight: 18,
   },
   signOutButton: {
     flexDirection: 'row',
@@ -450,6 +456,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 8,
     backgroundColor: '#FEF2F2',
+    minWidth: 60, // Ensure minimum width for touch target
+    alignSelf: 'flex-start', // Don't stretch to fill space
   },
   signOutText: {
     marginLeft: 4,
