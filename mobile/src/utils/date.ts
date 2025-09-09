@@ -1,18 +1,25 @@
 import { parseISO, format, isValid } from 'date-fns';
 
-export const formatDate = (date: string | Date): string => {
-  if (!date) return new Date().toLocaleDateString();
-  
+export const formatDate = (date: string | Date | null | undefined): string => {
+  if (!date) return '';
+
   try {
     let dateObj: Date;
-    
+
     if (typeof date === 'string') {
-      // Handle YYYY-MM-DD format, and partial inputs
+      // Handle various date formats
       if (date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        // YYYY-MM-DD format
         dateObj = parseISO(date);
+      } else if (date.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
+        // ISO format with time
+        dateObj = parseISO(date);
+      } else if (date.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/)) {
+        // MySQL datetime format
+        dateObj = new Date(date.replace(' ', 'T'));
       } else {
-        // For partial dates, or other formats, we can return a default or placeholder
-        return 'Invalid Date';
+        // Try to parse as general date string
+        dateObj = new Date(date);
       }
     } else {
       dateObj = date;
@@ -20,13 +27,13 @@ export const formatDate = (date: string | Date): string => {
 
     if (!isValid(dateObj)) {
       // Fallback for invalid dates
-      return 'Invalid Date';
+      return '';
     }
 
     return format(dateObj, 'MMM d, yyyy');
   } catch (error) {
     // Fallback for any unexpected errors
-    return 'Invalid Date';
+    return '';
   }
 };
 

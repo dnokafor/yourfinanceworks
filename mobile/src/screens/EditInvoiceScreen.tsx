@@ -33,7 +33,6 @@ interface Client {
   email: string;
 }
 
-
 interface EditInvoiceFormData {
   client: string;
   invoiceNumber: string;
@@ -138,7 +137,7 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
       if (updatedInvoice.has_attachment || updatedInvoice.attachment_filename) {
         setAttachmentInfo({
           has_attachment: true,
-          filename: updatedInvoice.attachment_filename
+          filename: updatedInvoice.attachment_filename || null
         });
       } else {
         setAttachmentInfo(null);
@@ -198,6 +197,7 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
   const [addClientLoading, setAddClientLoading] = useState(false);
   const [addClientError, setAddClientError] = useState<string | null>(null);
   const [loadingAttachments, setLoadingAttachments] = useState(false);
+  const [attachmentInfo, setAttachmentInfo] = useState<{ has_attachment: boolean; filename: string | null } | null>(null);
 
   // Debug modal states
   useEffect(() => {

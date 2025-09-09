@@ -970,6 +970,31 @@ class ApiService {
   async getExpenseAttachments(expenseId: number): Promise<any[]> {
     return await this.request<any[]>(`/expenses/${expenseId}/attachments`);
   }
+
+  // Client Notes Methods
+  async getClientNotes(clientId: number): Promise<ClientNote[]> {
+    return await this.request<ClientNote[]>(`/crm/clients/${clientId}/notes`);
+  }
+
+  async createClientNote(clientId: number, noteData: { note: string }): Promise<ClientNote> {
+    return await this.request<ClientNote>(`/crm/clients/${clientId}/notes`, {
+      method: 'POST',
+      body: JSON.stringify(noteData),
+    });
+  }
+
+  async updateClientNote(clientId: number, noteId: number, noteData: { note: string }): Promise<ClientNote> {
+    return await this.request<ClientNote>(`/crm/clients/${clientId}/notes/${noteId}`, {
+      method: 'PUT',
+      body: JSON.stringify(noteData),
+    });
+  }
+
+  async deleteClientNote(clientId: number, noteId: number): Promise<void> {
+    await this.request(`/crm/clients/${clientId}/notes/${noteId}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 // Additional types for expenses and bank statements
