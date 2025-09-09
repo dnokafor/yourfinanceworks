@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,15 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiService, { CreateClientData, Client } from '../services/api';
+import { SUPPORTED_CURRENCIES, getCurrencySymbol } from '../utils/currencyList';
 
 interface NewClientScreenProps {
   onNavigateBack: () => void;
@@ -28,6 +33,26 @@ const NewClientScreen: React.FC<NewClientScreenProps> = ({ onNavigateBack, onCli
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showCurrencyModal, setShowCurrencyModal] = useState(false);
+  const [tenantInfo, setTenantInfo] = useState<{ default_currency: string } | null>(null);
+
+  // Load tenant info on mount
+  useEffect(() => {
+    const loadTenantInfo = async () => {
+      try {
+        const info = await apiService.getTenantInfo();
+        setTenantInfo(info);
+        // Set default currency from tenant if available
+        if (info.default_currency && !formData.preferred_currency) {
+          setFormData(prev => ({ ...prev, preferred_currency: info.default_currency }));
+        }
+      } catch (error) {
+        console.warn('Failed to load tenant info:', error);
+      }
+    };
+
+    loadTenantInfo();
+  }, []);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -154,30 +179,86 @@ const NewClientScreen: React.FC<NewClientScreenProps> = ({ onNavigateBack, onCli
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Preferred Currency</Text>
-            <View style={styles.currencyContainer}>
-              {['USD', 'EUR', 'GBP', 'CAD'].map((currency) => (
-                <TouchableOpacity
-                  key={currency}
-                  style={[
-                    styles.currencyButton,
-                    formData.preferred_currency === currency && styles.currencyButtonActive,
-                  ]}
-                  onPress={() => updateFormData('preferred_currency', currency)}
-                >
-                  <Text
-                    style={[
-                      styles.currencyButtonText,
-                      formData.preferred_currency === currency && styles.currencyButtonTextActive,
-                    ]}
-                  >
-                    {currency}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <TouchableOpacity
+              style={styles.currencySelector}
+              onPress={() => setShowCurrencyModal(true)}
+            >
+              <View style={styles.currencyDisplay}>
+                <Text style={styles.currencySymbol}>
+                  {getCurrencySymbol(formData.preferred_currency)}
+                </Text>
+                <Text style={styles.currencyCode}>{formData.preferred_currency}</Text>
+                <Ionicons name="chevron-down" size={16} color="#6B7280" />
+              </View>
+            </TouchableOpacity>
+            <Text style={styles.fieldHint}>
+              Select the currency this client prefers for transactions
+            </Text>
           </View>
         </View>
       </ScrollView>
+
+      {/* Currency Selection Modal */}
+      <Modal
+        visible={showCurrencyModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCurrencyModal(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowCurrencyModal(false)}
+          >
+            <View style={styles.currencyModalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Currency</Text>
+                <TouchableOpacity onPress={() => setShowCurrencyModal(false)}>
+                  <Ionicons name="close" size={24} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.currencyModalBody}>
+                <Text style={styles.modalSubtitle}>
+                  Choose the preferred currency for this client
+                </Text>
+                <ScrollView style={styles.currencyList} showsVerticalScrollIndicator={false}>
+                  {SUPPORTED_CURRENCIES.map((currency, index) => (
+                    <TouchableOpacity
+                      key={currency.code}
+                      style={[
+                        styles.currencyOption,
+                        formData.preferred_currency === currency.code && styles.currencyOptionSelected,
+                        index === SUPPORTED_CURRENCIES.length - 1 && styles.currencyOptionLast
+                      ]}
+                      onPress={() => {
+                        updateFormData('preferred_currency', currency.code);
+                        setShowCurrencyModal(false);
+                      }}
+                    >
+                      <View style={styles.currencyInfo}>
+                        <View style={styles.currencySymbolContainer}>
+                          <Text style={styles.currencySymbolText}>{currency.symbol}</Text>
+                        </View>
+                        <View style={styles.currencyDetails}>
+                          <Text style={styles.currencyCode}>{currency.code}</Text>
+                          <Text style={styles.currencyName}>{currency.name}</Text>
+                        </View>
+                      </View>
+                      {formData.preferred_currency === currency.code && (
+                        <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 };
@@ -198,11 +279,27 @@ const styles = StyleSheet.create({
   inputError: { borderColor: '#EF4444' },
   textArea: { height: 80 },
   errorText: { color: '#EF4444', fontSize: 12, marginTop: 4 },
-  currencyContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  currencyButton: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#D1D5DB', backgroundColor: '#fff' },
-  currencyButtonActive: { backgroundColor: '#007AFF', borderColor: '#007AFF' },
-  currencyButtonText: { fontSize: 14, color: '#374151' },
-  currencyButtonTextActive: { color: '#fff' },
+  currencySelector: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, padding: 12, backgroundColor: '#fff' },
+  currencyDisplay: { flexDirection: 'row', alignItems: 'center' },
+  currencySymbol: { fontSize: 16, color: '#374151', marginRight: 8 },
+  currencyCode: { fontSize: 16, color: '#374151', flex: 1 },
+  fieldHint: { fontSize: 12, color: '#6B7280', marginTop: 4 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
+  modalBackdrop: { flex: 1, justifyContent: 'flex-end' },
+  currencyModalContent: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '70%', minHeight: '50%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+  modalTitle: { fontSize: 18, fontWeight: '600', color: '#111827' },
+  currencyModalBody: { padding: 20, paddingBottom: 40 },
+  modalSubtitle: { fontSize: 14, color: '#6B7280', marginBottom: 16, textAlign: 'center' },
+  currencyList: { flex: 1 },
+  currencyOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
+  currencyOptionSelected: { backgroundColor: '#F0F9FF', borderRadius: 8, marginHorizontal: -4, paddingHorizontal: 12 },
+  currencyOptionLast: { borderBottomWidth: 0 },
+  currencyInfo: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  currencySymbolContainer: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  currencySymbolText: { fontSize: 16, fontWeight: '600', color: '#374151' },
+  currencyDetails: { flex: 1 },
+  currencyName: { fontSize: 14, color: '#6B7280' },
 });
 
 export default NewClientScreen;

@@ -37,12 +37,27 @@ const UsersScreen: React.FC<UsersScreenProps> = ({ onNavigateBack }) => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      // Note: This endpoint might need to be implemented in the API
-      const response = await apiService.request<User[]>('/users/');
-      setUsers(response);
+      const response: any = await apiService.getUsers();
+
+      // Handle different response formats
+      let usersList: User[] = [];
+      if (Array.isArray(response)) {
+        usersList = response;
+      } else if (response && typeof response === 'object') {
+        if (response.data && Array.isArray(response.data)) {
+          usersList = response.data;
+        } else if (response.users && Array.isArray(response.users)) {
+          usersList = response.users;
+        } else if (response.items && Array.isArray(response.items)) {
+          usersList = response.items;
+        }
+      }
+
+      setUsers(usersList);
     } catch (error) {
       console.error('Failed to fetch users:', error);
       Alert.alert('Error', 'Failed to load users');
+      setUsers([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -56,11 +71,7 @@ const UsersScreen: React.FC<UsersScreenProps> = ({ onNavigateBack }) => {
 
     try {
       setInviteLoading(true);
-      // Note: This endpoint might need to be implemented in the API
-      await apiService.request('/users/invite', {
-        method: 'POST',
-        body: JSON.stringify(inviteData),
-      });
+      await apiService.inviteUser(inviteData);
       
       Alert.alert('Success', 'User invitation sent successfully!');
       setShowInviteForm(false);
@@ -84,7 +95,7 @@ const UsersScreen: React.FC<UsersScreenProps> = ({ onNavigateBack }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await apiService.request(`/users/${user.id}`, { method: 'DELETE' });
+              await apiService.deleteUser(user.id);
               setUsers(prev => prev.filter(u => u.id !== user.id));
               Alert.alert('Success', 'User deleted successfully');
             } catch (error: any) {

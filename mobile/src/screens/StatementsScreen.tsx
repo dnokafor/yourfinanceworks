@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import * as DocumentPicker from 'expo-document-picker';
 import apiService from '../services/api';
+import StatusIndicator from '../components/StatusIndicator';
 
 interface BankStatement {
   id: number;
@@ -198,9 +199,11 @@ const BankStatementsScreen: React.FC<BankStatementsScreenProps> = ({
                         {statement.original_filename}
                       </Text>
                       <View style={styles.statementMeta}>
-                        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(statement.status) }]}>
-                          <Text style={styles.statusText}>{formatStatus(statement.status)}</Text>
-                        </View>
+                        <StatusIndicator
+                          status={statement.status as any}
+                          size="small"
+                          customText={formatStatus(statement.status)}
+                        />
                         <Text style={styles.transactionCount}>
                           {statement.extracted_count} transactions
                         </Text>

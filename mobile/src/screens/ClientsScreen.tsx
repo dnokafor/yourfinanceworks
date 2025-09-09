@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import apiService, { Client, CreateClientData } from '../services/api';
-import ClientNotesModal from '../components/ClientNotesModal';
 
 interface ClientsScreenProps {
   clients: Client[];
@@ -37,20 +36,10 @@ const ClientsScreen: React.FC<ClientsScreenProps> = ({
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showNotesModal, setShowNotesModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [clientNotesCounts, setClientNotesCounts] = useState<Record<number, number>>({});
 
-  // Load notes count for all clients on mount
-  useEffect(() => {
-    clients.forEach(client => {
-      if (!(client.id in clientNotesCounts)) {
-        loadNotesCount(client.id);
-      }
-    });
-  }, [clients]);
 
   const [addForm, setAddForm] = useState({
     name: '',
@@ -151,34 +140,6 @@ const ClientsScreen: React.FC<ClientsScreenProps> = ({
     }).format(amount);
   };
 
-  const loadNotesCount = async (clientId: number) => {
-    try {
-      const notes = await apiService.getClientNotes(clientId);
-      setClientNotesCounts(prev => ({
-        ...prev,
-        [clientId]: notes.length
-      }));
-    } catch (error) {
-      // Silently fail for note count loading
-      console.warn(`Failed to load notes count for client ${clientId}:`, error);
-    }
-  };
-
-  const openNotesModal = (client: Client) => {
-    setSelectedClient(client);
-    setShowNotesModal(true);
-    // Load notes count if not already loaded
-    if (!(client.id in clientNotesCounts)) {
-      loadNotesCount(client.id);
-    }
-  };
-
-  const handleNotesUpdated = () => {
-    // Refresh notes count when notes are updated
-    if (selectedClient) {
-      loadNotesCount(selectedClient.id);
-    }
-  };
 
   const renderAddModal = () => (
     <Modal
@@ -363,19 +324,6 @@ const ClientsScreen: React.FC<ClientsScreenProps> = ({
               <View style={styles.clientActions}>
                 <TouchableOpacity
                   style={styles.actionButton}
-                  onPress={() => openNotesModal(client)}
-                >
-                  <View style={styles.notesButton}>
-                    <Ionicons name="document-text" size={16} color="#007AFF" />
-                    {clientNotesCounts[client.id] !== undefined && (
-                      <Text style={styles.notesCount}>
-                        {clientNotesCounts[client.id]}
-                      </Text>
-                    )}
-                  </View>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.actionButton}
                   onPress={() => onNavigateToEditClient(client)}
                 >
                   <Ionicons name="pencil" size={20} color="#007AFF" />
@@ -394,17 +342,6 @@ const ClientsScreen: React.FC<ClientsScreenProps> = ({
 
       {renderAddModal()}
       {renderEditModal()}
-
-      {/* Client Notes Modal */}
-      <ClientNotesModal
-        visible={showNotesModal}
-        client={selectedClient}
-        onClose={() => {
-          setShowNotesModal(false);
-          setSelectedClient(null);
-        }}
-        onNotesUpdated={handleNotesUpdated}
-      />
     </View>
   );
 };
@@ -526,23 +463,6 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     // Additional styling if needed
-  },
-  notesButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  notesCount: {
-    fontSize: 10,
-    color: '#007AFF',
-    fontWeight: '600',
-    marginLeft: 2,
-    backgroundColor: '#E3F2FD',
-    borderRadius: 8,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    minWidth: 14,
-    textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,

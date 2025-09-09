@@ -56,6 +56,8 @@ export interface User {
   tenant_id: string;
   is_active: boolean;
   is_verified: boolean;
+  created_at: string;
+  updated_at?: string;
 }
 
 export interface AuthResponse {
@@ -435,6 +437,17 @@ class ApiService {
     };
 
     try {
+      // Log request details for debugging
+      if (options.method === 'PUT' && endpoint.includes('/invoices/')) {
+        logger.log('🚀 API PUT Request to invoices:', {
+          url,
+          endpoint,
+          method: options.method,
+          body: options.body ? JSON.parse(options.body as string) : null,
+          headers: requestOptions.headers
+        });
+      }
+
       const response = await fetch(url, requestOptions);
       
       if (!response.ok) {
@@ -640,6 +653,14 @@ class ApiService {
   }
 
   async updateInvoice(invoiceId: number, invoiceData: UpdateInvoiceData): Promise<Invoice> {
+    logger.log('📝 updateInvoice called with:', {
+      invoiceId,
+      invoiceData,
+      paidAmount: invoiceData.paid_amount,
+      hasPaidAmount: 'paid_amount' in invoiceData,
+      allKeys: Object.keys(invoiceData)
+    });
+
     const response = await this.request<any>(`/invoices/${invoiceId}`, {
       method: 'PUT',
       body: JSON.stringify(invoiceData),
@@ -884,9 +905,46 @@ class ApiService {
   }
 
   async getTenantInfo(): Promise<{ id: number; name: string; default_currency: string; [key: string]: any }> {
-    return await this.request('/tenants/me', { 
-      method: 'GET' 
+    return await this.request('/tenants/me', {
+      method: 'GET'
     });
+  }
+
+  // User Management Methods
+  async getUsers(): Promise<User[]> {
+    return await this.request<User[]>('/auth/users');
+  }
+
+  async inviteUser(inviteData: { email: string; role: string; first_name: string; last_name?: string }): Promise<any> {
+    return await this.request('/auth/invites', {
+      method: 'POST',
+      body: JSON.stringify(inviteData),
+    });
+  }
+
+  async getInvites(): Promise<any[]> {
+    return await this.request('/auth/invites');
+  }
+
+  async deleteUser(userId: number): Promise<void> {
+    return await this.request(`/auth/users/${userId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getAuditLogs(params?: {
+    user_id?: number;
+    user_email?: string;
+    action?: string;
+    resource_type?: string;
+    resource_id?: string;
+    status?: string;
+    start_date?: string;
+    end_date?: string;
+  }): Promise<any[]> {
+    const queryParams = params ? new URLSearchParams(params as any).toString() : '';
+    const url = queryParams ? `/audit-logs?${queryParams}` : '/audit-logs';
+    return await this.request(url);
   }
 
   // Expense Methods

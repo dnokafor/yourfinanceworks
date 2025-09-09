@@ -20,7 +20,7 @@ interface AuditLogEntry {
   action: string;
   resource_type: string;
   resource_id: number;
-  details: string;
+  details: string | object;
   ip_address: string;
   user_agent: string;
   created_at: string;
@@ -43,23 +43,42 @@ const AuditLogScreen: React.FC<AuditLogScreenProps> = ({ onNavigateBack }) => {
   const fetchAuditLogs = async () => {
     try {
       setLoading(true);
-      // Note: This endpoint might need to be implemented in the API
-      const response = await apiService.request<AuditLogEntry[]>('/audit-log/');
-      setAuditLogs(response);
+      const response: any = await apiService.getAuditLogs();
+
+      // Handle different response formats
+      let logs: AuditLogEntry[] = [];
+      if (Array.isArray(response)) {
+        logs = response;
+      } else if (response && typeof response === 'object') {
+        if (response.data && Array.isArray(response.data)) {
+          logs = response.data;
+        } else if (response.items && Array.isArray(response.items)) {
+          logs = response.items;
+        } else if (response.audit_logs && Array.isArray(response.audit_logs)) {
+          logs = response.audit_logs;
+        }
+      }
+
+      setAuditLogs(logs);
     } catch (error) {
       console.error('Failed to fetch audit logs:', error);
       Alert.alert('Error', 'Failed to load audit logs');
+      setAuditLogs([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredLogs = auditLogs.filter(log =>
-    log.user_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    log.resource_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    log.details.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredLogs = (auditLogs || []).filter(log => {
+    const detailsString = typeof log.details === 'object'
+      ? formatDetails(log.details)
+      : (log.details || '');
+
+    return log.user_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           log.action?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           log.resource_type?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           detailsString.toLowerCase().includes(searchQuery.toLowerCase());
+  });
 
   const getActionColor = (action: string) => {
     switch (action.toLowerCase()) {
@@ -81,6 +100,43 @@ const AuditLogScreen: React.FC<AuditLogScreenProps> = ({ onNavigateBack }) => {
       case 'logout': return 'log-out-outline';
       default: return 'information-circle-outline';
     }
+  };
+
+  const formatDetails = (details: any): string => {
+    if (!details) return 'No details available';
+
+    // Handle object with changes property
+    if (details.changes && typeof details.changes === 'object') {
+      const changes = details.changes;
+      const changeKeys = Object.keys(changes);
+
+      if (changeKeys.length === 0) return 'No changes recorded';
+
+      // Format the first few changes
+      const formattedChanges = changeKeys.slice(0, 3).map(key => {
+        const change = changes[key];
+        if (Array.isArray(change) && change.length === 2) {
+          return `${key}: ${change[0]} → ${change[1]}`;
+        }
+        return `${key} updated`;
+      });
+
+      const remainingCount = changeKeys.length - 3;
+      const remainingText = remainingCount > 0 ? ` (+${remainingCount} more)` : '';
+
+      return formattedChanges.join(', ') + remainingText;
+    }
+
+    // Handle other object formats
+    if (typeof details === 'object') {
+      try {
+        return JSON.stringify(details);
+      } catch {
+        return 'Details contain complex data';
+      }
+    }
+
+    return String(details);
   };
 
   const AuditLogItem = ({ entry }: { entry: AuditLogEntry }) => (
@@ -110,7 +166,10 @@ const AuditLogScreen: React.FC<AuditLogScreenProps> = ({ onNavigateBack }) => {
       <View style={styles.logContent}>
         <Text style={styles.userText}>by {entry.user_name}</Text>
         <Text style={styles.detailsText} numberOfLines={2}>
-          {entry.details}
+          {typeof entry.details === 'object'
+            ? formatDetails(entry.details)
+            : entry.details
+          }
         </Text>
       </View>
       
@@ -215,7 +274,12 @@ const AuditLogScreen: React.FC<AuditLogScreenProps> = ({ onNavigateBack }) => {
 
               <View style={styles.detailColumn}>
                 <Text style={styles.detailLabel}>Details:</Text>
-                <Text style={styles.detailValueMultiline}>{selectedEntry.details}</Text>
+                <Text style={styles.detailValueMultiline}>
+                  {typeof selectedEntry.details === 'object'
+                    ? formatDetails(selectedEntry.details)
+                    : selectedEntry.details
+                  }
+                </Text>
               </View>
 
               <View style={styles.detailColumn}>

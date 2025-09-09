@@ -15,6 +15,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import apiService, { Expense } from '../services/api';
+import StatusIndicator from '../components/StatusIndicator';
 
 interface ExpensesScreenProps {
   onNavigateBack: () => void;
@@ -239,9 +240,10 @@ const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                     <Text style={styles.expenseAmountText}>
                       {formatCurrency(expense.amount, expense.currency)}
                     </Text>
-                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(expense.status) }]}>
-                      <Text style={styles.statusText}>{expense.status}</Text>
-                    </View>
+                    <StatusIndicator
+                      status={expense.status as any}
+                      size="small"
+                    />
                   </View>
                 </View>
                 

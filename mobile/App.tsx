@@ -20,12 +20,11 @@ import StatementsScreen from './src/screens/StatementsScreen';
 import AnalyticsScreen from './src/screens/AnalyticsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import UsersScreen from './src/screens/UsersScreen';
-import AuditLogScreen from './src/screens/AuditLogScreen';
 import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
 import apiService, { User, Client, Invoice, CreateInvoiceData, UpdateInvoiceData, InvoiceItemCreate, InvoiceItemUpdate, Expense, BankStatement, set401ErrorHandler } from './src/services/api';
 
-type Screen = 'login' | 'signup' | 'forgotPassword' | 'resetPassword' | 'dashboard' | 'invoices' | 'newInvoice' | 'editInvoice' | 'clients' | 'newClient' | 'editClient' | 'payments' | 'expenses' | 'newExpense' | 'editExpense' | 'statements' | 'analytics' | 'settings' | 'users' | 'auditLog';
+type Screen = 'login' | 'signup' | 'forgotPassword' | 'resetPassword' | 'dashboard' | 'invoices' | 'newInvoice' | 'editInvoice' | 'clients' | 'newClient' | 'editClient' | 'payments' | 'expenses' | 'newExpense' | 'editExpense' | 'statements' | 'analytics' | 'settings' | 'users';
 
 const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<Screen>('login');
@@ -170,9 +169,6 @@ const App: React.FC = () => {
     setCurrentScreen('users');
   };
 
-  const handleNavigateToAuditLog = () => {
-    setCurrentScreen('auditLog');
-  };
 
   const handleNavigateToEditInvoice = (invoiceId: number) => {
     setSelectedInvoice(invoiceId);
@@ -525,19 +521,12 @@ const App: React.FC = () => {
           <SettingsScreen
             onNavigateBack={handleNavigateBack}
             onNavigateToUsers={handleNavigateToUsers}
-            onNavigateToAuditLog={handleNavigateToAuditLog}
             onSignOut={handleSignOut}
           />
         );
       case 'users':
         return (
           <UsersScreen
-            onNavigateBack={handleNavigateBack}
-          />
-        );
-      case 'auditLog':
-        return (
-          <AuditLogScreen
             onNavigateBack={handleNavigateBack}
           />
         );

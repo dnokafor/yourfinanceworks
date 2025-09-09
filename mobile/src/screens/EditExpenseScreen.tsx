@@ -15,7 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
 import apiService, { Expense } from '../services/api';
-import FileUpload, { FileData } from '../components/FileUpload';
+import EnhancedFileUpload from '../components/EnhancedFileUpload';
+import { FileData } from '../components/FileUpload';
 
 // Extended FileData for existing attachments
 interface ExistingFileData extends FileData {
@@ -456,12 +457,12 @@ const EditExpenseScreen: React.FC<EditExpenseScreenProps> = ({
           </View>
 
           {/* Receipt Upload */}
-          <FileUpload
+          <EnhancedFileUpload
             title="Receipt"
             maxFiles={5}
-            allowedTypes={['image/jpeg', 'image/png', 'image/jpg']}
+            allowedTypes={['image/*']}
             onFilesSelected={handleFilesSelected}
-            selectedFiles={receiptFiles}
+            selectedFiles={receiptFiles as FileData[]}
             onRemoveFile={handleRemoveFile}
             uploading={uploadingReceipt || loadingAttachments}
           />

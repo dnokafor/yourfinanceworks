@@ -889,7 +889,7 @@ async def read_invoice(
         logger.info(f"Returning {len(items_data)} items for invoice {invoice_id}: {[{'id': item['id'], 'description': item['description'], 'description_length': len(item['description']) if item['description'] else 0} for item in items_data]}")
         
         invoice_dict = {
-            "id": invoice.id,
+            "date": invoice.created_at.isoformat() if invoice.created_at else None,            "id": invoice.id,
             "number": invoice.number,
             "amount": float(invoice.amount),
             "currency": invoice.currency,
@@ -971,19 +971,20 @@ async def update_invoice(
                 detail="Invoice not found"
             )
         
-        # Check if invoice is paid and prevent updates except status changes
+        # Check if invoice is paid and prevent updates except status and payment-related changes
         update_data = invoice.model_dump(exclude_unset=True)
         if db_invoice.status == "paid" and "status" in update_data:
             # If changing status from paid, allow the change
             pass
         elif db_invoice.status == "paid":
-            # Only allow status updates for paid invoices
-            non_status_updates = {k: v for k, v in update_data.items() if k != "status"}
-            if non_status_updates:
-                logger.warning(f"User {current_user.email} attempted to modify paid invoice {invoice_id} (fields: {list(non_status_updates.keys())})")
+            # Allow status updates and payment-related updates for paid invoices
+            non_allowed_updates = {k: v for k, v in update_data.items()
+                                 if k not in ["status", "paid_amount", "total_paid"]}
+            if non_allowed_updates:
+                logger.warning(f"User {current_user.email} attempted to modify paid invoice {invoice_id} (fields: {list(non_allowed_updates.keys())})")
                 raise HTTPException(
                     status_code=400,
-                    detail="Paid invoices cannot be modified except for status changes"
+                    detail="Paid invoices can only be modified for status and payment updates"
                 )
         
         # Initialize currency service for validation

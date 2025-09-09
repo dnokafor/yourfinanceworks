@@ -22,7 +22,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import apiService, { CreateClientData, CreateInvoiceData, Client, Settings, DiscountRule } from '../services/api';
 import { formatCurrency, getCurrencySymbol, parseCurrencyAmount } from '../utils/currency';
 import { formatDate, safeParseDateString } from '../utils/date';
-import FileUpload, { FileData } from '../components/FileUpload';
+import EnhancedFileUpload from '../components/EnhancedFileUpload';
+import { FileData } from '../components/FileUpload';
 
 interface InvoiceItem {
   id?: number;
@@ -862,10 +863,10 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
         </View>
 
         {/* Attachments */}
-        <FileUpload
+        <EnhancedFileUpload
           title="Attachments"
           maxFiles={5}
-          allowedTypes={['image/jpeg', 'image/png', 'image/jpg', 'application/pdf']}
+          allowedTypes={['image/*', 'application/pdf']}
           onFilesSelected={handleFilesSelected}
           selectedFiles={attachmentFiles}
           onRemoveFile={handleRemoveFile}

@@ -23,7 +23,7 @@ async def create_client_note(
     set_tenant_context(current_user.tenant_id)
     SessionLocal = tenant_db_manager.get_tenant_session(current_user.tenant_id)
     db = SessionLocal()
-    
+
     try:
         # Check if client exists
         db_client = db.query(Client).filter(Client.id == client_id).first()
@@ -52,7 +52,9 @@ async def create_client_note(
             details=note.model_dump(),
             status="success",
         )
-        return db_note
+        # Return before closing session to avoid DetachedInstanceError
+        result = db_note
+        return result
     finally:
         db.close()
 
@@ -67,7 +69,7 @@ async def update_client_note(
     set_tenant_context(current_user.tenant_id)
     SessionLocal = tenant_db_manager.get_tenant_session(current_user.tenant_id)
     db = SessionLocal()
-    
+
     try:
         # Check if client exists
         db_client = db.query(Client).filter(Client.id == client_id).first()
@@ -85,7 +87,7 @@ async def update_client_note(
         # Update the note
         db_note.note = note.note
         db_note.updated_at = datetime.now(timezone.utc)
-        
+
         db.commit()
         db.refresh(db_note)
         # Audit log update
@@ -100,7 +102,9 @@ async def update_client_note(
             details={"note": note.note},
             status="success",
         )
-        return db_note
+        # Return before closing session to avoid DetachedInstanceError
+        result = db_note
+        return result
     finally:
         db.close()
 
@@ -156,7 +160,7 @@ async def get_client_notes(
     set_tenant_context(current_user.tenant_id)
     SessionLocal = tenant_db_manager.get_tenant_session(current_user.tenant_id)
     db = SessionLocal()
-    
+
     try:
         # Check if client exists
         db_client = db.query(Client).filter(Client.id == client_id).first()
@@ -164,6 +168,8 @@ async def get_client_notes(
             raise HTTPException(status_code=404, detail="Client not found")
 
         notes = db.query(ClientNote).filter(ClientNote.client_id == client_id).all()
-        return notes
+        # Return before closing session to avoid DetachedInstanceError
+        result = notes
+        return result
     finally:
         db.close()
