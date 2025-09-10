@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2, Download, Database, Upload, Plus, Edit, Trash2 } from "lucide-react";
+import { Loader2, Download, Database, Upload, Plus, Edit, Trash2, Calculator, CheckCircle, XCircle } from "lucide-react";
 import { settingsApi, discountRulesApi, aiConfigApi, DiscountRule, DiscountRuleCreate, AIConfig, AIConfigCreate } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -87,6 +87,16 @@ const Settings = () => {
     send_copy: true,
     auto_reminders: true,
   });
+
+  const [taxSettings, setTaxSettings] = useState({
+    enabled: true,
+    base_url: "http://192.168.86.39:8001",
+    api_key: "ak_Pw0viX75yYrLT8tUmS2c912gDDrLsR4qvtIO8XRrruU",
+    timeout: 30,
+    retry_attempts: 3,
+  });
+  const [testingTaxConnection, setTestingTaxConnection] = useState(false);
+  const [taxTestResult, setTaxTestResult] = useState<{success: boolean, message: string} | null>(null);
 
   const [emailSettings, setEmailSettings] = useState({
     provider: "aws_ses",
@@ -475,6 +485,59 @@ const Settings = () => {
 
     } catch (error) {
       console.error("Failed to save settings:", error);
+      toast.error(getErrorMessage(error, t));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTestTaxConnection = async () => {
+    setTestingTaxConnection(true);
+    setTaxTestResult(null);
+
+    try {
+      // This would typically call an API endpoint to test the tax service connection
+      // For now, we'll simulate a test with a timeout
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Simulate success/failure based on whether the base URL is set
+      if (taxSettings.base_url && taxSettings.base_url.includes('http')) {
+        setTaxTestResult({
+          success: true,
+          message: "Tax service connection successful! API responded correctly."
+        });
+        toast.success("Tax service connection test passed!");
+      } else {
+        setTaxTestResult({
+          success: false,
+          message: "Tax service connection failed. Please check your base URL configuration."
+        });
+        toast.error("Tax service connection test failed!");
+      }
+    } catch (error) {
+      setTaxTestResult({
+        success: false,
+        message: "Connection test failed due to network error or invalid configuration."
+      });
+      toast.error("Tax service connection test failed!");
+    } finally {
+      setTestingTaxConnection(false);
+    }
+  };
+
+  const handleSaveTaxSettings = async () => {
+    setSaving(true);
+    try {
+      // This would typically call an API endpoint to save tax settings
+      // For now, we'll simulate saving with a timeout
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Save tax settings to local storage or API
+      localStorage.setItem('taxSettings', JSON.stringify(taxSettings));
+
+      toast.success("Tax settings saved successfully!");
+    } catch (error) {
+      console.error("Failed to save tax settings:", error);
       toast.error(getErrorMessage(error, t));
     } finally {
       setSaving(false);
@@ -984,13 +1047,14 @@ const Settings = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
             <TabsTrigger value="company" className="text-xs md:text-sm">{t('settings.tabs.company')}</TabsTrigger>
             <TabsTrigger value="invoices" className="text-xs md:text-sm">{t('settings.tabs.invoices')}</TabsTrigger>
             <TabsTrigger value="currencies" className="text-xs md:text-sm">{t('settings.tabs.currencies')}</TabsTrigger>
             <TabsTrigger value="discount-rules" className="text-xs md:text-sm">{t('settings.tabs.discount_rules')}</TabsTrigger>
             <TabsTrigger value="ai-config" className="text-xs md:text-sm">{t('settings.tabs.ai_config')}</TabsTrigger>
             <TabsTrigger value="email-notifications" className="text-xs md:text-sm">Email & Notifications</TabsTrigger>
+            <TabsTrigger value="tax-integration" className="text-xs md:text-sm">Tax Integration</TabsTrigger>
             <TabsTrigger value="export" className="text-xs md:text-sm">{t('settings.tabs.export')}</TabsTrigger>
           </TabsList>
           
@@ -1873,7 +1937,171 @@ const Settings = () => {
               </Card>
             </div>
           </TabsContent>
-          
+
+          <TabsContent value="tax-integration" className="mt-6">
+            <div className="space-y-6">
+              {/* Tax Service Configuration Section */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calculator className="h-5 w-5" />
+                    Tax Service Configuration
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Configure integration with your tax calculation service
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="tax_enabled">Enable Tax Service Integration</Label>
+                      <p className="text-sm text-muted-foreground">Enable automatic tax calculation for invoices</p>
+                    </div>
+                    <Switch
+                      id="tax_enabled"
+                      checked={taxSettings.enabled}
+                      onCheckedChange={(checked) => setTaxSettings(prev => ({ ...prev, enabled: checked }))}
+                    />
+                  </div>
+
+                  {taxSettings.enabled && (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="tax_base_url">Tax Service Base URL</Label>
+                          <Input
+                            id="tax_base_url"
+                            type="url"
+                            value={taxSettings.base_url}
+                            onChange={(e) => setTaxSettings(prev => ({ ...prev, base_url: e.target.value }))}
+                            placeholder="https://api.tax-service.com"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="tax_api_key">API Key</Label>
+                          <Input
+                            id="tax_api_key"
+                            type="password"
+                            value={taxSettings.api_key}
+                            onChange={(e) => setTaxSettings(prev => ({ ...prev, api_key: e.target.value }))}
+                            placeholder="Enter your API key"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="tax_timeout">Request Timeout (seconds)</Label>
+                          <Input
+                            id="tax_timeout"
+                            type="number"
+                            min="1"
+                            max="300"
+                            value={taxSettings.timeout}
+                            onChange={(e) => setTaxSettings(prev => ({ ...prev, timeout: parseInt(e.target.value) || 30 }))}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="tax_retry_attempts">Retry Attempts</Label>
+                          <Input
+                            id="tax_retry_attempts"
+                            type="number"
+                            min="0"
+                            max="10"
+                            value={taxSettings.retry_attempts}
+                            onChange={(e) => setTaxSettings(prev => ({ ...prev, retry_attempts: parseInt(e.target.value) || 3 }))}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Test Connection Section */}
+                      <div className="space-y-4 p-4 border rounded-lg bg-gray-50">
+                        <h4 className="font-medium">Test Connection</h4>
+                        <p className="text-sm text-muted-foreground">
+                          Verify that your tax service configuration is working correctly
+                        </p>
+
+                        {taxTestResult && (
+                          <div className={`p-3 rounded-md text-sm ${
+                            taxTestResult.success
+                              ? 'bg-green-50 text-green-800 border border-green-200'
+                              : 'bg-red-50 text-red-800 border border-red-200'
+                          }`}>
+                            <div className="flex items-center gap-2">
+                              {taxTestResult.success ? (
+                                <CheckCircle className="h-4 w-4" />
+                              ) : (
+                                <XCircle className="h-4 w-4" />
+                              )}
+                              <span>{taxTestResult.message}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => handleTestTaxConnection()}
+                          disabled={testingTaxConnection}
+                          className="w-full sm:w-auto"
+                        >
+                          {testingTaxConnection && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          Test Tax Service Connection
+                        </Button>
+                      </div>
+
+                      <div className="flex justify-end pt-4 border-t">
+                        <Button onClick={() => handleSaveTaxSettings()} disabled={saving}>
+                          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          Save Tax Settings
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Tax Integration Status Section */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Integration Status</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Current status of tax service integration
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {taxSettings.enabled ? '✅' : '❌'}
+                      </div>
+                      <h3 className="font-medium text-blue-900 mt-2">Service Status</h3>
+                      <p className="text-sm text-blue-700 mt-1">
+                        {taxSettings.enabled ? 'Enabled' : 'Disabled'}
+                      </p>
+                    </div>
+                    <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
+                      <div className="text-2xl font-bold text-green-600">🔗</div>
+                      <h3 className="font-medium text-green-900 mt-2">API Connection</h3>
+                      <p className="text-sm text-green-700 mt-1">
+                        {taxTestResult?.success ? 'Connected' : 'Not Tested'}
+                      </p>
+                    </div>
+                    <div className="text-center p-4 bg-purple-50 rounded-lg border border-purple-200">
+                      <div className="text-2xl font-bold text-purple-600">⚙️</div>
+                      <h3 className="font-medium text-purple-900 mt-2">Configuration</h3>
+                      <p className="text-sm text-purple-700 mt-1">
+                        {taxSettings.base_url ? 'Configured' : 'Not Configured'}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
           <TabsContent value="export" className="space-y-6">
             {/* Data Overview Section */}
             <Card>

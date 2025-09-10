@@ -381,6 +381,47 @@ async def get_integration_settings(
     )
 
 
+@router.put("/settings", response_model=IntegrationSettings)
+async def update_integration_settings(
+    settings: IntegrationSettings,
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Update tax integration settings"""
+    try:
+        # Here you would typically save settings to database or environment
+        # For now, we'll just return the settings as they would be updated
+        logger.info(f"Updating tax integration settings for user {current_user.id}")
+
+        # Validate settings
+        if settings.timeout < 1 or settings.timeout > 300:
+            raise HTTPException(status_code=400, detail="Timeout must be between 1 and 300 seconds")
+
+        if settings.retry_attempts < 0 or settings.retry_attempts > 10:
+            raise HTTPException(status_code=400, detail="Retry attempts must be between 0 and 10")
+
+        # In a real implementation, you would:
+        # 1. Save to database
+        # 2. Update environment variables
+        # 3. Restart services if needed
+
+        return IntegrationSettings(
+            enabled=settings.enabled,
+            base_url=settings.base_url,
+            api_key=f"{'*' * 8}...{settings.api_key[-4:]}" if settings.api_key else "",
+            timeout=settings.timeout,
+            retry_attempts=settings.retry_attempts
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating integration settings: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update integration settings: {str(e)}"
+        )
+
+
 @router.get("/expenses/{expense_id}/tax-transaction")
 async def get_expense_tax_transaction(
     expense_id: int,

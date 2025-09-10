@@ -70,12 +70,20 @@ services:
       # OCR Configuration
       - OLLAMA_OCR_ENDPOINT=http://host.docker.internal:11434/api/generate
       - OLLAMA_OCR_MODEL=llama3.2-vision:11b
-      # Tax Service Integration
-      - TAX_SERVICE_ENABLED=true
-      - TAX_SERVICE_BASE_URL=http://192.168.86.39:8001
-      - TAX_SERVICE_API_KEY=ak_Pw0viX75yYrLT8tUmS2c912gDDrLsR4qvtIO8XRrruU
-      - TAX_SERVICE_TIMEOUT=30
-      - TAX_SERVICE_RETRY_ATTEMPTS=3
+      # ============================================================================
+      # Tax Service Integration Configuration
+      # ============================================================================
+      # Enable/disable tax service integration
+      - TAX_SERVICE_ENABLED=${TAX_SERVICE_ENABLED:-true}
+      # Base URL for tax service API endpoint
+      - TAX_SERVICE_BASE_URL=${TAX_SERVICE_BASE_URL:-http://192.168.86.39:8001}
+      # API key for authenticating with tax service
+      - TAX_SERVICE_API_KEY=${TAX_SERVICE_API_KEY:-ak_Pw0viX75yYrLT8tUmS2c912gDDrLsR4qvtIO8XRrruU}
+      # Timeout for tax service requests (in seconds)
+      - TAX_SERVICE_TIMEOUT=${TAX_SERVICE_TIMEOUT:-30}
+      # Number of retry attempts for failed requests
+      - TAX_SERVICE_RETRY_ATTEMPTS=${TAX_SERVICE_RETRY_ATTEMPTS:-3}
+      # ============================================================================
     ports:
       - "8000:8000"
     depends_on:
