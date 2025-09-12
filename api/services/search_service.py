@@ -37,7 +37,6 @@ class SearchService:
                 )
                 # Test connection
                 self.client.cluster.health()
-                self._ensure_indices()
                 logger.info(f"OpenSearch connected successfully at {self.host}:{self.port}")
             except Exception as e:
                 logger.warning(f"OpenSearch connection failed: {e}. Search functionality will be disabled.")
@@ -54,6 +53,14 @@ class SearchService:
         if not self.enabled or not self.client:
             return
             
+        # Skip if no tenant context (during initialization)
+        try:
+            tenant_id = get_tenant_context()
+            if tenant_id is None:
+                return
+        except Exception:
+            return
+            
         indices = ['invoices', 'clients', 'payments', 'expenses', 'statements', 'attachments']
         
         for entity_type in indices:
@@ -67,9 +74,8 @@ class SearchService:
                     )
                     logger.info(f"Created index: {index_name}")
             except Exception as e:
-                logger.error(f"Error creating index {index_name}: {e}")
-                # Disable search if index creation fails
-                self.enabled = False
+                logger.warning(f"Error creating index {index_name}: {e}")
+                # Don't disable search entirely, just log the error
     
     def _get_mapping(self, entity_type: str) -> Dict[str, Any]:
         """Get mapping configuration for entity type"""
@@ -260,6 +266,9 @@ class SearchService:
     def _opensearch_search(self, query: str, entity_types: List[str] = None, limit: int = 50) -> Dict[str, Any]:
         """Search using OpenSearch"""
         try:
+            # Ensure indices exist for current tenant
+            self._ensure_indices()
+            
             if not entity_types:
                 entity_types = ['invoices', 'clients', 'payments', 'expenses', 'statements', 'attachments']
             
@@ -443,7 +452,7 @@ class SearchService:
                 self.index_invoice(invoice, client)
             
             # Index clients
-            clients = db.query(Client).filter(Client.is_deleted == False).all()
+            clients = db.query(Client).all()
             for client in clients:
                 self.index_client(client)
             

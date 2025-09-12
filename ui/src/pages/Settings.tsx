@@ -1048,7 +1048,7 @@ const Settings = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
+          <TabsList className="flex w-full flex-wrap gap-1 h-auto justify-start">
             <TabsTrigger value="company" className="text-xs md:text-sm">{t('settings.tabs.company')}</TabsTrigger>
             <TabsTrigger value="invoices" className="text-xs md:text-sm">{t('settings.tabs.invoices')}</TabsTrigger>
             <TabsTrigger value="currencies" className="text-xs md:text-sm">{t('settings.tabs.currencies')}</TabsTrigger>

@@ -26,10 +26,11 @@ export function SearchStatus() {
   const fetchStatus = async () => {
     try {
       const response = await apiClient.get<SearchStatus>('/search/status');
-      setStatus(response.data);
+      setStatus(response);
     } catch (error) {
       console.error('Error fetching search status:', error);
       toast.error('Failed to fetch search status');
+      setStatus(null);
     } finally {
       setLoading(false);
     }
@@ -65,6 +66,17 @@ export function SearchStatus() {
   }
 
   if (!status) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center p-6">
+          <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
+          Failed to load search status
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!status && !loading) {
     return (
       <Card>
         <CardContent className="flex items-center justify-center p-6">

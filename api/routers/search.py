@@ -111,9 +111,10 @@ async def reindex_all_data(
         
         search_service.reindex_all(db)
         
+        from models.database import get_tenant_context
         return {
             'message': 'Reindexing completed successfully',
-            'tenant_id': current_user.tenant_id
+            'tenant_id': get_tenant_context()
         }
         
     except Exception as e:
@@ -137,7 +138,8 @@ async def search_suggestions(
         results = search_service.search(
             query=q,
             entity_types=None,
-            limit=limit
+            limit=limit,
+            db=db
         )
         
         suggestions = []
@@ -184,6 +186,8 @@ async def search_status(
 ):
     """Get search service status"""
     try:
+        logger.info(f"Getting search status for user {current_user.id}")
+        
         status = {
             'opensearch_enabled': search_service.enabled,
             'opensearch_connected': search_service.client is not None,
@@ -198,12 +202,16 @@ async def search_status(
                 status['opensearch_health'] = health['status']
                 status['opensearch_nodes'] = health['number_of_nodes']
             except Exception as e:
+                logger.warning(f"OpenSearch health check failed: {str(e)}")
                 status['opensearch_error'] = str(e)
         
+        logger.info(f"Search status: {status}")
         return status
         
     except Exception as e:
         logger.error(f"Error getting search status: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return {
             'opensearch_enabled': False,
             'opensearch_connected': False,

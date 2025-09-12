@@ -286,8 +286,8 @@ services:
     volumes:
       - opensearch_data:/usr/share/opensearch/data
     ports:
-      - "9200:9200"
-      - "9600:9600"
+      - "9200"
+      - "9600"
     networks:
       - invoice_app_network
     restart: unless-stopped
