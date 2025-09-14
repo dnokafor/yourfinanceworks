@@ -662,7 +662,13 @@ const Expenses = () => {
                             <span className="text-muted-foreground text-xs">—</span>
                           )}
                           {e.analysis_status && e.analysis_status !== 'done' && canPerformActions() && (
-                            <Button variant="ghost" size="sm" className="ml-2" onClick={() => handleRequeue(e.id)}>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="ml-2" 
+                              onClick={() => handleRequeue(e.id)}
+                              disabled={!e.imported_from_attachment && (!e.attachments_count || e.attachments_count === 0)}
+                            >
                               {t('expenses.process_again', { defaultValue: 'Process Again' })}
                             </Button>
                           )}

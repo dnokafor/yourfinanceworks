@@ -20,6 +20,7 @@ import { CurrencySelector } from "@/components/ui/currency-selector";
 import { SearchStatus } from "@/components/search/SearchStatus";
 import { api } from "@/lib/api";
 import { getErrorMessage } from '@/lib/api';
+import APIClientManagement from "@/components/APIClientManagement/APIClientManagement";
 
 const Settings = () => {
   const { t } = useTranslation();
@@ -1054,6 +1055,7 @@ const Settings = () => {
             <TabsTrigger value="currencies" className="text-xs md:text-sm">{t('settings.tabs.currencies')}</TabsTrigger>
             <TabsTrigger value="discount-rules" className="text-xs md:text-sm">{t('settings.tabs.discount_rules')}</TabsTrigger>
             <TabsTrigger value="ai-config" className="text-xs md:text-sm">{t('settings.tabs.ai_config')}</TabsTrigger>
+            <TabsTrigger value="api-keys" className="text-xs md:text-sm">API Keys</TabsTrigger>
             <TabsTrigger value="search" className="text-xs md:text-sm">Search</TabsTrigger>
             <TabsTrigger value="email-notifications" className="text-xs md:text-sm">Email & Notifications</TabsTrigger>
             <TabsTrigger value="tax-integration" className="text-xs md:text-sm">Tax Integration</TabsTrigger>
@@ -2420,6 +2422,10 @@ const Settings = () => {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="api-keys" className="mt-6">
+            <APIClientManagement />
           </TabsContent>
         </Tabs>
 

@@ -134,6 +134,11 @@ async def tenant_context_middleware(request: Request, call_next):
         # Google OAuth SSO endpoints must be public
         "/api/v1/auth/google/login", "/api/v1/auth/google/callback",
     ]
+    
+    # Skip tenant context for external API endpoints (they use API key auth)
+    if request.url.path.startswith("/api/v1/external-transactions/"):
+        logger.info(f"Skipping tenant context for external API endpoint: {request.url.path}")
+        return await call_next(request)
 
     # SECURITY IMPROVEMENT 8: Secure static file handling
     if request.url.path.startswith("/static/") or request.url.path.startswith("/api/v1/static/"):

@@ -36,7 +36,9 @@ from routers import (
     tax_integration,  # Add the new tax integration router
     reports,  # Add the new reports router
     attachments,  # Add the new attachments router
-    search
+    search,
+    external_api_auth,  # Add the new external API auth router
+    external_transactions  # Add the new external transactions router
 )
 from models.database import engine
 from models import models
@@ -162,6 +164,10 @@ async def catch_exceptions_middleware(request: Request, call_next):
 from middleware.tenant_context_middleware import tenant_context_middleware
 app.middleware('http')(tenant_context_middleware)
 
+# Add external API authentication middleware
+from middleware.external_api_auth_middleware import ExternalAPIAuthMiddleware
+app.add_middleware(ExternalAPIAuthMiddleware)
+
 # Include routers with v1 API versioning
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(tenant.router, prefix="/api/v1")
@@ -187,6 +193,8 @@ app.include_router(tax_integration.router, prefix="/api/v1") # Include the new t
 app.include_router(reports.router, prefix="/api/v1") # Include the new reports router
 app.include_router(attachments.router, prefix="/api/v1") # Include the new attachments router
 app.include_router(search.router, prefix="/api/v1") # Include the new search router
+app.include_router(external_api_auth.router, prefix="/api/v1") # Include the new external API auth router
+app.include_router(external_transactions.router, prefix="/api/v1") # Include the new external transactions router
 
 @app.get("/")
 def read_root():
