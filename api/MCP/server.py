@@ -340,6 +340,233 @@ async def create_payment(invoice_id: int, amount: float, payment_date: str, paym
     
     return await server_context.tools.create_payment(invoice_id=invoice_id, amount=amount, payment_date=payment_date, payment_method=payment_method, reference=reference, notes=notes)
 
+# Inventory Management Tools
+
+@mcp.tool()
+async def list_inventory_categories(active_only: bool = True) -> dict:
+    """
+    List all inventory categories with optional filtering for active categories only.
+
+    Args:
+        active_only: Return only active categories (default: True)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.list_inventory_categories(active_only=active_only)
+
+@mcp.tool()
+async def create_inventory_category(name: str, description: Optional[str] = None, is_active: bool = True) -> dict:
+    """
+    Create a new inventory category for organizing inventory items.
+
+    Args:
+        name: Category name
+        description: Category description (optional)
+        is_active: Whether category is active (default: True)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.create_inventory_category(name=name, description=description, is_active=is_active)
+
+@mcp.tool()
+async def update_inventory_category(category_id: int, name: Optional[str] = None, description: Optional[str] = None, is_active: Optional[bool] = None) -> dict:
+    """
+    Update an existing inventory category.
+
+    Args:
+        category_id: ID of category to update
+        name: New category name (optional)
+        description: New category description (optional)
+        is_active: New active status (optional)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.update_inventory_category(category_id=category_id, name=name, description=description, is_active=is_active)
+
+@mcp.tool()
+async def list_inventory_items(skip: int = 0, limit: int = 100, query: Optional[str] = None, category_id: Optional[int] = None, item_type: Optional[str] = None, low_stock_only: bool = False, track_stock: Optional[bool] = None) -> dict:
+    """
+    List inventory items with optional filtering and pagination.
+
+    Args:
+        skip: Number of items to skip for pagination (default: 0)
+        limit: Maximum number of items to return (default: 100)
+        query: Search query for items (optional)
+        category_id: Filter by category ID (optional)
+        item_type: Filter by item type (optional)
+        low_stock_only: Return only low stock items (default: False)
+        track_stock: Filter by stock tracking setting (optional)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.list_inventory_items(skip=skip, limit=limit, query=query, category_id=category_id, item_type=item_type, low_stock_only=low_stock_only, track_stock=track_stock)
+
+@mcp.tool()
+async def create_inventory_item(name: str, unit_price: float, sku: Optional[str] = None, description: Optional[str] = None, category_id: Optional[int] = None, cost_price: Optional[float] = None, currency: str = "USD", track_stock: bool = True, current_stock: float = 0, minimum_stock: float = 0, unit_of_measure: str = "each", item_type: str = "product", is_active: bool = True) -> dict:
+    """
+    Create a new inventory item with detailed specifications.
+
+    Args:
+        name: Item name
+        unit_price: Unit selling price
+        sku: Stock Keeping Unit (optional)
+        description: Item description (optional)
+        category_id: Category ID (optional)
+        cost_price: Unit cost price (optional)
+        currency: Currency code (default: USD)
+        track_stock: Whether to track stock levels (default: True)
+        current_stock: Current stock quantity (default: 0)
+        minimum_stock: Minimum stock level (default: 0)
+        unit_of_measure: Unit of measure (default: "each")
+        item_type: Type of item (default: "product")
+        is_active: Whether item is active (default: True)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.create_inventory_item(name=name, unit_price=unit_price, sku=sku, description=description, category_id=category_id, cost_price=cost_price, currency=currency, track_stock=track_stock, current_stock=current_stock, minimum_stock=minimum_stock, unit_of_measure=unit_of_measure, item_type=item_type, is_active=is_active)
+
+@mcp.tool()
+async def update_inventory_item(item_id: int, name: Optional[str] = None, sku: Optional[str] = None, description: Optional[str] = None, category_id: Optional[int] = None, unit_price: Optional[float] = None, cost_price: Optional[float] = None, currency: Optional[str] = None, track_stock: Optional[bool] = None, current_stock: Optional[float] = None, minimum_stock: Optional[float] = None, unit_of_measure: Optional[str] = None, item_type: Optional[str] = None, is_active: Optional[bool] = None) -> dict:
+    """
+    Update an existing inventory item.
+
+    Args:
+        item_id: ID of item to update
+        name: New item name (optional)
+        sku: New SKU (optional)
+        description: New description (optional)
+        category_id: New category ID (optional)
+        unit_price: New unit price (optional)
+        cost_price: New cost price (optional)
+        currency: New currency (optional)
+        track_stock: New stock tracking setting (optional)
+        current_stock: New current stock (optional)
+        minimum_stock: New minimum stock (optional)
+        unit_of_measure: New unit of measure (optional)
+        item_type: New item type (optional)
+        is_active: New active status (optional)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.update_inventory_item(item_id=item_id, name=name, sku=sku, description=description, category_id=category_id, unit_price=unit_price, cost_price=cost_price, currency=currency, track_stock=track_stock, current_stock=current_stock, minimum_stock=minimum_stock, unit_of_measure=unit_of_measure, item_type=item_type, is_active=is_active)
+
+@mcp.tool()
+async def adjust_stock(item_id: int, quantity: float, reason: str = "Manual adjustment") -> dict:
+    """
+    Adjust stock levels for an inventory item manually.
+
+    Args:
+        item_id: ID of inventory item
+        quantity: Quantity to adjust (positive for increase, negative for decrease)
+        reason: Reason for adjustment (default: "Manual adjustment")
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.adjust_stock(item_id=item_id, quantity=quantity, reason=reason)
+
+@mcp.tool()
+async def get_inventory_analytics() -> dict:
+    """
+    Get comprehensive inventory analytics and statistics including totals, low stock alerts, and category breakdowns.
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.get_inventory_analytics()
+
+@mcp.tool()
+async def get_low_stock_items() -> dict:
+    """
+    Get items with stock levels below their minimum threshold.
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.get_low_stock_items()
+
+# Bank Statement Management Tools
+
+@mcp.tool()
+async def list_bank_statements(skip: int = 0, limit: int = 100, status: Optional[str] = None, account_name: Optional[str] = None) -> dict:
+    """
+    List bank statements with optional filtering and pagination.
+
+    Args:
+        skip: Number of statements to skip for pagination (default: 0)
+        limit: Maximum number of statements to return (default: 100)
+        status: Filter by processing status (optional)
+        account_name: Filter by account name (optional)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.list_bank_statements(skip=skip, limit=limit, status=status, account_name=account_name)
+
+@mcp.tool()
+async def get_bank_statement(statement_id: int) -> dict:
+    """
+    Get detailed information about a bank statement including all transactions.
+
+    Args:
+        statement_id: ID of bank statement to retrieve
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.get_bank_statement(statement_id=statement_id)
+
+@mcp.tool()
+async def reprocess_bank_statement(statement_id: int, force_reprocess: bool = False) -> dict:
+    """
+    Reprocess a bank statement to extract transactions again.
+
+    Args:
+        statement_id: ID of bank statement to reprocess
+        force_reprocess: Force reprocessing even if already processed (default: False)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.reprocess_bank_statement(statement_id=statement_id, force_reprocess=force_reprocess)
+
+@mcp.tool()
+async def update_bank_statement_meta(statement_id: int, account_name: Optional[str] = None, statement_period: Optional[str] = None, notes: Optional[str] = None, status: Optional[str] = None) -> dict:
+    """
+    Update bank statement metadata like account name, period, notes, and status.
+
+    Args:
+        statement_id: ID of bank statement to update
+        account_name: Bank account name (optional)
+        statement_period: Statement period description (optional)
+        notes: Additional notes (optional)
+        status: Processing status (optional)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.update_bank_statement_meta(statement_id=statement_id, account_name=account_name, statement_period=statement_period, notes=notes, status=status)
+
+@mcp.tool()
+async def delete_bank_statement(statement_id: int, confirm_deletion: bool = False) -> dict:
+    """
+    Delete a bank statement and all associated transactions.
+
+    Args:
+        statement_id: ID of bank statement to delete
+        confirm_deletion: Confirmation flag to prevent accidental deletion (default: False)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.delete_bank_statement(statement_id=statement_id, confirm_deletion=confirm_deletion)
+
 # Expense Management Tools
 
 @mcp.tool()
@@ -1068,7 +1295,7 @@ Available Tools:
   - upload_expense_receipt: Upload a receipt for an expense
   - list_expense_attachments: List attachments for an expense
   - delete_expense_attachment: Delete an attachment for an expense
-  - list_statements: List all statements
+  - list_bank_statements: List bank statements with optional filtering
   - get_bank_statement: Get bank statement with transactions
   - reprocess_bank_statement: Reprocess a bank statement
   - update_bank_statement_meta: Update bank statement metadata
@@ -1076,6 +1303,15 @@ Available Tools:
   - get_clients_with_outstanding_balance: Get clients with unpaid invoices
   - get_overdue_invoices: Get invoices past their due date
   - get_invoice_stats: Get overall invoice statistics
+  - list_inventory_categories: List all inventory categories
+  - create_inventory_category: Create a new inventory category
+  - update_inventory_category: Update an inventory category
+  - list_inventory_items: List inventory items with filtering
+  - create_inventory_item: Create a new inventory item
+  - update_inventory_item: Update an inventory item
+  - adjust_stock: Adjust stock levels for an item
+  - get_inventory_analytics: Get inventory analytics
+  - get_low_stock_items: Get items with low stock
   - list_currencies: List supported currencies
   - create_currency: Create a custom currency
   - convert_currency: Convert amount between currencies

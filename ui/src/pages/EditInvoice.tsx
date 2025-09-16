@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { InvoiceForm } from "@/components/invoices/InvoiceForm";
-import { invoiceApi, Invoice, getErrorMessage, expenseApi, Expense } from "@/lib/api";
+import { InvoiceStockImpact } from "@/components/invoices/InvoiceStockImpact";
+import { invoiceApi, Invoice, getErrorMessage, expenseApi, Expense, inventoryApi } from "@/lib/api";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { toast } from "sonner";
 import { Loader2, Package } from "lucide-react";
 import { useTranslation } from 'react-i18next';
 import { CurrencyDisplay } from '@/components/ui/currency-display';
+import { format } from 'date-fns';
 
 const EditInvoice = () => {
   const { t } = useTranslation();
@@ -58,11 +60,11 @@ const EditInvoice = () => {
 
           // Fetch stock movements related to this invoice
           try {
-            // Get stock movements by reference (this would need to be implemented in the API)
-            // For now, we'll show a placeholder
-            setStockMovements([]);
+            const movements = await inventoryApi.getStockMovementsByReference('invoice', data.id);
+            setStockMovements(movements);
           } catch (stockError) {
             console.warn("Failed to fetch stock movements:", stockError);
+            setStockMovements([]);
           }
         } catch {}
       } catch (error) {
@@ -118,13 +120,25 @@ const EditInvoice = () => {
           invoice={invoice} 
           isEdit={true} 
           key={`${invoice.id}-${invoice.has_attachment}-${invoice.attachment_filename}`} 
-          onInvoiceUpdate={(updatedInvoice) => {
+          onInvoiceUpdate={async (updatedInvoice) => {
             console.log("🔍 EDIT INVOICE - Invoice updated via callback:", updatedInvoice);
             console.log("🔍 EDIT INVOICE - Updated attachment info:", {
               has_attachment: updatedInvoice.has_attachment,
               attachment_filename: updatedInvoice.attachment_filename
             });
             setInvoice(updatedInvoice);
+
+            // Refetch stock movements if invoice status changed to payable status
+            if (updatedInvoice.status === 'paid') {
+              try {
+                const movements = await inventoryApi.getStockMovementsByReference('invoice', updatedInvoice.id);
+                setStockMovements(movements);
+                console.log("🔍 EDIT INVOICE - Refetched stock movements after status change:", movements);
+              } catch (stockError) {
+                console.warn("Failed to refetch stock movements:", stockError);
+                setStockMovements([]);
+              }
+            }
           }}
         />
 
@@ -231,110 +245,14 @@ const EditInvoice = () => {
             </CardContent>
           </Card>
 
-          {/* Stock Movements Section */}
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5" />
-                Inventory Stock Movements
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Track how this invoice affected your inventory levels
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {stockMovements.length > 0 ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Item</TableHead>
-                        <TableHead>Movement Type</TableHead>
-                        <TableHead>Quantity</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Notes</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {stockMovements.map((movement: any) => (
-                        <TableRow key={movement.id}>
-                          <TableCell className="font-medium">
-                            {movement.item?.name || 'Unknown Item'}
-                          </TableCell>
-                          <TableCell>
-                            <span className={`px-2 py-1 rounded-full text-xs ${
-                              movement.movement_type === 'sale' ? 'bg-red-100 text-red-800' :
-                              movement.movement_type === 'adjustment' ? 'bg-blue-100 text-blue-800' :
-                              'bg-gray-100 text-gray-800'
-                            }`}>
-                              {movement.movement_type}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <span className={movement.quantity < 0 ? 'text-red-600' : 'text-green-600'}>
-                              {movement.quantity > 0 ? '+' : ''}{movement.quantity}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            {movement.movement_date ? format(new Date(movement.movement_date), 'PPp') : 'N/A'}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {movement.notes || '-'}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <div className="text-center py-8">
-                    <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-medium mb-2">No Stock Movements Yet</h3>
-                    <p className="text-muted-foreground mb-4">
-                      Stock movements will appear here when this invoice affects your inventory levels.
-                    </p>
-                    <div className="text-sm text-muted-foreground">
-                      {invoice?.status === 'paid' || invoice?.status === 'completed' ? (
-                        <p>Stock movements should have been processed automatically.</p>
-                      ) : (
-                        <p>Stock movements will be processed when the invoice is marked as paid or completed.</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Stock Summary */}
-                {invoice && (
-                  <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-                    <h4 className="font-medium mb-2">Stock Movement Summary</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Invoice Status:</span>
-                        <span className={`ml-2 px-2 py-1 rounded-full text-xs ${
-                          invoice.status === 'paid' ? 'bg-green-100 text-green-800' :
-                          invoice.status === 'completed' ? 'bg-blue-100 text-blue-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {invoice.status}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Items with Inventory:</span>
-                        <span className="ml-2 font-medium">
-                          {invoice.items?.filter(item => item.inventory_item_id).length || 0}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Auto Stock Updates:</span>
-                        <span className="ml-2">
-                          {(invoice.status === 'paid' || invoice.status === 'completed') ? '✅ Processed' : '⏳ Pending'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+          {/* Enhanced Stock Impact Section */}
+        {invoice && (
+          <InvoiceStockImpact
+            invoiceId={invoice.id}
+            invoiceNumber={invoice.number || ''}
+            invoiceStatus={invoice.status}
+          />
+        )}
         </div>
       </div>
     </AppLayout>

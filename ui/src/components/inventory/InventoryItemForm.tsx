@@ -12,6 +12,7 @@ import { ArrowLeft, Save, Loader2 } from "lucide-react";
 import { inventoryApi, InventoryItem, InventoryCategory, getErrorMessage } from "@/lib/api";
 import { toast } from "sonner";
 import { useTranslation } from 'react-i18next';
+import { InventoryItemLinkedInvoices } from "./InventoryItemLinkedInvoices";
 
 interface InventoryItemFormProps {
   isEdit?: boolean;
@@ -434,6 +435,14 @@ const InventoryItemForm = ({ isEdit = false }: InventoryItemFormProps) => {
             </Button>
           </div>
         </form>
+
+        {/* Linked Invoices and Stock Movements - Only show for existing items */}
+        {isEdit && id && (
+          <InventoryItemLinkedInvoices
+            itemId={parseInt(id)}
+            itemName={formData.name || 'this item'}
+          />
+        )}
       </div>
     </AppLayout>
   );

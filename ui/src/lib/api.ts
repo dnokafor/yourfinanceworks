@@ -232,6 +232,65 @@ export interface LowStockAlertsResponse {
   };
 }
 
+// Invoice-Inventory Linking Interfaces
+export interface InvoiceInventoryLink {
+  id: number;
+  number: string;
+  amount: number;
+  currency: string;
+  status: string;
+  due_date?: string;
+  created_at: string;
+  client_id: number;
+  invoice_items: Array<{
+    quantity: number;
+    price: number;
+    amount: number;
+  }>;
+  stock_movements: Array<{
+    id: number;
+    quantity: number;
+    movement_type: string;
+    movement_date: string;
+    notes?: string;
+  }>;
+}
+
+export interface InventoryStockSummary {
+  item_id: number;
+  movement_summary: Record<string, {
+    total_quantity: number;
+    count: number;
+  }>;
+  recent_movements: Array<{
+    id: number;
+    movement_type: string;
+    quantity: number;
+    reference_type?: string;
+    reference_id?: number;
+    movement_date: string;
+    notes?: string;
+  }>;
+  linked_references: {
+    invoices: Array<{
+      id: number;
+      number: string;
+      amount: number;
+      currency: string;
+      status: string;
+      client_id: number;
+    }>;
+    expenses: Array<{
+      id: number;
+      amount: number;
+      currency: string;
+      category?: string;
+      vendor?: string;
+    }>;
+  };
+  period_days: number;
+}
+
 export interface ProfitabilityAnalysis {
   period: {
     start_date: string;
@@ -1212,7 +1271,9 @@ export const invoiceApi = {
           description: item.description || '',
           quantity: item.quantity || 1,
           price: item.price || 0,
-          amount: item.amount || (item.quantity || 1) * (item.price || 0)
+          amount: item.amount || (item.quantity || 1) * (item.price || 0),
+          inventory_item_id: item.inventory_item_id,
+          unit_of_measure: item.unit_of_measure
         })) : [],
         created_at: apiResponse.created_at || '',
         updated_at: apiResponse.updated_at || '',
@@ -2212,6 +2273,16 @@ export const inventoryApi = {
     if (movementType) params.set('movement_type', movementType);
     return apiRequest<StockMovement[]>(`/inventory/items/${itemId}/stock/movements?${params.toString()}`);
   },
+
+  getStockMovementsByReference: (referenceType: string, referenceId: number) =>
+    apiRequest<StockMovement[]>(`/inventory/movements/by-reference/${referenceType}/${referenceId}`),
+
+  // Invoice-Inventory Linking
+  getInvoicesLinkedToInventoryItem: (itemId: number) =>
+    apiRequest<InvoiceInventoryLink[]>(`/inventory/items/${itemId}/linked-invoices`),
+
+  getInventoryItemStockSummary: (itemId: number, days = 30) =>
+    apiRequest<InventoryStockSummary>(`/inventory/items/${itemId}/stock-movement-summary?days=${days}`),
 
   getLowStockAlerts: (thresholdDays = 30) =>
     apiRequest<LowStockAlertsResponse>(`/inventory/alerts/low-stock?threshold_days=${thresholdDays}`),

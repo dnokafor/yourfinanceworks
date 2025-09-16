@@ -1345,10 +1345,12 @@ async def update_invoice(
                 {
                     "id": item.id,
                     "invoice_id": item.invoice_id,
+                    "inventory_item_id": item.inventory_item_id,
                     "description": item.description,
                     "quantity": item.quantity,
                     "price": item.price,
-                    "amount": item.amount
+                    "amount": item.amount,
+                    "unit_of_measure": item.unit_of_measure
                 }
                 for item in items
             ]

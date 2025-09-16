@@ -228,8 +228,8 @@ export const InventoryInvoiceForm: React.FC<InventoryInvoiceFormProps> = ({
         setDiscountRules(discountRulesData);
 
         // Set default currency from settings
-        if (settingsData?.default_currency) {
-          form.setValue("currency", settingsData.default_currency);
+        if ((settingsData as { default_currency?: string })?.default_currency) {
+          form.setValue("currency", (settingsData as { default_currency?: string }).default_currency!);
         }
 
         // Load invoice data if editing
@@ -337,8 +337,8 @@ export const InventoryInvoiceForm: React.FC<InventoryInvoiceFormProps> = ({
             })
           });
 
-          if (!stockValidation.is_valid) {
-            const warnings = stockValidation.items.filter((item: any) => !item.is_available);
+          if (!(stockValidation as { is_valid: boolean; items: any[] }).is_valid) {
+            const warnings = (stockValidation as { is_valid: boolean; items: any[] }).items.filter((item: any) => !item.is_available);
             if (warnings.length > 0) {
               const proceed = window.confirm(
                 `Warning: Some items have insufficient stock:\n${warnings.map((w: any) => `- ${w.item_name}: ${w.message}`).join('\n')}\n\nDo you want to proceed anyway?`
@@ -362,8 +362,14 @@ export const InventoryInvoiceForm: React.FC<InventoryInvoiceFormProps> = ({
         : (subtotal * (data.discountValue || 0)) / 100;
       const totalAmount = subtotal - discountAmount;
 
+      // Get client details for the invoice
+      const selectedClient = clients.find((client: any) => client.id === parseInt(data.client));
+
       const invoiceData = {
         client_id: parseInt(data.client),
+        client_name: selectedClient?.name || '',
+        client_email: selectedClient?.email || '',
+        number: data.invoiceNumber,
         amount: totalAmount,
         currency: data.currency,
         date: format(data.date, "yyyy-MM-dd"),
@@ -375,6 +381,7 @@ export const InventoryInvoiceForm: React.FC<InventoryInvoiceFormProps> = ({
           description: item.description,
           quantity: item.quantity,
           price: item.price,
+          amount: item.quantity * item.price,
           inventory_item_id: item.inventory_item_id,
           unit_of_measure: item.unit_of_measure,
         })),
@@ -451,7 +458,7 @@ export const InventoryInvoiceForm: React.FC<InventoryInvoiceFormProps> = ({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5" />
-                Invoice Details
+                {t('invoices.invoice_details', 'Invoice Details')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -461,7 +468,7 @@ export const InventoryInvoiceForm: React.FC<InventoryInvoiceFormProps> = ({
                   name="invoiceNumber"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Invoice Number *</FormLabel>
+                      <FormLabel>{t('invoices.invoice_number', 'Invoice Number')} *</FormLabel>
                       <FormControl>
                         <Input placeholder="INV-001" {...field} />
                       </FormControl>
@@ -475,11 +482,11 @@ export const InventoryInvoiceForm: React.FC<InventoryInvoiceFormProps> = ({
                   name="client"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Client *</FormLabel>
+                      <FormLabel>{t('invoices.client', 'Client')} *</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select a client" />
+                            <SelectValue placeholder={t('invoices.select_client', 'Select a client')} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -502,7 +509,7 @@ export const InventoryInvoiceForm: React.FC<InventoryInvoiceFormProps> = ({
                   name="date"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
-                      <FormLabel>Invoice Date</FormLabel>
+                      <FormLabel>{t('invoices.invoice_date', 'Invoice Date')}</FormLabel>
                       <Popover>
                         <PopoverTrigger asChild>
                           <FormControl>
@@ -516,7 +523,7 @@ export const InventoryInvoiceForm: React.FC<InventoryInvoiceFormProps> = ({
                               {field.value ? (
                                 format(field.value, "PPP")
                               ) : (
-                                <span>Pick a date</span>
+                                <span>{t('invoices.pick_a_date', 'Pick a date')}</span>
                               )}
                             </Button>
                           </FormControl>
@@ -540,7 +547,7 @@ export const InventoryInvoiceForm: React.FC<InventoryInvoiceFormProps> = ({
                   name="dueDate"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
-                      <FormLabel>Due Date</FormLabel>
+                      <FormLabel>{t('invoices.due_date', 'Due Date')}</FormLabel>
                       <Popover>
                         <PopoverTrigger asChild>
                           <FormControl>
@@ -554,7 +561,7 @@ export const InventoryInvoiceForm: React.FC<InventoryInvoiceFormProps> = ({
                               {field.value ? (
                                 format(field.value, "PPP")
                               ) : (
-                                <span>Pick a date</span>
+                                <span>{t('invoices.pick_a_date', 'Pick a date')}</span>
                               )}
                             </Button>
                           </FormControl>
@@ -578,9 +585,9 @@ export const InventoryInvoiceForm: React.FC<InventoryInvoiceFormProps> = ({
                   name="currency"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Currency</FormLabel>
+                      <FormLabel>{t('invoices.currency', 'Currency')}</FormLabel>
                       <FormControl>
-                        <CurrencySelector value={field.value} onChange={field.onChange} />
+                        <CurrencySelector value={field.value} onValueChange={field.onChange} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -596,11 +603,11 @@ export const InventoryInvoiceForm: React.FC<InventoryInvoiceFormProps> = ({
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <Package className="h-5 w-5" />
-                  Invoice Items
+                  {t('invoices.items', 'Invoice Items')}
                 </CardTitle>
                 <Button type="button" onClick={addItem} variant="outline" size="sm">
                   <Plus className="h-4 w-4 mr-2" />
-                  Add Item
+                  {t('invoices.add_item', 'Add Item')}
                 </Button>
               </div>
             </CardHeader>
@@ -608,7 +615,13 @@ export const InventoryInvoiceForm: React.FC<InventoryInvoiceFormProps> = ({
               {watchedItems?.map((item, index) => (
                 <InventoryInvoiceItem
                   key={index}
-                  item={item}
+                  item={{
+                    ...item,
+                    description: item.description || '',
+                    quantity: item.quantity || 0,
+                    price: item.price || 0,
+                    amount: (item.quantity || 0) * (item.price || 0)
+                  }}
                   onChange={(updatedItem) => updateItem(index, updatedItem)}
                   onRemove={() => removeItem(index)}
                   index={index}
@@ -621,23 +634,23 @@ export const InventoryInvoiceForm: React.FC<InventoryInvoiceFormProps> = ({
           {/* Invoice Summary */}
           <Card>
             <CardHeader>
-              <CardTitle>Invoice Summary</CardTitle>
+              <CardTitle>{t('invoices.invoice_summary', 'Invoice Summary')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex justify-between items-center">
-                <span>Subtotal:</span>
+                <span>{t('invoices.subtotal', 'Subtotal')}:</span>
                 <CurrencyDisplay amount={subtotal} currency={watchedCurrency} />
               </div>
 
               {discountAmount > 0 && (
                 <div className="flex justify-between items-center text-green-600">
-                  <span>Discount ({watchedDiscountType === "percentage" ? `${watchedDiscountValue}%` : "Fixed"}):</span>
+                  <span>{t('invoices.discount', 'Discount')} ({watchedDiscountType === "percentage" ? `${watchedDiscountValue}%` : t('invoices.discount_fixed', 'Fixed')}):</span>
                   <span>-<CurrencyDisplay amount={discountAmount} currency={watchedCurrency} /></span>
                 </div>
               )}
 
               <div className="border-t pt-4 flex justify-between items-center font-bold text-lg">
-                <span>Total:</span>
+                <span>{t('invoices.total', 'Total')}:</span>
                 <CurrencyDisplay amount={total} currency={watchedCurrency} />
               </div>
             </CardContent>
@@ -651,7 +664,7 @@ export const InventoryInvoiceForm: React.FC<InventoryInvoiceFormProps> = ({
               onClick={() => navigate('/invoices')}
               disabled={saving}
             >
-              Cancel
+              {t('common.cancel', 'Cancel')}
             </Button>
                   {(() => {
                     const errors = form.formState.errors;
@@ -688,8 +701,8 @@ export const InventoryInvoiceForm: React.FC<InventoryInvoiceFormProps> = ({
                   >
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {saving
-                ? (isEdit ? 'Updating...' : 'Creating...')
-                : (isEdit ? 'Update Invoice' : 'Create Invoice')
+                ? (isEdit ? t('invoices.updating', 'Updating...') : t('invoices.creating', 'Creating...'))
+                : (isEdit ? t('invoices.update_invoice', 'Update Invoice') : t('invoices.create_invoice', 'Create Invoice'))
               }
             </Button>
           </div>

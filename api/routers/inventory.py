@@ -395,6 +395,22 @@ async def get_stock_movements(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch stock movements")
 
 
+@router.get("/movements/by-reference/{reference_type}/{reference_id}", response_model=List[StockMovementSchema])
+async def get_stock_movements_by_reference(
+    reference_type: str,
+    reference_id: int,
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user),
+    stock_service: StockMovementService = Depends(get_stock_service)
+):
+    """Get stock movements by reference (invoice, expense, etc.)"""
+    try:
+        return stock_service.get_movements_by_reference(reference_type, reference_id)
+    except Exception as e:
+        logger.error(f"Error fetching stock movements for reference {reference_type}:{reference_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch stock movements by reference")
+
+
 @router.get("/stock/low-stock", response_model=List[InventoryItemSchema])
 async def get_low_stock_items(
     db: Session = Depends(get_db),
@@ -1130,3 +1146,201 @@ async def export_inventory_csv(
     except Exception as e:
         logger.error(f"Error exporting CSV: {e}")
         raise HTTPException(status_code=500, detail="Failed to export inventory data")
+
+
+# Invoice-Inventory Linking Endpoints
+
+@router.get("/items/{item_id}/linked-invoices", response_model=List[Dict[str, Any]])
+async def get_invoices_linked_to_inventory_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user),
+    stock_service: StockMovementService = Depends(get_stock_service)
+):
+    """Get all invoices that have affected this inventory item's stock"""
+    try:
+        from models.models_per_tenant import Invoice, InvoiceItem
+
+        # Get all stock movements for this item
+        stock_movements = stock_service.get_movement_history(item_id, limit=1000)
+
+        if not stock_movements:
+            return []
+
+        # Filter stock movements to only invoice-related ones
+        invoice_stock_movements = [m for m in stock_movements if m.reference_type == "invoice"]
+
+        if not invoice_stock_movements:
+            return []
+
+        # Get unique invoice IDs from stock movements
+        invoice_ids = list(set(movement.reference_id for movement in invoice_stock_movements))
+
+        # Fetch invoice details with items
+        invoices = db.query(
+            Invoice.id,
+            Invoice.number,
+            Invoice.amount,
+            Invoice.currency,
+            Invoice.status,
+            Invoice.due_date,
+            Invoice.created_at,
+            Invoice.client_id
+        ).filter(
+            Invoice.id.in_(invoice_ids),
+            Invoice.is_deleted == False
+        ).all()
+
+        # Get invoice items for this inventory item
+        invoice_items = db.query(
+            InvoiceItem.invoice_id,
+            InvoiceItem.quantity,
+            InvoiceItem.price,
+            InvoiceItem.amount
+        ).filter(
+            InvoiceItem.inventory_item_id == item_id,
+            InvoiceItem.invoice_id.in_(invoice_ids)
+        ).all()
+
+        # Group invoice items by invoice_id
+        items_by_invoice = {}
+        for item in invoice_items:
+            if item.invoice_id not in items_by_invoice:
+                items_by_invoice[item.invoice_id] = []
+            items_by_invoice[item.invoice_id].append({
+                "quantity": float(item.quantity),
+                "price": float(item.price),
+                "amount": float(item.amount)
+            })
+
+        # Get stock movements by invoice
+        movements_by_invoice = {}
+        for movement in invoice_stock_movements:
+            if movement.reference_id not in movements_by_invoice:
+                movements_by_invoice[movement.reference_id] = []
+            movements_by_invoice[movement.reference_id].append({
+                "id": movement.id,
+                "quantity": float(movement.quantity),
+                "movement_type": movement.movement_type,
+                "movement_date": movement.movement_date.isoformat(),
+                "notes": movement.notes
+            })
+
+        # Build response
+        result = []
+        for invoice_data in invoices:
+            invoice_dict = {
+                "id": invoice_data.id,
+                "number": invoice_data.number,
+                "amount": float(invoice_data.amount),
+                "currency": invoice_data.currency,
+                "status": invoice_data.status,
+                "due_date": invoice_data.due_date.isoformat() if invoice_data.due_date else None,
+                "created_at": invoice_data.created_at.isoformat(),
+                "client_id": invoice_data.client_id,
+                "invoice_items": items_by_invoice.get(invoice_data.id, []),
+                "stock_movements": movements_by_invoice.get(invoice_data.id, [])
+            }
+            result.append(invoice_dict)
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error fetching linked invoices for inventory item {item_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch linked invoices")
+
+
+@router.get("/items/{item_id}/stock-movement-summary", response_model=Dict[str, Any])
+async def get_inventory_item_stock_summary(
+    item_id: int,
+    days: int = 30,
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user),
+    stock_service: StockMovementService = Depends(get_stock_service)
+):
+    """Get stock movement summary for an inventory item, grouped by reference type"""
+    try:
+        from models.models_per_tenant import Invoice, InvoiceItem, Expense
+
+        # Get movement summary by type
+        movement_summary = stock_service.get_movement_summary_by_type(item_id, days)
+
+        # Get detailed movements for recent period
+        recent_movements = stock_service.get_movement_history(item_id, limit=50)
+
+        # Get linked references (invoices and expenses)
+        linked_references = {
+            "invoices": [],
+            "expenses": []
+        }
+
+        # Get invoice references
+        invoice_movements = [m for m in recent_movements if m.reference_type == "invoice"]
+        if invoice_movements:
+            invoice_ids = list(set(m.reference_id for m in invoice_movements))
+            invoices = db.query(
+                Invoice.id,
+                Invoice.number,
+                Invoice.amount,
+                Invoice.currency,
+                Invoice.status,
+                Invoice.client_id
+            ).filter(Invoice.id.in_(invoice_ids)).all()
+
+            linked_references["invoices"] = [
+                {
+                    "id": inv.id,
+                    "number": inv.number,
+                    "amount": float(inv.amount),
+                    "currency": inv.currency,
+                    "status": inv.status,
+                    "client_id": inv.client_id
+                }
+                for inv in invoices
+            ]
+
+        # Get expense references
+        expense_movements = [m for m in recent_movements if m.reference_type == "expense"]
+        if expense_movements:
+            expense_ids = list(set(m.reference_id for m in expense_movements))
+            expenses = db.query(
+                Expense.id,
+                Expense.amount,
+                Expense.currency,
+                Expense.category,
+                Expense.vendor
+            ).filter(Expense.id.in_(expense_ids)).all()
+
+            linked_references["expenses"] = [
+                {
+                    "id": exp.id,
+                    "amount": float(exp.amount),
+                    "currency": exp.currency,
+                    "category": exp.category,
+                    "vendor": exp.vendor
+                }
+                for exp in expenses
+            ]
+
+        return {
+            "item_id": item_id,
+            "movement_summary": movement_summary,
+            "recent_movements": [
+                {
+                    "id": m.id,
+                    "movement_type": m.movement_type,
+                    "quantity": float(m.quantity),
+                    "reference_type": m.reference_type,
+                    "reference_id": m.reference_id,
+                    "movement_date": m.movement_date.isoformat(),
+                    "notes": m.notes
+                }
+                for m in recent_movements[:20]  # Limit to 20 most recent
+            ],
+            "linked_references": linked_references,
+            "period_days": days
+        }
+
+    except Exception as e:
+        logger.error(f"Error fetching stock movement summary for item {item_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch stock movement summary")

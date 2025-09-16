@@ -38,12 +38,35 @@ export const InventoryItemSelector: React.FC<InventoryItemSelectorProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<number | "all">("all");
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  const [displayItem, setDisplayItem] = useState<InventoryItem | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       fetchData();
     }
   }, [isOpen]);
+
+  // Fetch display item data when selectedItemId changes
+  useEffect(() => {
+    if (selectedItemId && (!displayItem || displayItem.id !== selectedItemId)) {
+      fetchDisplayItemData();
+    } else if (!selectedItemId) {
+      setDisplayItem(null);
+    }
+  }, [selectedItemId, displayItem]);
+
+  const fetchDisplayItemData = async () => {
+    if (!selectedItemId) return;
+
+    try {
+      const itemData = await inventoryApi.getItem(selectedItemId);
+      if (itemData) {
+        setDisplayItem(itemData);
+      }
+    } catch (error) {
+      console.error("Failed to fetch display inventory item:", error);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -54,6 +77,14 @@ export const InventoryItemSelector: React.FC<InventoryItemSelectorProps> = ({
       ]);
       setItems(itemsData.items);
       setCategories(categoriesData);
+
+      // If there's a selectedItemId, find and set it as selected in the dialog
+      if (selectedItemId) {
+        const selectedItemFromList = itemsData.items.find(item => item.id === selectedItemId);
+        if (selectedItemFromList) {
+          setSelectedItem(selectedItemFromList);
+        }
+      }
     } catch (error) {
       console.error("Failed to fetch inventory data:", error);
       toast.error(getErrorMessage(error, t));
@@ -90,22 +121,23 @@ export const InventoryItemSelector: React.FC<InventoryItemSelectorProps> = ({
       setSelectedItem(null);
       setSearchQuery("");
       setSelectedCategory("all");
+      setDisplayItem(selectedItem); // Update display item
     }
   };
 
   const getStockStatus = (item: InventoryItem) => {
-    if (!item.track_stock) return { status: 'not-tracked', label: 'Not Tracked', color: 'secondary' as const };
+    if (!item.track_stock) return { status: 'not-tracked', label: t('inventory.stock_status.not_tracked', 'Not Tracked'), color: 'secondary' as const };
 
     if (item.current_stock <= item.minimum_stock) {
-      return { status: 'critical', label: 'Low Stock', color: 'destructive' as const };
+      return { status: 'critical', label: t('inventory.stock_status.low_stock', 'Low Stock'), color: 'destructive' as const };
     } else if (item.current_stock <= item.minimum_stock * 1.5) {
-      return { status: 'warning', label: 'Low Stock', color: 'secondary' as const };
+      return { status: 'warning', label: t('inventory.stock_status.low_stock', 'Low Stock'), color: 'secondary' as const };
     } else {
-      return { status: 'normal', label: 'In Stock', color: 'default' as const };
+      return { status: 'normal', label: t('inventory.stock_status.in_stock', 'In Stock'), color: 'default' as const };
     }
   };
 
-  const currentlySelectedItem = selectedItemId ? items.find(item => item.id === selectedItemId) : null;
+  const currentlySelectedItem = selectedItemId ? (selectedItem || displayItem || items.find(item => item.id === selectedItemId)) : null;
 
   return (
     <div className={className}>
@@ -118,7 +150,7 @@ export const InventoryItemSelector: React.FC<InventoryItemSelectorProps> = ({
               ? `h-6 w-6 p-0 ${className}`
               : `w-full justify-start gap-2 ${className}`
             }
-            title={compact ? "Select inventory item" : undefined}
+            title={compact ? (currentlySelectedItem ? `Selected: ${currentlySelectedItem.name}` : "Select inventory item") : undefined}
           >
             <Package className="h-4 w-4" />
             {!compact && currentlySelectedItem ? (
@@ -126,14 +158,14 @@ export const InventoryItemSelector: React.FC<InventoryItemSelectorProps> = ({
                 <span className="truncate">{currentlySelectedItem.name}</span>
                 {currentlySelectedItem.track_stock && (
                   <Badge variant="outline" className="ml-auto">
-                    Stock: {currentlySelectedItem.current_stock}
+                    {t('inventory.stock_label', 'Stock')}: {currentlySelectedItem.current_stock}
                   </Badge>
                 )}
               </>
             ) : !compact && (
               <>
-                <span>Select Inventory Item</span>
-                <span className="ml-auto text-muted-foreground">(Optional)</span>
+                <span>{t('inventory.select_item', 'Select Inventory Item')}</span>
+                <span className="ml-auto text-muted-foreground">({t('common.optional', 'Optional')})</span>
               </>
             )}
           </Button>
@@ -143,7 +175,7 @@ export const InventoryItemSelector: React.FC<InventoryItemSelectorProps> = ({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Package className="h-5 w-5" />
-              Select Inventory Item
+              {t('inventory.select_item', 'Select Inventory Item')}
             </DialogTitle>
           </DialogHeader>
 
@@ -153,7 +185,7 @@ export const InventoryItemSelector: React.FC<InventoryItemSelectorProps> = ({
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
-                  placeholder="Search items by name, SKU, or description..."
+                  placeholder={t('inventory.search_advanced', 'Search items by name, SKU, or description...')}
                   className="pl-10"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -164,10 +196,10 @@ export const InventoryItemSelector: React.FC<InventoryItemSelectorProps> = ({
                 onValueChange={(value) => setSelectedCategory(value === "all" ? "all" : parseInt(value))}
               >
                 <SelectTrigger className="w-48">
-                  <SelectValue placeholder="All Categories" />
+                  <SelectValue placeholder={t('inventory.all_categories', 'All Categories')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
+                  <SelectItem value="all">{t('inventory.all_categories', 'All Categories')}</SelectItem>
                   {categories.map(category => (
                     <SelectItem key={category.id} value={category.id.toString()}>
                       {category.name}
@@ -182,7 +214,7 @@ export const InventoryItemSelector: React.FC<InventoryItemSelectorProps> = ({
               {loading ? (
                 <div className="p-8 text-center">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                  <p className="mt-2 text-muted-foreground">Loading inventory items...</p>
+                  <p className="mt-2 text-muted-foreground">{t('inventory.loading', 'Loading inventory...')}</p>
                 </div>
               ) : filteredItems.length > 0 ? (
                 <div className="divide-y">

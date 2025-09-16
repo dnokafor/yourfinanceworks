@@ -166,7 +166,7 @@ class StockMovement(StockMovementBase):
     user_id: int
     movement_date: datetime
     created_at: datetime
-    item: InventoryItem
+    item: Optional[InventoryItem] = None
 
     model_config = ConfigDict(from_attributes=True)
 

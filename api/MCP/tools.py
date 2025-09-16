@@ -357,6 +357,97 @@ class ImportTenantDataArgs(BaseModel):
     data: Dict[str, Any] = Field(description="Data to import")
 
 
+# Inventory Management Argument Schemas
+class ListInventoryCategoriesArgs(BaseModel):
+    active_only: bool = Field(default=True, description="Return only active categories")
+
+class CreateInventoryCategoryArgs(BaseModel):
+    name: str = Field(description="Category name")
+    description: Optional[str] = Field(default=None, description="Category description")
+    is_active: bool = Field(default=True, description="Whether category is active")
+
+class UpdateInventoryCategoryArgs(BaseModel):
+    category_id: int = Field(description="ID of category to update")
+    name: Optional[str] = Field(default=None, description="New category name")
+    description: Optional[str] = Field(default=None, description="New category description")
+    is_active: Optional[bool] = Field(default=None, description="Whether category is active")
+
+class ListInventoryItemsArgs(BaseModel):
+    skip: int = Field(default=0, description="Number of items to skip for pagination")
+    limit: int = Field(default=100, description="Maximum number of items to return")
+    query: Optional[str] = Field(default=None, description="Search query for items")
+    category_id: Optional[int] = Field(default=None, description="Filter by category ID")
+    item_type: Optional[str] = Field(default=None, description="Filter by item type")
+    low_stock_only: bool = Field(default=False, description="Return only low stock items")
+    track_stock: Optional[bool] = Field(default=None, description="Filter by stock tracking")
+
+class CreateInventoryItemArgs(BaseModel):
+    name: str = Field(description="Item name")
+    sku: Optional[str] = Field(default=None, description="Stock Keeping Unit")
+    description: Optional[str] = Field(default=None, description="Item description")
+    category_id: Optional[int] = Field(default=None, description="Category ID")
+    unit_price: float = Field(description="Unit selling price")
+    cost_price: Optional[float] = Field(default=None, description="Unit cost price")
+    currency: str = Field(default="USD", description="Currency code")
+    track_stock: bool = Field(default=True, description="Whether to track stock levels")
+    current_stock: float = Field(default=0, description="Current stock quantity")
+    minimum_stock: float = Field(default=0, description="Minimum stock level")
+    unit_of_measure: str = Field(default="each", description="Unit of measure")
+    item_type: str = Field(default="product", description="Type of item")
+    is_active: bool = Field(default=True, description="Whether item is active")
+
+class UpdateInventoryItemArgs(BaseModel):
+    item_id: int = Field(description="ID of item to update")
+    name: Optional[str] = Field(default=None, description="New item name")
+    sku: Optional[str] = Field(default=None, description="New SKU")
+    description: Optional[str] = Field(default=None, description="New description")
+    category_id: Optional[int] = Field(default=None, description="New category ID")
+    unit_price: Optional[float] = Field(default=None, description="New unit price")
+    cost_price: Optional[float] = Field(default=None, description="New cost price")
+    currency: Optional[str] = Field(default=None, description="New currency")
+    track_stock: Optional[bool] = Field(default=None, description="New stock tracking setting")
+    current_stock: Optional[float] = Field(default=None, description="New current stock")
+    minimum_stock: Optional[float] = Field(default=None, description="New minimum stock")
+    unit_of_measure: Optional[str] = Field(default=None, description="New unit of measure")
+    item_type: Optional[str] = Field(default=None, description="New item type")
+    is_active: Optional[bool] = Field(default=None, description="New active status")
+
+class AdjustStockArgs(BaseModel):
+    item_id: int = Field(description="ID of inventory item")
+    quantity: float = Field(description="Quantity to adjust (positive for increase, negative for decrease)")
+    reason: str = Field(default="Manual adjustment", description="Reason for adjustment")
+
+class GetInventoryAnalyticsArgs(BaseModel):
+    pass  # No arguments needed for analytics
+
+class GetLowStockItemsArgs(BaseModel):
+    pass  # No arguments needed for low stock list
+
+# Bank Statement Management Argument Schemas
+class ListBankStatementsArgs(BaseModel):
+    skip: int = Field(default=0, description="Number of statements to skip for pagination")
+    limit: int = Field(default=100, description="Maximum number of statements to return")
+    status: Optional[str] = Field(default=None, description="Filter by processing status")
+    account_name: Optional[str] = Field(default=None, description="Filter by account name")
+
+class GetBankStatementArgs(BaseModel):
+    statement_id: int = Field(description="ID of bank statement to retrieve")
+
+class ReprocessBankStatementArgs(BaseModel):
+    statement_id: int = Field(description="ID of bank statement to reprocess")
+    force_reprocess: bool = Field(default=False, description="Force reprocessing even if already processed")
+
+class UpdateBankStatementMetaArgs(BaseModel):
+    statement_id: int = Field(description="ID of bank statement to update")
+    account_name: Optional[str] = Field(default=None, description="Bank account name")
+    statement_period: Optional[str] = Field(default=None, description="Statement period description")
+    notes: Optional[str] = Field(default=None, description="Additional notes")
+    status: Optional[str] = Field(default=None, description="Processing status")
+
+class DeleteBankStatementArgs(BaseModel):
+    statement_id: int = Field(description="ID of bank statement to delete")
+    confirm_deletion: bool = Field(default=False, description="Confirmation flag to prevent accidental deletion")
+
 # Tool argument schemas will be used directly with FastMCP decorators
 
 
@@ -1852,4 +1943,341 @@ class InvoiceTools:
                 "message": f"Data imported successfully into tenant {tenant_id}"
             }
         except Exception as e:
-            return {"success": False, "error": f"Failed to import tenant data: {e}"} 
+            return {"success": False, "error": f"Failed to import tenant data: {e}"}
+
+    # === Inventory Management Tools ===
+
+    async def list_inventory_categories(self, active_only: bool = True) -> Dict[str, Any]:
+        """List all inventory categories"""
+        try:
+            # Call inventory API endpoint
+            response = await self.api_client._make_request("GET", "/inventory/categories", params={"active_only": active_only})
+            return {
+                "success": True,
+                "data": response.get("data", []),
+                "count": len(response.get("data", [])),
+                "active_only": active_only
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to list inventory categories: {e}"}
+
+    async def create_inventory_category(self, name: str, description: Optional[str] = None, is_active: bool = True) -> Dict[str, Any]:
+        """Create a new inventory category"""
+        try:
+            category_data = {"name": name, "is_active": is_active}
+            if description:
+                category_data["description"] = description
+
+            response = await self.api_client._make_request("POST", "/inventory/categories", json=category_data)
+            return {
+                "success": True,
+                "data": response.get("data", {}),
+                "message": "Inventory category created successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to create inventory category: {e}"}
+
+    async def update_inventory_category(self, category_id: int, name: Optional[str] = None, description: Optional[str] = None, is_active: Optional[bool] = None) -> Dict[str, Any]:
+        """Update an inventory category"""
+        try:
+            update_data = {}
+            if name is not None:
+                update_data["name"] = name
+            if description is not None:
+                update_data["description"] = description
+            if is_active is not None:
+                update_data["is_active"] = is_active
+
+            response = await self.api_client._make_request("PUT", f"/inventory/categories/{category_id}", json=update_data)
+            return {
+                "success": True,
+                "data": response.get("data", {}),
+                "message": "Inventory category updated successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to update inventory category: {e}"}
+
+    async def list_inventory_items(
+        self,
+        skip: int = 0,
+        limit: int = 100,
+        query: Optional[str] = None,
+        category_id: Optional[int] = None,
+        item_type: Optional[str] = None,
+        low_stock_only: bool = False,
+        track_stock: Optional[bool] = None
+    ) -> Dict[str, Any]:
+        """List inventory items with optional filtering"""
+        try:
+            params = {
+                "skip": skip,
+                "limit": limit,
+                "low_stock_only": low_stock_only
+            }
+            if query:
+                params["query"] = query
+            if category_id:
+                params["category_id"] = category_id
+            if item_type:
+                params["item_type"] = item_type
+            if track_stock is not None:
+                params["track_stock"] = track_stock
+
+            response = await self.api_client._make_request("GET", "/inventory/items", params=params)
+            return {
+                "success": True,
+                "data": response.get("items", []),
+                "total": response.get("total", 0),
+                "count": len(response.get("items", [])),
+                "pagination": {
+                    "skip": skip,
+                    "limit": limit,
+                    "has_more": len(response.get("items", [])) == limit
+                }
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to list inventory items: {e}"}
+
+    async def create_inventory_item(
+        self,
+        name: str,
+        unit_price: float,
+        sku: Optional[str] = None,
+        description: Optional[str] = None,
+        category_id: Optional[int] = None,
+        cost_price: Optional[float] = None,
+        currency: str = "USD",
+        track_stock: bool = True,
+        current_stock: float = 0,
+        minimum_stock: float = 0,
+        unit_of_measure: str = "each",
+        item_type: str = "product",
+        is_active: bool = True
+    ) -> Dict[str, Any]:
+        """Create a new inventory item"""
+        try:
+            item_data = {
+                "name": name,
+                "unit_price": unit_price,
+                "currency": currency,
+                "track_stock": track_stock,
+                "current_stock": current_stock,
+                "minimum_stock": minimum_stock,
+                "unit_of_measure": unit_of_measure,
+                "item_type": item_type,
+                "is_active": is_active
+            }
+            if sku:
+                item_data["sku"] = sku
+            if description:
+                item_data["description"] = description
+            if category_id:
+                item_data["category_id"] = category_id
+            if cost_price:
+                item_data["cost_price"] = cost_price
+
+            response = await self.api_client._make_request("POST", "/inventory/items", json=item_data)
+            return {
+                "success": True,
+                "data": response.get("data", {}),
+                "message": "Inventory item created successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to create inventory item: {e}"}
+
+    async def update_inventory_item(
+        self,
+        item_id: int,
+        name: Optional[str] = None,
+        sku: Optional[str] = None,
+        description: Optional[str] = None,
+        category_id: Optional[int] = None,
+        unit_price: Optional[float] = None,
+        cost_price: Optional[float] = None,
+        currency: Optional[str] = None,
+        track_stock: Optional[bool] = None,
+        current_stock: Optional[float] = None,
+        minimum_stock: Optional[float] = None,
+        unit_of_measure: Optional[str] = None,
+        item_type: Optional[str] = None,
+        is_active: Optional[bool] = None
+    ) -> Dict[str, Any]:
+        """Update an inventory item"""
+        try:
+            update_data = {}
+            if name is not None:
+                update_data["name"] = name
+            if sku is not None:
+                update_data["sku"] = sku
+            if description is not None:
+                update_data["description"] = description
+            if category_id is not None:
+                update_data["category_id"] = category_id
+            if unit_price is not None:
+                update_data["unit_price"] = unit_price
+            if cost_price is not None:
+                update_data["cost_price"] = cost_price
+            if currency is not None:
+                update_data["currency"] = currency
+            if track_stock is not None:
+                update_data["track_stock"] = track_stock
+            if current_stock is not None:
+                update_data["current_stock"] = current_stock
+            if minimum_stock is not None:
+                update_data["minimum_stock"] = minimum_stock
+            if unit_of_measure is not None:
+                update_data["unit_of_measure"] = unit_of_measure
+            if item_type is not None:
+                update_data["item_type"] = item_type
+            if is_active is not None:
+                update_data["is_active"] = is_active
+
+            response = await self.api_client._make_request("PUT", f"/inventory/items/{item_id}", json=update_data)
+            return {
+                "success": True,
+                "data": response.get("data", {}),
+                "message": "Inventory item updated successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to update inventory item: {e}"}
+
+    async def adjust_stock(self, item_id: int, quantity: float, reason: str = "Manual adjustment") -> Dict[str, Any]:
+        """Adjust stock levels for an inventory item"""
+        try:
+            response = await self.api_client._make_request(
+                "POST",
+                f"/inventory/items/{item_id}/stock/adjust",
+                json={"quantity": quantity, "reason": reason}
+            )
+            return {
+                "success": True,
+                "data": response,
+                "message": "Stock adjusted successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to adjust stock: {e}"}
+
+    async def get_inventory_analytics(self) -> Dict[str, Any]:
+        """Get inventory analytics and statistics"""
+        try:
+            response = await self.api_client._make_request("GET", "/inventory/analytics")
+            return {
+                "success": True,
+                "data": response.get("data", {}),
+                "message": "Inventory analytics retrieved successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to get inventory analytics: {e}"}
+
+    async def get_low_stock_items(self) -> Dict[str, Any]:
+        """Get items with low stock levels"""
+        try:
+            response = await self.api_client._make_request("GET", "/inventory/stock/low-stock")
+            return {
+                "success": True,
+                "data": response,
+                "count": len(response),
+                "message": f"Found {len(response)} low stock items"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to get low stock items: {e}"}
+
+    # === Bank Statement Management Tools ===
+
+    async def list_bank_statements(
+        self,
+        skip: int = 0,
+        limit: int = 100,
+        status: Optional[str] = None,
+        account_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """List bank statements with optional filtering"""
+        try:
+            params = {"skip": skip, "limit": limit}
+            if status:
+                params["status"] = status
+            if account_name:
+                params["account_name"] = account_name
+
+            response = await self.api_client._make_request("GET", "/statements", params=params)
+            return {
+                "success": True,
+                "data": response.get("statements", []),
+                "count": len(response.get("statements", [])),
+                "pagination": {
+                    "skip": skip,
+                    "limit": limit
+                }
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to list bank statements: {e}"}
+
+    async def get_bank_statement(self, statement_id: int) -> Dict[str, Any]:
+        """Get detailed information about a bank statement"""
+        try:
+            response = await self.api_client._make_request("GET", f"/statements/{statement_id}")
+            return {
+                "success": True,
+                "data": response.get("statement", {}),
+                "transaction_count": len(response.get("statement", {}).get("transactions", []))
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to get bank statement: {e}"}
+
+    async def reprocess_bank_statement(self, statement_id: int, force_reprocess: bool = False) -> Dict[str, Any]:
+        """Reprocess a bank statement"""
+        try:
+            response = await self.api_client._make_request("POST", f"/statements/{statement_id}/reprocess", json={"force_reprocess": force_reprocess})
+            return {
+                "success": True,
+                "data": response,
+                "message": "Bank statement reprocessing started"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to reprocess bank statement: {e}"}
+
+    async def update_bank_statement_meta(
+        self,
+        statement_id: int,
+        account_name: Optional[str] = None,
+        statement_period: Optional[str] = None,
+        notes: Optional[str] = None,
+        status: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Update bank statement metadata"""
+        try:
+            update_data = {}
+            if account_name is not None:
+                update_data["account_name"] = account_name
+            if statement_period is not None:
+                update_data["statement_period"] = statement_period
+            if notes is not None:
+                update_data["notes"] = notes
+            if status is not None:
+                update_data["status"] = status
+
+            response = await self.api_client._make_request("PUT", f"/statements/{statement_id}", json=update_data)
+            return {
+                "success": True,
+                "data": response.get("statement", {}),
+                "message": "Bank statement metadata updated successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to update bank statement metadata: {e}"}
+
+    async def delete_bank_statement(self, statement_id: int, confirm_deletion: bool = False) -> Dict[str, Any]:
+        """Delete a bank statement"""
+        try:
+            if not confirm_deletion:
+                return {
+                    "success": False,
+                    "error": "Deletion not confirmed. Please set confirm_deletion=true to proceed."
+                }
+
+            await self.api_client._make_request("DELETE", f"/statements/{statement_id}")
+            return {
+                "success": True,
+                "message": "Bank statement deleted successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to delete bank statement: {e}"} 

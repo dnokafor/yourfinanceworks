@@ -32,7 +32,8 @@ graph TB
         CLIENT_TOOLS["Client Management<br/>• list_clients<br/>• search_clients<br/>• get_client<br/>• create_client"]
         INVOICE_TOOLS["Invoice Management<br/>• list_invoices<br/>• search_invoices<br/>• get_invoice<br/>• create_invoice"]
         EXPENSE_TOOLS["Expense Management<br/>• list_expenses<br/>• get_expense<br/>• create_expense<br/>• update_expense<br/>• delete_expense<br/>• upload_expense_receipt<br/>• list_expense_attachments<br/>• delete_expense_attachment"]
-        BANK_TOOLS["Statement Management<br/>• list_statements<br/>• get_bank_statement<br/>• reprocess_bank_statement<br/>• update_bank_statement_meta<br/>• delete_bank_statement"]
+        BANK_TOOLS["Statement Management<br/>• list_bank_statements<br/>• get_bank_statement<br/>• reprocess_bank_statement<br/>• update_bank_statement_meta<br/>• delete_bank_statement"]
+        INVENTORY_TOOLS["Inventory Management<br/>• list_inventory_categories<br/>• create_inventory_category<br/>• update_inventory_category<br/>• list_inventory_items<br/>• create_inventory_item<br/>• update_inventory_item<br/>• adjust_stock<br/>• get_inventory_analytics<br/>• get_low_stock_items"]
         ANALYTICS["Analytics<br/>• get_clients_with_outstanding_balance<br/>• get_overdue_invoices<br/>• get_invoice_stats"]
     end
     
@@ -50,10 +51,12 @@ graph TB
     MCP --> ANALYTICS
     MCP --> EXPENSE_TOOLS
     MCP --> BANK_TOOLS
-    
+    MCP --> INVENTORY_TOOLS
+
     TOOLS -.-> CLIENT_TOOLS
     TOOLS -.-> INVOICE_TOOLS
     TOOLS -.-> ANALYTICS
+    TOOLS -.-> INVENTORY_TOOLS
     
     style CD fill:#e1f5fe
     style MCP fill:#f3e5f5
@@ -184,10 +187,19 @@ Would you like me to get more details about any of these clients or their invoic
 - *"Create an expense for office supplies costing $150"*
 - *"Upload a receipt for expense #456"*
 - *"Show me unlinked expenses that need categorization"*
-- *"List all imported statements"*
+- *"List all imported bank statements"*
+- *"Show me statements from my business checking account"*
 - *"Get details for statement from January 2024"*
 - *"Reprocess statement for better transaction matching"*
+- *"Update statement notes to 'Reviewed Q1 transactions'"*
 - *"Delete old statement that was imported incorrectly"*
+- *"List all inventory items"*
+- *"Show me items with low stock levels"*
+- *"Create a new category for office supplies"*
+- *"Add a new inventory item for wireless mouse"*
+- *"Update stock level for item #123 to 50 units"*
+- *"Get inventory analytics and reports"*
+- *"Search for items containing 'laptop' in the name"*
 
 ## ✨ Key Benefits
 
@@ -221,16 +233,25 @@ Would you like me to get more details about any of these clients or their invoic
 - **Expense Filtering**: Filter by category, invoice linkage, and other criteria
 
 ### Statement Management
-- **List Statements**: Get all imported statements with pagination
-- **Statement Details**: Retrieve detailed statement information
+- **List Statements**: Get all imported statements with pagination and filtering
+- **Statement Details**: Retrieve detailed statement information with all transactions
 - **Reprocess Statements**: Reprocess statements for better transaction matching
-- **Update Metadata**: Modify statement names, periods, and notes
-- **Delete Statements**: Remove statements and associated transactions
+- **Update Metadata**: Modify statement account names, periods, notes, and status
+- **Delete Statements**: Remove statements and associated transactions with confirmation
+
+### Inventory Management
+- **Category Management**: Create, update, and list inventory categories
+- **Item Management**: Full CRUD operations for inventory items with detailed specifications
+- **Stock Tracking**: Automatic stock level monitoring and manual adjustments
+- **Low Stock Alerts**: Get notifications for items below minimum stock levels
+- **Analytics**: Comprehensive inventory analytics including value reports and turnover analysis
+- **Invoice Integration**: Automatic stock updates when invoices are created or paid
 
 ### Analytics & Reporting
 - **Outstanding Balances**: Find clients with unpaid invoices (`get_clients_with_outstanding_balance`)
 - **Overdue Invoices**: Identify invoices past their due date (`get_overdue_invoices`)
 - **Invoice Statistics**: Get overall financial metrics (`get_invoice_stats`)
+- **Inventory Analytics**: Get comprehensive inventory statistics and reports
 
 ### Currency Management
 - **List Currencies**: Get supported currencies with filtering options (`list_currencies`)
@@ -882,6 +903,185 @@ Delete a statement and all associated transactions.
     "statement_id": 123,
     "confirm_deletion": true
   }
+}
+```
+
+### Inventory Management Tools
+
+#### `list_inventory_categories`
+List all inventory categories with optional filtering for active categories only.
+
+**Parameters:**
+- `active_only` (boolean, optional): Return only active categories (default: true)
+
+**Example:**
+```json
+{
+  "name": "list_inventory_categories",
+  "arguments": {
+    "active_only": true
+  }
+}
+```
+
+#### `create_inventory_category`
+Create a new inventory category for organizing inventory items.
+
+**Parameters:**
+- `name` (string): Category name
+- `description` (string, optional): Category description
+- `is_active` (boolean, optional): Whether category is active (default: true)
+
+**Example:**
+```json
+{
+  "name": "create_inventory_category",
+  "arguments": {
+    "name": "Electronics",
+    "description": "Electronic devices and components",
+    "is_active": true
+  }
+}
+```
+
+#### `update_inventory_category`
+Update an existing inventory category.
+
+**Parameters:**
+- `category_id` (int): ID of category to update
+- `name` (string, optional): New category name
+- `description` (string, optional): New category description
+- `is_active` (boolean, optional): New active status
+
+**Example:**
+```json
+{
+  "name": "update_inventory_category",
+  "arguments": {
+    "category_id": 123,
+    "name": "Updated Electronics",
+    "description": "Updated description"
+  }
+}
+```
+
+#### `list_inventory_items`
+List inventory items with optional filtering and pagination.
+
+**Parameters:**
+- `skip` (int, optional): Number of items to skip for pagination (default: 0)
+- `limit` (int, optional): Maximum number of items to return (default: 100)
+- `query` (string, optional): Search query for items
+- `category_id` (int, optional): Filter by category ID
+- `item_type` (string, optional): Filter by item type
+- `low_stock_only` (boolean, optional): Return only low stock items (default: false)
+- `track_stock` (boolean, optional): Filter by stock tracking setting
+
+**Example:**
+```json
+{
+  "name": "list_inventory_items",
+  "arguments": {
+    "skip": 0,
+    "limit": 50,
+    "category_id": 123,
+    "low_stock_only": true
+  }
+}
+```
+
+#### `create_inventory_item`
+Create a new inventory item with detailed specifications.
+
+**Parameters:**
+- `name` (string): Item name
+- `unit_price` (float): Unit selling price
+- `sku` (string, optional): Stock Keeping Unit
+- `description` (string, optional): Item description
+- `category_id` (int, optional): Category ID
+- `cost_price` (float, optional): Unit cost price
+- `currency` (string, optional): Currency code (default: "USD")
+- `track_stock` (boolean, optional): Whether to track stock levels (default: true)
+- `current_stock` (float, optional): Current stock quantity (default: 0)
+- `minimum_stock` (float, optional): Minimum stock level (default: 0)
+- `unit_of_measure` (string, optional): Unit of measure (default: "each")
+- `item_type` (string, optional): Type of item (default: "product")
+- `is_active` (boolean, optional): Whether item is active (default: true)
+
+**Example:**
+```json
+{
+  "name": "create_inventory_item",
+  "arguments": {
+    "name": "Wireless Mouse",
+    "unit_price": 29.99,
+    "sku": "WM-001",
+    "description": "Ergonomic wireless mouse",
+    "category_id": 123,
+    "current_stock": 50,
+    "minimum_stock": 10
+  }
+}
+```
+
+#### `update_inventory_item`
+Update an existing inventory item.
+
+**Parameters:**
+- `item_id` (int): ID of item to update
+- Other parameters same as `create_inventory_item`, all optional
+
+**Example:**
+```json
+{
+  "name": "update_inventory_item",
+  "arguments": {
+    "item_id": 456,
+    "unit_price": 34.99,
+    "current_stock": 45
+  }
+}
+```
+
+#### `adjust_stock`
+Adjust stock levels for an inventory item manually.
+
+**Parameters:**
+- `item_id` (int): ID of inventory item
+- `quantity` (float): Quantity to adjust (positive for increase, negative for decrease)
+- `reason` (string, optional): Reason for adjustment (default: "Manual adjustment")
+
+**Example:**
+```json
+{
+  "name": "adjust_stock",
+  "arguments": {
+    "item_id": 456,
+    "quantity": 25,
+    "reason": "Received new shipment"
+  }
+}
+```
+
+#### `get_inventory_analytics`
+Get comprehensive inventory analytics and statistics.
+
+**Example:**
+```json
+{
+  "name": "get_inventory_analytics",
+  "arguments": {}
+}
+```
+
+#### `get_low_stock_items`
+Get items with stock levels below their minimum threshold.
+
+**Example:**
+```json
+{
+  "name": "get_low_stock_items",
+  "arguments": {}
 }
 ```
 
