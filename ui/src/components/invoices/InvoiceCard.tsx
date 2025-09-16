@@ -4,12 +4,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { CurrencyDisplay } from "@/components/ui/currency-display";
 import { formatDate } from "@/lib/utils";
-import { Invoice } from "@/lib/api";
-import { Calendar, Clock, FileText, MoreVertical, Pencil, Copy, Trash2, User, DollarSign } from "lucide-react";
+import { Invoice, api } from "@/lib/api";
+import { Calendar, Clock, FileText, MoreVertical, Pencil, Copy, Trash2, User, DollarSign, Send } from "lucide-react";
 import { Link } from "react-router-dom";
-
-// Import Tax Integration Components
-import { SendToTaxServiceButton } from '@/components/tax-integration';
+import { toast } from "sonner";
 
 interface InvoiceCardProps {
   invoice: Invoice;
@@ -106,19 +104,36 @@ export function InvoiceCard({ invoice, onClone, onDelete, canPerformActions = tr
                     <Copy className="mr-2 h-4 w-4" />
                     Clone
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <div className="w-full">
-                      <SendToTaxServiceButton
-                        itemId={invoice.id}
-                        itemType="invoice"
-                        onSuccess={() => {
-                          // Could add refresh logic here if needed
-                          console.log('Invoice sent to tax service successfully');
-                        }}
-                        size="sm"
-                        variant="ghost"
-                      />
-                    </div>
+                  <DropdownMenuItem onClick={async () => {
+                    // Handle send to tax service directly here
+                    try {
+                      const response = await api.post<{
+                        success: boolean;
+                        transaction_id?: string;
+                        error_message?: string;
+                      }>('/tax-integration/send', {
+                        item_id: invoice.id,
+                        item_type: 'invoice',
+                      });
+
+                      if (response.success) {
+                        toast.success(
+                          'Invoice sent to tax service successfully'
+                        );
+                      } else {
+                        toast.error(
+                          response.error_message || 'Failed to send to tax service'
+                        );
+                      }
+                    } catch (error: any) {
+                      console.error('Error sending to tax service:', error);
+                      toast.error(
+                        error?.message || 'Failed to send to tax service'
+                      );
+                    }
+                  }}>
+                    <Send className="mr-2 h-4 w-4" />
+                    Send to Tax Service
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={() => onDelete?.(invoice.id)}

@@ -108,6 +108,10 @@ const ExpensesWithTaxIntegration = () => {
     };
   }, [preview.url]);
 
+  useEffect(() => {
+    fetchExpenses();
+  }, [categoryFilter, labelFilter, unlinkedOnly, page, pageSize]);
+
   // ... existing useEffect hooks and functions from original Expenses.tsx ...
 
   // Handle bulk send to tax service
@@ -117,6 +121,26 @@ const ExpensesWithTaxIntegration = () => {
       return;
     }
     setBulkSendDialogOpen(true);
+  };
+
+  const fetchExpenses = async () => {
+    setLoading(true);
+    try {
+      const skip = (page - 1) * pageSize;
+      const data = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip, limit: pageSize });
+      setExpenses(data);
+      // Probe next page existence precisely
+      try {
+        const probe = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip: skip + pageSize, limit: 1 });
+        setHasNextPage(Array.isArray(probe) && probe.length > 0);
+      } catch {
+        setHasNextPage(data.length === pageSize);
+      }
+    } catch (e) {
+      toast.error('Failed to load expenses');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Handle successful tax service send
@@ -281,8 +305,13 @@ const ExpensesWithTaxIntegration = () => {
                           itemType="expense"
                           onSuccess={handleTaxServiceSuccess}
                           size="sm"
+                          variant="ghost"
                         />
-                        {/* Other action buttons */}
+                        <Link to={`/expenses/edit/${expense.id}`}>
+                          <Button variant="ghost" size="sm">
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </Link>
                       </div>
                     </TableCell>
                   </TableRow>

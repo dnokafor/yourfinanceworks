@@ -125,6 +125,40 @@ class StockMovementService:
 
         return movements
 
+    def process_expense_consumption(self, expense: Expense) -> List[StockMovement]:
+        """Process stock reductions for inventory consumption expenses"""
+        movements = []
+
+        if not expense.is_inventory_consumption or not expense.consumption_items:
+            return movements
+
+        for consumption_item in expense.consumption_items:
+            try:
+                item_id = consumption_item.get('item_id')
+                quantity = consumption_item.get('quantity', 0)
+                unit_cost = consumption_item.get('unit_cost')
+
+                if not item_id or quantity <= 0:
+                    continue
+
+                movement = self.record_movement(StockMovementCreate(
+                    item_id=item_id,
+                    movement_type="usage",
+                    quantity=-quantity,  # Negative for reduction
+                    unit_cost=unit_cost,
+                    reference_type="expense",
+                    reference_id=expense.id,
+                    notes=f"Consumption from expense #{expense.id}",
+                    user_id=expense.user_id or 1
+                ))
+                movements.append(movement)
+
+            except ValueError as e:
+                logger.error(f"Failed to process stock for expense consumption item {consumption_item}: {e}")
+                continue
+
+        return movements
+
     def reverse_invoice_stock_impact(self, invoice: Invoice) -> List[StockMovement]:
         """Reverse stock impacts when invoice is cancelled or deleted"""
         movements = []

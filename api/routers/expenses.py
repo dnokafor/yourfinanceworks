@@ -85,6 +85,7 @@ async def get_expense(
         expense.attachments_count = db.query(ExpenseAttachment).filter(ExpenseAttachment.expense_id == expense_id).count()
     except Exception:
         pass
+
     return expense
 
 
@@ -143,6 +144,10 @@ async def create_expense(
         is_inventory_purchase = bool(getattr(expense, "is_inventory_purchase", False))
         inventory_items = getattr(expense, "inventory_items", None)
 
+        # Handle inventory consumption fields
+        is_inventory_consumption = bool(getattr(expense, "is_inventory_consumption", False))
+        consumption_items = getattr(expense, "consumption_items", None)
+
         # Validate inventory purchase data if provided
         if is_inventory_purchase:
             if not inventory_items or len(inventory_items) == 0:
@@ -179,6 +184,49 @@ async def create_expense(
                         detail=f"Quantity must be greater than 0 for item {inventory_item.name}"
                     )
 
+        # Validate inventory consumption data if provided
+        if is_inventory_consumption:
+            if not consumption_items or len(consumption_items) == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Inventory consumption must include at least one item"
+                )
+
+            # Validate each consumption item
+            from services.inventory_service import InventoryService
+            inventory_service = InventoryService(db)
+
+            for item_data in consumption_items:
+                item_id = item_data.get('item_id')
+                quantity = item_data.get('quantity', 0)
+
+                if not item_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Each consumption item must have an item_id"
+                    )
+
+                # Verify item exists
+                inventory_item = inventory_service.get_item(item_id)
+                if not inventory_item:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Inventory item {item_id} not found"
+                    )
+
+                if quantity <= 0:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Quantity must be greater than 0 for item {inventory_item.name}"
+                    )
+
+                # Check if there's enough stock
+                if inventory_item.track_stock and inventory_item.current_stock < quantity:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Insufficient stock for {inventory_item.name}. Available: {inventory_item.current_stock}, Requested: {quantity}"
+                    )
+
         db_expense = Expense(
             amount=float(expense.amount),
             currency=currency_code,
@@ -198,6 +246,8 @@ async def create_expense(
             invoice_id=expense.invoice_id,
             is_inventory_purchase=is_inventory_purchase,
             inventory_items=inventory_items,
+            is_inventory_consumption=is_inventory_consumption,
+            consumption_items=consumption_items,
             imported_from_attachment=bool(getattr(expense, "imported_from_attachment", False)),
             analysis_status=getattr(expense, "analysis_status", "not_started"),
             analysis_result=getattr(expense, "analysis_result", None),
@@ -222,6 +272,21 @@ async def create_expense(
 
             except Exception as e:
                 uvicorn_logger.error(f"Failed to process stock movements for expense {db_expense.id}: {e}")
+                # Don't fail the expense creation, but log the error
+                # The expense is already created, stock movements can be processed later if needed
+
+        # Process inventory stock movements for inventory consumption
+        if is_inventory_consumption and consumption_items:
+            try:
+                from services.inventory_integration_service import InventoryIntegrationService
+                integration_service = InventoryIntegrationService(db)
+
+                movements = integration_service.process_expense_inventory_consumption(db_expense, current_user.id)
+                if movements:
+                    uvicorn_logger.info(f"Processed {len(movements)} stock movements for inventory consumption expense {db_expense.id}")
+
+            except Exception as e:
+                uvicorn_logger.error(f"Failed to process consumption stock movements for expense {db_expense.id}: {e}")
                 # Don't fail the expense creation, but log the error
                 # The expense is already created, stock movements can be processed later if needed
 
@@ -504,7 +569,55 @@ async def update_expense(
                     if quantity <= 0:
                         raise HTTPException(
                             status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Quantity must be greater than 0 for item {inventory_item.name}"
+                    )
+
+        # Handle inventory consumption updates
+        if "is_inventory_consumption" in update_data or "consumption_items" in update_data:
+            is_inventory_consumption = update_data.get("is_inventory_consumption", db_expense.is_inventory_consumption)
+            consumption_items = update_data.get("consumption_items", db_expense.consumption_items)
+
+            # Validate inventory consumption data if being set to true
+            if is_inventory_consumption and consumption_items:
+                if not consumption_items or len(consumption_items) == 0:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Inventory consumption must include at least one item"
+                    )
+
+                # Validate each consumption item
+                from services.inventory_service import InventoryService
+                inventory_service = InventoryService(db)
+
+                for item_data in consumption_items:
+                    item_id = item_data.get('item_id')
+                    quantity = item_data.get('quantity', 0)
+
+                    if not item_id:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Each consumption item must have an item_id"
+                        )
+
+                    # Verify item exists
+                    inventory_item = inventory_service.get_item(item_id)
+                    if not inventory_item:
+                        raise HTTPException(
+                            status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Inventory item {item_id} not found"
+                        )
+
+                    if quantity <= 0:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
                             detail=f"Quantity must be greater than 0 for item {inventory_item.name}"
+                        )
+
+                    # Check if there's enough stock
+                    if inventory_item.track_stock and inventory_item.current_stock < quantity:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Insufficient stock for {inventory_item.name}. Available: {inventory_item.current_stock}, Requested: {quantity}"
                         )
 
         # Normalize labels if provided
@@ -554,6 +667,21 @@ async def update_expense(
 
             except Exception as e:
                 uvicorn_logger.error(f"Failed to process stock movements for updated expense {expense_id}: {e}")
+                # Don't fail the expense update, but log the error
+                # The expense is already updated, stock movements can be processed later if needed
+
+        # Handle inventory stock movements for updated consumption
+        if ("is_inventory_consumption" in update_data or "consumption_items" in update_data) and db_expense.is_inventory_consumption and db_expense.consumption_items:
+            try:
+                from services.inventory_integration_service import InventoryIntegrationService
+                integration_service = InventoryIntegrationService(db)
+
+                movements = integration_service.process_expense_inventory_consumption(db_expense, current_user.id)
+                if movements:
+                    uvicorn_logger.info(f"Processed {len(movements)} stock movements for updated consumption expense {expense_id}")
+
+            except Exception as e:
+                uvicorn_logger.error(f"Failed to process consumption stock movements for updated expense {expense_id}: {e}")
                 # Don't fail the expense update, but log the error
                 # The expense is already updated, stock movements can be processed later if needed
 

@@ -9,13 +9,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CurrencySelector } from '@/components/ui/currency-selector';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Upload, X } from 'lucide-react';
+import { CalendarIcon, Upload, X, Package } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { expenseApi, Expense, ExpenseAttachmentMeta, linkApi } from '@/lib/api';
 import { EXPENSE_CATEGORY_OPTIONS } from '@/constants/expenses';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { InventoryConsumptionForm } from '@/components/inventory/InventoryConsumptionForm';
 
 export default function ExpensesEdit() {
   const { t } = useTranslation();
@@ -31,6 +33,10 @@ export default function ExpensesEdit() {
   const [preview, setPreview] = useState<{ open: boolean; url: string | null; contentType: string | null; filename: string | null }>({ open: false, url: null, contentType: null, filename: null });
   const [invoiceOptions, setInvoiceOptions] = useState<Array<{ id: number; number: string; client_name: string }>>([]);
   const [newLabel, setNewLabel] = useState<string>('');
+  
+  // Inventory consumption state
+  const [isInventoryConsumption, setIsInventoryConsumption] = useState(false);
+  const [consumptionItems, setConsumptionItems] = useState<any[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -39,6 +45,12 @@ export default function ExpensesEdit() {
         if (!id) return;
         const exp = await expenseApi.getExpense(Number(id));
         setForm(exp);
+        
+        // Initialize consumption state from existing expense data
+        const isConsumption = !!(exp as any).is_inventory_consumption;
+        const consumptionItemsData = (exp as any).consumption_items || [];
+        setIsInventoryConsumption(isConsumption);
+        setConsumptionItems(consumptionItemsData);
         const list = await expenseApi.listAttachments(Number(id));
         setAttachments(list);
         try { const invs = await linkApi.getInvoicesBasic(); setInvoiceOptions(invs); } catch {}
@@ -50,6 +62,14 @@ export default function ExpensesEdit() {
     };
     load();
   }, [id]);
+
+  // Calculate amount from consumption items
+  useEffect(() => {
+    if (isInventoryConsumption && consumptionItems.length > 0) {
+      const total = consumptionItems.reduce((sum, item) => sum + (item.quantity * (item.unit_cost || 0)), 0);
+      setForm(prev => ({ ...prev, amount: total }));
+    }
+  }, [consumptionItems, isInventoryConsumption]);
 
   const onSave = async () => {
     try {
@@ -73,6 +93,18 @@ export default function ExpensesEdit() {
       if (!form.category) {
         toast.error(t('expenses.category_required'));
         return;
+      }
+      if (isInventoryConsumption && (!consumptionItems || consumptionItems.length === 0)) {
+        toast.error('Inventory consumption must include at least one item');
+        return;
+      }
+      if (isInventoryConsumption && consumptionItems && consumptionItems.length > 0) {
+        // Validate that all consumption items have valid quantities
+        const invalidItems = consumptionItems.filter(item => !item.quantity || item.quantity <= 0);
+        if (invalidItems.length > 0) {
+          toast.error('All inventory consumption items must have a quantity greater than 0');
+          return;
+        }
       }
       // Ensure pending input label is included if user didn't press Enter
       let labelsFromForm: string[] = Array.isArray((form as any).labels) ? ((form as any).labels as string[]) : [];
@@ -100,6 +132,8 @@ export default function ExpensesEdit() {
         notes: form.notes,
         labels: labelsFromForm.length ? labelsFromForm : undefined,
         invoice_id: form.invoice_id ?? null,
+        is_inventory_consumption: isInventoryConsumption,
+        consumption_items: isInventoryConsumption ? consumptionItems : null,
       } as any;
       await expenseApi.updateExpense(Number(id), payload);
 
@@ -204,7 +238,13 @@ export default function ExpensesEdit() {
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-sm">{t('expenses.labels.amount')}</label>
-              <Input type="number" value={Number(form.amount || 0)} onChange={e => setForm({ ...form, amount: Number(e.target.value) })} />
+              <Input 
+                type="number" 
+                value={Number(form.amount || 0)} 
+                onChange={e => setForm({ ...form, amount: Number(e.target.value) })} 
+                disabled={isInventoryConsumption}
+                placeholder={isInventoryConsumption ? "Calculated from items" : ""}
+              />
             </div>
             <div>
               <label className="text-sm">{t('expenses.link_to_invoice')}</label>
@@ -313,6 +353,62 @@ export default function ExpensesEdit() {
                 />
               </div>
             </div>
+            
+            {/* Inventory Consumption Section */}
+            <div className="sm:col-span-2">
+              <div className="space-y-3 p-4 border rounded-lg bg-gray-50">
+                <div className="flex items-center gap-2">
+                  <Package className="h-4 w-4" />
+                  <span className="text-sm font-medium">Inventory Integration</span>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="is-inventory-consumption"
+                    checked={isInventoryConsumption}
+                    onCheckedChange={(checked) => setIsInventoryConsumption(checked as boolean)}
+                  />
+                  <label
+                    htmlFor="is-inventory-consumption"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    This expense is for consuming inventory items
+                  </label>
+                </div>
+
+                {isInventoryConsumption && (
+                  <div className="space-y-4">
+                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                      <div className="flex items-center gap-2 text-orange-800 mb-3">
+                        <Package className="h-4 w-4" />
+                        <span className="text-sm font-medium">Inventory Consumption Details</span>
+                      </div>
+                      <p className="text-sm text-orange-700 mb-4">
+                        Select the inventory items you consumed. The system will automatically reduce stock levels and calculate the expense amount.
+                      </p>
+
+                      <InventoryConsumptionForm
+                        onConsumptionItemsChange={setConsumptionItems}
+                        currency={form.currency || 'USD'}
+                        initialConsumptionItems={consumptionItems}
+                      />
+                    </div>
+
+                    {consumptionItems.length > 0 && (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                        <div className="flex items-center gap-2 text-green-800">
+                          <Package className="h-4 w-4" />
+                          <span className="text-sm font-medium">
+                            Ready to process: {consumptionItems.length} inventory items will be consumed
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="sm:col-span-2">
               <label className="text-sm">{t('expenses.labels.notes')}</label>
               <Input value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} />

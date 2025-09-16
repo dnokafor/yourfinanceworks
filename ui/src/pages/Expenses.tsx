@@ -14,6 +14,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { CalendarIcon, X } from 'lucide-react';
 import { BulkExpenseModal } from '@/components/BulkExpenseModal';
+import { InventoryConsumptionForm } from '@/components/inventory/InventoryConsumptionForm';
 import { format, parseISO, isValid } from 'date-fns';
 import { 
   AlertDialog,
@@ -27,12 +28,12 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 // removed duplicate useEffect import
-import { Loader2, Plus, Search, Trash2, Upload, ChevronDown, MoreHorizontal, Edit } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Loader2, Plus, Search, Trash2, Upload, ChevronDown, MoreHorizontal, Edit, Package } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Link } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { expenseApi, Expense, ExpenseAttachmentMeta, api } from '@/lib/api';
+import { expenseApi, Expense, ExpenseAttachmentMeta, api, linkApi } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { CurrencySelector } from '@/components/ui/currency-selector';
 import { EXPENSE_CATEGORY_OPTIONS } from '@/constants/expenses';
@@ -97,8 +98,43 @@ const Expenses = () => {
   const [attachments, setAttachments] = useState<Record<number, ExpenseAttachmentMeta[]>>({});
   const [preview, setPreview] = useState<{ open: boolean; url: string | null; contentType: string | null; filename: string | null }>({ open: false, url: null, contentType: null, filename: null });
   const [isBulkCreateOpen, setIsBulkCreateOpen] = useState(false);
+  const [invoiceOptions, setInvoiceOptions] = useState<Array<{ id: number; number: string; client_name: string }>>([]);
+  
+  // Inventory consumption state for new expense
+  const [isNewInventoryConsumption, setIsNewInventoryConsumption] = useState(false);
+  const [newConsumptionItems, setNewConsumptionItems] = useState<any[]>([]);
+  
+  // Inventory consumption state for edit expense
+  const [isEditInventoryConsumption, setIsEditInventoryConsumption] = useState(false);
+  const [editConsumptionItems, setEditConsumptionItems] = useState<any[]>([]);
 
+  // Fetch invoice options for linking
+  useEffect(() => {
+    (async () => {
+      try { 
+        const invs = await linkApi.getInvoicesBasic(); 
+        setInvoiceOptions(invs); 
+      } catch (error) {
+        console.error('Failed to fetch invoices:', error);
+      }
+    })();
+  }, []);
 
+  // Calculate amount from consumption items for new expense
+  useEffect(() => {
+    if (isNewInventoryConsumption && newConsumptionItems.length > 0) {
+      const total = newConsumptionItems.reduce((sum, item) => sum + (item.quantity * (item.unit_cost || 0)), 0);
+      setNewExpense(prev => ({ ...prev, amount: total }));
+    }
+  }, [newConsumptionItems, isNewInventoryConsumption]);
+
+  // Calculate amount from consumption items for edit expense
+  useEffect(() => {
+    if (isEditInventoryConsumption && editConsumptionItems.length > 0) {
+      const total = editConsumptionItems.reduce((sum, item) => sum + (item.quantity * (item.unit_cost || 0)), 0);
+      setEditExpense(prev => ({ ...prev, amount: total }));
+    }
+  }, [editConsumptionItems, isEditInventoryConsumption]);
 
   useEffect(() => {
     return () => {
@@ -201,6 +237,8 @@ const Expenses = () => {
   const openCreate = () => {
     setNewExpense(defaultNewExpense);
     setNewReceiptFile(null);
+    setIsNewInventoryConsumption(false);
+    setNewConsumptionItems([]);
     setIsCreateOpen(true);
   };
 
@@ -212,6 +250,10 @@ const Expenses = () => {
       }
       if (!newExpense.category) {
         toast.error('Category is required');
+        return;
+      }
+      if (isNewInventoryConsumption && (!newConsumptionItems || newConsumptionItems.length === 0)) {
+        toast.error('Inventory consumption must include at least one item');
         return;
       }
       const payload = {
@@ -227,6 +269,9 @@ const Expenses = () => {
         reference_number: newExpense.reference_number,
         status: newExpense.status || 'recorded',
         notes: newExpense.notes,
+        invoice_id: newExpense.invoice_id ?? null,
+        is_inventory_consumption: isNewInventoryConsumption,
+        consumption_items: isNewInventoryConsumption ? newConsumptionItems : null,
       } as any;
       const created = await expenseApi.createExpense({ ...payload, imported_from_attachment: !!newReceiptFile, analysis_status: newReceiptFile ? 'queued' : 'not_started' } as any);
       // Upload receipt if provided
@@ -324,6 +369,13 @@ const Expenses = () => {
       status: e.status,
       notes: e.notes,
     });
+    
+    // Initialize consumption state from existing expense data
+    const isConsumption = !!(e as any).is_inventory_consumption;
+    const consumptionItems = (e as any).consumption_items || [];
+    setIsEditInventoryConsumption(isConsumption);
+    setEditConsumptionItems(consumptionItems);
+    
     setIsEditOpen(true);
   };
 
@@ -332,6 +384,10 @@ const Expenses = () => {
       if (!editExpense.id) return;
       if (!editExpense.amount || !editExpense.category) {
         toast.error('Amount and category are required');
+        return;
+      }
+      if (isEditInventoryConsumption && (!editConsumptionItems || editConsumptionItems.length === 0)) {
+        toast.error('Inventory consumption must include at least one item');
         return;
       }
       const payload = {
@@ -347,6 +403,8 @@ const Expenses = () => {
         reference_number: editExpense.reference_number,
         status: editExpense.status || 'recorded',
         notes: editExpense.notes,
+        is_inventory_consumption: isEditInventoryConsumption,
+        consumption_items: isEditInventoryConsumption ? editConsumptionItems : null,
       } as any;
       const updated = await expenseApi.updateExpense(editExpense.id, payload);
       let finalUpdated = updated;
@@ -785,7 +843,13 @@ const Expenses = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4">
               <div>
                 <label className="text-sm">{t('expenses.labels.amount')}</label>
-                <Input type="number" value={Number(newExpense.amount || 0)} onChange={e => setNewExpense({ ...newExpense, amount: Number(e.target.value) })} />
+                <Input 
+                  type="number" 
+                  value={Number(newExpense.amount || 0)} 
+                  onChange={e => setNewExpense({ ...newExpense, amount: Number(e.target.value) })} 
+                  disabled={isNewInventoryConsumption}
+                  placeholder={isNewInventoryConsumption ? "Calculated from items" : ""}
+                />
               </div>
               <div>
                 <label className="text-sm">{t('expenses.labels.currency')}</label>
@@ -820,6 +884,20 @@ const Expenses = () => {
                 </Popover>
               </div>
               <div>
+                <label className="text-sm">Link to Invoice (optional)</label>
+                <Select value={newExpense.invoice_id ? String(newExpense.invoice_id) : undefined} onValueChange={v => setNewExpense({ ...newExpense, invoice_id: v === 'none' ? undefined : Number(v) })}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select invoice" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {invoiceOptions.map(inv => (
+                      <SelectItem key={inv.id} value={String(inv.id)}>{inv.number} — {inv.client_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <label className="text-sm">{t('expenses.labels.category')}</label>
                 <Select
                   value={(newExpense.category as string) || 'General'}
@@ -847,6 +925,61 @@ const Expenses = () => {
                 <label className="text-sm">{t('expenses.labels.reference_number')}</label>
                 <Input value={newExpense.reference_number || ''} onChange={e => setNewExpense({ ...newExpense, reference_number: e.target.value })} />
               </div>
+              
+              {/* Inventory Consumption Section */}
+              <div className="sm:col-span-2">
+                <div className="space-y-3 p-4 border rounded-lg bg-gray-50">
+                  <div className="flex items-center gap-2">
+                    <Package className="h-4 w-4" />
+                    <span className="text-sm font-medium">Inventory Integration</span>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="is-new-inventory-consumption"
+                      checked={isNewInventoryConsumption}
+                      onCheckedChange={(checked) => setIsNewInventoryConsumption(checked as boolean)}
+                    />
+                    <label
+                      htmlFor="is-new-inventory-consumption"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      This expense is for consuming inventory items
+                    </label>
+                  </div>
+
+                  {isNewInventoryConsumption && (
+                    <div className="space-y-4">
+                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-orange-800 mb-3">
+                          <Package className="h-4 w-4" />
+                          <span className="text-sm font-medium">Inventory Consumption Details</span>
+                        </div>
+                        <p className="text-sm text-orange-700 mb-4">
+                          Select the inventory items you consumed. The system will automatically reduce stock levels and calculate the expense amount.
+                        </p>
+
+                        <InventoryConsumptionForm
+                          onConsumptionItemsChange={setNewConsumptionItems}
+                          currency={newExpense.currency || 'USD'}
+                        />
+                      </div>
+
+                      {newConsumptionItems.length > 0 && (
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                          <div className="flex items-center gap-2 text-green-800">
+                            <Package className="h-4 w-4" />
+                            <span className="text-sm font-medium">
+                              Ready to process: {newConsumptionItems.length} inventory items will be consumed
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="sm:col-span-2">
                 <label className="text-sm">{t('expenses.labels.notes')}</label>
                 <Input value={newExpense.notes || ''} onChange={e => setNewExpense({ ...newExpense, notes: e.target.value })} />
@@ -874,7 +1007,13 @@ const Expenses = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4">
               <div>
                 <label className="text-sm">{t('expenses.labels.amount')}</label>
-                <Input type="number" value={Number(editExpense.amount || 0)} onChange={e => setEditExpense({ ...editExpense, amount: Number(e.target.value) })} />
+                <Input 
+                  type="number" 
+                  value={Number(editExpense.amount || 0)} 
+                  onChange={e => setEditExpense({ ...editExpense, amount: Number(e.target.value) })} 
+                  disabled={isEditInventoryConsumption}
+                  placeholder={isEditInventoryConsumption ? "Calculated from items" : ""}
+                />
               </div>
               <div>
                 <label className="text-sm">{t('expenses.labels.currency')}</label>
@@ -936,6 +1075,61 @@ const Expenses = () => {
                 <label className="text-sm">{t('expenses.labels.reference_number')}</label>
                 <Input value={editExpense.reference_number || ''} onChange={e => setEditExpense({ ...editExpense, reference_number: e.target.value })} />
               </div>
+              
+              {/* Inventory Consumption Section */}
+              <div className="sm:col-span-2">
+                <div className="space-y-3 p-4 border rounded-lg bg-gray-50">
+                  <div className="flex items-center gap-2">
+                    <Package className="h-4 w-4" />
+                    <span className="text-sm font-medium">Inventory Integration</span>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="is-edit-inventory-consumption"
+                      checked={isEditInventoryConsumption}
+                      onCheckedChange={(checked) => setIsEditInventoryConsumption(checked as boolean)}
+                    />
+                    <label
+                      htmlFor="is-edit-inventory-consumption"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      This expense is for consuming inventory items
+                    </label>
+                  </div>
+
+                  {isEditInventoryConsumption && (
+                    <div className="space-y-4">
+                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-orange-800 mb-3">
+                          <Package className="h-4 w-4" />
+                          <span className="text-sm font-medium">Inventory Consumption Details</span>
+                        </div>
+                        <p className="text-sm text-orange-700 mb-4">
+                          Select the inventory items you consumed. The system will automatically reduce stock levels and calculate the expense amount.
+                        </p>
+
+                        <InventoryConsumptionForm
+                          onConsumptionItemsChange={setEditConsumptionItems}
+                          currency={editExpense.currency || 'USD'}
+                        />
+                      </div>
+
+                      {editConsumptionItems.length > 0 && (
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                          <div className="flex items-center gap-2 text-green-800">
+                            <Package className="h-4 w-4" />
+                            <span className="text-sm font-medium">
+                              Ready to process: {editConsumptionItems.length} inventory items will be consumed
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="sm:col-span-2">
                 <label className="text-sm">{t('expenses.labels.notes')}</label>
                 <Input value={editExpense.notes || ''} onChange={e => setEditExpense({ ...editExpense, notes: e.target.value })} />

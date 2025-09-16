@@ -251,6 +251,7 @@ const InvoicesWithTaxIntegration: React.FC = () => {
                           itemType="invoice"
                           onSuccess={handleTaxServiceSuccess}
                           size="sm"
+                          variant="ghost"
                         />
                         <Link to={`/invoices/${invoice.id}`}>
                           <Button variant="ghost" size="sm">

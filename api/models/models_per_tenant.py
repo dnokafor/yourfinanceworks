@@ -161,6 +161,10 @@ class Expense(Base):
     is_inventory_purchase = Column(Boolean, default=False, nullable=False)
     inventory_items = Column(JSON, nullable=True)  # Store purchased items and quantities as JSON array
 
+    # Inventory consumption fields
+    is_inventory_consumption = Column(Boolean, default=False, nullable=False)
+    consumption_items = Column(JSON, nullable=True)  # Store consumed items and quantities as JSON array
+
     # OCR/AI analysis fields
     imported_from_attachment = Column(Boolean, default=False, nullable=False)
     analysis_status = Column(String, default="not_started", nullable=False)  # not_started|queued|processing|done|failed|cancelled

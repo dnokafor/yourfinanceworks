@@ -23,6 +23,10 @@ class ExpenseBase(BaseModel):
     is_inventory_purchase: Optional[bool] = Field(False, description="Whether this expense is an inventory purchase")
     inventory_items: Optional[List[Dict[str, Any]]] = Field(None, description="List of inventory items purchased")
 
+    # Inventory consumption fields
+    is_inventory_consumption: Optional[bool] = Field(False, description="Whether this expense is for inventory consumption")
+    consumption_items: Optional[List[Dict[str, Any]]] = Field(None, description="List of inventory items consumed")
+
     # OCR/AI analysis flags
     imported_from_attachment: Optional[bool] = Field(False, description="Whether this expense originated from an uploaded file")
     analysis_status: Optional[str] = Field("not_started", description="OCR analysis status: not_started|pending|queued|processing|done|failed|cancelled")
@@ -56,6 +60,10 @@ class ExpenseUpdate(BaseModel):
     # Inventory purchase fields
     is_inventory_purchase: Optional[bool] = None
     inventory_items: Optional[List[Dict[str, Any]]] = None
+
+    # Inventory consumption fields
+    is_inventory_consumption: Optional[bool] = None
+    consumption_items: Optional[List[Dict[str, Any]]] = None
     imported_from_attachment: Optional[bool] = None
     analysis_status: Optional[str] = None
     analysis_result: Optional[dict] = None
@@ -132,6 +140,51 @@ class InventoryPurchaseSummary(BaseModel):
     total_items_purchased: int
     currency: str
     purchases: List[Dict[str, Any]]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# === Inventory Consumption Schemas ===
+
+class InventoryConsumptionItem(BaseModel):
+    """Schema for individual inventory consumption items"""
+    item_id: int = Field(..., description="ID of the inventory item being consumed")
+    quantity: float = Field(..., gt=0, description="Quantity consumed")
+    unit_cost: Optional[float] = Field(None, ge=0, description="Cost per unit at time of consumption")
+    item_name: Optional[str] = Field(None, description="Item name for validation")
+
+    @field_validator('quantity')
+    @classmethod
+    def validate_quantity(cls, v):
+        if v <= 0:
+            raise ValueError('Quantity must be greater than 0')
+        return v
+
+    @field_validator('unit_cost')
+    @classmethod
+    def validate_unit_cost(cls, v):
+        if v is not None and v < 0:
+            raise ValueError('Unit cost cannot be negative')
+        return v
+
+
+class InventoryConsumptionCreate(BaseModel):
+    """Schema for creating an inventory consumption expense"""
+    items: List[InventoryConsumptionItem] = Field(..., description="List of items consumed")
+    notes: Optional[str] = Field(None, description="Consumption notes")
+    category: str = Field("Inventory Consumption", description="Expense category")
+
+    @field_validator('items')
+    @classmethod
+    def validate_items(cls, v):
+        if not v:
+            raise ValueError('At least one item must be consumed')
+        return v
+
+
+class ExpenseWithInventoryConsumption(Expense):
+    """Expense with detailed inventory consumption information"""
+    consumption_details: Optional[Dict[str, Any]] = None
 
     model_config = ConfigDict(from_attributes=True)
 

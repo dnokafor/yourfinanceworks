@@ -282,6 +282,61 @@ class InventoryIntegrationService:
                 {"expense_id": expense.id, "error": str(e)}
             )
 
+    def process_expense_inventory_consumption(self, expense: Expense, user_id: int) -> List[StockMovement]:
+        """
+        Process stock decreases for inventory consumption expenses
+        """
+        movements = []
+
+        try:
+            if not expense.is_inventory_consumption or not expense.consumption_items:
+                return movements
+
+            logger.info(f"Processing inventory consumption for expense {expense.id}")
+
+            for consumption_item in expense.consumption_items:
+                try:
+                    item_id = consumption_item.get('item_id')
+                    quantity = consumption_item.get('quantity', 0)
+
+                    if not item_id or quantity <= 0:
+                        continue
+
+                    # Verify item exists
+                    inventory_item = self.inventory_service.get_item(item_id)
+                    if not inventory_item:
+                        logger.warning(f"Inventory item {item_id} not found for expense consumption")
+                        continue
+
+                    # Create stock movement for consumption (negative quantity)
+                    movement = self.stock_service.record_movement(StockMovementCreate(
+                        item_id=item_id,
+                        movement_type="usage",
+                        quantity=-quantity,  # Negative for reduction
+                        unit_cost=consumption_item.get('unit_cost', inventory_item.cost_price),
+                        reference_type="expense",
+                        reference_id=expense.id,
+                        notes=f"Consumption from expense #{expense.id}",
+                        user_id=user_id
+                    ))
+                    movements.append(movement)
+                    logger.info(f"Processed consumption stock movement for item {inventory_item.name}: -{quantity}")
+
+                except Exception as e:
+                    logger.error(f"Error processing consumption item {consumption_item}: {e}")
+                    continue
+
+            logger.info(f"Successfully processed {len(movements)} consumption movements for expense {expense.id}")
+            return movements
+
+        except Exception as e:
+            logger.error(f"Error processing expense inventory consumption for expense {expense.id}: {e}")
+            raise InventoryException(
+                f"Failed to process inventory consumption for expense",
+                "CONSUMPTION_PROCESSING_ERROR",
+                {"expense_id": expense.id, "error": str(e)}
+            )
+
     def get_invoice_inventory_summary(self, invoice_id: int) -> Dict[str, Any]:
         """
         Get inventory summary for an invoice

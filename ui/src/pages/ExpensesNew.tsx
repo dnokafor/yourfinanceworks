@@ -14,6 +14,7 @@ import { expenseApi, Expense, linkApi } from '@/lib/api';
 import { EXPENSE_CATEGORY_OPTIONS } from '@/constants/expenses';
 import { FileUpload, FileData } from '@/components/ui/file-upload';
 import { InventoryPurchaseForm } from '@/components/inventory/InventoryPurchaseForm';
+import { InventoryConsumptionForm } from '@/components/inventory/InventoryConsumptionForm';
 import { Checkbox } from '@/components/ui/checkbox';
 
 export default function ExpensesNew() {
@@ -30,12 +31,30 @@ export default function ExpensesNew() {
   const [invoiceOptions, setInvoiceOptions] = useState<Array<{ id: number; number: string; client_name: string }>>([]);
   const [isInventoryPurchase, setIsInventoryPurchase] = useState(false);
   const [inventoryPurchaseItems, setInventoryPurchaseItems] = useState<any[]>([]);
+  const [isInventoryConsumption, setIsInventoryConsumption] = useState(false);
+  const [consumptionItems, setConsumptionItems] = useState<any[]>([]);
 
   useEffect(() => {
     (async () => {
       try { const invs = await linkApi.getInvoicesBasic(); setInvoiceOptions(invs); } catch {}
     })();
   }, []);
+
+  // Calculate amount from consumption items
+  useEffect(() => {
+    if (isInventoryConsumption && consumptionItems.length > 0) {
+      const total = consumptionItems.reduce((sum, item) => sum + (item.quantity * (item.unit_cost || 0)), 0);
+      setForm(prev => ({ ...prev, amount: total }));
+    }
+  }, [consumptionItems, isInventoryConsumption]);
+
+  // Ensure only one inventory option is selected
+  useEffect(() => {
+    if (isInventoryPurchase && isInventoryConsumption) {
+      // If both are somehow selected, prefer consumption
+      setIsInventoryPurchase(false);
+    }
+  }, [isInventoryPurchase, isInventoryConsumption]);
 
   const onSubmit = async () => {
     try {
@@ -48,7 +67,21 @@ export default function ExpensesNew() {
         toast.error('Category is required');
         return;
       }
-      
+
+      // Validate consumption items
+      if (isInventoryConsumption) {
+        if (!consumptionItems || consumptionItems.length === 0) {
+          toast.error('At least one inventory item must be selected for consumption');
+          return;
+        }
+        // Validate that all consumption items have valid quantities
+        const invalidItems = consumptionItems.filter(item => !item.quantity || item.quantity <= 0);
+        if (invalidItems.length > 0) {
+          toast.error('All inventory consumption items must have a quantity greater than 0');
+          return;
+        }
+      }
+
       const addNotification = (window as any).addAINotification;
       if (files.length > 0) {
         addNotification?.('processing', 'Processing Expense Receipts', `Analyzing ${files.length} receipt files with AI...`);
@@ -70,6 +103,8 @@ export default function ExpensesNew() {
         invoice_id: form.invoice_id ?? null,
         is_inventory_purchase: isInventoryPurchase,
         inventory_items: isInventoryPurchase ? inventoryPurchaseItems : undefined,
+        is_inventory_consumption: isInventoryConsumption,
+        consumption_items: isInventoryConsumption ? consumptionItems : undefined,
       } as any;
       const created = await expenseApi.createExpense({ ...payload, imported_from_attachment: files.length > 0, analysis_status: files.length > 0 ? 'queued' : 'not_started' } as any);
       
@@ -92,7 +127,7 @@ export default function ExpensesNew() {
         }
       }
       
-      toast.success('Expense created');
+      toast.success(isInventoryConsumption ? 'Consumption expense created successfully' : 'Expense created');
       window.history.back();
     } catch (e: any) {
       const addNotification = (window as any).addAINotification;
@@ -110,7 +145,7 @@ export default function ExpensesNew() {
       <div className="h-full space-y-6 fade-in">
         <div>
           <h1 className="text-3xl font-bold">New Expense</h1>
-          <p className="text-muted-foreground">Create a new expense and upload up to 5 attachments.</p>
+          <p className="text-muted-foreground">Create a new expense with optional inventory integration and upload up to 5 attachments.</p>
         </div>
 
         <Card className="slide-in">
@@ -120,7 +155,16 @@ export default function ExpensesNew() {
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-sm">Amount</label>
-              <Input type="number" value={Number(form.amount || 0)} onChange={e => setForm({ ...form, amount: Number(e.target.value) })} />
+              <Input
+                type="number"
+                value={Number(form.amount || 0)}
+                onChange={e => setForm({ ...form, amount: Number(e.target.value) })}
+                disabled={isInventoryConsumption}
+                placeholder={isInventoryConsumption ? "Calculated from items" : undefined}
+              />
+              {isInventoryConsumption && (
+                <p className="text-xs text-muted-foreground mt-1">Amount calculated from selected inventory items</p>
+              )}
             </div>
             <div>
               <label className="text-sm">Currency</label>
@@ -154,17 +198,6 @@ export default function ExpensesNew() {
               </Popover>
             </div>
             <div>
-              <label className="text-sm">Category</label>
-              <Select value={(form.category as string) || 'General'} onValueChange={v => setForm({ ...form, category: v })}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categoryOptions.map(c => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
               <label className="text-sm">Link to Invoice (optional)</label>
               <Select value={form.invoice_id ? String(form.invoice_id) : undefined} onValueChange={v => setForm({ ...form, invoice_id: v === 'none' ? undefined : Number(v) })}>
                 <SelectTrigger className="w-full">
@@ -175,6 +208,17 @@ export default function ExpensesNew() {
                   {invoiceOptions.map(inv => (
                     <SelectItem key={inv.id} value={String(inv.id)}>{inv.number} — {inv.client_name}</SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm">Category</label>
+              <Select value={(form.category as string) || 'General'} onValueChange={v => setForm({ ...form, category: v })}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categoryOptions.map(c => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
                 </SelectContent>
               </Select>
             </div>
@@ -197,27 +241,49 @@ export default function ExpensesNew() {
           </CardContent>
         </Card>
 
-        {/* Inventory Purchase Section */}
+        {/* Inventory Section */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Package className="h-5 w-5" />
-              Inventory Purchase
+              Inventory Integration
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="is-inventory-purchase"
-                checked={isInventoryPurchase}
-                onCheckedChange={(checked) => setIsInventoryPurchase(checked as boolean)}
-              />
-              <label
-                htmlFor="is-inventory-purchase"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                This expense is for purchasing inventory items
-              </label>
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="is-inventory-purchase"
+                  checked={isInventoryPurchase}
+                  onCheckedChange={(checked) => {
+                    setIsInventoryPurchase(checked as boolean);
+                    if (checked) setIsInventoryConsumption(false); // Disable consumption when purchase is selected
+                  }}
+                />
+                <label
+                  htmlFor="is-inventory-purchase"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  This expense is for purchasing inventory items
+                </label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="is-inventory-consumption"
+                  checked={isInventoryConsumption}
+                  onCheckedChange={(checked) => {
+                    setIsInventoryConsumption(checked as boolean);
+                    if (checked) setIsInventoryPurchase(false); // Disable purchase when consumption is selected
+                  }}
+                />
+                <label
+                  htmlFor="is-inventory-consumption"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  This expense is for consuming inventory items
+                </label>
+              </div>
             </div>
 
             {isInventoryPurchase && (
@@ -244,6 +310,37 @@ export default function ExpensesNew() {
                       <Package className="h-4 w-4" />
                       <span className="text-sm font-medium">
                         Ready to process: {inventoryPurchaseItems.length} inventory items will be added to stock
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isInventoryConsumption && (
+              <div className="space-y-4">
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2 text-orange-800 mb-3">
+                    <Package className="h-4 w-4" />
+                    <span className="text-sm font-medium">Inventory Consumption Details</span>
+                  </div>
+                  <p className="text-sm text-orange-700 mb-4">
+                    Select the inventory items you consumed. The system will automatically reduce stock levels and calculate the expense amount based on cost prices.
+                  </p>
+
+                  <InventoryConsumptionForm
+                    onConsumptionItemsChange={setConsumptionItems}
+                    currency={form.currency || 'USD'}
+                    initialConsumptionItems={consumptionItems}
+                  />
+                </div>
+
+                {consumptionItems.length > 0 && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <div className="flex items-center gap-2 text-green-800">
+                      <Package className="h-4 w-4" />
+                      <span className="text-sm font-medium">
+                        Ready to process: {consumptionItems.length} inventory items will be consumed
                       </span>
                     </div>
                   </div>
