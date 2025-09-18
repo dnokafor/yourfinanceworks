@@ -1588,7 +1588,9 @@
       "price": "Preis",
       "stock": "Lager",
       "status": "Status",
-      "actions": "Aktionen"
+      "actions": "Aktionen",
+      "created_date": "Erstellt",
+      "updated_date": "Aktualisiert"
     },
     "loading": "Inventar wird geladen...",
     "no_service_items": "Noch keine Serviceartikel. Erstellen Sie Ihren Servicekatalog, um zu beginnen.",
@@ -1704,6 +1706,7 @@
     "validation": {
       "name_required": "Artikelname ist erforderlich",
       "price_required": "Gültiger Stückpreis ist erforderlich"
-    }
+    },
+    "total": "Total"
   }
 }

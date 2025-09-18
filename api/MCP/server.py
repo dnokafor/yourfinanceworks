@@ -8,7 +8,7 @@ import argparse
 import logging
 import sys
 from contextlib import asynccontextmanager
-from typing import Optional, AsyncIterator, List
+from typing import Optional, AsyncIterator, List, Dict, Any
 from datetime import datetime
 
 from fastmcp import FastMCP
@@ -947,6 +947,168 @@ async def get_stock_movements_by_reference(reference_type: str, reference_id: in
 
     return await server_context.tools.get_stock_movements_by_reference(reference_type=reference_type, reference_id=reference_id)
 
+# === Inventory Attachments Tools ===
+
+@mcp.tool()
+async def upload_attachment(item_id: int, file_path: str, attachment_type: Optional[str] = None, document_type: Optional[str] = None, description: Optional[str] = None) -> dict:
+    """
+    Upload an attachment for an inventory item.
+
+    Args:
+        item_id: ID of inventory item
+        file_path: Path to file to upload
+        attachment_type: Attachment type ('image' or 'document') (optional)
+        document_type: Document type (for documents) (optional)
+        description: Optional description (optional)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.upload_attachment(item_id=item_id, file_path=file_path, attachment_type=attachment_type, document_type=document_type, description=description)
+
+@mcp.tool()
+async def get_attachments(item_id: int, attachment_type: Optional[str] = None) -> dict:
+    """
+    Get all attachments for an inventory item.
+
+    Args:
+        item_id: ID of inventory item
+        attachment_type: Filter by attachment type ('image', 'document', or None) (optional)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.get_attachments(item_id=item_id, attachment_type=attachment_type)
+
+@mcp.tool()
+async def get_attachment(item_id: int, attachment_id: int) -> dict:
+    """
+    Get a specific attachment by ID.
+
+    Args:
+        item_id: ID of inventory item
+        attachment_id: ID of attachment
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.get_attachment(item_id=item_id, attachment_id=attachment_id)
+
+@mcp.tool()
+async def update_attachment(item_id: int, attachment_id: int, description: Optional[str] = None, document_type: Optional[str] = None, alt_text: Optional[str] = None, display_order: Optional[int] = None) -> dict:
+    """
+    Update attachment metadata.
+
+    Args:
+        item_id: ID of inventory item
+        attachment_id: ID of attachment
+        description: New description (optional)
+        document_type: New document type (optional)
+        alt_text: New alt text for images (optional)
+        display_order: New display order (optional)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.update_attachment(item_id=item_id, attachment_id=attachment_id, description=description, document_type=document_type, alt_text=alt_text, display_order=display_order)
+
+@mcp.tool()
+async def delete_attachment(item_id: int, attachment_id: int) -> dict:
+    """
+    Delete an attachment.
+
+    Args:
+        item_id: ID of inventory item
+        attachment_id: ID of attachment
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.delete_attachment(item_id=item_id, attachment_id=attachment_id)
+
+@mcp.tool()
+async def set_primary_image(item_id: int, attachment_id: int) -> dict:
+    """
+    Set an image attachment as the primary image for an inventory item.
+
+    Args:
+        item_id: ID of inventory item
+        attachment_id: ID of image attachment to set as primary
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.set_primary_image(item_id=item_id, attachment_id=attachment_id)
+
+@mcp.tool()
+async def reorder_attachments(item_id: int, attachment_orders: List[Dict[str, Any]]) -> dict:
+    """
+    Reorder attachments for display.
+
+    Args:
+        item_id: ID of inventory item
+        attachment_orders: List of attachment orders with attachment_id and order
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.reorder_attachments(item_id=item_id, attachment_orders=attachment_orders)
+
+@mcp.tool()
+async def get_thumbnail(item_id: int, attachment_id: int, size: str) -> dict:
+    """
+    Get a thumbnail image.
+
+    Args:
+        item_id: ID of inventory item
+        attachment_id: ID of attachment
+        size: Thumbnail size (e.g., '150x150')
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.get_thumbnail(item_id=item_id, attachment_id=attachment_id, size=size)
+
+@mcp.tool()
+async def download_attachment(item_id: int, attachment_id: int) -> dict:
+    """
+    Download an attachment file.
+
+    Args:
+        item_id: ID of inventory item
+        attachment_id: ID of attachment
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.download_attachment(item_id=item_id, attachment_id=attachment_id)
+
+@mcp.tool()
+async def get_storage_usage(item_id: int) -> dict:
+    """
+    Get storage usage statistics for the current tenant.
+
+    Args:
+        item_id: ID of inventory item (used for tenant context)
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.get_storage_usage(item_id=item_id)
+
+@mcp.tool()
+async def get_primary_image(item_id: int) -> dict:
+    """
+    Get the primary image for an inventory item.
+
+    Args:
+        item_id: ID of inventory item
+    """
+    if server_context.tools is None:
+        return {"success": False, "error": "Server not properly initialized"}
+
+    return await server_context.tools.get_primary_image(item_id=item_id)
+
 # Bank Statement Management Tools
 
 @mcp.tool()
@@ -1801,6 +1963,17 @@ Available Tools:
   - search_inventory_items: Search inventory items by name, SKU, or description
   - get_inventory_item_movements: Get stock movement history for an item
   - get_stock_movements_by_reference: Get stock movements by reference
+  - upload_attachment: Upload an attachment for an inventory item
+  - get_attachments: Get all attachments for an inventory item
+  - get_attachment: Get a specific attachment by ID
+  - update_attachment: Update attachment metadata
+  - delete_attachment: Delete an attachment
+  - set_primary_image: Set an image attachment as the primary image
+  - reorder_attachments: Reorder attachments for display
+  - get_thumbnail: Get a thumbnail image
+  - download_attachment: Download an attachment file
+  - get_storage_usage: Get storage usage statistics
+  - get_primary_image: Get the primary image for an inventory item
   - list_currencies: List supported currencies
   - create_currency: Create a custom currency
   - convert_currency: Convert amount between currencies

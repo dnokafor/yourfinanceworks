@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Loader2, Pencil, Trash2, Package, AlertTriangle, TrendingUp, DollarSign, BarChart3, Zap, Target, Lightbulb } from "lucide-react";
+import { Plus, Search, Loader2, Pencil, Trash2, Eye, Package, AlertTriangle, TrendingUp, DollarSign, BarChart3, Zap, Target, Lightbulb, Image as ImageIcon } from "lucide-react";
 import { useState, useEffect } from "react";
 import { inventoryApi, InventoryItem, InventoryCategory, InventoryAnalytics, getErrorMessage } from "@/lib/api";
 import { toast } from "sonner";
@@ -272,7 +272,7 @@ const Inventory = () => {
                   <CardContent>
                     <div className="text-2xl font-bold"><CurrencyDisplay amount={analytics.total_value} currency={analytics.currency} /></div>
                     <p className="text-xs text-muted-foreground">
-                      {t('total', 'Total')}
+                      {t('inventory.total', 'Total')}
                     </p>
                   </CardContent>
                 </Card>
@@ -353,13 +353,20 @@ const Inventory = () => {
                           return (
                             <TableRow key={item.id} className="hover:bg-muted/50">
                               <TableCell className="font-medium">
-                                <div>
-                                  <div className="font-medium">{item.name}</div>
-                                  {item.description && (
-                                    <div className="text-sm text-muted-foreground truncate max-w-xs">
-                                      {item.description}
-                                    </div>
-                                  )}
+                                <div className="flex items-start gap-2">
+                                  <div className="flex-1">
+                                    <div className="font-medium">{item.name}</div>
+                                    {item.description && (
+                                      <div className="text-sm text-muted-foreground truncate max-w-xs">
+                                        {item.description}
+                                      </div>
+                                    )}
+                                  </div>
+                                  {/* Attachment indicator - can be enhanced when API provides attachment counts */}
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                    <ImageIcon className="w-3 h-3" />
+                                    {/* Placeholder for attachment count - will be populated when API is enhanced */}
+                                  </div>
                                 </div>
                               </TableCell>
                               <TableCell>{item.sku || '-'}</TableCell>
@@ -389,16 +396,22 @@ const Inventory = () => {
                               </TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-2">
+                                  <Link to={`/inventory/view/${item.id}`}>
+                                    <Button variant="ghost" size="icon" title="View Details">
+                                      <Eye className="h-4 w-4" />
+                                    </Button>
+                                  </Link>
                                   {canPerformAction && (
                                     <>
                                       <Link to={`/inventory/edit/${item.id}`}>
-                                        <Button variant="ghost" size="icon">
+                                        <Button variant="ghost" size="icon" title="Edit Item">
                                           <Pencil className="h-4 w-4" />
                                         </Button>
                                       </Link>
                                       <Button
                                         variant="ghost"
                                         size="icon"
+                                        title="Delete Item"
                                         onClick={() => setItemToDelete(item)}
                                       >
                                         <Trash2 className="h-4 w-4 text-red-500" />

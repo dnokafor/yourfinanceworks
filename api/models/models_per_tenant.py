@@ -108,6 +108,7 @@ class Invoice(Base):
     items = relationship("InvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
     deleted_by_user = relationship("User", foreign_keys=[deleted_by])
     expenses = relationship("Expense", back_populates="invoice")
+    attachments = relationship("InvoiceAttachment", back_populates="invoice", cascade="all, delete-orphan")
 
 class Payment(Base):
     __tablename__ = "payments"
@@ -551,6 +552,7 @@ class InventoryItem(Base):
     stock_movements = relationship("StockMovement", back_populates="item", cascade="all, delete-orphan")
     invoice_items = relationship("InvoiceItem", back_populates="inventory_item")
     inventory_levels = relationship("InventoryLevel", back_populates="item", cascade="all, delete-orphan")
+    attachments = relationship("ItemAttachment", back_populates="item", cascade="all, delete-orphan")
 
 
 class StockMovement(Base):
@@ -647,3 +649,87 @@ class InventoryLevel(Base):
     __table_args__ = (
         UniqueConstraint('item_id', 'warehouse_id', name='unique_item_warehouse'),
     )
+
+
+class ItemAttachment(Base):
+    __tablename__ = "item_attachments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    item_id = Column(Integer, ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False)
+    
+    # File information
+    filename = Column(String, nullable=False)  # Original filename
+    stored_filename = Column(String, nullable=False)  # Stored filename (usually UUID-based)
+    file_path = Column(String, nullable=False)  # Full path to stored file
+    file_size = Column(Integer, nullable=False)  # File size in bytes
+    content_type = Column(String, nullable=True)  # MIME type
+    file_hash = Column(String, nullable=True)  # SHA-256 hash for integrity
+    
+    # Attachment metadata
+    attachment_type = Column(String, nullable=False)  # 'image' or 'document'
+    document_type = Column(String, nullable=True)  # For documents: manual, certificate, warranty, etc.
+    description = Column(Text, nullable=True)  # User-provided description
+    alt_text = Column(String, nullable=True)  # Alt text for images (accessibility)
+    
+    # Display and organization
+    is_primary = Column(Boolean, default=False, nullable=False)  # Primary image for item
+    display_order = Column(Integer, default=0, nullable=False)  # Order for display
+    
+    # Image-specific fields
+    image_width = Column(Integer, nullable=True)  # Original image width
+    image_height = Column(Integer, nullable=True)  # Original image height
+    has_thumbnail = Column(Boolean, default=False, nullable=False)  # Whether thumbnails exist
+    thumbnail_path = Column(String, nullable=True)  # Path to thumbnail image
+    
+    # Upload tracking
+    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    upload_ip = Column(String, nullable=True)  # IP address of uploader
+    
+    # Status
+    is_active = Column(Boolean, default=True, nullable=False)  # Soft delete support
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    item = relationship("InventoryItem", back_populates="attachments")
+    uploader = relationship("User")
+
+
+class InvoiceAttachment(Base):
+    __tablename__ = "invoice_attachments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_id = Column(Integer, ForeignKey("invoices.id", ondelete="CASCADE"), nullable=False)
+    
+    # File information
+    filename = Column(String, nullable=False)  # Original filename
+    stored_filename = Column(String, nullable=False)  # Stored filename (usually UUID-based)
+    file_path = Column(String, nullable=False)  # Full path to stored file
+    file_size = Column(Integer, nullable=False)  # File size in bytes
+    content_type = Column(String, nullable=True)  # MIME type
+    file_hash = Column(String, nullable=True)  # SHA-256 hash for integrity
+    
+    # Attachment metadata
+    attachment_type = Column(String, nullable=False)  # 'image' or 'document'
+    document_type = Column(String, nullable=True)  # For documents: receipt, contract, etc.
+    description = Column(Text, nullable=True)  # User-provided description
+    
+    # Display and organization
+    display_order = Column(Integer, default=0, nullable=False)  # Order for display
+    
+    # Upload tracking
+    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    upload_ip = Column(String, nullable=True)  # IP address of uploader
+    
+    # Status
+    is_active = Column(Boolean, default=True, nullable=False)  # Soft delete support
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    invoice = relationship("Invoice", back_populates="attachments")
+    uploader = relationship("User")

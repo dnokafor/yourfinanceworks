@@ -52,6 +52,7 @@ import { SearchDialog } from "./components/search/SearchDialog";
 import Inventory from "./pages/Inventory";
 import NewInventoryItem from "./pages/NewInventoryItem";
 import EditInventoryItem from "./pages/EditInventoryItem";
+import InventoryItemDetail from "./pages/InventoryItemDetail";
 import NewInventoryInvoice from "./pages/NewInventoryInvoice";
 
 
@@ -126,6 +127,7 @@ const AppContent = () => {
           <Route path="/attachments" element={<ProtectedRoute><AttachmentSearch /></ProtectedRoute>} />
           <Route path="/inventory" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><Inventory /></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/inventory/new" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><NewInventoryItem /></RoleProtectedRoute></ProtectedRoute>} />
+          <Route path="/inventory/view/:id" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><InventoryItemDetail /></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/inventory/edit/:id" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><EditInventoryItem /></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/invoices/new-inventory" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><NewInventoryInvoice /></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />

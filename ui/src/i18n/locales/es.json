@@ -1601,7 +1601,9 @@
       "price": "Precio",
       "stock": "Stock",
       "status": "Estado",
-      "actions": "Acciones"
+      "actions": "Acciones",
+      "created_date": "Creado",
+      "updated_date": "Actualizado"
     },
     "loading": "Cargando inventario...",
     "no_service_items": "Aún no hay artículos de servicio. Crea tu catálogo de servicios para comenzar.",
@@ -1717,6 +1719,7 @@
     "validation": {
       "name_required": "El nombre del artículo es obligatorio",
       "price_required": "Se requiere un precio unitario válido"
-    }
+    },
+    "total": "Total"
   }
 }

@@ -556,6 +556,69 @@ class CheckStockAvailabilityArgs(BaseModel):
     item_id: int = Field(description="ID of inventory item")
     requested_quantity: float = Field(..., gt=0, description="Quantity to check availability for")
 
+
+# === Inventory Attachments Schemas ===
+
+class UploadAttachmentArgs(BaseModel):
+    item_id: int = Field(description="ID of inventory item")
+    file_path: str = Field(description="Path to file to upload")
+    attachment_type: Optional[str] = Field(None, description="Attachment type: 'image' or 'document'")
+    document_type: Optional[str] = Field(None, description="Document type (for documents)")
+    description: Optional[str] = Field(None, description="Optional description")
+
+
+class GetAttachmentsArgs(BaseModel):
+    item_id: int = Field(description="ID of inventory item")
+    attachment_type: Optional[str] = Field(None, description="Filter by attachment type")
+
+
+class GetAttachmentArgs(BaseModel):
+    item_id: int = Field(description="ID of inventory item")
+    attachment_id: int = Field(description="ID of attachment")
+
+
+class UpdateAttachmentArgs(BaseModel):
+    item_id: int = Field(description="ID of inventory item")
+    attachment_id: int = Field(description="ID of attachment")
+    description: Optional[str] = Field(None, description="New description")
+    document_type: Optional[str] = Field(None, description="New document type")
+    alt_text: Optional[str] = Field(None, description="New alt text for images")
+    display_order: Optional[int] = Field(None, description="New display order")
+
+
+class DeleteAttachmentArgs(BaseModel):
+    item_id: int = Field(description="ID of inventory item")
+    attachment_id: int = Field(description="ID of attachment")
+
+
+class SetPrimaryImageArgs(BaseModel):
+    item_id: int = Field(description="ID of inventory item")
+    attachment_id: int = Field(description="ID of image attachment to set as primary")
+
+
+class ReorderAttachmentsArgs(BaseModel):
+    item_id: int = Field(description="ID of inventory item")
+    attachment_orders: List[Dict[str, Any]] = Field(description="List of attachment orders with attachment_id and order")
+
+
+class GetThumbnailArgs(BaseModel):
+    item_id: int = Field(description="ID of inventory item")
+    attachment_id: int = Field(description="ID of attachment")
+    size: str = Field(description="Thumbnail size (e.g., '150x150')")
+
+
+class DownloadAttachmentArgs(BaseModel):
+    item_id: int = Field(description="ID of inventory item")
+    attachment_id: int = Field(description="ID of attachment")
+
+
+class GetStorageUsageArgs(BaseModel):
+    item_id: int = Field(description="ID of inventory item (for tenant context)")
+
+
+class GetPrimaryImageArgs(BaseModel):
+    item_id: int = Field(description="ID of inventory item")
+
 # Bank Statement Management Argument Schemas
 class ListBankStatementsArgs(BaseModel):
     skip: int = Field(default=0, description="Number of statements to skip for pagination")
@@ -2828,6 +2891,205 @@ class InvoiceTools:
             }
         except Exception as e:
             return {"success": False, "error": f"Failed to get stock movements by reference: {e}"}
+
+    # === Inventory Attachments Tools ===
+
+    async def upload_attachment(self, item_id: int, file_path: str, attachment_type: Optional[str] = None, document_type: Optional[str] = None, description: Optional[str] = None) -> Dict[str, Any]:
+        """Upload an attachment for an inventory item"""
+        try:
+            # Read file content
+            with open(file_path, 'rb') as f:
+                file_content = f.read()
+
+            if not file_content:
+                return {"success": False, "error": "Empty file provided"}
+
+            # Prepare request data
+            data = {"item_id": item_id}
+            if attachment_type:
+                data["attachment_type"] = attachment_type
+            if document_type:
+                data["document_type"] = document_type
+            if description:
+                data["description"] = description
+
+            # Create multipart form data
+            files = {"file": (file_path.split('/')[-1], file_content)}
+
+            response = await self.api_client._make_request(
+                "POST",
+                f"/inventory/{item_id}/attachments",
+                data=data,
+                files=files
+            )
+            return {
+                "success": True,
+                "data": response,
+                "message": "Attachment uploaded successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to upload attachment: {e}"}
+
+    async def get_attachments(self, item_id: int, attachment_type: Optional[str] = None) -> Dict[str, Any]:
+        """Get all attachments for an inventory item"""
+        try:
+            params = {}
+            if attachment_type:
+                params["attachment_type"] = attachment_type
+
+            response = await self.api_client._make_request("GET", f"/inventory/{item_id}/attachments", params=params)
+            return {
+                "success": True,
+                "data": response,
+                "count": len(response),
+                "message": f"Found {len(response)} attachments"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to get attachments: {e}"}
+
+    async def get_attachment(self, item_id: int, attachment_id: int) -> Dict[str, Any]:
+        """Get a specific attachment by ID"""
+        try:
+            response = await self.api_client._make_request("GET", f"/inventory/{item_id}/attachments/{attachment_id}")
+            return {
+                "success": True,
+                "data": response,
+                "message": "Attachment retrieved successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to get attachment: {e}"}
+
+    async def update_attachment(self, item_id: int, attachment_id: int, description: Optional[str] = None, document_type: Optional[str] = None, alt_text: Optional[str] = None, display_order: Optional[int] = None) -> Dict[str, Any]:
+        """Update attachment metadata"""
+        try:
+            update_data = {}
+            if description is not None:
+                update_data["description"] = description
+            if document_type is not None:
+                update_data["document_type"] = document_type
+            if alt_text is not None:
+                update_data["alt_text"] = alt_text
+            if display_order is not None:
+                update_data["display_order"] = display_order
+
+            response = await self.api_client._make_request("PUT", f"/inventory/{item_id}/attachments/{attachment_id}", json=update_data)
+            return {
+                "success": True,
+                "data": response,
+                "message": "Attachment updated successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to update attachment: {e}"}
+
+    async def delete_attachment(self, item_id: int, attachment_id: int) -> Dict[str, Any]:
+        """Delete an attachment"""
+        try:
+            await self.api_client._make_request("DELETE", f"/inventory/{item_id}/attachments/{attachment_id}")
+            return {
+                "success": True,
+                "message": "Attachment deleted successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to delete attachment: {e}"}
+
+    async def set_primary_image(self, item_id: int, attachment_id: int) -> Dict[str, Any]:
+        """Set an image attachment as the primary image for an inventory item"""
+        try:
+            response = await self.api_client._make_request("POST", f"/inventory/{item_id}/attachments/{attachment_id}/set-primary")
+            return {
+                "success": True,
+                "data": response,
+                "message": "Primary image set successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to set primary image: {e}"}
+
+    async def reorder_attachments(self, item_id: int, attachment_orders: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Reorder attachments for display"""
+        try:
+            response = await self.api_client._make_request("POST", f"/inventory/{item_id}/attachments/reorder", json={"orders": attachment_orders})
+            return {
+                "success": True,
+                "data": response,
+                "message": "Attachments reordered successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to reorder attachments: {e}"}
+
+    async def get_thumbnail(self, item_id: int, attachment_id: int, size: str) -> Dict[str, Any]:
+        """Get a thumbnail image"""
+        try:
+            # Make direct HTTP request since this returns binary content, not JSON
+            headers = await self.api_client.auth_client.get_auth_headers()
+            response = await self.api_client._client.get(
+                url=f"{self.api_client.base_url}/inventory/{item_id}/attachments/{attachment_id}/thumbnail/{size}",
+                headers=headers
+            )
+            response.raise_for_status()
+
+            return {
+                "success": True,
+                "content_type": response.headers.get('content-type', 'image/jpeg'),
+                "content_length": len(response.content),
+                "data": response.content,  # Binary image content
+                "size": size,
+                "message": f"Thumbnail retrieved successfully (size: {size})"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to get thumbnail: {e}"}
+
+    async def download_attachment(self, item_id: int, attachment_id: int) -> Dict[str, Any]:
+        """Download an attachment file"""
+        try:
+            # Make direct HTTP request since this returns binary content, not JSON
+            headers = await self.api_client.auth_client.get_auth_headers()
+            response = await self.api_client._client.get(
+                url=f"{self.api_client.base_url}/inventory/{item_id}/attachments/{attachment_id}/download",
+                headers=headers
+            )
+            response.raise_for_status()
+
+            # Get filename from Content-Disposition header
+            content_disposition = response.headers.get('content-disposition', '')
+            filename = f"attachment_{attachment_id}"
+            if 'filename=' in content_disposition:
+                filename = content_disposition.split('filename=')[-1].strip('"')
+
+            # Return file information and content
+            return {
+                "success": True,
+                "filename": filename,
+                "content_type": response.headers.get('content-type', 'application/octet-stream'),
+                "content_length": len(response.content),
+                "data": response.content,  # Binary content
+                "message": f"Attachment '{filename}' downloaded successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to download attachment: {e}"}
+
+    async def get_storage_usage(self, item_id: int) -> Dict[str, Any]:
+        """Get storage usage statistics"""
+        try:
+            response = await self.api_client._make_request("GET", f"/inventory/{item_id}/attachments/storage/usage")
+            return {
+                "success": True,
+                "data": response,
+                "message": "Storage usage retrieved successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to get storage usage: {e}"}
+
+    async def get_primary_image(self, item_id: int) -> Dict[str, Any]:
+        """Get the primary image for an inventory item"""
+        try:
+            response = await self.api_client._make_request("GET", f"/inventory/{item_id}/attachments/primary-image")
+            return {
+                "success": True,
+                "data": response,
+                "message": "Primary image retrieved successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to get primary image: {e}"}
 
     # === Bank Statement Management Tools ===
 

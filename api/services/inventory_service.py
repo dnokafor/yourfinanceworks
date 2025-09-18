@@ -7,7 +7,7 @@ import logging
 
 from models.models_per_tenant import (
     InventoryItem, InventoryCategory, StockMovement,
-    User, InvoiceItem, Expense
+    User, Invoice, InvoiceItem, Expense
 )
 from schemas.inventory import (
     InventoryItemCreate, InventoryItemUpdate, InventoryCategoryCreate,

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from typing import List, Optional
@@ -299,6 +299,13 @@ async def create_invoice(
             for item in items
         ]
 
+        # Get new-style attachments
+        from models.models_per_tenant import InvoiceAttachment
+        new_attachments = db.query(InvoiceAttachment).filter(
+            InvoiceAttachment.invoice_id == db_invoice.id,
+            InvoiceAttachment.is_active == True
+        ).all()
+        
         return {
             "id": db_invoice.id,
             "number": db_invoice.number,
@@ -320,7 +327,15 @@ async def create_invoice(
             "custom_fields": db_invoice.custom_fields if db_invoice.custom_fields is not None else {},
             "show_discount_in_pdf": db_invoice.show_discount_in_pdf,
             "has_attachment": bool(db_invoice.attachment_filename) if hasattr(db_invoice, 'attachment_filename') else False,
-            "attachment_filename": getattr(db_invoice, 'attachment_filename', None)
+            "attachment_filename": getattr(db_invoice, 'attachment_filename', None),
+            "attachments": [{
+                "id": att.id,
+                "filename": att.filename,
+                "file_size": att.file_size,
+                "attachment_type": att.attachment_type,
+                "created_at": att.created_at.isoformat()
+            } for att in new_attachments],
+            "attachment_count": len(new_attachments)
         }
     except HTTPException:
         db.rollback()
@@ -959,8 +974,16 @@ async def read_invoice(
 
         logger.info(f"Returning {len(items_data)} items for invoice {invoice_id}: {[{'id': item['id'], 'description': item['description'], 'description_length': len(item['description']) if item['description'] else 0} for item in items_data]}")
         
+        # Get new-style attachments for read endpoint
+        from models.models_per_tenant import InvoiceAttachment
+        new_attachments = db.query(InvoiceAttachment).filter(
+            InvoiceAttachment.invoice_id == invoice_id,
+            InvoiceAttachment.is_active == True
+        ).all()
+        
         invoice_dict = {
-            "date": invoice.created_at.isoformat() if invoice.created_at else None,            "id": invoice.id,
+            "date": invoice.created_at.isoformat() if invoice.created_at else None,
+            "id": invoice.id,
             "number": invoice.number,
             "amount": float(invoice.amount),
             "currency": invoice.currency,
@@ -981,7 +1004,15 @@ async def read_invoice(
             "items": items_data,
             "show_discount_in_pdf": invoice.show_discount_in_pdf,
             "has_attachment": bool(invoice.attachment_filename) if invoice.attachment_filename is not None else False,
-            "attachment_filename": invoice.attachment_filename if invoice.attachment_filename is not None else None
+            "attachment_filename": invoice.attachment_filename if invoice.attachment_filename is not None else None,
+            "attachments": [{
+                "id": att.id,
+                "filename": att.filename,
+                "file_size": att.file_size,
+                "attachment_type": att.attachment_type,
+                "created_at": att.created_at.isoformat()
+            } for att in new_attachments],
+            "attachment_count": len(new_attachments)
         }
         
 
@@ -1388,6 +1419,13 @@ async def update_invoice(
             total_paid = db.query(func.coalesce(func.sum(Payment.amount), 0)).filter(Payment.invoice_id == invoice_id).scalar() or 0
             
             # Convert to response format
+            # Get new-style attachments for update endpoint
+            from models.models_per_tenant import InvoiceAttachment
+            new_attachments = db.query(InvoiceAttachment).filter(
+                InvoiceAttachment.invoice_id == invoice_id,
+                InvoiceAttachment.is_active == True
+            ).all()
+            
             invoice_dict = {
                 "id": db_invoice.id,
                 "number": db_invoice.number,
@@ -1409,7 +1447,15 @@ async def update_invoice(
                 "items": items_data,
                 "show_discount_in_pdf": db_invoice.show_discount_in_pdf,
                 "has_attachment": bool(db_invoice.attachment_filename),
-                "attachment_filename": db_invoice.attachment_filename
+                "attachment_filename": db_invoice.attachment_filename,
+                "attachments": [{
+                    "id": att.id,
+                    "filename": att.filename,
+                    "file_size": att.file_size,
+                    "attachment_type": att.attachment_type,
+                    "created_at": att.created_at.isoformat()
+                } for att in new_attachments],
+                "attachment_count": len(new_attachments)
             }
             return invoice_dict
         else:
@@ -1459,6 +1505,13 @@ async def update_invoice(
             client = db.query(Client).filter(Client.id == db_invoice.client_id).first()
             total_paid = db.query(func.coalesce(func.sum(Payment.amount), 0)).filter(Payment.invoice_id == invoice_id).scalar() or 0
             
+            # Get new-style attachments for update endpoint (no changes case)
+            from models.models_per_tenant import InvoiceAttachment
+            new_attachments = db.query(InvoiceAttachment).filter(
+                InvoiceAttachment.invoice_id == invoice_id,
+                InvoiceAttachment.is_active == True
+            ).all()
+            
             return {
                 "id": db_invoice.id,
                 "number": db_invoice.number,
@@ -1480,7 +1533,15 @@ async def update_invoice(
                 "items": items_data,
                 "show_discount_in_pdf": db_invoice.show_discount_in_pdf,
                 "has_attachment": bool(db_invoice.attachment_filename),
-                "attachment_filename": db_invoice.attachment_filename
+                "attachment_filename": db_invoice.attachment_filename,
+                "attachments": [{
+                    "id": att.id,
+                    "filename": att.filename,
+                    "file_size": att.file_size,
+                    "attachment_type": att.attachment_type,
+                    "created_at": att.created_at.isoformat()
+                } for att in new_attachments],
+                "attachment_count": len(new_attachments)
             }
     except HTTPException:
         raise
@@ -2080,3 +2141,186 @@ async def preview_invoice_attachment(
     except Exception as e:
         logger.error(f"Error previewing attachment for invoice {invoice_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to preview attachment")
+
+
+# === Invoice Attachments Endpoints ===
+
+@router.post("/{invoice_id}/attachments/")
+@router.post("/{invoice_id}/attachments")
+async def upload_invoice_attachment_new(
+    invoice_id: int,
+    file: UploadFile = File(...),
+    attachment_type: Optional[str] = Query("document", description="Attachment type: 'image' or 'document'"),
+    document_type: Optional[str] = Query(None, description="Document type (for documents)"),
+    description: Optional[str] = Query(None, description="Optional description"),
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """
+    Upload a new attachment for an invoice (using new attachment system)
+    """
+    try:
+        # Check if user has permission
+        require_non_viewer(current_user, "upload attachments")
+        
+        # Verify invoice exists
+        invoice = db.query(Invoice).filter(
+            Invoice.id == invoice_id,
+            Invoice.is_deleted == False
+        ).first()
+        
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        
+        # Basic validation
+        if attachment_type and attachment_type not in ['image', 'document']:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="attachment_type must be 'image' or 'document'"
+            )
+        
+        # Default to document if not specified
+        if not attachment_type:
+            attachment_type = "document"
+        
+        # Read file content for validation
+        file_content = await file.read()
+        
+        if not file_content:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Empty file provided"
+            )
+        
+        # Import the InvoiceAttachment model
+        from models.models_per_tenant import InvoiceAttachment
+        import uuid
+        import hashlib
+        from pathlib import Path
+        
+        # Create attachments directory
+        from models.database import get_tenant_context
+        tenant_id = get_tenant_context()
+        tenant_folder = f"tenant_{tenant_id}" if tenant_id else "tenant_unknown"
+        attachments_dir = Path("attachments") / tenant_folder / "invoices"
+        attachments_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate unique filename
+        file_extension = Path(file.filename or "attachment").suffix
+        stored_filename = f"{uuid.uuid4()}{file_extension}"
+        file_path = attachments_dir / stored_filename
+        
+        # Save file to disk
+        with open(file_path, "wb") as f:
+            f.write(file_content)
+        
+        # Calculate file hash
+        file_hash = hashlib.sha256(file_content).hexdigest()
+        
+        # Create attachment record
+        attachment = InvoiceAttachment(
+            invoice_id=invoice_id,
+            filename=file.filename or "attachment",
+            stored_filename=stored_filename,
+            file_path=str(file_path),
+            file_size=len(file_content),
+            content_type=file.content_type,
+            file_hash=file_hash,
+            attachment_type=attachment_type,
+            document_type=document_type,
+            description=description,
+            uploaded_by=current_user.id,
+            is_active=True
+        )
+        
+        db.add(attachment)
+        db.commit()
+        db.refresh(attachment)
+        
+        return {
+            "id": attachment.id,
+            "invoice_id": invoice_id,
+            "filename": attachment.filename,
+            "file_size": attachment.file_size,
+            "attachment_type": attachment.attachment_type,
+            "document_type": attachment.document_type,
+            "description": attachment.description,
+            "created_at": attachment.created_at.isoformat(),
+            "status": "success",
+            "message": "Attachment uploaded successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to process invoice attachment upload: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process file upload"
+        )
+
+
+@router.get("/{invoice_id}/attachments/")
+@router.get("/{invoice_id}/attachments")
+async def get_invoice_attachments(
+    invoice_id: int,
+    attachment_type: Optional[str] = Query(None, description="Filter by attachment type"),
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """
+    Get all attachments for an invoice
+    """
+    try:
+        # Verify invoice exists
+        invoice = db.query(Invoice).filter(
+            Invoice.id == invoice_id,
+            Invoice.is_deleted == False
+        ).first()
+        
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        
+        # Import the InvoiceAttachment model
+        from models.models_per_tenant import InvoiceAttachment
+        
+        # Query attachments
+        query = db.query(InvoiceAttachment).filter(
+            InvoiceAttachment.invoice_id == invoice_id,
+            InvoiceAttachment.is_active == True
+        )
+        
+        if attachment_type:
+            query = query.filter(InvoiceAttachment.attachment_type == attachment_type)
+        
+        attachments = query.order_by(InvoiceAttachment.created_at.desc()).all()
+        
+        # Format response
+        attachment_list = []
+        for attachment in attachments:
+            attachment_list.append({
+                "id": attachment.id,
+                "filename": attachment.filename,
+                "file_size": attachment.file_size,
+                "content_type": attachment.content_type,
+                "attachment_type": attachment.attachment_type,
+                "document_type": attachment.document_type,
+                "description": attachment.description,
+                "created_at": attachment.created_at.isoformat(),
+                "uploaded_by": attachment.uploaded_by
+            })
+        
+        return {
+            "invoice_id": invoice_id,
+            "attachments": attachment_list,
+            "total_count": len(attachment_list)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get invoice attachments: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve attachments"
+        )

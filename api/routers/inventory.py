@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Response
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List, Optional, Dict, Any
 import logging
 from datetime import datetime, timezone
 import csv
 
 from models.database import get_db
-from models.models_per_tenant import InventoryItem, InventoryCategory, StockMovement
+from models.models_per_tenant import InventoryItem, InventoryCategory, StockMovement, Invoice, InvoiceItem
 from models.models import MasterUser
 from schemas.inventory import (
     InventoryItem as InventoryItemSchema,
@@ -748,6 +749,7 @@ async def get_sales_velocity_analysis(
 ):
     """Get sales velocity analysis for inventory forecasting"""
     try:
+        # Use the service method that handles database queries internally
         return inventory_service.get_sales_velocity_analysis(days)
     except Exception as e:
         logger.error(f"Error generating sales velocity analysis: {e}")
@@ -763,6 +765,7 @@ async def get_inventory_forecasting(
 ):
     """Get inventory forecasting based on historical data"""
     try:
+        # Use the service method that handles database queries internally
         return inventory_service.get_inventory_forecasting(forecast_days)
     except Exception as e:
         logger.error(f"Error generating inventory forecast: {e}")

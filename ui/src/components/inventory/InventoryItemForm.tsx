@@ -8,12 +8,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Save, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, Loader2, Package, FileText } from "lucide-react";
 import { inventoryApi, InventoryItem, InventoryCategory, getErrorMessage } from "@/lib/api";
 import { toast } from "sonner";
 import { useTranslation } from 'react-i18next';
-import { InventoryItemLinkedInvoices } from "./InventoryItemLinkedInvoices";
 import { CurrencySelector } from "@/components/ui/currency-selector";
+import { AttachmentUpload } from "./AttachmentUpload";
+import { AttachmentGallery, Attachment } from "./AttachmentGallery";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface InventoryItemFormProps {
   isEdit?: boolean;
@@ -27,6 +29,8 @@ const InventoryItemForm = ({ isEdit = false }: InventoryItemFormProps) => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   // Detect user's business type to set appropriate defaults
   const getUserBusinessType = () => {
     try {
@@ -42,6 +46,41 @@ const InventoryItemForm = ({ isEdit = false }: InventoryItemFormProps) => {
   };
 
   const businessType = getUserBusinessType();
+
+  // Load attachments for the current item
+  const loadAttachments = async (itemId: number) => {
+    try {
+      setAttachmentsLoading(true);
+      const response = await fetch(`/api/v1/inventory/${itemId}/attachments`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAttachments(data);
+      }
+    } catch (error) {
+      console.error('Failed to load attachments:', error);
+    } finally {
+      setAttachmentsLoading(false);
+    }
+  };
+
+  // Handle successful attachment uploads
+  const handleAttachmentUpload = (uploadedAttachments: any[]) => {
+    // Refresh the attachments list
+    if (id) {
+      loadAttachments(parseInt(id));
+    }
+    toast.success(`Successfully uploaded ${uploadedAttachments.length} attachment(s)`);
+  };
+
+  // Handle attachment upload errors
+  const handleAttachmentUploadError = (error: string) => {
+    toast.error(`Upload error: ${error}`);
+  };
 
   const [formData, setFormData] = useState({
     name: '',
@@ -88,6 +127,9 @@ const InventoryItemForm = ({ isEdit = false }: InventoryItemFormProps) => {
             is_active: itemData.is_active,
             unlimited_stock: isUnlimited
           });
+
+          // Load attachments for this item
+          await loadAttachments(parseInt(id));
         }
       } catch (error) {
         console.error("Failed to fetch data:", error);
@@ -237,11 +279,30 @@ const InventoryItemForm = ({ isEdit = false }: InventoryItemFormProps) => {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>{t('inventory.basic_info', 'Basic Information')}</CardTitle>
-            </CardHeader>
+        <Tabs defaultValue="details" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="details">{t('inventory.item_details', 'Item Details')}</TabsTrigger>
+            <TabsTrigger value="attachments">
+              {t('inventory.attachments', 'Attachments')}
+              {attachments.length > 0 && (
+                <span className="ml-2 bg-primary text-primary-foreground text-xs px-2 py-1 rounded-full">
+                  {attachments.length}
+                </span>
+              )}
+            </TabsTrigger>
+            {isEdit && id && (
+              <TabsTrigger value="activity">
+                {t('inventory.activity', 'Activity')}
+              </TabsTrigger>
+            )}
+          </TabsList>
+
+          <TabsContent value="details" className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>{t('inventory.basic_info', 'Basic Information')}</CardTitle>
+                </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -498,33 +559,101 @@ const InventoryItemForm = ({ isEdit = false }: InventoryItemFormProps) => {
             </CardContent>
           </Card>
 
-          <div className="flex justify-end gap-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate('/inventory')}
-              disabled={saving}
-            >
-              {t('common.cancel', 'Cancel')}
-            </Button>
-            <Button type="submit" disabled={saving}>
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              <Save className="mr-2 h-4 w-4" />
-              {saving
-                ? t('common.saving', 'Saving...')
-                : t('common.save', 'Save')
-              }
-            </Button>
-          </div>
-        </form>
+              <div className="flex justify-end gap-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => navigate('/inventory')}
+                  disabled={saving}
+                >
+                  {t('common.cancel', 'Cancel')}
+                </Button>
+                <Button type="submit" disabled={saving}>
+                  {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <Save className="mr-2 h-4 w-4" />
+                  {saving
+                    ? t('common.saving', 'Saving...')
+                    : t('common.save', 'Save')
+                  }
+                </Button>
+              </div>
+            </form>
+          </TabsContent>
 
-        {/* Linked Invoices and Stock Movements - Only show for existing items */}
-        {isEdit && id && (
-          <InventoryItemLinkedInvoices
-            itemId={parseInt(id)}
-            itemName={formData.name || 'this item'}
-          />
-        )}
+          <TabsContent value="attachments" className="space-y-6">
+            {isEdit && id ? (
+              <div className="space-y-6">
+                {/* Existing Attachments Gallery */}
+                {attachments.length > 0 && (
+                  <AttachmentGallery
+                    itemId={parseInt(id)}
+                    attachments={attachments}
+                    onAttachmentUpdate={() => loadAttachments(parseInt(id))}
+                  />
+                )}
+
+                {/* Upload New Attachments */}
+                <AttachmentUpload
+                  itemId={parseInt(id)}
+                  onUploadComplete={handleAttachmentUpload}
+                  onUploadError={handleAttachmentUploadError}
+                />
+              </div>
+            ) : (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <div className="text-muted-foreground">
+                    <p className="text-lg font-medium mb-2">Save the item first</p>
+                    <p>You can add attachments after creating the inventory item.</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {isEdit && id && (
+            <TabsContent value="activity" className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Stock Movement Summary */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Package className="h-5 w-5" />
+                      {t('inventory.stock_movement_summary', 'Stock Movement Summary')}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-center py-8">
+                      <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">
+                        {t('inventory.stock_movement_placeholder', 'Stock movement summary will be displayed here')}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Linked Invoices */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileText className="h-5 w-5" />
+                      {t('inventory.linked_invoices', 'Linked Invoices')}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-center py-8">
+                      <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">
+                        {t('inventory.linked_invoices_placeholder', 'Linked invoices will be displayed here')}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          )}
+        </Tabs>
+
       </div>
     </AppLayout>
   );

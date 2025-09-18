@@ -717,8 +717,7 @@
     "priority": "Priorité",
     "discount_type": "Type de Remise",
     "discount_value": "Valeur de la Remise",
-    "currency": "Devise",
-    "rule_active": "Actif"
+    "currency": "Devise"
   },
   "users": {
     "title": "Utilisateurs",
@@ -1586,7 +1585,9 @@
       "price": "Prix",
       "stock": "Stock",
       "status": "Statut",
-      "actions": "Actions"
+      "actions": "Actions",
+      "created_date": "Créé",
+      "updated_date": "Mis à jour"
     },
     "loading": "Chargement de l'inventaire...",
     "no_service_items": "Aucun article de service pour le moment. Créez votre catalogue de services pour commencer.",
@@ -1702,6 +1703,7 @@
     "validation": {
       "name_required": "Le nom de l'article est requis",
       "price_required": "Un prix unitaire valide est requis"
-    }
+    },
+    "total": "Total"
   }
 } 
