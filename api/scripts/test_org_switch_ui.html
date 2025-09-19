@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organization Switch Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏢 Organization Switch Test</h1>
+        
+        <div class="test-section info">
+            <h3>📋 Current Status</h3>
+            <p><strong>User:</strong> <span id="current-user">Not logged in</span></p>
+            <p><strong>Current Organization:</strong> <span id="current-org">Unknown</span></p>
+            <p><strong>Available Organizations:</strong> <span id="available-orgs">Loading...</span></p>
+        </div>
+
+        <div class="test-section">
+            <h3>🔐 Authentication</h3>
+            <input type="email" id="email" placeholder="Email" value="test@example.com">
+            <input type="password" id="password" placeholder="Password" value="testpass123">
+            <button onclick="login()">Login</button>
+            <button onclick="logout()">Logout</button>
+        </div>
+
+        <div class="test-section">
+            <h3>🔄 Organization Switching</h3>
+            <select id="org-selector">
+                <option value="">Select Organization</option>
+            </select>
+            <button onclick="switchOrganization()">Switch Organization</button>
+            <button onclick="testCurrentOrgData()">Test Current Org Data</button>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 Test Results</h3>
+            <div id="test-results"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📝 Debug Log</h3>
+            <button onclick="clearLog()">Clear Log</button>
+            <div id="debug-log" class="log"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8000/api/v1';
+        let authToken = localStorage.getItem('token');
+        
+        function log(message) {
+            const logDiv = document.getElementById('debug-log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+
+        function clearLog() {
+            document.getElementById('debug-log').innerHTML = '';
+        }
+
+        function updateStatus() {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const selectedTenantId = localStorage.getItem('selected_tenant_id');
+            
+            document.getElementById('current-user').textContent = user.email || 'Not logged in';
+            document.getElementById('current-org').textContent = selectedTenantId ? `Tenant ${selectedTenantId}` : (user.tenant_id ? `Tenant ${user.tenant_id} (default)` : 'Unknown');
+        }
+
+        async function apiRequest(url, options = {}) {
+            const token = localStorage.getItem('token');
+            const selectedTenantId = localStorage.getItem('selected_tenant_id');
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const tenantId = selectedTenantId || user.tenant_id;
+
+            const headers = {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` }),
+                ...(tenantId && !options.skipTenant && { 'X-Tenant-ID': tenantId.toString() }),
+                ...options.headers
+            };
+
+            log(`🌐 API Request: ${url} with tenant ${tenantId}`);
+            
+            const response = await fetch(`${API_BASE_URL}${url}`, {
+                ...options,
+                headers
+            });
+
+            const data = await response.json();
+            
+            if (!response.ok) {
+                log(`❌ API Error: ${response.status} - ${data.detail || 'Unknown error'}`);
+                throw new Error(data.detail || `HTTP ${response.status}`);
+            }
+
+            log(`✅ API Success: ${url}`);
+            return data;
+        }
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                log(`🔐 Attempting login for ${email}`);
+                const response = await apiRequest('/auth/login', {
+                    method: 'POST',
+                    body: JSON.stringify({ email, password }),
+                    skipTenant: true
+                });
+                
+                localStorage.setItem('token', response.access_token);
+                localStorage.setItem('user', JSON.stringify(response.user));
+                
+                log(`✅ Login successful for ${email}`);
+                await loadUserOrganizations();
+                updateStatus();
+            } catch (error) {
+                log(`❌ Login failed: ${error.message}`);
+            }
+        }
+
+        async function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            localStorage.removeItem('selected_tenant_id');
+            
+            document.getElementById('org-selector').innerHTML = '<option value="">Select Organization</option>';
+            document.getElementById('available-orgs').textContent = 'Not logged in';
+            
+            log('🚪 Logged out');
+            updateStatus();
+        }
+
+        async function loadUserOrganizations() {
+            try {
+                log('🏢 Loading user organizations...');
+                const response = await apiRequest('/auth/me', { skipTenant: true });
+                
+                const organizations = response.organizations || [];
+                log(`📋 Found ${organizations.length} organizations`);
+                
+                const selector = document.getElementById('org-selector');
+                selector.innerHTML = '<option value="">Select Organization</option>';
+                
+                organizations.forEach(org => {
+                    const option = document.createElement('option');
+                    option.value = org.id;
+                    option.textContent = `${org.name} (ID: ${org.id})`;
+                    selector.appendChild(option);
+                });
+                
+                document.getElementById('available-orgs').textContent = 
+                    organizations.map(org => `${org.name} (${org.id})`).join(', ') || 'None';
+                
+            } catch (error) {
+                log(`❌ Failed to load organizations: ${error.message}`);
+            }
+        }
+
+        async function switchOrganization() {
+            const orgId = document.getElementById('org-selector').value;
+            if (!orgId) {
+                log('⚠️ No organization selected');
+                return;
+            }
+            
+            try {
+                log(`🔄 Switching to organization ${orgId}`);
+                localStorage.setItem('selected_tenant_id', orgId);
+                
+                // Test the switch by making a request
+                await testCurrentOrgData();
+                updateStatus();
+                
+                log(`✅ Successfully switched to organization ${orgId}`);
+            } catch (error) {
+                log(`❌ Failed to switch organization: ${error.message}`);
+            }
+        }
+
+        async function testCurrentOrgData() {
+            const results = document.getElementById('test-results');
+            results.innerHTML = '';
+            
+            try {
+                log('🧪 Testing current organization data...');
+                
+                // Test clients endpoint
+                const clients = await apiRequest('/clients/');
+                const clientResult = document.createElement('div');
+                clientResult.className = 'success';
+                clientResult.innerHTML = `<strong>Clients:</strong> Found ${clients.length} clients`;
+                results.appendChild(clientResult);
+                log(`📋 Clients: ${clients.length} found`);
+                
+                // Test invoices endpoint
+                const invoices = await apiRequest('/invoices/');
+                const invoiceResult = document.createElement('div');
+                invoiceResult.className = 'success';
+                invoiceResult.innerHTML = `<strong>Invoices:</strong> Found ${invoices.length} invoices`;
+                results.appendChild(invoiceResult);
+                log(`📄 Invoices: ${invoices.length} found`);
+                
+                // Test payments endpoint
+                const paymentsResponse = await apiRequest('/payments/');
+                const payments = paymentsResponse.data || paymentsResponse;
+                const paymentResult = document.createElement('div');
+                paymentResult.className = 'success';
+                paymentResult.innerHTML = `<strong>Payments:</strong> Found ${payments.length} payments`;
+                results.appendChild(paymentResult);
+                log(`💰 Payments: ${payments.length} found`);
+                
+            } catch (error) {
+                const errorResult = document.createElement('div');
+                errorResult.className = 'error';
+                errorResult.innerHTML = `<strong>Error:</strong> ${error.message}`;
+                results.appendChild(errorResult);
+                log(`❌ Test failed: ${error.message}`);
+            }
+        }
+
+        // Initialize on page load
+        window.onload = function() {
+            updateStatus();
+            if (localStorage.getItem('token')) {
+                loadUserOrganizations();
+            }
+        };
+    </script>
+</body>
+</html>

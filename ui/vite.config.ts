@@ -6,7 +6,7 @@ import path from "path"
 // monster-humane-currently.ngrok-free.app is for local testing with ngrok only
 // need a correct domain for production
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -14,9 +14,8 @@ export default defineConfig({
   },
   server: {
     port: 8080,
-    host: true,
-    allowedHosts: ['localhost', '127.0.0.1', '0.0.0.0', 'monster-humane-currently.ngrok-free.app'],
-    hmr: false,
+    host: '0.0.0.0',
+    allowedHosts: ['ui', 'localhost', '127.0.0.1', '0.0.0.0', '192.168.86.39'],
   },
   test: {
     globals: true,

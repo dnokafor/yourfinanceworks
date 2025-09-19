@@ -31,6 +31,9 @@ graph TB
     subgraph "Available MCP Tools"
         CLIENT_TOOLS["Client Management<br/>• list_clients<br/>• search_clients<br/>• get_client<br/>• create_client"]
         INVOICE_TOOLS["Invoice Management<br/>• list_invoices<br/>• search_invoices<br/>• get_invoice<br/>• create_invoice"]
+        EXPENSE_TOOLS["Expense Management<br/>• list_expenses<br/>• get_expense<br/>• create_expense<br/>• update_expense<br/>• delete_expense<br/>• upload_expense_receipt<br/>• list_expense_attachments<br/>• delete_expense_attachment"]
+        BANK_TOOLS["Statement Management<br/>• list_bank_statements<br/>• get_bank_statement<br/>• reprocess_bank_statement<br/>• update_bank_statement_meta<br/>• delete_bank_statement"]
+        INVENTORY_TOOLS["Inventory Management<br/>• list_inventory_categories<br/>• create_inventory_category<br/>• update_inventory_category<br/>• list_inventory_items<br/>• create_inventory_item<br/>• update_inventory_item<br/>• adjust_stock<br/>• get_inventory_analytics<br/>• get_low_stock_items"]
         ANALYTICS["Analytics<br/>• get_clients_with_outstanding_balance<br/>• get_overdue_invoices<br/>• get_invoice_stats"]
     end
     
@@ -46,10 +49,14 @@ graph TB
     MCP --> CLIENT_TOOLS
     MCP --> INVOICE_TOOLS
     MCP --> ANALYTICS
-    
+    MCP --> EXPENSE_TOOLS
+    MCP --> BANK_TOOLS
+    MCP --> INVENTORY_TOOLS
+
     TOOLS -.-> CLIENT_TOOLS
     TOOLS -.-> INVOICE_TOOLS
     TOOLS -.-> ANALYTICS
+    TOOLS -.-> INVENTORY_TOOLS
     
     style CD fill:#e1f5fe
     style MCP fill:#f3e5f5
@@ -176,6 +183,23 @@ Would you like me to get more details about any of these clients or their invoic
 - *"Add a note to client John Doe about our meeting"*
 - *"Send invoice #123 via email"*
 - *"Test my email configuration"*
+- *"List all expenses from this quarter"*
+- *"Create an expense for office supplies costing $150"*
+- *"Upload a receipt for expense #456"*
+- *"Show me unlinked expenses that need categorization"*
+- *"List all imported bank statements"*
+- *"Show me statements from my business checking account"*
+- *"Get details for statement from January 2024"*
+- *"Reprocess statement for better transaction matching"*
+- *"Update statement notes to 'Reviewed Q1 transactions'"*
+- *"Delete old statement that was imported incorrectly"*
+- *"List all inventory items"*
+- *"Show me items with low stock levels"*
+- *"Create a new category for office supplies"*
+- *"Add a new inventory item for wireless mouse"*
+- *"Update stock level for item #123 to 50 units"*
+- *"Get inventory analytics and reports"*
+- *"Search for items containing 'laptop' in the name"*
 
 ## ✨ Key Benefits
 
@@ -200,10 +224,34 @@ Would you like me to get more details about any of these clients or their invoic
 - **Get Invoice Details**: Retrieve detailed information for a specific invoice
 - **Create Invoice**: Generate new invoices for clients
 
+### Expense Management
+- **List Expenses**: Get paginated list of all expenses with filtering options
+- **Create Expenses**: Record business expenses with tax calculations
+- **Update Expenses**: Modify existing expense details and categorization
+- **Delete Expenses**: Remove expenses from the system
+- **Receipt Management**: Upload, list, and delete expense receipt attachments
+- **Expense Filtering**: Filter by category, invoice linkage, and other criteria
+
+### Statement Management
+- **List Statements**: Get all imported statements with pagination and filtering
+- **Statement Details**: Retrieve detailed statement information with all transactions
+- **Reprocess Statements**: Reprocess statements for better transaction matching
+- **Update Metadata**: Modify statement account names, periods, notes, and status
+- **Delete Statements**: Remove statements and associated transactions with confirmation
+
+### Inventory Management
+- **Category Management**: Create, update, and list inventory categories
+- **Item Management**: Full CRUD operations for inventory items with detailed specifications
+- **Stock Tracking**: Automatic stock level monitoring and manual adjustments
+- **Low Stock Alerts**: Get notifications for items below minimum stock levels
+- **Analytics**: Comprehensive inventory analytics including value reports and turnover analysis
+- **Invoice Integration**: Automatic stock updates when invoices are created or paid
+
 ### Analytics & Reporting
 - **Outstanding Balances**: Find clients with unpaid invoices (`get_clients_with_outstanding_balance`)
 - **Overdue Invoices**: Identify invoices past their due date (`get_overdue_invoices`)
 - **Invoice Statistics**: Get overall financial metrics (`get_invoice_stats`)
+- **Inventory Analytics**: Get comprehensive inventory statistics and reports
 
 ### Currency Management
 - **List Currencies**: Get supported currencies with filtering options (`list_currencies`)
@@ -585,6 +633,458 @@ Convert amount from one currency to another using current or historical exchange
 ```
 
 ### Payment Management Tools
+### Expense Management Tools
+
+#### `list_expenses`
+List expenses with optional filters and pagination.
+
+**Parameters:**
+- `skip` (int, optional): Number of records to skip (default: 0)
+- `limit` (int, optional): Max records to return (default: 100)
+- `category` (string, optional): Filter by category
+- `invoice_id` (int, optional): Filter by linked invoice id
+- `unlinked_only` (bool, optional): Only expenses not linked to any invoice
+
+**Example:**
+```json
+{
+  "name": "list_expenses",
+  "arguments": {
+    "skip": 0,
+    "limit": 50,
+    "category": "office_supplies",
+    "unlinked_only": true
+  }
+}
+```
+
+#### `get_expense`
+Get a single expense by ID.
+
+**Parameters:**
+- `expense_id` (int): Expense ID
+
+**Example:**
+```json
+{
+  "name": "get_expense",
+  "arguments": {
+    "expense_id": 123
+  }
+}
+```
+
+#### `create_expense`
+Create a new expense.
+
+**Parameters:**
+- `amount` (float): Expense amount before tax
+- `currency` (string): Currency code (e.g., USD)
+- `expense_date` (string): ISO date (YYYY-MM-DD)
+- `category` (string): Expense category
+- `vendor` (string, optional)
+- `tax_rate` (float, optional)
+- `tax_amount` (float, optional)
+- `total_amount` (float, optional)
+- `payment_method` (string, optional)
+- `reference_number` (string, optional)
+- `status` (string, optional)
+- `notes` (string, optional)
+- `invoice_id` (int, optional)
+
+**Example:**
+```json
+{
+  "name": "create_expense",
+  "arguments": {
+    "amount": 150.00,
+    "currency": "USD",
+    "expense_date": "2024-01-15",
+    "category": "office_supplies",
+    "vendor": "Office Depot",
+    "tax_rate": 8.5,
+    "tax_amount": 12.75,
+    "total_amount": 162.75,
+    "payment_method": "credit_card",
+    "reference_number": "REF-12345",
+    "status": "approved",
+    "notes": "Monthly office supplies purchase"
+  }
+}
+```
+
+#### `update_expense`
+Update fields of an existing expense.
+
+**Parameters:**
+- `expense_id` (int): ID of the expense to update
+- Other fields same as `create_expense`, all optional
+
+**Example:**
+```json
+{
+  "name": "update_expense",
+  "arguments": {
+    "expense_id": 123,
+    "category": "travel",
+    "notes": "Updated category to travel"
+  }
+}
+```
+
+#### `delete_expense`
+Delete an expense by ID.
+
+**Parameters:**
+- `expense_id` (int): ID to delete
+
+**Example:**
+```json
+{
+  "name": "delete_expense",
+  "arguments": {
+    "expense_id": 123
+  }
+}
+```
+
+#### `upload_expense_receipt`
+Upload an attachment file for an expense.
+
+**Parameters:**
+- `expense_id` (int)
+- `file_path` (string): Absolute path to local file to upload
+- `filename` (string, optional): Override filename
+- `content_type` (string, optional): Explicit MIME type
+
+**Notes:** Up to 5 attachments per expense. Allowed types: PDF, JPG, PNG. Max 10 MB as enforced by backend.
+
+**Example:**
+```json
+{
+  "name": "upload_expense_receipt",
+  "arguments": {
+    "expense_id": 123,
+    "file_path": "/path/to/receipt.pdf",
+    "filename": "office_supplies_receipt.pdf",
+    "content_type": "application/pdf"
+  }
+}
+```
+
+#### `list_expense_attachments`
+List attachments for an expense.
+
+**Parameters:**
+- `expense_id` (int)
+
+**Example:**
+```json
+{
+  "name": "list_expense_attachments",
+  "arguments": {
+    "expense_id": 123
+  }
+}
+```
+
+#### `delete_expense_attachment`
+Delete an attachment of an expense.
+
+**Parameters:**
+- `expense_id` (int)
+- `attachment_id` (int)
+
+**Example:**
+```json
+{
+  "name": "delete_expense_attachment",
+  "arguments": {
+    "expense_id": 123,
+    "attachment_id": 456
+  }
+}
+```
+
+### Statement Management Tools
+
+#### `list_statements`
+List all imported statements with pagination support.
+
+**Parameters:**
+- `skip` (int, optional): Number of records to skip (default: 0)
+- `limit` (int, optional): Max records to return (default: 100)
+- `account_name` (string, optional): Filter by bank account name
+- `status` (string, optional): Filter by processing status
+
+**Example:**
+```json
+{
+  "name": "list_statements",
+  "arguments": {
+    "skip": 0,
+    "limit": 50,
+    "account_name": "Business Checking",
+    "status": "processed"
+  }
+}
+```
+
+#### `get_bank_statement`
+Get detailed information about a specific statement.
+
+**Parameters:**
+- `statement_id` (int): ID of the statement to retrieve
+
+**Example:**
+```json
+{
+  "name": "get_bank_statement",
+  "arguments": {
+    "statement_id": 123
+  }
+}
+```
+
+#### `reprocess_bank_statement`
+Reprocess a statement for better transaction matching and categorization.
+
+**Parameters:**
+- `statement_id` (int): ID of the statement to reprocess
+- `force_reprocess` (bool, optional): Force reprocessing even if already processed (default: false)
+
+**Example:**
+```json
+{
+  "name": "reprocess_bank_statement",
+  "arguments": {
+    "statement_id": 123,
+    "force_reprocess": true
+  }
+}
+```
+
+#### `update_bank_statement_meta`
+Update metadata for a statement (name, description, etc.).
+
+**Parameters:**
+- `statement_id` (int): ID of the statement to update
+- `account_name` (string, optional): Bank account name
+- `statement_period` (string, optional): Statement period description
+- `notes` (string, optional): Additional notes
+- `status` (string, optional): Processing status
+
+**Example:**
+```json
+{
+  "name": "update_bank_statement_meta",
+  "arguments": {
+    "statement_id": 123,
+    "account_name": "Business Checking - Updated",
+    "statement_period": "January 2024",
+    "notes": "Updated with correct account name",
+    "status": "reviewed"
+  }
+}
+```
+
+#### `delete_bank_statement`
+Delete a statement and all associated transactions.
+
+**Parameters:**
+- `statement_id` (int): ID of the statement to delete
+- `confirm_deletion` (bool, optional): Confirmation flag to prevent accidental deletion (default: false)
+
+**Example:**
+```json
+{
+  "name": "delete_bank_statement",
+  "arguments": {
+    "statement_id": 123,
+    "confirm_deletion": true
+  }
+}
+```
+
+### Inventory Management Tools
+
+#### `list_inventory_categories`
+List all inventory categories with optional filtering for active categories only.
+
+**Parameters:**
+- `active_only` (boolean, optional): Return only active categories (default: true)
+
+**Example:**
+```json
+{
+  "name": "list_inventory_categories",
+  "arguments": {
+    "active_only": true
+  }
+}
+```
+
+#### `create_inventory_category`
+Create a new inventory category for organizing inventory items.
+
+**Parameters:**
+- `name` (string): Category name
+- `description` (string, optional): Category description
+- `is_active` (boolean, optional): Whether category is active (default: true)
+
+**Example:**
+```json
+{
+  "name": "create_inventory_category",
+  "arguments": {
+    "name": "Electronics",
+    "description": "Electronic devices and components",
+    "is_active": true
+  }
+}
+```
+
+#### `update_inventory_category`
+Update an existing inventory category.
+
+**Parameters:**
+- `category_id` (int): ID of category to update
+- `name` (string, optional): New category name
+- `description` (string, optional): New category description
+- `is_active` (boolean, optional): New active status
+
+**Example:**
+```json
+{
+  "name": "update_inventory_category",
+  "arguments": {
+    "category_id": 123,
+    "name": "Updated Electronics",
+    "description": "Updated description"
+  }
+}
+```
+
+#### `list_inventory_items`
+List inventory items with optional filtering and pagination.
+
+**Parameters:**
+- `skip` (int, optional): Number of items to skip for pagination (default: 0)
+- `limit` (int, optional): Maximum number of items to return (default: 100)
+- `query` (string, optional): Search query for items
+- `category_id` (int, optional): Filter by category ID
+- `item_type` (string, optional): Filter by item type
+- `low_stock_only` (boolean, optional): Return only low stock items (default: false)
+- `track_stock` (boolean, optional): Filter by stock tracking setting
+
+**Example:**
+```json
+{
+  "name": "list_inventory_items",
+  "arguments": {
+    "skip": 0,
+    "limit": 50,
+    "category_id": 123,
+    "low_stock_only": true
+  }
+}
+```
+
+#### `create_inventory_item`
+Create a new inventory item with detailed specifications.
+
+**Parameters:**
+- `name` (string): Item name
+- `unit_price` (float): Unit selling price
+- `sku` (string, optional): Stock Keeping Unit
+- `description` (string, optional): Item description
+- `category_id` (int, optional): Category ID
+- `cost_price` (float, optional): Unit cost price
+- `currency` (string, optional): Currency code (default: "USD")
+- `track_stock` (boolean, optional): Whether to track stock levels (default: true)
+- `current_stock` (float, optional): Current stock quantity (default: 0)
+- `minimum_stock` (float, optional): Minimum stock level (default: 0)
+- `unit_of_measure` (string, optional): Unit of measure (default: "each")
+- `item_type` (string, optional): Type of item (default: "product")
+- `is_active` (boolean, optional): Whether item is active (default: true)
+
+**Example:**
+```json
+{
+  "name": "create_inventory_item",
+  "arguments": {
+    "name": "Wireless Mouse",
+    "unit_price": 29.99,
+    "sku": "WM-001",
+    "description": "Ergonomic wireless mouse",
+    "category_id": 123,
+    "current_stock": 50,
+    "minimum_stock": 10
+  }
+}
+```
+
+#### `update_inventory_item`
+Update an existing inventory item.
+
+**Parameters:**
+- `item_id` (int): ID of item to update
+- Other parameters same as `create_inventory_item`, all optional
+
+**Example:**
+```json
+{
+  "name": "update_inventory_item",
+  "arguments": {
+    "item_id": 456,
+    "unit_price": 34.99,
+    "current_stock": 45
+  }
+}
+```
+
+#### `adjust_stock`
+Adjust stock levels for an inventory item manually.
+
+**Parameters:**
+- `item_id` (int): ID of inventory item
+- `quantity` (float): Quantity to adjust (positive for increase, negative for decrease)
+- `reason` (string, optional): Reason for adjustment (default: "Manual adjustment")
+
+**Example:**
+```json
+{
+  "name": "adjust_stock",
+  "arguments": {
+    "item_id": 456,
+    "quantity": 25,
+    "reason": "Received new shipment"
+  }
+}
+```
+
+#### `get_inventory_analytics`
+Get comprehensive inventory analytics and statistics.
+
+**Example:**
+```json
+{
+  "name": "get_inventory_analytics",
+  "arguments": {}
+}
+```
+
+#### `get_low_stock_items`
+Get items with stock levels below their minimum threshold.
+
+**Example:**
+```json
+{
+  "name": "get_low_stock_items",
+  "arguments": {}
+}
+```
+
 
 #### `list_payments`
 List all payments with pagination support.
@@ -909,3 +1409,45 @@ FastMCP was chosen for this implementation because it:
 ## License
 
 This FastMCP server is part of the Invoice Application project. Please refer to the main project license.
+
+## Recent Updates
+
+### AI-Powered Intent Classification (Latest)
+- **Eliminated Hardcoded Patterns**: Replaced keyword pattern matching with AI-based intent classification
+- **Dynamic Tool Selection**: AI automatically determines which MCP tool to use based on message meaning
+- **Natural Language Understanding**: Supports natural language variations without maintaining pattern lists
+- **Improved Accuracy**: AI classification provides better understanding of user intent
+- **Automatic Default Config**: System automatically sets single active AI config as default
+- **Enhanced Debugging**: Added comprehensive logging for intent classification and tool selection
+
+### AI Intent Classification System
+
+The MCP server now uses AI-powered intent classification to route queries:
+
+1. **Intent Classification**: Uses AI to classify user messages into predefined business categories
+2. **Dynamic Tool Selection**: Automatically selects appropriate MCP tools based on classified intent
+3. **Business Categories**: Supports analyze_patterns, payments, clients, invoices, expenses, statements, currencies, outstanding, overdue, statistics
+4. **LLM Fallback**: Uses LLM for general questions classified as non-business queries
+5. **Adaptive Understanding**: AI understands natural language variations without hardcoded patterns
+
+### Usage Examples with AI Classification
+
+```
+# These all get classified as "statements" intent:
+"Show statements"
+"What statements do I have?"
+"Display my banking information"
+"List all my bank account statements"
+
+# These all get classified as "expenses" intent:
+"List all expenses"
+"What did I spend money on?"
+"Show my business expenses"
+"Display expense information"
+
+# These all get classified as "clients" intent:
+"List all my clients"
+"Who are my customers?"
+"Show me client information"
+"Display customer details"
+```

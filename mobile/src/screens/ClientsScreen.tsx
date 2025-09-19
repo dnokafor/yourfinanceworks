@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -39,7 +39,8 @@ const ClientsScreen: React.FC<ClientsScreenProps> = ({
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
+
   const [addForm, setAddForm] = useState({
     name: '',
     email: '',
@@ -138,6 +139,7 @@ const ClientsScreen: React.FC<ClientsScreenProps> = ({
       currency: 'USD',
     }).format(amount);
   };
+
 
   const renderAddModal = () => (
     <Modal

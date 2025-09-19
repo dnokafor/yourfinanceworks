@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import apiService from '../services/api';
 import { Payment } from '../services/api';
 import { formatCurrency } from '../utils/currency';
+import StatusIndicator from '../components/StatusIndicator';
 
 interface PaymentsScreenProps {
   onNavigateBack: () => void;
@@ -155,9 +156,10 @@ const PaymentsScreen: React.FC<PaymentsScreenProps> = ({ onNavigateBack }) => {
           </View>
         </View>
         <View style={styles.paymentStatus}>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-            <Text style={styles.statusText}>{item.status}</Text>
-          </View>
+          <StatusIndicator
+            status={item.status as any}
+            size="small"
+          />
         </View>
       </View>
 

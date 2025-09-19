@@ -1,33 +1,37 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Date, Table, DateTime, Boolean, JSON, Text
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Date, DateTime, Boolean, JSON, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
-from datetime import datetime, date, timezone
-from sqlalchemy.ext.declarative import declarative_base
+from datetime import datetime, timezone
+from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
 
 class User(Base):
     __tablename__ = "users"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     is_superuser = Column(Boolean, default=False, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
-    
+    must_reset_password = Column(Boolean, default=False, nullable=False)
+
     # User role within tenant (no tenant_id needed since each tenant has its own database)
     role = Column(String, default="user")  # admin, user, viewer
-    
+
     # Additional user fields
     first_name = Column(String, nullable=True)
     last_name = Column(String, nullable=True)
     google_id = Column(String, unique=True, nullable=True)  # For Google SSO
     theme = Column(String, default="system")
-    
+    show_analytics = Column(Boolean, default=False)  # Show/hide analytics menu
+
+    # Business type preference (helps with UI customization)
+    business_type = Column(String, default="service")  # service, retail, wholesale, individual
+
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    
+
     # Relationships (no tenant relationship needed)
     notes = relationship("ClientNote", back_populates="user")
 
@@ -41,6 +45,7 @@ class Client(Base):
     email = Column(String, unique=True, nullable=False, index=True)
     phone = Column(String, nullable=True)
     address = Column(String, nullable=True)
+    company = Column(String, nullable=True)
     balance = Column(Float, default=0.0)
     paid_amount = Column(Float, default=0)
     preferred_currency = Column(String, nullable=True)  # Optional, fallback to tenant default
@@ -86,6 +91,8 @@ class Invoice(Base):
     subtotal = Column(Float, nullable=False)  # Amount before discount
     custom_fields = Column(JSON, nullable=True)
     show_discount_in_pdf = Column(Boolean, default=True, nullable=False)
+    attachment_path = Column(String, nullable=True)  # Path to uploaded attachment file
+    attachment_filename = Column(String, nullable=True)  # Original filename
     
     # Soft delete fields for recycle bin functionality
     is_deleted = Column(Boolean, default=False, nullable=False)
@@ -100,6 +107,8 @@ class Invoice(Base):
     payments = relationship("Payment", back_populates="invoice", cascade="all, delete-orphan")
     items = relationship("InvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
     deleted_by_user = relationship("User", foreign_keys=[deleted_by])
+    expenses = relationship("Expense", back_populates="invoice")
+    attachments = relationship("InvoiceAttachment", back_populates="invoice", cascade="all, delete-orphan")
 
 class Payment(Base):
     __tablename__ = "payments"
@@ -122,14 +131,84 @@ class Payment(Base):
     invoice = relationship("Invoice", back_populates="payments")
     user = relationship("User")  # NEW: Relationship to User
 
+class Expense(Base):
+    __tablename__ = "expenses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    # No tenant_id needed since each tenant has its own database
+
+    amount = Column(Float, nullable=False)
+    currency = Column(String, default="USD", nullable=False)
+    expense_date = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    category = Column(String, nullable=False)
+    vendor = Column(String, nullable=True)
+    # Optional label to categorize or tag expenses (legacy single label)
+    label = Column(String, nullable=True, index=True)
+    # Optional multiple labels (tags) stored as JSON array of strings
+    labels = Column(JSON, nullable=True)
+    tax_rate = Column(Float, nullable=True)
+    tax_amount = Column(Float, nullable=True)
+    total_amount = Column(Float, nullable=True)
+    payment_method = Column(String, nullable=True)
+    reference_number = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="recorded")
+    notes = Column(String, nullable=True)
+    receipt_path = Column(String, nullable=True)
+    receipt_filename = Column(String, nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=True)
+
+    # Inventory purchase fields
+    is_inventory_purchase = Column(Boolean, default=False, nullable=False)
+    inventory_items = Column(JSON, nullable=True)  # Store purchased items and quantities as JSON array
+
+    # Inventory consumption fields
+    is_inventory_consumption = Column(Boolean, default=False, nullable=False)
+    consumption_items = Column(JSON, nullable=True)  # Store consumed items and quantities as JSON array
+
+    # OCR/AI analysis fields
+    imported_from_attachment = Column(Boolean, default=False, nullable=False)
+    analysis_status = Column(String, default="not_started", nullable=False)  # not_started|queued|processing|done|failed|cancelled
+    analysis_result = Column(JSON, nullable=True)
+    analysis_error = Column(Text, nullable=True)
+    manual_override = Column(Boolean, default=False, nullable=False)
+    analysis_updated_at = Column(DateTime(timezone=True), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    user = relationship("User")
+    invoice = relationship("Invoice", back_populates="expenses")
+
+class ExpenseAttachment(Base):
+    __tablename__ = "expense_attachments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    expense_id = Column(Integer, ForeignKey("expenses.id", ondelete="CASCADE"), nullable=False)
+    filename = Column(String, nullable=False)
+    content_type = Column(String, nullable=True)
+    size_bytes = Column(Integer, nullable=True)
+    file_path = Column(String, nullable=False)
+    uploaded_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # Relationships
+    expense = relationship("Expense")
+    uploader = relationship("User")
+
 class Settings(Base):
     __tablename__ = "settings"
 
     id = Column(Integer, primary_key=True, index=True)
     # No tenant_id needed since each tenant has its own database
-    
+
     key = Column(String, unique=True, index=True)  # Can be unique within tenant database
     value = Column(JSON)
+    description = Column(String, nullable=True)  # Human readable description
+    category = Column(String, default="general")  # general, features, appearance, etc.
+    is_public = Column(Boolean, default=True)  # Whether users can see/modify this setting
+
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -179,15 +258,18 @@ class InvoiceItem(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     invoice_id = Column(Integer, ForeignKey("invoices.id", ondelete="CASCADE"), nullable=False)
+    inventory_item_id = Column(Integer, ForeignKey("inventory_items.id"), nullable=True)  # Optional link to inventory item
     description = Column(String, nullable=False)
     quantity = Column(Float, nullable=False, default=1.0)
     price = Column(Float, nullable=False, default=0.0)
     amount = Column(Float, nullable=False, default=0.0)
+    unit_of_measure = Column(String, nullable=True)  # Unit of measure from inventory item
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     invoice = relationship("Invoice", back_populates="items")
+    inventory_item = relationship("InventoryItem", back_populates="invoice_items")
 
 class InvoiceHistory(Base):
     __tablename__ = "invoice_history"
@@ -210,18 +292,29 @@ class InvoiceHistory(Base):
 
 class AIConfig(Base):
     __tablename__ = "ai_configs"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     # No tenant_id needed since each tenant has its own database
     provider_name = Column(String, nullable=False)  # e.g., "openai", "ollama"
     provider_url = Column(String, nullable=True)  # For custom endpoints
-    api_key = Column(String, nullable=True)  # API key/token
+    api_key = Column(Text, nullable=True)  # API key/token - changed to Text for longer keys
     model_name = Column(String, nullable=False)  # e.g., "gpt-4", "llama2"
     is_active = Column(Boolean, default=True)
     is_default = Column(Boolean, default=False)  # Only one default per tenant
     tested = Column(Boolean, default=False)  # Track if configuration has been successfully tested
-    created_at = Column(DateTime, default=datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
+
+    # OCR specific settings
+    ocr_enabled = Column(Boolean, default=False, nullable=False)
+    max_tokens = Column(Integer, default=4096, nullable=False)
+    temperature = Column(Float, default=0.1, nullable=False)
+
+    # Usage tracking
+    usage_count = Column(Integer, default=0, nullable=False)
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Audit fields
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
@@ -239,6 +332,53 @@ class AuditLog(Base):
     status = Column(String, default="success", nullable=False)  # success, error, warning
     error_message = Column(String, nullable=True)  # Error message if status is error
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+# --- Statements ---
+
+class BankStatement(Base):
+    __tablename__ = "bank_statements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, nullable=False)
+
+    original_filename = Column(String, nullable=False)
+    stored_filename = Column(String, nullable=False)
+    file_path = Column(String, nullable=False)
+    status = Column(String, default="processed", nullable=False)  # uploaded|processing|processed|failed
+    extracted_count = Column(Integer, default=0, nullable=False)
+    notes = Column(Text, nullable=True)
+    labels = Column(JSON, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    transactions = relationship("BankStatementTransaction", back_populates="statement", cascade="all, delete-orphan")
+
+
+class BankStatementTransaction(Base):
+    __tablename__ = "bank_statement_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    statement_id = Column(Integer, ForeignKey("bank_statements.id", ondelete="CASCADE"), nullable=False)
+
+    date = Column(Date, nullable=False)
+    description = Column(String, nullable=False)
+    amount = Column(Float, nullable=False)
+    transaction_type = Column(String, nullable=False)  # debit|credit
+    balance = Column(Float, nullable=True)
+    category = Column(String, nullable=True)
+    # Optional link to an invoice created from this transaction (prevents duplicates)
+    invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=True)
+    # Optional link to an expense created from this transaction (prevents duplicates)
+    expense_id = Column(Integer, ForeignKey("expenses.id"), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    statement = relationship("BankStatement", back_populates="transactions")
+    # Note: No explicit relationship to Invoice to avoid circular import in some tooling environments
 
 class AIChatHistory(Base):
     __tablename__ = "ai_chat_history"
@@ -293,4 +433,303 @@ class EmailNotificationSettings(Base):
     # Relationships
     user = relationship("User")
 
- 
+
+# --- Reporting Module Models ---
+
+class ReportTemplate(Base):
+    __tablename__ = "report_templates"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    report_type = Column(String, nullable=False)  # client, invoice, payment, expense, statement
+    filters = Column(JSON, nullable=True)  # Stored filter configuration
+    columns = Column(JSON, nullable=True)  # Selected columns for the report
+    formatting = Column(JSON, nullable=True)  # Formatting preferences
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    is_shared = Column(Boolean, default=False, nullable=False)
+    
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    user = relationship("User")
+    scheduled_reports = relationship("ScheduledReport", back_populates="template", cascade="all, delete-orphan")
+    report_history = relationship("ReportHistory", back_populates="template")
+
+
+class ScheduledReport(Base):
+    __tablename__ = "scheduled_reports"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    template_id = Column(Integer, ForeignKey("report_templates.id", ondelete="CASCADE"), nullable=False)
+    schedule_type = Column(String, nullable=False)  # daily, weekly, monthly, yearly, cron
+    schedule_config = Column(JSON, nullable=False)  # Cron expression or schedule configuration
+    recipients = Column(JSON, nullable=False)  # List of email addresses
+    is_active = Column(Boolean, default=True, nullable=False)
+    last_run = Column(DateTime(timezone=True), nullable=True)
+    next_run = Column(DateTime(timezone=True), nullable=True)
+    
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    template = relationship("ReportTemplate", back_populates="scheduled_reports")
+
+
+class ReportHistory(Base):
+    __tablename__ = "report_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    template_id = Column(Integer, ForeignKey("report_templates.id"), nullable=True)  # Nullable for ad-hoc reports
+    report_type = Column(String, nullable=False)  # client, invoice, payment, expense, statement
+    parameters = Column(JSON, nullable=False)  # Report generation parameters and filters
+    file_path = Column(String, nullable=True)  # Path to generated report file
+    status = Column(String, nullable=False, default="pending")  # pending, generating, completed, failed
+    generated_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    error_message = Column(Text, nullable=True)  # Error details if generation failed
+
+    generated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    expires_at = Column(DateTime(timezone=True), nullable=True)  # When the report file should be cleaned up
+
+    # Relationships
+    template = relationship("ReportTemplate", back_populates="report_history")
+    user = relationship("User")
+
+
+# --- Inventory Management Models ---
+
+class InventoryCategory(Base):
+    __tablename__ = "inventory_categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, unique=True, index=True)
+    description = Column(Text, nullable=True)
+    color = Column(String, nullable=True)  # For UI display (hex color code)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    items = relationship("InventoryItem", back_populates="category", cascade="all, delete-orphan")
+
+
+class InventoryItem(Base):
+    __tablename__ = "inventory_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, index=True)
+    description = Column(Text, nullable=True)
+    sku = Column(String, nullable=True, unique=True, index=True)  # Stock Keeping Unit
+    category_id = Column(Integer, ForeignKey("inventory_categories.id"), nullable=True)
+
+    # Pricing
+    unit_price = Column(Float, nullable=False)
+    cost_price = Column(Float, nullable=True)  # Cost to purchase/acquire
+    currency = Column(String, default="USD", nullable=False)
+
+    # Stock tracking (optional - items can exist without stock tracking)
+    track_stock = Column(Boolean, default=False, nullable=False)
+    current_stock = Column(Float, default=0.0, nullable=False)
+    minimum_stock = Column(Float, default=0.0, nullable=False)
+    unit_of_measure = Column(String, default="each", nullable=False)  # each, kg, lb, liters, etc.
+
+    # Item type and status
+    item_type = Column(String, default="product", nullable=False)  # product, material, service
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    # Barcode support
+    barcode = Column(String, nullable=True, unique=True, index=True)  # Barcode value
+    barcode_type = Column(String, nullable=True)  # UPC, EAN, CODE128, QR, etc.
+    barcode_format = Column(String, nullable=True)  # 1D, 2D, etc.
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    category = relationship("InventoryCategory", back_populates="items")
+    stock_movements = relationship("StockMovement", back_populates="item", cascade="all, delete-orphan")
+    invoice_items = relationship("InvoiceItem", back_populates="inventory_item")
+    inventory_levels = relationship("InventoryLevel", back_populates="item", cascade="all, delete-orphan")
+    attachments = relationship("ItemAttachment", back_populates="item", cascade="all, delete-orphan")
+
+
+class StockMovement(Base):
+    __tablename__ = "stock_movements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    item_id = Column(Integer, ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=True)  # Can be null for legacy movements
+
+    # Movement details
+    movement_type = Column(String, nullable=False)  # purchase, sale, adjustment, usage, return, transfer
+    quantity = Column(Float, nullable=False)  # Positive for increases, negative for decreases
+    unit_cost = Column(Float, nullable=True)  # Cost per unit for purchases
+
+    # Transfer specific fields
+    from_warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=True)
+    to_warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=True)
+
+    # Reference information for tracking source
+    reference_type = Column(String, nullable=True)  # invoice, expense, manual, system, transfer
+    reference_id = Column(Integer, nullable=True)  # ID of the related record
+    notes = Column(Text, nullable=True)  # Additional context for the movement
+
+    # User and timestamp (for audit trail)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    movement_date = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    item = relationship("InventoryItem", back_populates="stock_movements")
+    warehouse = relationship("Warehouse", foreign_keys=[warehouse_id])
+    from_warehouse = relationship("Warehouse", foreign_keys=[from_warehouse_id])
+    to_warehouse = relationship("Warehouse", foreign_keys=[to_warehouse_id])
+    user = relationship("User")
+
+
+class Warehouse(Base):
+    __tablename__ = "warehouses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, index=True)
+    code = Column(String, nullable=False, unique=True, index=True)  # Short code like WH001
+    description = Column(Text, nullable=True)
+    address = Column(Text, nullable=True)
+    city = Column(String, nullable=True)
+    state = Column(String, nullable=True)
+    country = Column(String, nullable=True)
+    postal_code = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    email = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    # Manager/Responsible person
+    manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    manager = relationship("User")
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    inventory_levels = relationship("InventoryLevel", back_populates="warehouse", cascade="all, delete-orphan")
+
+
+class InventoryLevel(Base):
+    __tablename__ = "inventory_levels"
+
+    id = Column(Integer, primary_key=True, index=True)
+    item_id = Column(Integer, ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False)
+
+    # Stock levels
+    current_stock = Column(Float, default=0.0, nullable=False)
+    minimum_stock = Column(Float, default=0.0, nullable=False)
+    maximum_stock = Column(Float, nullable=True)  # Optional maximum capacity
+
+    # Location within warehouse (aisle, shelf, bin)
+    location_code = Column(String, nullable=True)  # e.g., "A-01-05" for Aisle 1, Shelf 1, Bin 5
+
+    # Last inventory count
+    last_count_date = Column(DateTime(timezone=True), nullable=True)
+    last_count_quantity = Column(Float, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    item = relationship("InventoryItem", back_populates="inventory_levels")
+    warehouse = relationship("Warehouse", back_populates="inventory_levels")
+
+    # Unique constraint to prevent duplicate item-warehouse combinations
+    __table_args__ = (
+        UniqueConstraint('item_id', 'warehouse_id', name='unique_item_warehouse'),
+    )
+
+
+class ItemAttachment(Base):
+    __tablename__ = "item_attachments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    item_id = Column(Integer, ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False)
+    
+    # File information
+    filename = Column(String, nullable=False)  # Original filename
+    stored_filename = Column(String, nullable=False)  # Stored filename (usually UUID-based)
+    file_path = Column(String, nullable=False)  # Full path to stored file
+    file_size = Column(Integer, nullable=False)  # File size in bytes
+    content_type = Column(String, nullable=True)  # MIME type
+    file_hash = Column(String, nullable=True)  # SHA-256 hash for integrity
+    
+    # Attachment metadata
+    attachment_type = Column(String, nullable=False)  # 'image' or 'document'
+    document_type = Column(String, nullable=True)  # For documents: manual, certificate, warranty, etc.
+    description = Column(Text, nullable=True)  # User-provided description
+    alt_text = Column(String, nullable=True)  # Alt text for images (accessibility)
+    
+    # Display and organization
+    is_primary = Column(Boolean, default=False, nullable=False)  # Primary image for item
+    display_order = Column(Integer, default=0, nullable=False)  # Order for display
+    
+    # Image-specific fields
+    image_width = Column(Integer, nullable=True)  # Original image width
+    image_height = Column(Integer, nullable=True)  # Original image height
+    has_thumbnail = Column(Boolean, default=False, nullable=False)  # Whether thumbnails exist
+    thumbnail_path = Column(String, nullable=True)  # Path to thumbnail image
+    
+    # Upload tracking
+    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    upload_ip = Column(String, nullable=True)  # IP address of uploader
+    
+    # Status
+    is_active = Column(Boolean, default=True, nullable=False)  # Soft delete support
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    item = relationship("InventoryItem", back_populates="attachments")
+    uploader = relationship("User")
+
+
+class InvoiceAttachment(Base):
+    __tablename__ = "invoice_attachments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_id = Column(Integer, ForeignKey("invoices.id", ondelete="CASCADE"), nullable=False)
+    
+    # File information
+    filename = Column(String, nullable=False)  # Original filename
+    stored_filename = Column(String, nullable=False)  # Stored filename (usually UUID-based)
+    file_path = Column(String, nullable=False)  # Full path to stored file
+    file_size = Column(Integer, nullable=False)  # File size in bytes
+    content_type = Column(String, nullable=True)  # MIME type
+    file_hash = Column(String, nullable=True)  # SHA-256 hash for integrity
+    
+    # Attachment metadata
+    attachment_type = Column(String, nullable=False)  # 'image' or 'document'
+    document_type = Column(String, nullable=True)  # For documents: receipt, contract, etc.
+    description = Column(Text, nullable=True)  # User-provided description
+    
+    # Display and organization
+    display_order = Column(Integer, default=0, nullable=False)  # Order for display
+    
+    # Upload tracking
+    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    upload_ip = Column(String, nullable=True)  # IP address of uploader
+    
+    # Status
+    is_active = Column(Boolean, default=True, nullable=False)  # Soft delete support
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    invoice = relationship("Invoice", back_populates="attachments")
+    uploader = relationship("User")

@@ -1,24 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import create_engine, text
 from typing import Dict, Any
 import tempfile
 import os
 import shutil
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone
 import logging
-import uuid
 from PIL import Image
 import io
-from fastapi.concurrency import run_in_threadpool
 
 from models.database import get_db, get_master_db, set_tenant_context
 from models.models_per_tenant import User, Client, Invoice, Settings, ClientNote, InvoiceItem
-from routers.payments import Payment
 from models.models import Tenant, MasterUser
 from routers.auth import get_current_user
-from utils.invoice import generate_invoice_number
 from utils.rbac import require_admin
 from utils.audit import log_audit_event
 from constants.error_codes import FAILED_TO_IMPORT_DATA
@@ -30,7 +25,8 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 
 @router.get("/")
 async def get_settings(
-    current_user: MasterUser = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """Get tenant settings (using tenant info as settings)"""
     # Only admins can view settings
@@ -45,6 +41,25 @@ async def get_settings(
         if not tenant:
             raise HTTPException(status_code=404, detail="Tenant not found")
         
+        # Get invoice settings from tenant database
+        invoice_settings_record = db.query(Settings).filter(Settings.key == "invoice_settings").first()
+        
+        # Default invoice settings
+        default_invoice_settings = {
+            "prefix": "INV-",
+            "next_number": "0001",
+            "terms": "",
+            "notes": "",
+            "send_copy": True,
+            "auto_reminders": True
+        }
+        
+        # Use stored settings or defaults
+        if invoice_settings_record and invoice_settings_record.value:
+            invoice_settings = {**default_invoice_settings, **invoice_settings_record.value}
+        else:
+            invoice_settings = default_invoice_settings
+        
         # Return tenant info formatted as settings
         return {
             "company_info": {
@@ -55,14 +70,7 @@ async def get_settings(
                 "tax_id": tenant.tax_id or "",
                 "logo": tenant.company_logo_url or ""
             },
-            "invoice_settings": {
-                "prefix": "INV-",
-                "next_number": "0001",
-                "terms": "Payment due within 30 days from the date of invoice.\nLate payments are subject to a 1.5% monthly finance charge.",
-                "notes": "Thank you for your business!",
-                "send_copy": True,
-                "auto_reminders": True
-            },
+            "invoice_settings": invoice_settings,
             "enable_ai_assistant": tenant.enable_ai_assistant or False
         }
     finally:
@@ -72,6 +80,7 @@ async def get_settings(
 async def update_settings(
     settings: Dict[str, Any],
     master_db: Session = Depends(get_master_db),
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Update tenant settings"""
@@ -86,7 +95,12 @@ async def update_settings(
     # Update tenant info from company_info
     company_info = settings.get("company_info", {})
     if company_info:
-        tenant.name = company_info.get("name", tenant.name)
+        # Validate and normalize company name consistency with signup rules (min 2 chars)
+        if "name" in company_info and company_info["name"] is not None:
+            new_name = str(company_info["name"]).strip()
+            if len(new_name) < 2:
+                raise HTTPException(status_code=400, detail="Organization name must be at least 2 characters long")
+            tenant.name = new_name
         
         tenant.phone = company_info.get("phone", tenant.phone)
         tenant.address = company_info.get("address", tenant.address)
@@ -96,6 +110,43 @@ async def update_settings(
     # Update AI assistant setting
     if "enable_ai_assistant" in settings:
         tenant.enable_ai_assistant = settings["enable_ai_assistant"]
+    
+    # Update invoice settings in tenant database
+    invoice_settings = settings.get("invoice_settings", {})
+    if invoice_settings:
+        # Get or create invoice settings record
+        invoice_settings_record = db.query(Settings).filter(Settings.key == "invoice_settings").first()
+        
+        if invoice_settings_record:
+            # Update existing record
+            current_value = invoice_settings_record.value or {}
+            updated_value = {**current_value, **invoice_settings}
+            invoice_settings_record.value = updated_value
+            invoice_settings_record.updated_at = datetime.now(timezone.utc)
+        else:
+            # Create new record
+            invoice_settings_record = Settings(
+                key="invoice_settings",
+                value=invoice_settings,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc)
+            )
+            db.add(invoice_settings_record)
+        
+        db.commit()
+        
+        # Log audit event in tenant DB for invoice settings
+        log_audit_event(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="UPDATE",
+            resource_type="invoice_settings",
+            resource_id="1",
+            resource_name="Invoice Settings",
+            details=invoice_settings,
+            status="success"
+        )
     
     master_db.commit()
     master_db.refresh(tenant)
@@ -144,10 +195,9 @@ async def export_tenant_data(
     """Export tenant data to a real SQLite file"""
     require_admin(current_user, "export data")
     import sqlalchemy
-    import sqlite3
     from sqlalchemy.orm import sessionmaker
     from models.models_per_tenant import (
-        Base as TenantBase, User, Client, ClientNote, Invoice, Payment, Settings, DiscountRule, SupportedCurrency, CurrencyRate, InvoiceItem, InvoiceHistory, AIConfig
+        Base as TenantBase, User, Client, ClientNote, Invoice, Payment, Settings, DiscountRule, SupportedCurrency, CurrencyRate, InvoiceItem, InvoiceHistory, AIConfig, Expense, ExpenseAttachment, BankStatement, BankStatementTransaction, AuditLog, AIChatHistory
     )
     import atexit
 
@@ -203,6 +253,24 @@ async def export_tenant_data(
         # 12. AIConfig
         for obj in db.query(AIConfig).all():
             sqlite_session.add(AIConfig(**{c.name: getattr(obj, c.name) for c in AIConfig.__table__.columns}))
+        # 13. Expenses
+        for obj in db.query(Expense).all():
+            sqlite_session.add(Expense(**{c.name: getattr(obj, c.name) for c in Expense.__table__.columns}))
+        # 14. ExpenseAttachments
+        for obj in db.query(ExpenseAttachment).all():
+            sqlite_session.add(ExpenseAttachment(**{c.name: getattr(obj, c.name) for c in ExpenseAttachment.__table__.columns}))
+        # 15. BankStatements
+        for obj in db.query(BankStatement).all():
+            sqlite_session.add(BankStatement(**{c.name: getattr(obj, c.name) for c in BankStatement.__table__.columns}))
+        # 16. BankStatementTransactions
+        for obj in db.query(BankStatementTransaction).all():
+            sqlite_session.add(BankStatementTransaction(**{c.name: getattr(obj, c.name) for c in BankStatementTransaction.__table__.columns}))
+        # 17. AuditLogs
+        for obj in db.query(AuditLog).all():
+            sqlite_session.add(AuditLog(**{c.name: getattr(obj, c.name) for c in AuditLog.__table__.columns}))
+        # 18. AIChatHistory
+        for obj in db.query(AIChatHistory).all():
+            sqlite_session.add(AIChatHistory(**{c.name: getattr(obj, c.name) for c in AIChatHistory.__table__.columns}))
         sqlite_session.commit()
         sqlite_session.close()
 
@@ -235,7 +303,7 @@ async def import_tenant_data(
     from sqlalchemy import create_engine, inspect
     from sqlalchemy.orm import sessionmaker
     from models.models_per_tenant import (
-        User, Client, ClientNote, Invoice, Payment, Settings, DiscountRule, SupportedCurrency, CurrencyRate, InvoiceItem, InvoiceHistory, AIConfig
+        User, Client, ClientNote, Invoice, Payment, Settings, DiscountRule, SupportedCurrency, CurrencyRate, InvoiceItem, InvoiceHistory, AIConfig, EmailNotificationSettings, Expense, ExpenseAttachment, BankStatement, BankStatementTransaction, AuditLog, AIChatHistory
     )
     from services.tenant_database_manager import tenant_db_manager
     try:
@@ -268,7 +336,8 @@ async def import_tenant_data(
             table_names = [
                 'users', 'clients', 'client_notes', 'invoices', 'payments', 'settings',
                 'discount_rules', 'supported_currencies', 'currency_rates',
-                'invoice_items', 'invoice_history', 'ai_configs'
+                'invoice_items', 'invoice_history', 'ai_configs', 'expenses', 'expense_attachments',
+                'bank_statements', 'bank_statement_transactions', 'audit_logs', 'ai_chat_history'
             ]
             missing = [t for t in ['clients', 'invoices', 'payments'] if t not in tables]
             if missing:
@@ -279,6 +348,12 @@ async def import_tenant_data(
             db = SessionLocal_tenant()
             try:
                 # Delete all existing data for this tenant (order matters for FKs)
+                db.query(AIChatHistory).delete()
+                db.query(AuditLog).delete()
+                db.query(BankStatementTransaction).delete()
+                db.query(BankStatement).delete()
+                db.query(ExpenseAttachment).delete()
+                db.query(Expense).delete()
                 db.query(ClientNote).delete()
                 db.query(InvoiceItem).delete()
                 db.query(Payment).delete()
@@ -290,10 +365,14 @@ async def import_tenant_data(
                 db.query(CurrencyRate).delete()
                 db.query(SupportedCurrency).delete()
                 db.query(AIConfig).delete()
+                # Delete notification settings before users to avoid FK violations
+                db.query(EmailNotificationSettings).delete()
                 db.query(User).filter(User.is_superuser == False).delete()  # Don't delete superusers
                 old_to_new_user_ids = {}
                 old_to_new_client_ids = {}
                 old_to_new_invoice_ids = {}
+                old_to_new_expense_ids = {}
+                old_to_new_statement_ids = {}
                 # 1. Users
                 if 'users' in tables:
                     users = import_db.query(User).all()
@@ -393,7 +472,40 @@ async def import_tenant_data(
                             db.add(new_payment)
                             payment_count += 1
                     imported_counts['payments'] = payment_count
-                # 5. InvoiceItems
+                # 5. Email Notification Settings (map user IDs)
+                if 'email_notification_settings' in tables:
+                    notif_rows = import_db.query(EmailNotificationSettings).all()
+                    for row in notif_rows:
+                        new_user_id = old_to_new_user_ids.get(row.user_id)
+                        if not new_user_id:
+                            continue
+                        new_row = EmailNotificationSettings(
+                            user_id=new_user_id,
+                            user_created=row.user_created,
+                            user_updated=row.user_updated,
+                            user_deleted=row.user_deleted,
+                            user_login=row.user_login,
+                            client_created=row.client_created,
+                            client_updated=row.client_updated,
+                            client_deleted=row.client_deleted,
+                            invoice_created=row.invoice_created,
+                            invoice_updated=row.invoice_updated,
+                            invoice_deleted=row.invoice_deleted,
+                            invoice_sent=row.invoice_sent,
+                            invoice_paid=row.invoice_paid,
+                            invoice_overdue=row.invoice_overdue,
+                            payment_created=row.payment_created,
+                            payment_updated=row.payment_updated,
+                            payment_deleted=row.payment_deleted,
+                            settings_updated=row.settings_updated,
+                            notification_email=row.notification_email,
+                            daily_summary=row.daily_summary,
+                            weekly_summary=row.weekly_summary,
+                        )
+                        db.add(new_row)
+                    imported_counts['email_notification_settings'] = len(notif_rows)
+
+                # 6. InvoiceItems
                 if 'invoice_items' in tables:
                     invoice_items = import_db.query(InvoiceItem).all()
                     item_count = 0
@@ -493,8 +605,8 @@ async def import_tenant_data(
                     histories = import_db.query(InvoiceHistory).all()
                     for hist in histories:
                         new_invoice_id = old_to_new_invoice_ids.get(hist.invoice_id)
-                        new_user_id = old_to_new_user_ids.get(hist.user_id) if hasattr(hist, 'user_id') else current_user.id
-                        if new_invoice_id:
+                        new_user_id = old_to_new_user_ids.get(hist.user_id) if hist.user_id else current_user.id
+                        if new_invoice_id and new_user_id:
                             new_hist = InvoiceHistory(
                                 invoice_id=new_invoice_id,
                                 user_id=new_user_id,
@@ -523,6 +635,151 @@ async def import_tenant_data(
                         )
                         db.add(new_config)
                     imported_counts['ai_configs'] = len(configs)
+                
+                # 13. Expenses
+                if 'expenses' in tables:
+                    expenses = import_db.query(Expense).all()
+                    for expense in expenses:
+                        new_user_id = old_to_new_user_ids.get(expense.user_id) if expense.user_id else None
+                        new_invoice_id = old_to_new_invoice_ids.get(expense.invoice_id) if expense.invoice_id else None
+                        new_expense = Expense(
+                            amount=expense.amount,
+                            currency=expense.currency,
+                            expense_date=expense.expense_date,
+                            category=expense.category,
+                            vendor=expense.vendor,
+                            label=expense.label,
+                            labels=expense.labels,
+                            tax_rate=expense.tax_rate,
+                            tax_amount=expense.tax_amount,
+                            total_amount=expense.total_amount,
+                            payment_method=expense.payment_method,
+                            reference_number=expense.reference_number,
+                            status=expense.status,
+                            notes=expense.notes,
+                            receipt_path=expense.receipt_path,
+                            receipt_filename=expense.receipt_filename,
+                            user_id=new_user_id,
+                            invoice_id=new_invoice_id,
+                            imported_from_attachment=getattr(expense, 'imported_from_attachment', False),
+                            analysis_status=getattr(expense, 'analysis_status', 'not_started'),
+                            analysis_result=getattr(expense, 'analysis_result', None),
+                            analysis_error=getattr(expense, 'analysis_error', None),
+                            manual_override=getattr(expense, 'manual_override', False),
+                            analysis_updated_at=getattr(expense, 'analysis_updated_at', None),
+                            created_at=expense.created_at,
+                            updated_at=datetime.now(timezone.utc)
+                        )
+                        db.add(new_expense)
+                        db.flush()
+                        old_to_new_expense_ids[expense.id] = new_expense.id
+                    imported_counts['expenses'] = len(expenses)
+                
+                # 14. ExpenseAttachments
+                if 'expense_attachments' in tables:
+                    attachments = import_db.query(ExpenseAttachment).all()
+                    attachment_count = 0
+                    for attachment in attachments:
+                        new_expense_id = old_to_new_expense_ids.get(attachment.expense_id)
+                        new_user_id = old_to_new_user_ids.get(attachment.uploaded_by) if attachment.uploaded_by else None
+                        if new_expense_id:
+                            new_attachment = ExpenseAttachment(
+                                expense_id=new_expense_id,
+                                filename=attachment.filename,
+                                content_type=attachment.content_type,
+                                size_bytes=attachment.size_bytes,
+                                file_path=attachment.file_path,
+                                uploaded_at=attachment.uploaded_at,
+                                uploaded_by=new_user_id
+                            )
+                            db.add(new_attachment)
+                            attachment_count += 1
+                    imported_counts['expense_attachments'] = attachment_count
+                
+                # 15. BankStatements
+                if 'bank_statements' in tables:
+                    statements = import_db.query(BankStatement).all()
+                    for statement in statements:
+                        new_statement = BankStatement(
+                            tenant_id=current_user.tenant_id,
+                            original_filename=statement.original_filename,
+                            stored_filename=statement.stored_filename,
+                            file_path=statement.file_path,
+                            status=statement.status,
+                            extracted_count=statement.extracted_count,
+                            notes=statement.notes,
+                            labels=statement.labels,
+                            created_at=statement.created_at,
+                            updated_at=datetime.now(timezone.utc)
+                        )
+                        db.add(new_statement)
+                        db.flush()
+                        old_to_new_statement_ids[statement.id] = new_statement.id
+                    imported_counts['bank_statements'] = len(statements)
+                
+                # 16. BankStatementTransactions
+                if 'bank_statement_transactions' in tables:
+                    transactions = import_db.query(BankStatementTransaction).all()
+                    transaction_count = 0
+                    for transaction in transactions:
+                        new_statement_id = old_to_new_statement_ids.get(transaction.statement_id)
+                        new_invoice_id = old_to_new_invoice_ids.get(transaction.invoice_id) if transaction.invoice_id else None
+                        new_expense_id = old_to_new_expense_ids.get(transaction.expense_id) if transaction.expense_id else None
+                        if new_statement_id:
+                            new_transaction = BankStatementTransaction(
+                                statement_id=new_statement_id,
+                                date=transaction.date,
+                                description=transaction.description,
+                                amount=transaction.amount,
+                                transaction_type=transaction.transaction_type,
+                                balance=transaction.balance,
+                                category=transaction.category,
+                                invoice_id=new_invoice_id,
+                                expense_id=new_expense_id,
+                                created_at=transaction.created_at,
+                                updated_at=datetime.now(timezone.utc)
+                            )
+                            db.add(new_transaction)
+                            transaction_count += 1
+                    imported_counts['bank_statement_transactions'] = transaction_count
+                
+                # 17. AuditLogs
+                if 'audit_logs' in tables:
+                    audit_logs = import_db.query(AuditLog).all()
+                    for log in audit_logs:
+                        new_log = AuditLog(
+                            user_id=log.user_id,
+                            user_email=log.user_email,
+                            action=log.action,
+                            resource_type=log.resource_type,
+                            resource_id=log.resource_id,
+                            resource_name=log.resource_name,
+                            details=log.details,
+                            ip_address=log.ip_address,
+                            user_agent=log.user_agent,
+                            status=log.status,
+                            error_message=log.error_message,
+                            created_at=log.created_at
+                        )
+                        db.add(new_log)
+                    imported_counts['audit_logs'] = len(audit_logs)
+                
+                # 18. AIChatHistory
+                if 'ai_chat_history' in tables:
+                    chat_history = import_db.query(AIChatHistory).all()
+                    for chat in chat_history:
+                        new_user_id = old_to_new_user_ids.get(chat.user_id) if chat.user_id else None
+                        if new_user_id:
+                            new_chat = AIChatHistory(
+                                user_id=new_user_id,
+                                tenant_id=current_user.tenant_id,
+                                message=chat.message,
+                                sender=chat.sender,
+                                created_at=chat.created_at
+                            )
+                            db.add(new_chat)
+                    imported_counts['ai_chat_history'] = len(chat_history)
+                
                 db.commit()
                 logger.info(f"Successfully imported data for tenant {current_user.tenant_id}: {imported_counts}")
                 return {
@@ -556,13 +813,57 @@ async def upload_company_logo(
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Upload a company logo image and return its public URL (per-tenant directory)."""
+    logger.info(f"🔍 LOGO UPLOAD ENDPOINT REACHED - user: {current_user.email}, tenant: {current_user.tenant_id}")
+    logger.info(f"file: {file}")
+    
     # Only admins can upload company logo
     require_admin(current_user, "upload company logo")
     
-    # Only allow image files
-    if not file.content_type or not file.content_type.startswith("image/"):
-        logger.error(f"Rejected upload: not an image file. Content-Type: {file.content_type}")
-        raise HTTPException(status_code=400, detail="Only image files are allowed.")
+    # Debug logging to see what we're receiving
+    logger.info(f"🔍 Logo upload request - filename: {file.filename}, content_type: {file.content_type}, size: {file.size if hasattr(file, 'size') else 'unknown'}")
+    
+    # Check for allowed image types more explicitly
+    allowed_image_types = {
+        'image/jpeg',
+        'image/jpg', 
+        'image/png',
+        'image/gif',
+        'image/webp',
+        'image/svg+xml'
+    }
+    
+    # Get file extension as fallback
+    file_ext = None
+    if file.filename:
+        file_ext = os.path.splitext(file.filename.lower())[1]
+    
+    # Validate content type or file extension
+    is_valid_image = False
+    if file.content_type and file.content_type.lower() in allowed_image_types:
+        is_valid_image = True
+    elif file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg']:
+        is_valid_image = True
+        logger.info(f"Accepted image based on file extension: {file_ext}")
+    
+    if not is_valid_image:
+        logger.error(f"Rejected upload: not an image file. Content-Type: {file.content_type}, filename: {file.filename}, extension: {file_ext}")
+        raise HTTPException(status_code=400, detail=f"Only image files are allowed. Received content-type: {file.content_type}, filename: {file.filename}")
+
+    # Check file size (limit to 5MB for logos)
+    try:
+        file_content = await file.read()
+        file_size = len(file_content)
+        logger.info(f"Logo file size: {file_size} bytes")
+        
+        MAX_LOGO_SIZE = 5 * 1024 * 1024  # 5MB
+        if file_size > MAX_LOGO_SIZE:
+            raise HTTPException(status_code=400, detail=f"Logo file too large. Maximum size is 5MB, received {file_size} bytes")
+        
+        # Reset file pointer for later processing
+        await file.seek(0)
+    except Exception as e:
+        logger.error(f"Error reading file for size check: {e}")
+        raise HTTPException(status_code=400, detail="Error processing uploaded file")
 
     # Ensure static/logos/<tenant_id> directory exists
     static_dir = os.path.join(os.path.dirname(__file__), "..", "static", "logos")
@@ -571,22 +872,20 @@ async def upload_company_logo(
     os.makedirs(tenant_dir, exist_ok=True)
 
     # Use consistent filename for each tenant (overwrites existing logo)
-    ext = os.path.splitext(file.filename)[1] or ".png"
+    ext = os.path.splitext(file.filename)[1].lower() or ".png"
+    if ext not in [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"]:
+        ext = ".png" # Default to png if extension is something else
     filename = f"logo{ext}"
     file_path = os.path.join(tenant_dir, filename)
     
     print(f"Attempting to save logo to {file_path}")
 
     try:
-        file.file.seek(0)  # Ensure pointer is at the start
-        
-        # Read the uploaded file
-        file_content = file.file.read()
-        
+        # Use the file_content we already read for size validation
         # Open and resize the image using PIL
         image = Image.open(io.BytesIO(file_content))
         
-        # Resize to 100x100 while maintaining aspect ratio
+        # Resize to 200x200 while maintaining aspect ratio
         image.thumbnail((200, 200), Image.Resampling.LANCZOS)
         
         # Save the resized image
@@ -601,3 +900,35 @@ async def upload_company_logo(
     except Exception as e:
         print(f"Failed to save logo to {file_path}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save logo: {e}")
+
+
+@router.get("/logo/{tenant_id}")
+async def get_company_logo(
+    tenant_id: str,
+    master_db: Session = Depends(get_master_db)
+):
+    """Retrieve a company logo image by tenant ID."""
+    try:
+        # Manually get master database
+        tenant_record = master_db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant_record or not tenant_record.company_logo_url:
+            raise HTTPException(status_code=404, detail="Logo not found for this tenant.")
+        
+        # Construct the absolute path to the logo file
+        # Assuming company_logo_url is like /static/logos/<tenant_id>/logo.png
+        # We need to convert this to an absolute file system path
+        relative_path = tenant_record.company_logo_url.lstrip("/") # Remove leading slash
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        file_path = os.path.join(base_dir, relative_path)
+        
+        if not os.path.exists(file_path):
+            logger.error(f"Logo file not found on disk: {file_path}")
+            raise HTTPException(status_code=404, detail="Logo file not found on server.")
+        
+        return FileResponse(file_path)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving logo for tenant {tenant_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error while retrieving logo.")

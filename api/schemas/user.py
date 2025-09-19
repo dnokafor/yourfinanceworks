@@ -1,5 +1,5 @@
-from pydantic import BaseModel, EmailStr
-from typing import Optional
+from pydantic import BaseModel, EmailStr, field_validator, ConfigDict
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 class UserBase(BaseModel):
@@ -9,6 +9,7 @@ class UserBase(BaseModel):
     is_active: bool = True
     is_superuser: bool = False
     is_verified: bool = False
+    must_reset_password: bool = False
     role: str = "user"  # admin, user, viewer
     theme: Optional[str] = "system"
 
@@ -16,6 +17,13 @@ class UserCreate(UserBase):
     password: str
     tenant_id: Optional[int] = None  # Optional for signup flow
     organization_name: Optional[str] = None  # For creating new tenant during signup
+    
+    @field_validator('organization_name')
+    @classmethod
+    def validate_organization_name(cls, v):
+        if v is not None and len(v.strip()) < 2:
+            raise ValueError('Organization name must be at least 2 characters long')
+        return v.strip() if v else v
 
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
@@ -24,19 +32,22 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
     is_superuser: Optional[bool] = None
     is_verified: Optional[bool] = None
+    must_reset_password: Optional[bool] = None
     role: Optional[str] = None
     password: Optional[str] = None
     theme: Optional[str] = None
+    show_analytics: Optional[bool] = None
 
 class UserRead(UserBase):
     id: int
     tenant_id: int
     google_id: Optional[str] = None
+    show_analytics: Optional[bool] = True
     created_at: datetime
     updated_at: datetime
+    organizations: Optional[List[Dict[str, Any]]] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -64,8 +75,7 @@ class InviteRead(BaseModel):
     created_at: datetime
     invited_by: Optional[str] = None  # email of inviter
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class InviteAccept(BaseModel):
     token: str
@@ -82,13 +92,12 @@ class UserList(BaseModel):
     is_active: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class UserRoleUpdate(BaseModel):
     role: str  # admin, user, viewer 
 
 class AdminActivateUser(BaseModel):
-    password: str
+    password: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None 

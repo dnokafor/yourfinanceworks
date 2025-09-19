@@ -1,11 +1,48 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
+import { logger } from '../utils/logger';
+
+// 401 Error Handler - will be set by the main App component
+let on401Error: (() => void) | null = null;
+
+export const set401ErrorHandler = (handler: () => void) => {
+  on401Error = handler;
+};
 
 // API Configuration
-// For development, use your computer's IP address instead of localhost
-// You can find your IP with: ifconfig (Mac/Linux) or ipconfig (Windows)
-const API_BASE_URL = __DEV__ 
-  ? 'http://10.0.0.211:8000/api/v1' // Use your computer's IP address
-  : 'https://your-production-api.com/api'; // Replace with your production URL
+// Get API base URL from environment variables
+const getApiBaseUrl = (): string => {
+  // Try to get from environment variable first
+  const envApiUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
+  if (envApiUrl) {
+    logger.log(`Using API URL from environment: ${envApiUrl}`);
+    return envApiUrl;
+  }
+
+  // Fallback to expo config
+  const expoApiUrl = Constants.expoConfig?.extra?.apiBaseUrl;
+  if (expoApiUrl && expoApiUrl !== '${EXPO_PUBLIC_API_BASE_URL}') {
+    logger.log(`Using API URL from Expo config: ${expoApiUrl}`);
+    return expoApiUrl;
+  }
+
+  // Environment-aware fallbacks
+  const environment = process.env.EXPO_PUBLIC_ENVIRONMENT || (__DEV__ ? 'development' : 'production');
+
+  if (__DEV__) {
+    logger.warn(`No API_BASE_URL found for ${environment} environment, using fallback development URL`);
+    // Try localhost first for local development
+    return 'http://localhost:8000/api/v1';
+  } else {
+    logger.warn(`No API_BASE_URL found for ${environment} environment, using fallback production URL`);
+    return 'https://your-production-api.com/api/v1';
+  }
+};
+
+const API_BASE_URL = getApiBaseUrl();
+
+// Log API URL for debugging (only in development)
+logger.log(`🌐 API Base URL: ${API_BASE_URL}`);
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'user_data';
 
@@ -19,6 +56,8 @@ export interface User {
   tenant_id: string;
   is_active: boolean;
   is_verified: boolean;
+  created_at: string;
+  updated_at?: string;
 }
 
 export interface AuthResponse {
@@ -97,6 +136,10 @@ export interface Invoice {
   discount_value?: number;
   subtotal?: number;
   items?: InvoiceItem[];
+  attachments?: any[];
+  has_attachment?: boolean;
+  attachment_filename?: string;
+  attachment_path?: string;
 }
 
 export interface Payment {
@@ -203,8 +246,8 @@ export interface CreateInvoiceData {
   client_id: number;
   amount: number;
   currency: string;
-  date: string;
-  due_date: string;
+  date: string | undefined;
+  due_date: string | undefined;
   status: InvoiceStatus;
   notes?: string;
   items: InvoiceItemCreate[];
@@ -226,6 +269,7 @@ export interface UpdateInvoiceData {
   items: InvoiceItemUpdate[];
   is_recurring?: boolean;
   recurring_frequency?: string;
+  attachment_filename?: string | null;
   discount_type?: string;
   discount_value?: number;
   paid_amount?: number;
@@ -266,7 +310,7 @@ export async function apiRequest<T>(
     const tenantId = user?.tenant_id;
     
     const requestUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
-    console.log(`Making API request to ${requestUrl}`, options);
+    logger.debug(`Making API request to ${requestUrl}`, options);
     
     const response = await fetch(requestUrl, {
       ...options,
@@ -301,17 +345,21 @@ export async function apiRequest<T>(
 
     return await response.json();
   } catch (error) {
-    console.error(`API request failed for ${url}:`, error);
+    logger.error(`API request failed for ${url}:`, error);
     throw error;
   }
 }
 
 // API Service Class
 class ApiService {
-  private baseURL: string;
+  private _baseURL: string;
 
   constructor(baseURL: string = API_BASE_URL) {
-    this.baseURL = baseURL;
+    this._baseURL = baseURL;
+  }
+
+  get baseURL(): string {
+    return this._baseURL;
   }
 
   // Token Management
@@ -319,7 +367,7 @@ class ApiService {
     try {
       return await AsyncStorage.getItem(TOKEN_KEY);
     } catch (error) {
-      console.error('Error getting token:', error);
+      logger.error('Error getting token:', error);
       return null;
     }
   }
@@ -328,7 +376,7 @@ class ApiService {
     try {
       await AsyncStorage.setItem(TOKEN_KEY, token);
     } catch (error) {
-      console.error('Error setting token:', error);
+      logger.error('Error setting token:', error);
     }
   }
 
@@ -336,7 +384,7 @@ class ApiService {
     try {
       await AsyncStorage.removeItem(TOKEN_KEY);
     } catch (error) {
-      console.error('Error removing token:', error);
+      logger.error('Error removing token:', error);
     }
   }
 
@@ -345,7 +393,7 @@ class ApiService {
       const userData = await AsyncStorage.getItem(USER_KEY);
       return userData ? JSON.parse(userData) : null;
     } catch (error) {
-      console.error('Error getting user:', error);
+      logger.error('Error getting user:', error);
       return null;
     }
   }
@@ -354,7 +402,7 @@ class ApiService {
     try {
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
     } catch (error) {
-      console.error('Error setting user:', error);
+      logger.error('Error setting user:', error);
     }
   }
 
@@ -362,7 +410,7 @@ class ApiService {
     try {
       await AsyncStorage.removeItem(USER_KEY);
     } catch (error) {
-      console.error('Error removing user:', error);
+      logger.error('Error removing user:', error);
     }
   }
 
@@ -376,7 +424,7 @@ class ApiService {
     const userData = await AsyncStorage.getItem(USER_KEY);
     const user = userData ? JSON.parse(userData) : null;
     const tenantId = user?.tenant_id;
-    const url = `${this.baseURL}${endpoint}`;
+    const url = `${this._baseURL}${endpoint}`;
 
     const requestOptions: RequestInit = {
       headers: {
@@ -389,6 +437,17 @@ class ApiService {
     };
 
     try {
+      // Log request details for debugging
+      if (options.method === 'PUT' && endpoint.includes('/invoices/')) {
+        logger.log('🚀 API PUT Request to invoices:', {
+          url,
+          endpoint,
+          method: options.method,
+          body: options.body ? JSON.parse(options.body as string) : null,
+          headers: requestOptions.headers
+        });
+      }
+
       const response = await fetch(url, requestOptions);
       
       if (!response.ok) {
@@ -400,11 +459,21 @@ class ApiService {
           if (errorData.detail && errorData.detail.includes('Tenant context required')) {
             await this.removeToken();
             await this.removeUser();
+            // Trigger redirect to login page
+            if (on401Error) {
+              on401Error();
+              throw new Error('Session expired. Please log in again.');
+            }
             throw new Error('Session expired. Please log in again.');
           } else if (response.status === 401) {
             // 401 Unauthorized - token is invalid/expired
             await this.removeToken();
             await this.removeUser();
+            // Trigger redirect to login page
+            if (on401Error) {
+              on401Error();
+              throw new Error('Authentication failed. Please log in again.');
+            }
             throw new Error('Authentication failed. Please log in again.');
           } else {
             // 403 Forbidden - user lacks permissions
@@ -416,15 +485,32 @@ class ApiService {
         if (response.status === 400 && errorData.detail && errorData.detail.includes('Tenant context required')) {
           await this.removeToken();
           await this.removeUser();
+          // Trigger redirect to login page
+          if (on401Error) {
+            on401Error();
+            throw new Error('Session expired. Please log in again.');
+          }
           throw new Error('Session expired. Please log in again.');
         }
 
         throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
       }
 
-      return await response.json();
+      // Handle empty response body
+      const text = await response.text();
+      if (!text) {
+        return {} as T;
+      }
+      
+      try {
+        return JSON.parse(text);
+      } catch (parseError) {
+        logger.error(`JSON parse error for ${endpoint}:`, parseError);
+        logger.error(`Response text:`, text);
+        throw new Error(`Invalid JSON response from server`);
+      }
     } catch (error) {
-      console.error(`API request failed for ${endpoint}:`, error);
+      logger.error(`API request failed for ${endpoint}:`, error);
       throw error;
     }
   }
@@ -465,6 +551,12 @@ class ApiService {
     }, { isLogin: true });
   }
 
+  async checkOrganizationNameAvailability(name: string): Promise<{ available: boolean; name: string }> {
+    return await this.request<{ available: boolean; name: string }>(`/tenants/check-name-availability?name=${encodeURIComponent(name)}`, {
+      method: 'GET',
+    }, { isLogin: true });
+  }
+
   async requestPasswordReset(email: string): Promise<{ message: string; success: boolean }> {
     return await this.request<{ message: string; success: boolean }>(`/auth/request-password-reset`, {
       method: 'POST',
@@ -488,7 +580,7 @@ class ApiService {
     try {
       return await this.request<User>('/auth/me');
     } catch (error) {
-      console.error('Failed to get current user:', error);
+      logger.error('Failed to get current user:', error);
       return null;
     }
   }
@@ -542,14 +634,33 @@ class ApiService {
     };
   }
 
+  async getInvoiceAttachmentInfo(invoiceId: number): Promise<any> {
+    return await this.request<any>(`/invoices/${invoiceId}/attachment-info`);
+  }
+
   async createInvoice(invoiceData: CreateInvoiceData): Promise<Invoice> {
+    // Convert date strings to ISO format for the API
+    const requestData = {
+      ...invoiceData,
+      date: invoiceData.date ? new Date(invoiceData.date + 'T00:00:00').toISOString() : undefined,
+      due_date: invoiceData.due_date ? new Date(invoiceData.due_date + 'T00:00:00').toISOString() : undefined,
+    };
+    
     return await this.request<Invoice>('/invoices/', {
       method: 'POST',
-      body: JSON.stringify(invoiceData),
+      body: JSON.stringify(requestData),
     });
   }
 
   async updateInvoice(invoiceId: number, invoiceData: UpdateInvoiceData): Promise<Invoice> {
+    logger.log('📝 updateInvoice called with:', {
+      invoiceId,
+      invoiceData,
+      paidAmount: invoiceData.paid_amount,
+      hasPaidAmount: 'paid_amount' in invoiceData,
+      allKeys: Object.keys(invoiceData)
+    });
+
     const response = await this.request<any>(`/invoices/${invoiceId}`, {
       method: 'PUT',
       body: JSON.stringify(invoiceData),
@@ -762,7 +873,7 @@ class ApiService {
         }
       };
     } catch (error) {
-      console.error('Failed to fetch dashboard stats:', error);
+      logger.error('Failed to fetch dashboard stats:', error);
       // Return default stats if API fails
       return {
         totalIncome: {},
@@ -792,6 +903,212 @@ class ApiService {
   async getStoredUser(): Promise<User | null> {
     return await this.getUser();
   }
+
+  async getTenantInfo(): Promise<{ id: number; name: string; default_currency: string; [key: string]: any }> {
+    return await this.request('/tenants/me', {
+      method: 'GET'
+    });
+  }
+
+  // User Management Methods
+  async getUsers(): Promise<User[]> {
+    return await this.request<User[]>('/auth/users');
+  }
+
+  async inviteUser(inviteData: { email: string; role: string; first_name: string; last_name?: string }): Promise<any> {
+    return await this.request('/auth/invites', {
+      method: 'POST',
+      body: JSON.stringify(inviteData),
+    });
+  }
+
+  async getInvites(): Promise<any[]> {
+    return await this.request('/auth/invites');
+  }
+
+  async deleteUser(userId: number): Promise<void> {
+    return await this.request(`/auth/users/${userId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getAuditLogs(params?: {
+    user_id?: number;
+    user_email?: string;
+    action?: string;
+    resource_type?: string;
+    resource_id?: string;
+    status?: string;
+    start_date?: string;
+    end_date?: string;
+  }): Promise<any[]> {
+    const queryParams = params ? new URLSearchParams(params as any).toString() : '';
+    const url = queryParams ? `/audit-logs?${queryParams}` : '/audit-logs';
+    return await this.request(url);
+  }
+
+  // Expense Methods
+  async getExpenses(categoryFilter?: string): Promise<Expense[]> {
+    const params = categoryFilter ? `?category=${categoryFilter}` : '';
+    return await this.request<Expense[]>(`/expenses/${params}`);
+  }
+
+  async getExpense(expenseId: number): Promise<Expense> {
+    return await this.request<Expense>(`/expenses/${expenseId}`);
+  }
+
+  async createExpense(expenseData: Partial<Expense>): Promise<Expense> {
+    return await this.request<Expense>('/expenses/', {
+      method: 'POST',
+      body: JSON.stringify(expenseData),
+    });
+  }
+
+  async updateExpense(expenseId: number, expenseData: Partial<Expense>): Promise<Expense> {
+    return await this.request<Expense>(`/expenses/${expenseId}`, {
+      method: 'PUT',
+      body: JSON.stringify(expenseData),
+    });
+  }
+
+  async deleteExpense(expenseId: number): Promise<void> {
+    await this.request(`/expenses/${expenseId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Bank Statement Methods
+  async getBankStatements(): Promise<BankStatement[]> {
+    return await this.request<BankStatement[]>('/statements/');
+  }
+
+  async getBankStatement(statementId: number): Promise<BankStatementDetail> {
+    return await this.request<BankStatementDetail>(`/statements/${statementId}`);
+  }
+
+  async uploadBankStatements(files: any[]): Promise<{ statements: BankStatement[] }> {
+    const formData = new FormData();
+    files.forEach((file, index) => {
+      formData.append('files', {
+        uri: file.uri,
+        name: file.name,
+        type: file.type,
+      } as any);
+    });
+
+    const token = await this.getToken();
+    const userData = await AsyncStorage.getItem(USER_KEY);
+    const user = userData ? JSON.parse(userData) : null;
+    const tenantId = user?.tenant_id;
+
+    const response = await fetch(`${this._baseURL}/statements/upload`, {
+      method: 'POST',
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+        ...(tenantId && { 'X-Tenant-ID': tenantId }),
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  }
+
+  async deleteBankStatement(statementId: number): Promise<void> {
+    await this.request(`/statements/${statementId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Expense Attachments Methods
+  async getExpenseAttachments(expenseId: number): Promise<any[]> {
+    return await this.request<any[]>(`/expenses/${expenseId}/attachments`);
+  }
+
+  // Client Notes Methods
+  async getClientNotes(clientId: number): Promise<ClientNote[]> {
+    return await this.request<ClientNote[]>(`/crm/clients/${clientId}/notes`);
+  }
+
+  async createClientNote(clientId: number, noteData: { note: string }): Promise<ClientNote> {
+    return await this.request<ClientNote>(`/crm/clients/${clientId}/notes`, {
+      method: 'POST',
+      body: JSON.stringify(noteData),
+    });
+  }
+
+  async updateClientNote(clientId: number, noteId: number, noteData: { note: string }): Promise<ClientNote> {
+    return await this.request<ClientNote>(`/crm/clients/${clientId}/notes/${noteId}`, {
+      method: 'PUT',
+      body: JSON.stringify(noteData),
+    });
+  }
+
+  async deleteClientNote(clientId: number, noteId: number): Promise<void> {
+    await this.request(`/crm/clients/${clientId}/notes/${noteId}`, {
+      method: 'DELETE',
+    });
+  }
+}
+
+// Additional types for expenses and bank statements
+export interface Expense {
+  id: number;
+  amount: number;
+  currency: string;
+  expense_date: string;
+  category: string;
+  vendor?: string;
+  tax_rate?: number;
+  tax_amount?: number;
+  total_amount?: number;
+  payment_method?: string;
+  reference_number?: string;
+  status: 'recorded' | 'pending' | 'completed';
+  notes?: string;
+  receipt_filename?: string;
+  labels?: string[];
+  invoice_id?: number;
+  tenant_id: number;
+  created_at: string;
+  updated_at: string;
+  attachments_count?: number;
+}
+
+export interface BankStatement {
+  id: number;
+  original_filename: string;
+  status: string;
+  extracted_count: number;
+  created_at: string;
+  labels?: string[];
+}
+
+export interface BankTransaction {
+  id?: number;
+  date: string;
+  description: string;
+  amount: number;
+  transaction_type: 'debit' | 'credit';
+  balance?: number;
+  category?: string;
+  invoice_id?: number;
+  expense_id?: number;
+}
+
+export interface BankStatementDetail {
+  id: number;
+  original_filename: string;
+  status: string;
+  extracted_count: number;
+  created_at: string;
+  notes?: string;
+  labels?: string[];
+  transactions: BankTransaction[];
 }
 
 const apiService = new ApiService();

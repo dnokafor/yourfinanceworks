@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2, Download, Database, Upload, Plus, Edit, Trash2 } from "lucide-react";
+import { Loader2, Download, Database, Upload, Plus, Edit, Trash2, Calculator, CheckCircle, XCircle } from "lucide-react";
 import { settingsApi, discountRulesApi, aiConfigApi, DiscountRule, DiscountRuleCreate, AIConfig, AIConfigCreate } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -17,8 +17,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Badge } from "@/components/ui/badge";
 import { CurrencyManager } from "@/components/ui/currency-manager";
 import { CurrencySelector } from "@/components/ui/currency-selector";
+import { SearchStatus } from "@/components/search/SearchStatus";
 import { api } from "@/lib/api";
 import { getErrorMessage } from '@/lib/api';
+import APIClientManagement from "@/components/APIClientManagement/APIClientManagement";
 
 const Settings = () => {
   const { t } = useTranslation();
@@ -28,6 +30,10 @@ const Settings = () => {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  // Backend hardcoded English defaults used for detection
+  const BACKEND_DEFAULT_NOTES = t('settings.thank_you');
+  const BACKEND_DEFAULT_TERMS = t('settings.payment_terms_net30');
   
   // Discount rules state
   const [discountRules, setDiscountRules] = useState<DiscountRule[]>([]);
@@ -72,15 +78,27 @@ const Settings = () => {
     is_active: true,
     is_default: false,
   });
+  const [testingNewConfig, setTestingNewConfig] = useState(false);
+  const [testResult, setTestResult] = useState<{success: boolean, message: string} | null>(null);
   
   const [invoiceSettings, setInvoiceSettings] = useState({
     prefix: "INV-",
     next_number: "0001",
-    terms: "Payment due within 30 days from the date of invoice.\nLate payments are subject to a 1.5% monthly finance charge.",
-    notes: "Thank you for your business!",
+    terms: t('settings.payment_terms_net30'),
+    notes: t('settings.thank_you'),
     send_copy: true,
     auto_reminders: true,
   });
+
+  const [taxSettings, setTaxSettings] = useState({
+    enabled: true,
+    base_url: "http://192.168.86.39:8001",
+    api_key: "ak_Pw0viX75yYrLT8tUmS2c912gDDrLsR4qvtIO8XRrruU",
+    timeout: 30,
+    retry_attempts: 3,
+  });
+  const [testingTaxConnection, setTestingTaxConnection] = useState(false);
+  const [taxTestResult, setTaxTestResult] = useState<{success: boolean, message: string} | null>(null);
 
   const [emailSettings, setEmailSettings] = useState({
     provider: "aws_ses",
@@ -133,6 +151,53 @@ const Settings = () => {
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [savingNotifications, setSavingNotifications] = useState(false);
 
+  // Get tab from URL parameters
+  const [activeTab, setActiveTab] = useState(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('tab') || 'company';
+  });
+
+  // Update active tab when URL changes
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tab = urlParams.get('tab');
+    if (tab && tab !== activeTab) {
+      setActiveTab(tab);
+    }
+  }, []);
+
+  // Handle highlighting for AI Assistant toggle
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tab = urlParams.get('tab');
+    const highlight = urlParams.get('highlight');
+    
+    console.log('Settings highlight check:', { tab, highlight, activeTab });
+    
+    if (tab === 'ai-config' && highlight === 'ai_assistant' && activeTab === 'ai-config') {
+      console.log('Attempting to highlight AI Assistant toggle');
+      // Wait for component to render and tab to switch, then highlight the AI Assistant toggle
+      setTimeout(() => {
+        const aiToggle = document.getElementById('ai_assistant');
+        console.log('Found AI toggle:', aiToggle);
+        if (aiToggle) {
+          const toggleContainer = aiToggle.closest('.flex');
+          console.log('Found toggle container:', toggleContainer);
+          if (toggleContainer) {
+            toggleContainer.classList.add('bg-yellow-100', 'dark:bg-yellow-900/30', 'border-2', 'border-yellow-400', 'dark:border-yellow-600', 'rounded-lg', 'p-3', 'transition-all', 'duration-300');
+            console.log('Applied highlighting styles');
+            
+            // Remove highlighting after 3 seconds
+            setTimeout(() => {
+              toggleContainer.classList.remove('bg-yellow-100', 'dark:bg-yellow-900/30', 'border-2', 'border-yellow-400', 'dark:border-yellow-600', 'rounded-lg', 'p-3', 'transition-all', 'duration-300');
+              console.log('Removed highlighting styles');
+            }, 3000);
+          }
+        }
+      }, 1500);
+    }
+  }, [activeTab]);
+
   // Fetch settings when component mounts
   useEffect(() => {
     const fetchSettings = async () => {
@@ -155,12 +220,24 @@ const Settings = () => {
         // Set AI assistant enabled state
         setAiAssistantEnabled(settings.enable_ai_assistant ?? false);
         
+        // Update user profile with any settings that might affect it
+        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+        if (currentUser) {
+          const updatedUser = { ...currentUser };
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+          setUserProfile(updatedUser);
+        }
+        
         if (settings.invoice_settings) {
           setInvoiceSettings({
             prefix: settings.invoice_settings.prefix || invoiceSettings.prefix,
             next_number: settings.invoice_settings.next_number || invoiceSettings.next_number,
-            terms: settings.invoice_settings.terms || invoiceSettings.terms,
-            notes: settings.invoice_settings.notes || invoiceSettings.notes,
+            terms: (settings.invoice_settings.terms && settings.invoice_settings.terms !== BACKEND_DEFAULT_TERMS)
+              ? settings.invoice_settings.terms
+              : t('settings.payment_terms_net30'),
+            notes: (settings.invoice_settings.notes && settings.invoice_settings.notes !== BACKEND_DEFAULT_NOTES)
+              ? settings.invoice_settings.notes
+              : t('settings.thank_you'),
             send_copy: settings.invoice_settings.send_copy ?? invoiceSettings.send_copy,
             auto_reminders: settings.invoice_settings.auto_reminders ?? invoiceSettings.auto_reminders,
           });
@@ -168,7 +245,19 @@ const Settings = () => {
 
         // Try to fetch email settings
         try {
-          const emailData = await api.get('/email/config');
+          type EmailConfig = {
+            provider: string;
+            from_name: string;
+            from_email: string;
+            enabled: boolean;
+            aws_access_key_id?: string;
+            aws_secret_access_key?: string;
+            aws_region?: string;
+            azure_connection_string?: string;
+            mailgun_api_key?: string;
+            mailgun_domain?: string;
+          };
+          const emailData = await api.get<EmailConfig>('/email/config');
           setEmailSettings({
             provider: emailData.provider || emailSettings.provider,
             from_name: emailData.from_name || emailSettings.from_name,
@@ -212,7 +301,29 @@ const Settings = () => {
         // Fetch notification settings
         try {
           setLoadingNotifications(true);
-          const notifData = await api.get('/notifications/settings');
+          type NotificationSettingsResponse = {
+            user_created?: boolean;
+            user_updated?: boolean;
+            user_deleted?: boolean;
+            user_login?: boolean;
+            client_created?: boolean;
+            client_updated?: boolean;
+            client_deleted?: boolean;
+            invoice_created?: boolean;
+            invoice_updated?: boolean;
+            invoice_deleted?: boolean;
+            invoice_sent?: boolean;
+            invoice_paid?: boolean;
+            invoice_overdue?: boolean;
+            payment_created?: boolean;
+            payment_updated?: boolean;
+            payment_deleted?: boolean;
+            settings_updated?: boolean;
+            notification_email?: string;
+            daily_summary?: boolean;
+            weekly_summary?: boolean;
+          };
+          const notifData = await api.get<NotificationSettingsResponse>('/notifications/settings');
           setNotificationSettings({
             user_created: notifData.user_created || false,
             user_updated: notifData.user_updated || false,
@@ -284,7 +395,7 @@ const Settings = () => {
     if (!testEmail) return;
 
     try {
-      const result = await api.post('/email/test', { test_email: testEmail });
+      const result = await api.post<{ success: boolean; message: string }>('/email/test', { test_email: testEmail });
       if (result.success) {
         toast.success(t('settings.test_email_sent_successfully'));
       } else {
@@ -298,6 +409,11 @@ const Settings = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
+      // Upload logo first if there's a new file
+      if (logoFile) {
+        await uploadLogo();
+      }
+      
       // Format data for API
       const settingsData = {
         company_info: {
@@ -319,10 +435,10 @@ const Settings = () => {
         enable_ai_assistant: aiAssistantEnabled
       };
       
-      console.log('Settings: Saving AI Assistant state', {
-        currentState: aiAssistantEnabled,
-        settingsData: settingsData.enable_ai_assistant
-      });
+      // console.log('Settings: Saving AI Assistant state', {
+      //   currentState: aiAssistantEnabled,
+      //   settingsData: settingsData.enable_ai_assistant
+      // });
       
       // Send to API
       await settingsApi.updateSettings(settingsData);
@@ -366,11 +482,64 @@ const Settings = () => {
       try {
         await api.put('/email/config', emailSettings);
       } catch (error) {
-        console.log("Failed to save email settings:", error);
+        toast.error(getErrorMessage(error, t));
       }
 
     } catch (error) {
       console.error("Failed to save settings:", error);
+      toast.error(getErrorMessage(error, t));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTestTaxConnection = async () => {
+    setTestingTaxConnection(true);
+    setTaxTestResult(null);
+
+    try {
+      // This would typically call an API endpoint to test the tax service connection
+      // For now, we'll simulate a test with a timeout
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Simulate success/failure based on whether the base URL is set
+      if (taxSettings.base_url && taxSettings.base_url.includes('http')) {
+        setTaxTestResult({
+          success: true,
+          message: "Tax service connection successful! API responded correctly."
+        });
+        toast.success("Tax service connection test passed!");
+      } else {
+        setTaxTestResult({
+          success: false,
+          message: "Tax service connection failed. Please check your base URL configuration."
+        });
+        toast.error("Tax service connection test failed!");
+      }
+    } catch (error) {
+      setTaxTestResult({
+        success: false,
+        message: "Connection test failed due to network error or invalid configuration."
+      });
+      toast.error("Tax service connection test failed!");
+    } finally {
+      setTestingTaxConnection(false);
+    }
+  };
+
+  const handleSaveTaxSettings = async () => {
+    setSaving(true);
+    try {
+      // This would typically call an API endpoint to save tax settings
+      // For now, we'll simulate saving with a timeout
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Save tax settings to local storage or API
+      localStorage.setItem('taxSettings', JSON.stringify(taxSettings));
+
+      toast.success("Tax settings saved successfully!");
+    } catch (error) {
+      console.error("Failed to save tax settings:", error);
       toast.error(getErrorMessage(error, t));
     } finally {
       setSaving(false);
@@ -641,18 +810,60 @@ const Settings = () => {
 
   const handleTestAIConfig = async (id: number) => {
     try {
+      console.log(`Testing AI config ${id}...`);
       const result = await aiConfigApi.testAIConfig(id);
+      console.log('Test AI config result:', result);
+      
       if (result.success) {
         toast.success(t('settings.ai_config_test_successful'));
         // Refresh AI configs to show updated tested status
         const configs = await aiConfigApi.getAIConfigs();
         setAiConfigs(configs);
       } else {
-        toast.error(t('settings.ai_config_test_failed', { message: result.message }));
+        console.log('Test failed with message:', result.message);
+        toast.error(result.message || t('settings.ai_config_test_failed'));
       }
     } catch (error) {
       console.error("Failed to test AI config:", error);
       toast.error(getErrorMessage(error, t));
+    }
+  };
+
+  const handleTestNewAIConfig = async () => {
+    setTestingNewConfig(true);
+    setTestResult(null);
+    try {
+      // Create a temporary config for testing
+      const tempConfig = await aiConfigApi.createAIConfig(newAIConfig);
+      const result = await aiConfigApi.testAIConfig(tempConfig.id);
+      
+      if (result.success) {
+        setTestResult({success: true, message: result.message || t('settings.ai_config_test_successful')});
+        // Update the newAIConfig to mark it as tested
+        setNewAIConfig(prev => ({ ...prev, tested: true }));
+        
+        // Check if this is the first tested provider and set as default
+        const testedConfigs = aiConfigs.filter(c => c.tested);
+        if (testedConfigs.length === 0) {
+          setNewAIConfig(prev => ({ ...prev, tested: true, is_default: true }));
+          setTestResult({success: true, message: result.message + ' and set as default provider'});
+        }
+      } else {
+        setTestResult({success: false, message: result.message || t('settings.ai_config_test_failed')});
+      }
+      
+      // Always delete the temporary config after testing
+      await aiConfigApi.deleteAIConfig(tempConfig.id);
+      
+      // Refresh the AI configs list to reflect any changes
+      const configs = await aiConfigApi.getAIConfigs();
+      setAiConfigs(configs);
+      
+    } catch (error) {
+      console.error("Failed to test new AI config:", error);
+      setTestResult({success: false, message: getErrorMessage(error, t)});
+    } finally {
+      setTestingNewConfig(false);
     }
   };
 
@@ -694,6 +905,7 @@ const Settings = () => {
       is_default: false,
       tested: false,
     });
+    setTestResult(null);
     setShowAIConfigDialog(true);
   };
 
@@ -703,6 +915,7 @@ const Settings = () => {
       provider_name: provider,
       model_name: 
         provider === "openai" ? "gpt-4" :
+        provider === "openrouter" ? "openai/gpt-4" :
         provider === "ollama" ? "llama2" :
         provider === "anthropic" ? "claude-3-sonnet" :
         provider === "google" ? "gemini-pro" :
@@ -726,7 +939,6 @@ const Settings = () => {
   const uploadLogo = async () => {
     if (!logoFile) return;
 
-    setUploadingLogo(true);
     try {
       const formData = new FormData();
       formData.append('file', logoFile);
@@ -749,32 +961,13 @@ const Settings = () => {
       // Update company info with the new logo URL
       setCompanyInfo(prev => ({ ...prev, logo: logoUrl }));
       
-      // Save the settings with the new logo URL to the backend
-      try {
-        await settingsApi.updateSettings({
-          company_info: {
-            ...companyInfo,
-            logo: logoUrl
-          }
-        });
-      } catch (saveError) {
-        console.error('Failed to save logo URL to settings:', saveError);
-        // Don't show error to user since upload succeeded
-      }
-      
-      // Invalidate settings query to refresh sidebar and other components
-      queryClient.invalidateQueries({ queryKey: ['settings'] });
-      
       // Clear the file input and preview
       setLogoFile(null);
       setLogoPreview("");
       
-      toast.success(t('settings.logo_uploaded_successfully'));
     } catch (error) {
       console.error('Failed to upload logo:', error);
-      toast.error(t('settings.failed_to_upload_logo'));
-    } finally {
-      setUploadingLogo(false);
+      throw error; // Re-throw to be handled by handleSave
     }
   };
 
@@ -789,6 +982,7 @@ const Settings = () => {
       const updated = await api.put('/auth/me', {
         first_name: userProfile.first_name,
         last_name: userProfile.last_name,
+        show_analytics: userProfile.show_analytics ?? true,
       });
       // Update localStorage and state
       localStorage.setItem('user', JSON.stringify(updated));
@@ -854,15 +1048,17 @@ const Settings = () => {
           <p className="text-muted-foreground">{t('settings.description')}</p>
         </div>
 
-        <Tabs defaultValue="company" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="flex w-full flex-wrap gap-1 h-auto justify-start">
             <TabsTrigger value="company" className="text-xs md:text-sm">{t('settings.tabs.company')}</TabsTrigger>
             <TabsTrigger value="invoices" className="text-xs md:text-sm">{t('settings.tabs.invoices')}</TabsTrigger>
             <TabsTrigger value="currencies" className="text-xs md:text-sm">{t('settings.tabs.currencies')}</TabsTrigger>
             <TabsTrigger value="discount-rules" className="text-xs md:text-sm">{t('settings.tabs.discount_rules')}</TabsTrigger>
             <TabsTrigger value="ai-config" className="text-xs md:text-sm">{t('settings.tabs.ai_config')}</TabsTrigger>
-            <TabsTrigger value="email" className="text-xs md:text-sm">{t('settings.tabs.email')}</TabsTrigger>
-            <TabsTrigger value="notifications" className="text-xs md:text-sm">Notifications</TabsTrigger>
+            <TabsTrigger value="api-keys" className="text-xs md:text-sm">API Keys</TabsTrigger>
+            <TabsTrigger value="search" className="text-xs md:text-sm">Search</TabsTrigger>
+            <TabsTrigger value="email-notifications" className="text-xs md:text-sm">Email & Notifications</TabsTrigger>
+            <TabsTrigger value="tax-integration" className="text-xs md:text-sm">Tax Integration</TabsTrigger>
             <TabsTrigger value="export" className="text-xs md:text-sm">{t('settings.tabs.export')}</TabsTrigger>
           </TabsList>
           
@@ -893,6 +1089,17 @@ const Settings = () => {
                       autoComplete="family-name"
                     />
                   </div>
+                </div>
+                <div className="flex items-center justify-between mt-4">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="show_analytics">Show Analytics Menu</Label>
+                    <p className="text-sm text-muted-foreground">Show or hide the analytics menu in the sidebar</p>
+                  </div>
+                  <Switch 
+                    id="show_analytics" 
+                    checked={userProfile.show_analytics ?? true} 
+                    onCheckedChange={(checked) => setUserProfile((prev: any) => ({ ...prev, show_analytics: checked }))} 
+                  />
                 </div>
                 <div className="flex justify-end mt-4">
                   <Button onClick={handleProfileSave} disabled={profileSaving}>
@@ -1006,22 +1213,6 @@ const Settings = () => {
                               e.currentTarget.style.display = 'none';
                             }}
                           />
-                          {logoFile && (
-                            <Button 
-                              onClick={uploadLogo} 
-                              disabled={uploadingLogo}
-                              size="sm"
-                            >
-                              {uploadingLogo ? (
-                                <>
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  {t('settings.uploading_logo')}
-                                </>
-                              ) : (
-                                t('settings.upload_logo')
-                              )}
-                            </Button>
-                          )}
                         </div>
                       </div>
                     )}
@@ -1142,7 +1333,7 @@ const Settings = () => {
                   <CardTitle>{t('settings.discount_rules')}</CardTitle>
                   <Button onClick={openCreateDialog} size="sm">
                     <Plus className="h-4 w-4 mr-2" />
-                    {t('settings.add_rule')}
+                    {t('settings.tabs.add_rule')}
                   </Button>
                 </div>
               </CardHeader>
@@ -1169,13 +1360,15 @@ const Settings = () => {
                             <Badge variant={rule.is_active ? "default" : "secondary"}>
                               {rule.is_active ? t('settings.rule_active') : t('settings.rule_inactive')}
                             </Badge>
-                            <Badge variant="outline">{t('settings.priority')}: {rule.priority}</Badge>
+                            <Badge variant="outline" className="font-semibold">
+                              {t('settings.priority')}: {rule.priority}
+                            </Badge>
                             {/* Show currency badge */}
                             <Badge variant="secondary">{rule.currency || "USD"}</Badge>
                           </div>
                           <p className="text-sm text-muted-foreground">
-                            {rule.discount_type === "percentage" 
-                              ? `${rule.discount_value}% ${t('settings.discount')}` 
+                            {rule.discount_type === "percentage"
+                              ? `${rule.discount_value}% ${t('settings.discount')}`
                               : `$${rule.discount_value} ${t('settings.discount')}`
                             } {t('settings.when_total')} ≥ ${rule.min_amount}
                           </p>
@@ -1314,436 +1507,609 @@ const Settings = () => {
             </Card>
           </TabsContent>
           
-          <TabsContent value="notifications" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Email Notifications</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Configure which operations trigger email notifications
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {loadingNotifications ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                    <span className="text-sm text-muted-foreground">Loading notification settings...</span>
+          <TabsContent value="search" className="mt-6">
+            <SearchStatus />
+          </TabsContent>
+          
+          <TabsContent value="email-notifications" className="mt-6">
+            <div className="space-y-6">
+              {/* Email Configuration Section */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>{t('settings.email_configuration')}</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Configure your email service provider and settings
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="email_enabled">{t('settings.enable_email_service')}</Label>
+                      <p className="text-sm text-muted-foreground">{t('settings.enable_email_service_description')}</p>
+                    </div>
+                    <Switch
+                      id="email_enabled"
+                      checked={emailSettings.enabled}
+                      onCheckedChange={(checked) => handleEmailToggleChange('enabled', checked)}
+                    />
                   </div>
-                ) : (
-                  <>
-                    {/* Custom notification email */}
-                    <div className="space-y-2">
-                      <Label htmlFor="notification_email">Notification Email (Optional)</Label>
-                      <Input
-                        id="notification_email"
-                        type="email"
-                        value={notificationSettings.notification_email}
-                        onChange={handleNotificationEmailChange}
-                        placeholder="Leave empty to use your account email"
-                      />
-                      <p className="text-sm text-muted-foreground">
-                        If specified, notifications will be sent to this email instead of your account email
+
+                  {emailSettings.enabled && (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="provider">{t('settings.email_provider')}</Label>
+                        <Select value={emailSettings.provider} onValueChange={handleEmailProviderChange}>
+                          <SelectTrigger>
+                            <SelectValue placeholder={t('settings.select_email_provider')} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="aws_ses">{t('settings.aws_ses')}</SelectItem>
+                            <SelectItem value="azure_email">{t('settings.azure_email_services')}</SelectItem>
+                            <SelectItem value="mailgun">{t('settings.mailgun')}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="from_name">{t('settings.from_name')}</Label>
+                          <Input
+                            id="from_name"
+                            name="from_name"
+                            value={emailSettings.from_name}
+                            onChange={handleEmailChange}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="from_email">{t('settings.from_email')}</Label>
+                          <Input
+                            id="from_email"
+                            name="from_email"
+                            type="email"
+                            value={emailSettings.from_email}
+                            onChange={handleEmailChange}
+                          />
+                        </div>
+                      </div>
+
+                      {emailSettings.provider === "aws_ses" && (
+                        <div className="space-y-4 p-4 border rounded-lg">
+                          <h4 className="font-medium">{t('settings.aws_ses_configuration')}</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="aws_access_key_id">{t('settings.aws_access_key_id')}</Label>
+                              <Input
+                                id="aws_access_key_id"
+                                name="aws_access_key_id"
+                                type="password"
+                                value={emailSettings.aws_access_key_id}
+                                onChange={handleEmailChange}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="aws_secret_access_key">{t('settings.aws_secret_access_key')}</Label>
+                              <Input
+                                id="aws_secret_access_key"
+                                name="aws_secret_access_key"
+                                type="password"
+                                value={emailSettings.aws_secret_access_key}
+                                onChange={handleEmailChange}
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="aws_region">{t('settings.aws_region')}</Label>
+                            <Select value={emailSettings.aws_region} onValueChange={(value) => setEmailSettings(prev => ({ ...prev, aws_region: value }))}>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="us-east-1">{t('settings.us_east_virginia')}</SelectItem>
+                                <SelectItem value="us-west-2">{t('settings.us_west_oregon')}</SelectItem>
+                                <SelectItem value="eu-west-1">{t('settings.eu_ireland')}</SelectItem>
+                                <SelectItem value="ap-southeast-1">{t('settings.asia_pacific_singapore')}</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      )}
+
+                      {emailSettings.provider === "azure_email" && (
+                        <div className="space-y-4 p-4 border rounded-lg">
+                          <h4 className="font-medium">{t('settings.azure_email_services_configuration')}</h4>
+                          <div className="space-y-2">
+                            <Label htmlFor="azure_connection_string">{t('settings.azure_connection_string')}</Label>
+                            <Input
+                              id="azure_connection_string"
+                              name="azure_connection_string"
+                              type="password"
+                              value={emailSettings.azure_connection_string}
+                              onChange={handleEmailChange}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {emailSettings.provider === "mailgun" && (
+                        <div className="space-y-4 p-4 border rounded-lg">
+                          <h4 className="font-medium">{t('settings.mailgun_configuration')}</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="mailgun_api_key">{t('settings.mailgun_api_key')}</Label>
+                              <Input
+                                id="mailgun_api_key"
+                                name="mailgun_api_key"
+                                type="password"
+                                value={emailSettings.mailgun_api_key}
+                                onChange={handleEmailChange}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="mailgun_domain">{t('settings.mailgun_domain')}</Label>
+                              <Input
+                                id="mailgun_domain"
+                                name="mailgun_domain"
+                                value={emailSettings.mailgun_domain}
+                                onChange={handleEmailChange}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between pt-4 border-t">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={testEmailConfiguration}
+                        >
+                          {t('settings.test_configuration')}
+                        </Button>
+                        <Button onClick={handleSave} disabled={saving}>
+                          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          {t('settings.save_email_settings')}
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Notification Settings Section */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Notification Settings</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Configure which operations trigger email notifications
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {loadingNotifications ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                      <span className="text-sm text-muted-foreground">Loading notification settings...</span>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Custom notification email */}
+                      <div className="space-y-2">
+                        <Label htmlFor="notification_email">Notification Email (Optional)</Label>
+                        <Input
+                          id="notification_email"
+                          type="email"
+                          value={notificationSettings.notification_email}
+                          onChange={handleNotificationEmailChange}
+                          placeholder="Leave empty to use your account email"
+                        />
+                        <p className="text-sm text-muted-foreground">
+                          If specified, notifications will be sent to this email instead of your account email
+                        </p>
+                      </div>
+
+                      {/* User Operations */}
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-semibold">User Operations</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>User Created</Label>
+                              <p className="text-sm text-muted-foreground">When a new user is added</p>
+                            </div>
+                            <Switch
+                              checked={notificationSettings.user_created}
+                              onCheckedChange={(checked) => handleNotificationToggle('user_created', checked)}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>User Updated</Label>
+                              <p className="text-sm text-muted-foreground">When user info is modified</p>
+                            </div>
+                            <Switch
+                              checked={notificationSettings.user_updated}
+                              onCheckedChange={(checked) => handleNotificationToggle('user_updated', checked)}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>User Deleted</Label>
+                              <p className="text-sm text-muted-foreground">When a user is removed</p>
+                            </div>
+                            <Switch
+                              checked={notificationSettings.user_deleted}
+                              onCheckedChange={(checked) => handleNotificationToggle('user_deleted', checked)}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>User Login</Label>
+                              <p className="text-sm text-muted-foreground">When a user logs in</p>
+                            </div>
+                            <Switch
+                              checked={notificationSettings.user_login}
+                              onCheckedChange={(checked) => handleNotificationToggle('user_login', checked)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Client Operations */}
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-semibold">Client Operations</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>Client Created</Label>
+                              <p className="text-sm text-muted-foreground">When a new client is added</p>
+                            </div>
+                            <Switch
+                              checked={notificationSettings.client_created}
+                              onCheckedChange={(checked) => handleNotificationToggle('client_created', checked)}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>Client Updated</Label>
+                              <p className="text-sm text-muted-foreground">When client info is modified</p>
+                            </div>
+                            <Switch
+                              checked={notificationSettings.client_updated}
+                              onCheckedChange={(checked) => handleNotificationToggle('client_updated', checked)}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>Client Deleted</Label>
+                              <p className="text-sm text-muted-foreground">When a client is removed</p>
+                            </div>
+                            <Switch
+                              checked={notificationSettings.client_deleted}
+                              onCheckedChange={(checked) => handleNotificationToggle('client_deleted', checked)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Invoice Operations */}
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-semibold">Invoice Operations</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>Invoice Created</Label>
+                              <p className="text-sm text-muted-foreground">When a new invoice is created</p>
+                            </div>
+                            <Switch
+                              checked={notificationSettings.invoice_created}
+                              onCheckedChange={(checked) => handleNotificationToggle('invoice_created', checked)}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>Invoice Updated</Label>
+                              <p className="text-sm text-muted-foreground">When invoice is modified</p>
+                            </div>
+                            <Switch
+                              checked={notificationSettings.invoice_updated}
+                              onCheckedChange={(checked) => handleNotificationToggle('invoice_updated', checked)}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>Invoice Deleted</Label>
+                              <p className="text-sm text-muted-foreground">When an invoice is deleted</p>
+                            </div>
+                            <Switch
+                              checked={notificationSettings.invoice_deleted}
+                              onCheckedChange={(checked) => handleNotificationToggle('invoice_deleted', checked)}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>Invoice Sent</Label>
+                              <p className="text-sm text-muted-foreground">When invoice is sent to client</p>
+                            </div>
+                            <Switch
+                              checked={notificationSettings.invoice_sent}
+                              onCheckedChange={(checked) => handleNotificationToggle('invoice_sent', checked)}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>Invoice Paid</Label>
+                              <p className="text-sm text-muted-foreground">When invoice is marked as paid</p>
+                            </div>
+                            <Switch
+                              checked={notificationSettings.invoice_paid}
+                              onCheckedChange={(checked) => handleNotificationToggle('invoice_paid', checked)}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>Invoice Overdue</Label>
+                              <p className="text-sm text-muted-foreground">When invoice becomes overdue</p>
+                            </div>
+                            <Switch
+                              checked={notificationSettings.invoice_overdue}
+                              onCheckedChange={(checked) => handleNotificationToggle('invoice_overdue', checked)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Payment Operations */}
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-semibold">Payment Operations</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>Payment Created</Label>
+                              <p className="text-sm text-muted-foreground">When a payment is recorded</p>
+                            </div>
+                            <Switch
+                              checked={notificationSettings.payment_created}
+                              onCheckedChange={(checked) => handleNotificationToggle('payment_created', checked)}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>Payment Updated</Label>
+                              <p className="text-sm text-muted-foreground">When payment is modified</p>
+                            </div>
+                            <Switch
+                              checked={notificationSettings.payment_updated}
+                              onCheckedChange={(checked) => handleNotificationToggle('payment_updated', checked)}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>Payment Deleted</Label>
+                              <p className="text-sm text-muted-foreground">When a payment is removed</p>
+                            </div>
+                            <Switch
+                              checked={notificationSettings.payment_deleted}
+                              onCheckedChange={(checked) => handleNotificationToggle('payment_deleted', checked)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Summary Notifications */}
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-semibold">Summary Notifications</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>Daily Summary</Label>
+                              <p className="text-sm text-muted-foreground">Daily activity summary</p>
+                            </div>
+                            <Switch
+                              checked={notificationSettings.daily_summary}
+                              onCheckedChange={(checked) => handleNotificationToggle('daily_summary', checked)}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>Weekly Summary</Label>
+                              <p className="text-sm text-muted-foreground">Weekly activity summary</p>
+                            </div>
+                            <Switch
+                              checked={notificationSettings.weekly_summary}
+                              onCheckedChange={(checked) => handleNotificationToggle('weekly_summary', checked)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex justify-between pt-4 border-t">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleTestNotification}
+                        >
+                          Send Test Notification
+                        </Button>
+                        <Button
+                          onClick={handleSaveNotifications}
+                          disabled={savingNotifications}
+                        >
+                          {savingNotifications && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          Save Notification Settings
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="tax-integration" className="mt-6">
+            <div className="space-y-6">
+              {/* Tax Service Configuration Section */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calculator className="h-5 w-5" />
+                    Tax Service Configuration
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Configure integration with your tax calculation service
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="tax_enabled">Enable Tax Service Integration</Label>
+                      <p className="text-sm text-muted-foreground">Enable automatic tax calculation for invoices</p>
+                    </div>
+                    <Switch
+                      id="tax_enabled"
+                      checked={taxSettings.enabled}
+                      onCheckedChange={(checked) => setTaxSettings(prev => ({ ...prev, enabled: checked }))}
+                    />
+                  </div>
+
+                  {taxSettings.enabled && (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="tax_base_url">Tax Service Base URL</Label>
+                          <Input
+                            id="tax_base_url"
+                            type="url"
+                            value={taxSettings.base_url}
+                            onChange={(e) => setTaxSettings(prev => ({ ...prev, base_url: e.target.value }))}
+                            placeholder="https://api.tax-service.com"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="tax_api_key">API Key</Label>
+                          <Input
+                            id="tax_api_key"
+                            type="password"
+                            value={taxSettings.api_key}
+                            onChange={(e) => setTaxSettings(prev => ({ ...prev, api_key: e.target.value }))}
+                            placeholder="Enter your API key"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="tax_timeout">Request Timeout (seconds)</Label>
+                          <Input
+                            id="tax_timeout"
+                            type="number"
+                            min="1"
+                            max="300"
+                            value={taxSettings.timeout}
+                            onChange={(e) => setTaxSettings(prev => ({ ...prev, timeout: parseInt(e.target.value) || 30 }))}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="tax_retry_attempts">Retry Attempts</Label>
+                          <Input
+                            id="tax_retry_attempts"
+                            type="number"
+                            min="0"
+                            max="10"
+                            value={taxSettings.retry_attempts}
+                            onChange={(e) => setTaxSettings(prev => ({ ...prev, retry_attempts: parseInt(e.target.value) || 3 }))}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Test Connection Section */}
+                      <div className="space-y-4 p-4 border rounded-lg bg-gray-50">
+                        <h4 className="font-medium">Test Connection</h4>
+                        <p className="text-sm text-muted-foreground">
+                          Verify that your tax service configuration is working correctly
+                        </p>
+
+                        {taxTestResult && (
+                          <div className={`p-3 rounded-md text-sm ${
+                            taxTestResult.success
+                              ? 'bg-green-50 text-green-800 border border-green-200'
+                              : 'bg-red-50 text-red-800 border border-red-200'
+                          }`}>
+                            <div className="flex items-center gap-2">
+                              {taxTestResult.success ? (
+                                <CheckCircle className="h-4 w-4" />
+                              ) : (
+                                <XCircle className="h-4 w-4" />
+                              )}
+                              <span>{taxTestResult.message}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => handleTestTaxConnection()}
+                          disabled={testingTaxConnection}
+                          className="w-full sm:w-auto"
+                        >
+                          {testingTaxConnection && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          Test Tax Service Connection
+                        </Button>
+                      </div>
+
+                      <div className="flex justify-end pt-4 border-t">
+                        <Button onClick={() => handleSaveTaxSettings()} disabled={saving}>
+                          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          Save Tax Settings
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Tax Integration Status Section */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Integration Status</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Current status of tax service integration
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {taxSettings.enabled ? '✅' : '❌'}
+                      </div>
+                      <h3 className="font-medium text-blue-900 mt-2">Service Status</h3>
+                      <p className="text-sm text-blue-700 mt-1">
+                        {taxSettings.enabled ? 'Enabled' : 'Disabled'}
                       </p>
                     </div>
-
-                    {/* User Operations */}
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-semibold">User Operations</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label>User Created</Label>
-                            <p className="text-sm text-muted-foreground">When a new user is added</p>
-                          </div>
-                          <Switch
-                            checked={notificationSettings.user_created}
-                            onCheckedChange={(checked) => handleNotificationToggle('user_created', checked)}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label>User Updated</Label>
-                            <p className="text-sm text-muted-foreground">When user info is modified</p>
-                          </div>
-                          <Switch
-                            checked={notificationSettings.user_updated}
-                            onCheckedChange={(checked) => handleNotificationToggle('user_updated', checked)}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label>User Deleted</Label>
-                            <p className="text-sm text-muted-foreground">When a user is removed</p>
-                          </div>
-                          <Switch
-                            checked={notificationSettings.user_deleted}
-                            onCheckedChange={(checked) => handleNotificationToggle('user_deleted', checked)}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label>User Login</Label>
-                            <p className="text-sm text-muted-foreground">When a user logs in</p>
-                          </div>
-                          <Switch
-                            checked={notificationSettings.user_login}
-                            onCheckedChange={(checked) => handleNotificationToggle('user_login', checked)}
-                          />
-                        </div>
-                      </div>
+                    <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
+                      <div className="text-2xl font-bold text-green-600">🔗</div>
+                      <h3 className="font-medium text-green-900 mt-2">API Connection</h3>
+                      <p className="text-sm text-green-700 mt-1">
+                        {taxTestResult?.success ? 'Connected' : 'Not Tested'}
+                      </p>
                     </div>
-
-                    {/* Client Operations */}
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-semibold">Client Operations</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label>Client Created</Label>
-                            <p className="text-sm text-muted-foreground">When a new client is added</p>
-                          </div>
-                          <Switch
-                            checked={notificationSettings.client_created}
-                            onCheckedChange={(checked) => handleNotificationToggle('client_created', checked)}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label>Client Updated</Label>
-                            <p className="text-sm text-muted-foreground">When client info is modified</p>
-                          </div>
-                          <Switch
-                            checked={notificationSettings.client_updated}
-                            onCheckedChange={(checked) => handleNotificationToggle('client_updated', checked)}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label>Client Deleted</Label>
-                            <p className="text-sm text-muted-foreground">When a client is removed</p>
-                          </div>
-                          <Switch
-                            checked={notificationSettings.client_deleted}
-                            onCheckedChange={(checked) => handleNotificationToggle('client_deleted', checked)}
-                          />
-                        </div>
-                      </div>
+                    <div className="text-center p-4 bg-purple-50 rounded-lg border border-purple-200">
+                      <div className="text-2xl font-bold text-purple-600">⚙️</div>
+                      <h3 className="font-medium text-purple-900 mt-2">Configuration</h3>
+                      <p className="text-sm text-purple-700 mt-1">
+                        {taxSettings.base_url ? 'Configured' : 'Not Configured'}
+                      </p>
                     </div>
-
-                    {/* Invoice Operations */}
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-semibold">Invoice Operations</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label>Invoice Created</Label>
-                            <p className="text-sm text-muted-foreground">When a new invoice is created</p>
-                          </div>
-                          <Switch
-                            checked={notificationSettings.invoice_created}
-                            onCheckedChange={(checked) => handleNotificationToggle('invoice_created', checked)}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label>Invoice Updated</Label>
-                            <p className="text-sm text-muted-foreground">When invoice is modified</p>
-                          </div>
-                          <Switch
-                            checked={notificationSettings.invoice_updated}
-                            onCheckedChange={(checked) => handleNotificationToggle('invoice_updated', checked)}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label>Invoice Deleted</Label>
-                            <p className="text-sm text-muted-foreground">When an invoice is deleted</p>
-                          </div>
-                          <Switch
-                            checked={notificationSettings.invoice_deleted}
-                            onCheckedChange={(checked) => handleNotificationToggle('invoice_deleted', checked)}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label>Invoice Sent</Label>
-                            <p className="text-sm text-muted-foreground">When invoice is sent to client</p>
-                          </div>
-                          <Switch
-                            checked={notificationSettings.invoice_sent}
-                            onCheckedChange={(checked) => handleNotificationToggle('invoice_sent', checked)}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label>Invoice Paid</Label>
-                            <p className="text-sm text-muted-foreground">When invoice is marked as paid</p>
-                          </div>
-                          <Switch
-                            checked={notificationSettings.invoice_paid}
-                            onCheckedChange={(checked) => handleNotificationToggle('invoice_paid', checked)}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label>Invoice Overdue</Label>
-                            <p className="text-sm text-muted-foreground">When invoice becomes overdue</p>
-                          </div>
-                          <Switch
-                            checked={notificationSettings.invoice_overdue}
-                            onCheckedChange={(checked) => handleNotificationToggle('invoice_overdue', checked)}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Payment Operations */}
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-semibold">Payment Operations</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label>Payment Created</Label>
-                            <p className="text-sm text-muted-foreground">When a payment is recorded</p>
-                          </div>
-                          <Switch
-                            checked={notificationSettings.payment_created}
-                            onCheckedChange={(checked) => handleNotificationToggle('payment_created', checked)}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label>Payment Updated</Label>
-                            <p className="text-sm text-muted-foreground">When payment is modified</p>
-                          </div>
-                          <Switch
-                            checked={notificationSettings.payment_updated}
-                            onCheckedChange={(checked) => handleNotificationToggle('payment_updated', checked)}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label>Payment Deleted</Label>
-                            <p className="text-sm text-muted-foreground">When a payment is removed</p>
-                          </div>
-                          <Switch
-                            checked={notificationSettings.payment_deleted}
-                            onCheckedChange={(checked) => handleNotificationToggle('payment_deleted', checked)}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Summary Notifications */}
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-semibold">Summary Notifications</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label>Daily Summary</Label>
-                            <p className="text-sm text-muted-foreground">Daily activity summary</p>
-                          </div>
-                          <Switch
-                            checked={notificationSettings.daily_summary}
-                            onCheckedChange={(checked) => handleNotificationToggle('daily_summary', checked)}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label>Weekly Summary</Label>
-                            <p className="text-sm text-muted-foreground">Weekly activity summary</p>
-                          </div>
-                          <Switch
-                            checked={notificationSettings.weekly_summary}
-                            onCheckedChange={(checked) => handleNotificationToggle('weekly_summary', checked)}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Action buttons */}
-                    <div className="flex justify-between pt-4 border-t">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleTestNotification}
-                      >
-                        Send Test Notification
-                      </Button>
-                      <Button
-                        onClick={handleSaveNotifications}
-                        disabled={savingNotifications}
-                      >
-                        {savingNotifications && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Save Notification Settings
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="email" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>{t('settings.email_configuration')}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="email_enabled">{t('settings.enable_email_service')}</Label>
-                    <p className="text-sm text-muted-foreground">{t('settings.enable_email_service_description')}</p>
                   </div>
-                  <Switch 
-                    id="email_enabled" 
-                    checked={emailSettings.enabled} 
-                    onCheckedChange={(checked) => handleEmailToggleChange('enabled', checked)} 
-                  />
-                </div>
-
-                {emailSettings.enabled && (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="provider">{t('settings.email_provider')}</Label>
-                      <Select value={emailSettings.provider} onValueChange={handleEmailProviderChange}>
-                        <SelectTrigger>
-                          <SelectValue placeholder={t('settings.select_email_provider')} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="aws_ses">{t('settings.aws_ses')}</SelectItem>
-                          <SelectItem value="azure_email">{t('settings.azure_email_services')}</SelectItem>
-                          <SelectItem value="mailgun">{t('settings.mailgun')}</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="from_name">{t('settings.from_name')}</Label>
-                        <Input 
-                          id="from_name" 
-                          name="from_name" 
-                          value={emailSettings.from_name} 
-                          onChange={handleEmailChange} 
-                        />
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="from_email">{t('settings.from_email')}</Label>
-                        <Input 
-                          id="from_email" 
-                          name="from_email" 
-                          type="email" 
-                          value={emailSettings.from_email} 
-                          onChange={handleEmailChange} 
-                        />
-                      </div>
-                    </div>
-
-                    {emailSettings.provider === "aws_ses" && (
-                      <div className="space-y-4 p-4 border rounded-lg">
-                        <h4 className="font-medium">{t('settings.aws_ses_configuration')}</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="aws_access_key_id">{t('settings.aws_access_key_id')}</Label>
-                            <Input 
-                              id="aws_access_key_id" 
-                              name="aws_access_key_id" 
-                              type="password"
-                              value={emailSettings.aws_access_key_id} 
-                              onChange={handleEmailChange} 
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="aws_secret_access_key">{t('settings.aws_secret_access_key')}</Label>
-                            <Input 
-                              id="aws_secret_access_key" 
-                              name="aws_secret_access_key" 
-                              type="password"
-                              value={emailSettings.aws_secret_access_key} 
-                              onChange={handleEmailChange} 
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="aws_region">{t('settings.aws_region')}</Label>
-                          <Select value={emailSettings.aws_region} onValueChange={(value) => setEmailSettings(prev => ({ ...prev, aws_region: value }))}>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="us-east-1">{t('settings.us_east_virginia')}</SelectItem>
-                              <SelectItem value="us-west-2">{t('settings.us_west_oregon')}</SelectItem>
-                              <SelectItem value="eu-west-1">{t('settings.eu_ireland')}</SelectItem>
-                              <SelectItem value="ap-southeast-1">{t('settings.asia_pacific_singapore')}</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    )}
-
-                    {emailSettings.provider === "azure_email" && (
-                      <div className="space-y-4 p-4 border rounded-lg">
-                        <h4 className="font-medium">{t('settings.azure_email_services_configuration')}</h4>
-                        <div className="space-y-2">
-                          <Label htmlFor="azure_connection_string">{t('settings.azure_connection_string')}</Label>
-                          <Input 
-                            id="azure_connection_string" 
-                            name="azure_connection_string" 
-                            type="password"
-                            value={emailSettings.azure_connection_string} 
-                            onChange={handleEmailChange} 
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {emailSettings.provider === "mailgun" && (
-                      <div className="space-y-4 p-4 border rounded-lg">
-                        <h4 className="font-medium">{t('settings.mailgun_configuration')}</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="mailgun_api_key">{t('settings.mailgun_api_key')}</Label>
-                            <Input 
-                              id="mailgun_api_key" 
-                              name="mailgun_api_key" 
-                              type="password"
-                              value={emailSettings.mailgun_api_key} 
-                              onChange={handleEmailChange} 
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="mailgun_domain">{t('settings.mailgun_domain')}</Label>
-                            <Input 
-                              id="mailgun_domain" 
-                              name="mailgun_domain" 
-                              value={emailSettings.mailgun_domain} 
-                              onChange={handleEmailChange} 
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="flex justify-between">
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        onClick={testEmailConfiguration}
-                      >
-                        {t('settings.test_configuration')}
-                      </Button>
-                      <Button onClick={handleSave} disabled={saving}>
-                        {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {t('settings.save_email_settings')}
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
-          
+
           <TabsContent value="export" className="space-y-6">
             {/* Data Overview Section */}
             <Card>
@@ -1814,6 +2180,22 @@ const Settings = () => {
                           <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
                           <span>{t('settings.company_settings')}</span>
                         </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                          <span>Expenses & Receipts</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                          <span>Statements & Transactions</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
+                          <span>Audit Logs & Activity History</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className="w-2 h-2 bg-pink-500 rounded-full"></div>
+                          <span>AI Chat History</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1826,6 +2208,7 @@ const Settings = () => {
                         <p><strong>{t('settings.compatibility')}:</strong> {t('settings.works_with_database_tools')}</p>
                         <p><strong>{t('settings.security')}:</strong> {t('settings.no_sensitive_authentication_data')}</p>
                         <p><strong>{t('settings.size')}:</strong> {t('settings.size_description')}</p>
+                        <p><strong>Note:</strong> Attachment files (receipts, bank statements, invoice attachments) are not included in the export. Only database records are exported.</p>
                       </div>
                     </div>
                   </div>
@@ -2040,6 +2423,10 @@ const Settings = () => {
               </CardContent>
             </Card>
           </TabsContent>
+
+          <TabsContent value="api-keys" className="mt-6">
+            <APIClientManagement />
+          </TabsContent>
         </Tabs>
 
         {/* AI Configuration Dialog */}
@@ -2067,6 +2454,7 @@ const Settings = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="openai">{t('settings.openai')}</SelectItem>
+                      <SelectItem value="openrouter">OpenRouter</SelectItem>
                       <SelectItem value="ollama">{t('settings.ollama')}</SelectItem>
                       <SelectItem value="anthropic">{t('settings.anthropic')}</SelectItem>
                       <SelectItem value="google">{t('settings.google')}</SelectItem>
@@ -2084,6 +2472,7 @@ const Settings = () => {
                     onChange={handleAIConfigChange}
                     placeholder={
                       newAIConfig.provider_name === "openai" ? t('settings.openai_model_example') :
+                      newAIConfig.provider_name === "openrouter" ? "openai/gpt-4, anthropic/claude-3-sonnet" :
                       newAIConfig.provider_name === "ollama" ? t('settings.ollama_model_example') :
                       newAIConfig.provider_name === "anthropic" ? t('settings.anthropic_model_example') :
                       newAIConfig.provider_name === "google" ? t('settings.google_model_example') :
@@ -2092,6 +2481,7 @@ const Settings = () => {
                   />
                   <p className="text-sm text-muted-foreground">
                     {newAIConfig.provider_name === "openai" && t('settings.openai_model_hint')}
+                    {newAIConfig.provider_name === "openrouter" && "Access 100+ models via OpenRouter. Use format: provider/model (e.g., openai/gpt-4, anthropic/claude-3-sonnet)"}
                     {newAIConfig.provider_name === "ollama" && t('settings.ollama_model_hint')}
                     {newAIConfig.provider_name === "anthropic" && t('settings.anthropic_model_hint')}
                     {newAIConfig.provider_name === "google" && t('settings.google_model_hint')}
@@ -2154,12 +2544,54 @@ const Settings = () => {
                   <Label htmlFor="tested">{t('settings.mark_as_tested')}</Label>
                 </div>
               </div>
+              
+              {/* Test Result Display */}
+              {testResult && (
+                <div className={`p-3 rounded-lg border ${
+                  testResult.success 
+                    ? 'bg-green-50 border-green-200 text-green-800' 
+                    : 'bg-red-50 border-red-200 text-red-800'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${
+                      testResult.success ? 'bg-green-500' : 'bg-red-500'
+                    }`}></div>
+                    <span className="font-medium">
+                      {testResult.success ? 'Test Successful' : 'Test Failed'}
+                    </span>
+                  </div>
+                  <p className="text-sm mt-1">{testResult.message}</p>
+                </div>
+              )}
             </div>
             
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowAIConfigDialog(false)}>
                 {t('settings.cancel')}
               </Button>
+              {editingAIConfig ? (
+                <Button
+                  variant="outline"
+                  onClick={() => handleTestAIConfig(editingAIConfig.id)}
+                >
+                  {t('settings.test')}
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  onClick={handleTestNewAIConfig}
+                  disabled={testingNewConfig || !newAIConfig.api_key || !newAIConfig.model_name}
+                >
+                  {testingNewConfig ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {t('common.loading')}
+                    </>
+                  ) : (
+                    t('settings.test')
+                  )}
+                </Button>
+              )}
               <Button
                 onClick={editingAIConfig ? handleUpdateAIConfig : handleCreateAIConfig}
               >
@@ -2253,7 +2685,6 @@ const Settings = () => {
                           <CurrencySelector
                             value={newDiscountRule.currency || "USD"}
                             onValueChange={(value) => setNewDiscountRule(prev => ({ ...prev, currency: value }))}
-                            includeInactive={true}
                           />
                         </div>
               

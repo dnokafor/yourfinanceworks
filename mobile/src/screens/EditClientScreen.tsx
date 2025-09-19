@@ -8,10 +8,15 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import apiService, { Client } from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import apiService, { Client, ClientNote } from '../services/api';
+import { SUPPORTED_CURRENCIES, getCurrencySymbol } from '../utils/currencyList';
 
 interface EditClientScreenProps {
   client: Client;
@@ -36,6 +41,46 @@ const EditClientScreen: React.FC<EditClientScreenProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showCurrencyModal, setShowCurrencyModal] = useState(false);
+  const [tenantInfo, setTenantInfo] = useState<{ default_currency: string } | null>(null);
+
+  // Notes functionality
+  const [clientNotes, setClientNotes] = useState<ClientNote[]>([]);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [showAddNoteModal, setShowAddNoteModal] = useState(false);
+  const [showEditNoteModal, setShowEditNoteModal] = useState(false);
+  const [selectedNote, setSelectedNote] = useState<ClientNote | null>(null);
+  const [newNoteText, setNewNoteText] = useState('');
+  const [editNoteText, setEditNoteText] = useState('');
+
+  // Load tenant info and client notes on mount
+  useEffect(() => {
+    const loadTenantInfo = async () => {
+      try {
+        const info = await apiService.getTenantInfo();
+        setTenantInfo(info);
+      } catch (error) {
+        console.warn('Failed to load tenant info:', error);
+      }
+    };
+
+    const loadClientNotes = async () => {
+      try {
+        setNotesLoading(true);
+        const notes = await apiService.getClientNotes(client.id);
+        setClientNotes(notes.sort((a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        ));
+      } catch (error) {
+        console.warn('Failed to load client notes:', error);
+      } finally {
+        setNotesLoading(false);
+      }
+    };
+
+    loadTenantInfo();
+    loadClientNotes();
+  }, [client.id]);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -112,6 +157,76 @@ const EditClientScreen: React.FC<EditClientScreenProps> = ({
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
+  };
+
+  // Note management functions
+  const handleAddNote = async () => {
+    if (!newNoteText.trim()) return;
+
+    try {
+      const newNote = await apiService.createClientNote(client.id, { note: newNoteText.trim() });
+      setClientNotes(prev => [newNote, ...prev]);
+      setNewNoteText('');
+      setShowAddNoteModal(false);
+      Alert.alert('Success', 'Note added successfully!');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to add note');
+    }
+  };
+
+  const handleEditNote = async () => {
+    if (!selectedNote || !editNoteText.trim()) return;
+
+    try {
+      const updatedNote = await apiService.updateClientNote(
+        selectedNote.client_id,
+        selectedNote.id,
+        { note: editNoteText.trim() }
+      );
+      setClientNotes(prev => prev.map(note =>
+        note.id === selectedNote.id ? updatedNote : note
+      ));
+      setEditNoteText('');
+      setSelectedNote(null);
+      setShowEditNoteModal(false);
+      Alert.alert('Success', 'Note updated successfully!');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to update note');
+    }
+  };
+
+  const handleDeleteNote = (note: ClientNote) => {
+    Alert.alert(
+      'Delete Note',
+      'Are you sure you want to delete this note?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiService.deleteClientNote(note.client_id, note.id);
+              setClientNotes(prev => prev.filter(n => n.id !== note.id));
+              Alert.alert('Success', 'Note deleted successfully!');
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to delete note');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const openEditNoteModal = (note: ClientNote) => {
+    setSelectedNote(note);
+    setEditNoteText(note.note);
+    setShowEditNoteModal(true);
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   return (
@@ -202,27 +317,80 @@ const EditClientScreen: React.FC<EditClientScreenProps> = ({
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Preferred Currency</Text>
-            <View style={styles.currencyContainer}>
-              {['USD', 'EUR', 'GBP', 'CAD'].map((currency) => (
-                <TouchableOpacity
-                  key={currency}
-                  style={[
-                    styles.currencyButton,
-                    formData.preferred_currency === currency && styles.currencyButtonActive,
-                  ]}
-                  onPress={() => updateFormData('preferred_currency', currency)}
-                >
-                  <Text
-                    style={[
-                      styles.currencyButtonText,
-                      formData.preferred_currency === currency && styles.currencyButtonTextActive,
-                    ]}
-                  >
-                    {currency}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            <TouchableOpacity
+              style={styles.currencySelector}
+              onPress={() => setShowCurrencyModal(true)}
+            >
+              <View style={styles.currencyDisplay}>
+                <Text style={styles.currencySymbol}>
+                  {getCurrencySymbol(formData.preferred_currency)}
+                </Text>
+                <Text style={styles.currencyCode}>{formData.preferred_currency}</Text>
+                <Ionicons name="chevron-down" size={16} color="#6B7280" />
+              </View>
+            </TouchableOpacity>
+            <Text style={styles.fieldHint}>
+              Select the currency this client prefers for transactions
+            </Text>
+          </View>
+
+          {/* Client Notes Section */}
+          <View style={styles.notesSection}>
+            <View style={styles.notesHeader}>
+              <Text style={styles.sectionTitle}>Client Notes</Text>
+              <TouchableOpacity
+                style={styles.addNoteButton}
+                onPress={() => setShowAddNoteModal(true)}
+              >
+                <Ionicons name="add" size={20} color="#007AFF" />
+                <Text style={styles.addNoteText}>Add Note</Text>
+              </TouchableOpacity>
             </View>
+
+            {notesLoading ? (
+              <View style={styles.notesLoading}>
+                <ActivityIndicator size="small" color="#007AFF" />
+                <Text style={styles.loadingText}>Loading notes...</Text>
+              </View>
+            ) : clientNotes.length === 0 ? (
+              <View style={styles.notesEmpty}>
+                <Ionicons name="document-text-outline" size={48} color="#9CA3AF" />
+                <Text style={styles.emptyText}>No notes yet</Text>
+                <Text style={styles.emptySubtext}>Add notes to keep track of important information about this client</Text>
+              </View>
+            ) : (
+              <View style={styles.notesList}>
+                {clientNotes.map((note) => (
+                  <View key={note.id} style={styles.noteCard}>
+                    <View style={styles.noteHeader}>
+                      <Text style={styles.noteDate}>
+                        {formatDate(note.created_at)}
+                      </Text>
+                      <View style={styles.noteActions}>
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={() => openEditNoteModal(note)}
+                        >
+                          <Ionicons name="pencil" size={16} color="#007AFF" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.actionButton, styles.noteDeleteButton]}
+                          onPress={() => handleDeleteNote(note)}
+                        >
+                          <Ionicons name="trash" size={16} color="#EF4444" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                    <Text style={styles.noteText}>{note.note}</Text>
+                    {note.updated_at !== note.created_at && (
+                      <Text style={styles.updatedText}>
+                        Updated: {formatDate(note.updated_at)}
+                      </Text>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
 
           <View style={styles.clientInfo}>
@@ -242,6 +410,176 @@ const EditClientScreen: React.FC<EditClientScreenProps> = ({
           </View>
         </View>
       </ScrollView>
+
+      {/* Currency Selection Modal */}
+      <Modal
+        visible={showCurrencyModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCurrencyModal(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowCurrencyModal(false)}
+          >
+            <View style={styles.currencyModalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Currency</Text>
+                <TouchableOpacity onPress={() => setShowCurrencyModal(false)}>
+                  <Ionicons name="close" size={24} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.currencyModalBody}>
+                <Text style={styles.modalSubtitle}>
+                  Choose the preferred currency for this client
+                </Text>
+                <ScrollView style={styles.currencyList} showsVerticalScrollIndicator={false}>
+                  {SUPPORTED_CURRENCIES.map((currency, index) => (
+                    <TouchableOpacity
+                      key={currency.code}
+                      style={[
+                        styles.currencyOption,
+                        formData.preferred_currency === currency.code && styles.currencyOptionSelected,
+                        index === SUPPORTED_CURRENCIES.length - 1 && styles.currencyOptionLast
+                      ]}
+                      onPress={() => {
+                        updateFormData('preferred_currency', currency.code);
+                        setShowCurrencyModal(false);
+                      }}
+                    >
+                      <View style={styles.currencyInfo}>
+                        <View style={styles.currencySymbolContainer}>
+                          <Text style={styles.currencySymbolText}>{currency.symbol}</Text>
+                        </View>
+                        <View style={styles.currencyDetails}>
+                          <Text style={styles.currencyCode}>{currency.code}</Text>
+                          <Text style={styles.currencyName}>{currency.name}</Text>
+                        </View>
+                      </View>
+                      {formData.preferred_currency === currency.code && (
+                        <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Add Note Modal */}
+      <Modal
+        visible={showAddNoteModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAddNoteModal(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowAddNoteModal(false)}
+          >
+            <View style={styles.noteModalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Add New Note</Text>
+                <TouchableOpacity onPress={() => setShowAddNoteModal(false)}>
+                  <Ionicons name="close" size={24} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.modalBody}>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder="Enter your note..."
+                  value={newNoteText}
+                  onChangeText={setNewNoteText}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={[styles.button, styles.cancelButton]}
+                    onPress={() => setShowAddNoteModal(false)}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.button, styles.modalSaveButton]}
+                    onPress={handleAddNote}
+                    disabled={!newNoteText.trim()}
+                  >
+                    <Text style={styles.saveButtonText}>Add Note</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Edit Note Modal */}
+      <Modal
+        visible={showEditNoteModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowEditNoteModal(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowEditNoteModal(false)}
+          >
+            <View style={styles.noteModalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Edit Note</Text>
+                <TouchableOpacity onPress={() => setShowEditNoteModal(false)}>
+                  <Ionicons name="close" size={24} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.modalBody}>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder="Enter your note..."
+                  value={editNoteText}
+                  onChangeText={setEditNoteText}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={[styles.button, styles.cancelButton]}
+                    onPress={() => setShowEditNoteModal(false)}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.button, styles.modalSaveButton]}
+                    onPress={handleEditNote}
+                    disabled={!editNoteText.trim()}
+                  >
+                    <Text style={styles.saveButtonText}>Update Note</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 };
@@ -256,7 +594,6 @@ const styles = StyleSheet.create({
   deleteButtonDisabled: { backgroundColor: '#ccc' },
   saveButton: { backgroundColor: '#007AFF', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
   saveButtonDisabled: { backgroundColor: '#ccc' },
-  saveButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   content: { flex: 1 },
   form: { padding: 20 },
   inputContainer: { marginBottom: 20 },
@@ -265,11 +602,54 @@ const styles = StyleSheet.create({
   inputError: { borderColor: '#EF4444' },
   textArea: { height: 80 },
   errorText: { color: '#EF4444', fontSize: 12, marginTop: 4 },
-  currencyContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  currencyButton: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#D1D5DB', backgroundColor: '#fff' },
-  currencyButtonActive: { backgroundColor: '#007AFF', borderColor: '#007AFF' },
-  currencyButtonText: { fontSize: 14, color: '#374151' },
-  currencyButtonTextActive: { color: '#fff' },
+  currencySelector: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, padding: 12, backgroundColor: '#fff' },
+  currencyDisplay: { flexDirection: 'row', alignItems: 'center' },
+  currencySymbol: { fontSize: 16, color: '#374151', marginRight: 8 },
+  currencyCode: { fontSize: 16, color: '#374151', flex: 1 },
+  fieldHint: { fontSize: 12, color: '#6B7280', marginTop: 4 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
+  modalBackdrop: { flex: 1, justifyContent: 'flex-end' },
+  currencyModalContent: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '70%', minHeight: '50%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+  modalTitle: { fontSize: 18, fontWeight: '600', color: '#111827' },
+  currencyModalBody: { padding: 20, paddingBottom: 40 },
+  modalSubtitle: { fontSize: 14, color: '#6B7280', marginBottom: 16, textAlign: 'center' },
+  currencyList: { flex: 1 },
+  currencyOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
+  currencyOptionSelected: { backgroundColor: '#F0F9FF', borderRadius: 8, marginHorizontal: -4, paddingHorizontal: 12 },
+  currencyOptionLast: { borderBottomWidth: 0 },
+  currencyInfo: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  currencySymbolContainer: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  currencySymbolText: { fontSize: 16, fontWeight: '600', color: '#374151' },
+  currencyDetails: { flex: 1 },
+  currencyName: { fontSize: 14, color: '#6B7280' },
+  notesSection: { marginTop: 20, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' },
+  notesHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+  addNoteButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, backgroundColor: '#F0F9FF' },
+  addNoteText: { fontSize: 14, fontWeight: '600', color: '#007AFF', marginLeft: 4 },
+  notesLoading: { padding: 40, alignItems: 'center' },
+  notesEmpty: { padding: 40, alignItems: 'center' },
+  emptyText: { fontSize: 16, fontWeight: '600', color: '#374151', marginTop: 12, marginBottom: 4 },
+  emptySubtext: { fontSize: 14, color: '#6B7280', textAlign: 'center', paddingHorizontal: 20 },
+  notesList: { padding: 16 },
+  noteCard: { backgroundColor: '#F8FAFC', borderRadius: 8, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#E5E7EB' },
+  noteHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  noteDate: { fontSize: 12, color: '#6B7280', fontWeight: '500' },
+  noteActions: { flexDirection: 'row', gap: 8 },
+  actionButton: { padding: 6, borderRadius: 4, backgroundColor: '#F3F4F6' },
+  noteDeleteButton: { backgroundColor: '#FEF2F2' },
+  noteText: { fontSize: 14, color: '#111827', lineHeight: 20 },
+  updatedText: { fontSize: 11, color: '#6B7280', marginTop: 4, fontStyle: 'italic' },
+  noteModalContent: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '70%', minHeight: '40%' },
+  modalBody: { padding: 20, paddingBottom: 40 },
+  modalButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 },
+  button: { flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginHorizontal: 8 },
+  cancelButton: { backgroundColor: '#F3F4F6' },
+  modalSaveButton: { backgroundColor: '#10B981' },
+  cancelButtonText: { color: '#374151', fontWeight: '600' },
+  saveButtonText: { color: '#FFFFFF', fontWeight: '600' },
+  loadingText: { marginTop: 8, fontSize: 14, color: '#6B7280' },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#111827' },
   clientInfo: { marginTop: 20, padding: 16, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' },
   infoLabel: { fontSize: 16, fontWeight: 'bold', color: '#111827', marginBottom: 12 },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },

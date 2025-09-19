@@ -1,17 +1,24 @@
 import { parseISO, format, isValid } from 'date-fns';
 
-export const formatDate = (date: string | Date): string => {
-  if (!date) return new Date().toLocaleDateString();
-  
+export const formatDate = (date: string | Date | null | undefined): string => {
+  if (!date) return '';
+
   try {
     let dateObj: Date;
-    
+
     if (typeof date === 'string') {
-      // Handle YYYY-MM-DD format
+      // Handle various date formats
       if (date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        const [year, month, day] = date.split('-').map(Number);
-        dateObj = new Date(year, month - 1, day);
+        // YYYY-MM-DD format
+        dateObj = parseISO(date);
+      } else if (date.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
+        // ISO format with time
+        dateObj = parseISO(date);
+      } else if (date.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/)) {
+        // MySQL datetime format
+        dateObj = new Date(date.replace(' ', 'T'));
       } else {
+        // Try to parse as general date string
         dateObj = new Date(date);
       }
     } else {
@@ -19,16 +26,14 @@ export const formatDate = (date: string | Date): string => {
     }
 
     if (!isValid(dateObj)) {
-      return new Date().toLocaleDateString();
+      // Fallback for invalid dates
+      return '';
     }
 
-    return dateObj.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+    return format(dateObj, 'MMM d, yyyy');
   } catch (error) {
-    return new Date().toLocaleDateString();
+    // Fallback for any unexpected errors
+    return '';
   }
 };
 

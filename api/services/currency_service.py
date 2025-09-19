@@ -4,8 +4,8 @@ from sqlalchemy import desc
 from datetime import datetime, date, timezone
 import logging
 
-from models.models import SupportedCurrency, CurrencyRate, Tenant
-from models.models_per_tenant import Client
+from models.models_per_tenant import SupportedCurrency, CurrencyRate, Client
+from models.database import get_tenant_context
 from schemas.currency import CurrencyConversion
 
 logger = logging.getLogger(__name__)
@@ -30,14 +30,14 @@ class CurrencyService:
             SupportedCurrency.is_active == True
         ).first()
     
-    def get_tenant_default_currency(self, tenant_id: int) -> str:
-        """Get the default currency for a tenant"""
+    def get_tenant_default_currency(self) -> str:
+        """Get the default currency for current tenant"""
         try:
-            tenant = self.db.query(Tenant).filter(Tenant.id == tenant_id).first()
-            return tenant.default_currency if tenant else "USD"
+            # Since we're in tenant database, we can't access tenant info directly
+            # Return USD as default for now
+            return "USD"
         except Exception as e:
             logger.warning(f"Error getting tenant default currency: {e}")
-            # Fallback to USD if there's any database error
             return "USD"
     
     def get_client_preferred_currency(self, client_id: int) -> str:
@@ -58,7 +58,7 @@ class CurrencyService:
             # Fallback to USD if there's any database error
             return "USD"
     
-    def get_exchange_rate(self, tenant_id: int, from_currency: str, to_currency: str, 
+    def get_exchange_rate(self, from_currency: str, to_currency: str, 
                          effective_date: Optional[date] = None) -> Optional[float]:
         """Get exchange rate between two currencies"""
         if from_currency == to_currency:
@@ -67,9 +67,8 @@ class CurrencyService:
         if effective_date is None:
             effective_date = date.today()
         
-        # Get the most recent rate for the given date
+        # Get the most recent rate for the given date (no tenant_id needed in tenant DB)
         rate = self.db.query(CurrencyRate).filter(
-            CurrencyRate.tenant_id == tenant_id,
             CurrencyRate.from_currency == from_currency,
             CurrencyRate.to_currency == to_currency,
             CurrencyRate.effective_date <= effective_date
@@ -77,7 +76,7 @@ class CurrencyService:
         
         return rate.rate if rate else None
     
-    def convert_currency(self, tenant_id: int, amount: float, from_currency: str, 
+    def convert_currency(self, amount: float, from_currency: str, 
                         to_currency: str, conversion_date: Optional[date] = None) -> Optional[CurrencyConversion]:
         """Convert amount from one currency to another"""
         if from_currency == to_currency:
@@ -90,7 +89,7 @@ class CurrencyService:
                 conversion_date=datetime.now(timezone.utc)
             )
         
-        exchange_rate = self.get_exchange_rate(tenant_id, from_currency, to_currency, conversion_date)
+        exchange_rate = self.get_exchange_rate(from_currency, to_currency, conversion_date)
         
         if exchange_rate is None:
             logger.warning(f"No exchange rate found for {from_currency} to {to_currency}")
@@ -107,15 +106,14 @@ class CurrencyService:
             conversion_date=datetime.now(timezone.utc)
         )
     
-    def update_exchange_rate(self, tenant_id: int, from_currency: str, to_currency: str, 
+    def update_exchange_rate(self, from_currency: str, to_currency: str, 
                            rate: float, effective_date: Optional[date] = None) -> CurrencyRate:
         """Update or create an exchange rate"""
         if effective_date is None:
             effective_date = date.today()
         
-        # Check if rate already exists for this date
+        # Check if rate already exists for this date (no tenant_id in tenant DB)
         existing_rate = self.db.query(CurrencyRate).filter(
-            CurrencyRate.tenant_id == tenant_id,
             CurrencyRate.from_currency == from_currency,
             CurrencyRate.to_currency == to_currency,
             CurrencyRate.effective_date == effective_date
@@ -127,7 +125,6 @@ class CurrencyService:
             currency_rate = existing_rate
         else:
             currency_rate = CurrencyRate(
-                tenant_id=tenant_id,
                 from_currency=from_currency,
                 to_currency=to_currency,
                 rate=rate,
@@ -139,11 +136,9 @@ class CurrencyService:
         self.db.refresh(currency_rate)
         return currency_rate
     
-    def get_tenant_exchange_rates(self, tenant_id: int, base_currency: Optional[str] = None) -> List[CurrencyRate]:
-        """Get all current exchange rates for a tenant"""
-        query = self.db.query(CurrencyRate).filter(
-            CurrencyRate.tenant_id == tenant_id
-        )
+    def get_tenant_exchange_rates(self, base_currency: Optional[str] = None) -> List[CurrencyRate]:
+        """Get all current exchange rates for current tenant"""
+        query = self.db.query(CurrencyRate)
         
         if base_currency:
             query = query.filter(CurrencyRate.from_currency == base_currency)
@@ -153,8 +148,6 @@ class CurrencyService:
             CurrencyRate.from_currency,
             CurrencyRate.to_currency,
             desc(CurrencyRate.effective_date).label('max_date')
-        ).filter(
-            CurrencyRate.tenant_id == tenant_id
         ).group_by(
             CurrencyRate.from_currency,
             CurrencyRate.to_currency
@@ -165,8 +158,6 @@ class CurrencyService:
             (CurrencyRate.from_currency == subquery.c.from_currency) &
             (CurrencyRate.to_currency == subquery.c.to_currency) &
             (CurrencyRate.effective_date == subquery.c.max_date)
-        ).filter(
-            CurrencyRate.tenant_id == tenant_id
         ).all()
         
         return rates

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { logger } from '../utils/logger';
 import {
   View,
   Text,
@@ -20,7 +21,6 @@ import LanguageSwitcher from '../components/LanguageSwitcher';
 interface SettingsScreenProps {
   onNavigateBack: () => void;
   onNavigateToUsers: () => void;
-  onNavigateToAuditLog: () => void;
   onSignOut: () => void;
 }
 
@@ -58,7 +58,6 @@ interface EmailSettings {
 const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onNavigateBack,
   onNavigateToUsers,
-  onNavigateToAuditLog,
   onSignOut,
 }) => {
   const { t } = useTranslation();
@@ -90,8 +89,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [invoiceSettings, setInvoiceSettings] = useState<InvoiceSettings>({
     prefix: "INV-",
     next_number: "0001",
-    terms: "Payment due within 30 days from the date of invoice.\nLate payments are subject to a 1.5% monthly finance charge.",
-    notes: "Thank you for your business!",
+    terms: t('settings.payment_terms_net30'),
+    notes: t('settings.thank_you'),
     send_copy: true,
     auto_reminders: true,
   });
@@ -147,13 +146,13 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         invoice_settings: invoiceSettings
       };
       
-      console.log('Saving settings:', settingsData);
+      logger.debug('Saving settings', settingsData);
       const result = await apiService.updateSettings(settingsData);
-      console.log('Settings save result:', result);
+      logger.debug('Settings save result', result);
       Alert.alert('Success', 'Settings saved successfully!');
     } catch (error) {
-      console.error('Failed to save settings:', error);
-      Alert.alert('Error', `Failed to save settings: ${error.message}`);
+      logger.error('Failed to save settings', error);
+      Alert.alert('Error', `Failed to save settings: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setSaving(false);
     }
@@ -641,15 +640,6 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.settingItem} onPress={onNavigateToAuditLog}>
-            <View style={styles.settingIcon}>
-              <Ionicons name="document-text-outline" size={20} color="#3B82F6" />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingText}>{t('auditLog.title')}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-          </TouchableOpacity>
           
           <TouchableOpacity
             style={[styles.settingItem, styles.logoutButton]}

@@ -1,16 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
-from sqlalchemy import func, or_, and_, distinct
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func
 from typing import List, Optional
 import logging
 import traceback
-from datetime import datetime, date, timezone
-from decimal import Decimal
-from fastapi.responses import StreamingResponse
+from datetime import datetime, timezone, timedelta
+from fastapi.responses import StreamingResponse, FileResponse
+import mimetypes
 from utils.pdf_generator import generate_invoice_pdf
+import os
+import shutil
+from pathlib import Path
+import re
 
-from models.database import get_db, set_tenant_context
-from models.models_per_tenant import Invoice, Client, User, InvoiceItem, DiscountRule
+from models.database import get_db
+from models.models_per_tenant import Invoice, Client, User, InvoiceItem, DiscountRule, InventoryItem
 from models.models import MasterUser
 from routers.payments import Payment
 from schemas.invoice import InvoiceCreate, InvoiceUpdate, Invoice as InvoiceSchema, InvoiceWithClient, InvoiceHistory, InvoiceHistoryCreate, RecycleBinResponse, DeletedInvoice, RestoreInvoiceRequest
@@ -35,11 +39,27 @@ def make_aware(dt):
         return dt.replace(tzinfo=timezone.utc)
     return dt
 
-@router.post("/", response_model=InvoiceSchema)
+def normalize_to_midnight_naive(dt: Optional[datetime]) -> Optional[datetime]:
+    """Normalize a datetime to naive midnight (no tzinfo) to avoid timezone shifts on clients.
+
+    If dt is timezone-aware, its date component is used.
+    If dt is naive, its date component is used.
+    """
+    if dt is None:
+        return None
+    return datetime(dt.year, dt.month, dt.day)
+
+def normalize_to_midnight_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    """Normalize to midnight UTC (tz-aware). Suitable for timestamptz columns like created_at."""
+    if dt is None:
+        return None
+    return datetime(dt.year, dt.month, dt.day, tzinfo=timezone.utc)
+
+@router.post("/", response_model=InvoiceSchema, status_code=status.HTTP_201_CREATED)
 async def create_invoice(
     invoice: InvoiceCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     logger.info("Invoice create endpoint called")
     # Check if user has permission to create invoices
@@ -54,9 +74,22 @@ async def create_invoice(
                 detail=f"Client with ID {invoice.client_id} not found. Please create a client first."
             )
         
-        # Generate unique invoice number
+        # Use provided invoice number or generate unique one
         # No tenant_id needed since we're in the tenant's database
-        invoice_number = generate_invoice_number(db)
+        if invoice.number and invoice.number.strip():
+            # Check if the provided number is already in use
+            existing_invoice = db.query(Invoice).filter(
+                Invoice.number == invoice.number.strip(),
+                Invoice.is_deleted == False
+            ).first()
+            if existing_invoice:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invoice number '{invoice.number.strip()}' is already in use. Please choose a different number."
+                )
+            invoice_number = invoice.number.strip()
+        else:
+            invoice_number = generate_invoice_number(db)
         
         # Initialize currency service
         currency_service = CurrencyService(db)
@@ -74,50 +107,137 @@ async def create_invoice(
         
         # No tenant_id needed since each tenant has its own database
         logger.debug(f"[DEBUG] Received custom_fields: {invoice.custom_fields}")
+        # Normalize incoming dates to avoid off-by-one issues
+        incoming_due_date = normalize_to_midnight_naive(invoice.due_date) if invoice.due_date else None
+        incoming_created_at = normalize_to_midnight_utc(invoice.date) if getattr(invoice, 'date', None) else None
+
         db_invoice = Invoice(
             number=invoice_number,
             amount=float(invoice.amount),
             currency=invoice_currency,
-            due_date=invoice.due_date,
+            due_date=incoming_due_date,
             status=invoice.status,
-            notes=invoice.notes,
+            # Persist description into notes field for backward compatibility
+            notes=invoice.description or invoice.notes,
             client_id=invoice.client_id,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=incoming_created_at or datetime.now(timezone.utc),
+            updated_at=incoming_created_at or datetime.now(timezone.utc),
             is_recurring=invoice.is_recurring,
             recurring_frequency=invoice.recurring_frequency,
             custom_fields=invoice.custom_fields,
             show_discount_in_pdf=invoice.show_discount_in_pdf
         )
         
-        # Calculate subtotal from items
-        calculated_subtotal = sum(float(item_data.quantity) * float(item_data.price) for item_data in invoice.items)
+        # Calculate subtotal and amount
+        items_list = invoice.items or []
+        if items_list:
+            calculated_subtotal = sum(
+                float(item_data.quantity) * float(item_data.price) for item_data in items_list
+            )
+        else:
+            calculated_subtotal = float(invoice.amount)
         db_invoice.subtotal = calculated_subtotal
 
-        # Apply discount if provided
+        # Apply discount if provided; if no items were provided, keep the provided amount
         db_invoice.discount_type = invoice.discount_type or "percentage"
         db_invoice.discount_value = float(invoice.discount_value or 0)
 
-        if db_invoice.discount_value > 0:
-            if db_invoice.discount_type == "percentage":
-                discount_amount = (calculated_subtotal * db_invoice.discount_value) / 100
-            else: # fixed
-                discount_amount = db_invoice.discount_value
-            db_invoice.amount = calculated_subtotal - discount_amount
+        if items_list:
+            if db_invoice.discount_value > 0:
+                if db_invoice.discount_type == "percentage":
+                    discount_amount = (calculated_subtotal * db_invoice.discount_value) / 100
+                else:  # fixed
+                    discount_amount = db_invoice.discount_value
+                db_invoice.amount = calculated_subtotal - discount_amount
+            else:
+                db_invoice.amount = calculated_subtotal
         else:
-            db_invoice.amount = calculated_subtotal
+            db_invoice.amount = float(invoice.amount)
+
+        # Ensure due_date default if not provided
+        if db_invoice.due_date is None:
+            default_due = datetime.now(timezone.utc) + timedelta(days=30)
+            # Store as naive midnight to avoid timezone shifts
+            db_invoice.due_date = normalize_to_midnight_naive(default_due)
+
         db.add(db_invoice)
         db.flush()  # Get the invoice ID
+
+        # Optionally link to a bank statement transaction to prevent duplicates
+        try:
+            txn_id = None
+            # Support passing link via custom_fields: { bank_transaction_id: <id> }
+            cf = getattr(invoice, 'custom_fields', None)
+            if isinstance(cf, dict):
+                txn_id = cf.get('bank_transaction_id') or cf.get('bank_statement_transaction_id') or cf.get('transaction_id')
+            if txn_id:
+                from models.models_per_tenant import BankStatementTransaction
+                txn = db.query(BankStatementTransaction).filter(BankStatementTransaction.id == int(txn_id)).first()
+                if txn is not None:
+                    if getattr(txn, 'invoice_id', None):
+                        # Already linked – treat as idempotent and return created invoice; UI should block earlier
+                        logger.info(f"Bank txn {txn_id} already linked to invoice {txn.invoice_id}")
+                    else:
+                        txn.invoice_id = db_invoice.id
+        except Exception:
+            logger.warning("Failed to link bank statement transaction to invoice", exc_info=True)
+
+        # If an initial paid_amount is provided OR status is paid, create a payment record
+        initial_paid = float(getattr(invoice, 'paid_amount', 0) or 0)
+        should_create_payment = initial_paid > 0 or (invoice.status == 'paid')
+        payment_amount = initial_paid if initial_paid > 0 else (float(db_invoice.amount) if invoice.status == 'paid' else 0)
+        if should_create_payment and payment_amount > 0:
+            try:
+                pay = Payment(
+                    invoice_id=db_invoice.id,
+                    amount=payment_amount,
+                    currency=db_invoice.currency,
+                    payment_date=normalize_to_midnight_utc(db_invoice.created_at) or datetime.now(timezone.utc),
+                    payment_method="system",
+                    reference_number=f"AUTO-{db_invoice.number}",
+                    notes="Auto-created from invoice creation"
+                )
+                db.add(pay)
+            except Exception:
+                logger.warning("Failed to create auto payment on invoice creation", exc_info=True)
         logger.info(f"[DEBUG] Saved custom_fields in DB: {db_invoice.custom_fields}")
         
-        # Create invoice items
-        for item_data in invoice.items:
+        # Create invoice items with inventory integration
+        from services.inventory_integration_service import InventoryIntegrationService
+        integration_service = InventoryIntegrationService(db)
+
+        for item_data in items_list:
+            # Handle inventory item integration
+            inventory_item_id = getattr(item_data, 'inventory_item_id', None)
+            unit_of_measure = getattr(item_data, 'unit_of_measure', None)
+
+            # If inventory_item_id is provided, populate from inventory
+            if inventory_item_id:
+                try:
+                    inventory_data = integration_service.populate_invoice_item_from_inventory(
+                        inventory_item_id, float(item_data.quantity)
+                    )
+                    # Use inventory data to populate item
+                    description = inventory_data['description']
+                    price = inventory_data['unit_price'] if item_data.price == 0 else float(item_data.price)
+                    unit_of_measure = inventory_data.get('unit_of_measure', unit_of_measure)
+                except Exception as e:
+                    logger.warning(f"Failed to populate invoice item from inventory {inventory_item_id}: {e}")
+                    # Fall back to provided data
+                    description = item_data.description
+                    price = float(item_data.price)
+            else:
+                description = item_data.description
+                price = float(item_data.price)
+
             db_item = InvoiceItem(
                 invoice_id=db_invoice.id,
-                description=item_data.description,
+                inventory_item_id=inventory_item_id,
+                description=description,
                 quantity=float(item_data.quantity),
-                price=float(item_data.price),
-                amount=float(item_data.quantity) * float(item_data.price)
+                price=price,
+                amount=float(item_data.quantity) * price,
+                unit_of_measure=unit_of_measure
             )
             db.add(db_item)
         
@@ -159,11 +279,64 @@ async def create_invoice(
             resource_type="invoice",
             resource_id=str(db_invoice.id),
             resource_name=f"Invoice {db_invoice.number}",
-            details=invoice.dict(),
+            details=invoice.model_dump(),
             status="success"
         )
         
-        return db_invoice
+        # Build response including description from notes and inventory information
+        items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id == db_invoice.id).all()
+        items_data = [
+            {
+                "id": item.id,
+                "invoice_id": item.invoice_id,
+                "inventory_item_id": item.inventory_item_id,
+                "description": item.description,
+                "quantity": item.quantity,
+                "price": item.price,
+                "amount": item.amount,
+                "unit_of_measure": item.unit_of_measure
+            }
+            for item in items
+        ]
+
+        # Get new-style attachments
+        from models.models_per_tenant import InvoiceAttachment
+        new_attachments = db.query(InvoiceAttachment).filter(
+            InvoiceAttachment.invoice_id == db_invoice.id,
+            InvoiceAttachment.is_active == True
+        ).all()
+        
+        return {
+            "id": db_invoice.id,
+            "number": db_invoice.number,
+            "amount": float(db_invoice.amount),
+            "currency": db_invoice.currency,
+            "due_date": db_invoice.due_date.isoformat() if db_invoice.due_date else None,
+            "status": db_invoice.status,
+            "notes": db_invoice.notes,
+            "description": db_invoice.notes,
+            "client_id": db_invoice.client_id,
+            "created_at": db_invoice.created_at.isoformat() if db_invoice.created_at else None,
+            "updated_at": db_invoice.updated_at.isoformat() if db_invoice.updated_at else None,
+            "is_recurring": db_invoice.is_recurring,
+            "recurring_frequency": db_invoice.recurring_frequency,
+            "discount_type": db_invoice.discount_type,
+            "discount_value": float(db_invoice.discount_value) if db_invoice.discount_value else 0,
+            "subtotal": float(db_invoice.subtotal) if db_invoice.subtotal else float(db_invoice.amount),
+            "items": items_data,
+            "custom_fields": db_invoice.custom_fields if db_invoice.custom_fields is not None else {},
+            "show_discount_in_pdf": db_invoice.show_discount_in_pdf,
+            "has_attachment": bool(db_invoice.attachment_filename) if hasattr(db_invoice, 'attachment_filename') else False,
+            "attachment_filename": getattr(db_invoice, 'attachment_filename', None),
+            "attachments": [{
+                "id": att.id,
+                "filename": att.filename,
+                "file_size": att.file_size,
+                "attachment_type": att.attachment_type,
+                "created_at": att.created_at.isoformat()
+            } for att in new_attachments],
+            "attachment_count": len(new_attachments)
+        }
     except HTTPException:
         db.rollback()
         raise
@@ -176,17 +349,187 @@ async def create_invoice(
             detail=FAILED_TO_CREATE_INVOICE
         )
 
+@router.post("/{invoice_id}/clone", response_model=InvoiceSchema, status_code=status.HTTP_201_CREATED)
+async def clone_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Clone an existing invoice and create a new draft with a new number and ID.
+
+    - Copies all primitive fields and items from the source invoice
+    - Generates a new invoice number
+    - Resets status to 'draft'
+    - Does not copy payments or attachments
+    """
+    # Check permissions
+    require_non_viewer(current_user, "clone invoices")
+
+    try:
+        # Fetch source invoice (exclude soft-deleted)
+        source_invoice = db.query(Invoice).filter(
+            Invoice.id == invoice_id,
+            Invoice.is_deleted == False
+        ).first()
+
+        if source_invoice is None:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+
+        # Fetch items for source invoice
+        source_items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).all()
+
+        # Always generate new invoice number for cloned invoices
+        new_number = generate_invoice_number(db)
+
+        # Build new invoice (reset status to draft, keep due_date as-is)
+        cloned_invoice = Invoice(
+            number=new_number,
+            amount=float(source_invoice.amount),
+            currency=source_invoice.currency,
+            due_date=source_invoice.due_date,
+            status="draft",
+            notes=source_invoice.notes,
+            client_id=source_invoice.client_id,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            is_recurring=source_invoice.is_recurring,
+            recurring_frequency=source_invoice.recurring_frequency,
+            custom_fields=source_invoice.custom_fields,
+            show_discount_in_pdf=source_invoice.show_discount_in_pdf
+        )
+
+        # If the original has items, recalc subtotal/amount like create endpoint
+        if source_items:
+            calculated_subtotal = sum(float(item.quantity) * float(item.price) for item in source_items)
+        else:
+            calculated_subtotal = float(source_invoice.amount)
+        cloned_invoice.subtotal = calculated_subtotal
+
+        # Copy discount fields and recalc total
+        cloned_invoice.discount_type = source_invoice.discount_type or "percentage"
+        cloned_invoice.discount_value = float(source_invoice.discount_value or 0)
+
+        if source_items:
+            if cloned_invoice.discount_value > 0:
+                if cloned_invoice.discount_type == "percentage":
+                    discount_amount = (calculated_subtotal * cloned_invoice.discount_value) / 100
+                else:
+                    discount_amount = cloned_invoice.discount_value
+                cloned_invoice.amount = calculated_subtotal - discount_amount
+            else:
+                cloned_invoice.amount = calculated_subtotal
+        else:
+            cloned_invoice.amount = float(source_invoice.amount)
+
+        # Default due_date if None
+        if cloned_invoice.due_date is None:
+            cloned_invoice.due_date = (datetime.now(timezone.utc) + timedelta(days=30))
+
+        # Persist invoice
+        db.add(cloned_invoice)
+        db.flush()
+
+        # Clone items
+        for s_item in source_items:
+            db_item = InvoiceItem(
+                invoice_id=cloned_invoice.id,
+                description=s_item.description,
+                quantity=float(s_item.quantity),
+                price=float(s_item.price),
+                amount=float(s_item.quantity) * float(s_item.price)
+            )
+            db.add(db_item)
+
+        # History for clone on new invoice
+        from models.models_per_tenant import InvoiceHistory as InvoiceHistoryModel
+        history_entry = InvoiceHistoryModel(
+            invoice_id=cloned_invoice.id,
+            user_id=current_user.id,
+            action='cloned',
+            details=f"Invoice cloned from {source_invoice.number} (ID {source_invoice.id})",
+            previous_values=None,
+            current_values={
+                'source_invoice_id': source_invoice.id,
+                'source_invoice_number': source_invoice.number,
+                'number': cloned_invoice.number,
+                'amount': cloned_invoice.amount,
+                'currency': cloned_invoice.currency,
+                'status': cloned_invoice.status,
+                'due_date': cloned_invoice.due_date.isoformat() if cloned_invoice.due_date else None,
+            }
+        )
+        db.add(history_entry)
+
+        db.commit()
+        db.refresh(cloned_invoice)
+
+        # Audit log
+        log_audit_event(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="CLONE",
+            resource_type="invoice",
+            resource_id=str(cloned_invoice.id),
+            resource_name=f"Invoice {cloned_invoice.number}",
+            details={"cloned_from": source_invoice.id},
+            status="success"
+        )
+
+        # Build response
+        items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id == cloned_invoice.id).all()
+        items_data = [
+            {
+                "id": item.id,
+                "invoice_id": item.invoice_id,
+                "description": item.description,
+                "quantity": item.quantity,
+                "price": item.price,
+                "amount": item.amount
+            }
+            for item in items
+        ]
+
+        return {
+            "id": cloned_invoice.id,
+            "number": cloned_invoice.number,
+            "amount": float(cloned_invoice.amount),
+            "currency": cloned_invoice.currency,
+            "due_date": cloned_invoice.due_date.isoformat() if cloned_invoice.due_date else None,
+            "status": cloned_invoice.status,
+            "notes": cloned_invoice.notes,
+            "description": cloned_invoice.notes,
+            "client_id": cloned_invoice.client_id,
+            "created_at": cloned_invoice.created_at.isoformat() if cloned_invoice.created_at else None,
+            "updated_at": cloned_invoice.updated_at.isoformat() if cloned_invoice.updated_at else None,
+            "is_recurring": cloned_invoice.is_recurring,
+            "recurring_frequency": cloned_invoice.recurring_frequency,
+            "discount_type": cloned_invoice.discount_type,
+            "discount_value": float(cloned_invoice.discount_value) if cloned_invoice.discount_value else 0,
+            "subtotal": float(cloned_invoice.subtotal) if cloned_invoice.subtotal else float(cloned_invoice.amount),
+            "items": items_data,
+            "custom_fields": cloned_invoice.custom_fields if cloned_invoice.custom_fields is not None else {},
+            "show_discount_in_pdf": cloned_invoice.show_discount_in_pdf,
+            "has_attachment": False,
+            "attachment_filename": None
+        }
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error cloning invoice {invoice_id}: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Failed to clone invoice")
+
 @router.get("/", response_model=List[InvoiceWithClient])
 async def read_invoices(
     skip: int = 0,
     limit: int = 100,
     status_filter: Optional[str] = None,
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
-    # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
     try:
         # Build base query (exclude soft-deleted invoices)
         # No tenant_id filtering needed since we're in the tenant's database
@@ -207,7 +550,7 @@ async def read_invoices(
         # Get invoices with client information and payment status
         invoices = query.group_by(
             Invoice.id, Client.name
-        ).offset(skip).limit(limit).all()
+        ).order_by(Invoice.created_at.desc(), Invoice.id.desc()).offset(skip).limit(limit).all()
 
         # Convert to response format
         result = []
@@ -231,7 +574,9 @@ async def read_invoices(
                 "discount_value": float(invoice.discount_value) if invoice.discount_value else 0,
                 "subtotal": float(invoice.subtotal) if invoice.subtotal else float(invoice.amount),
                 "custom_fields": invoice.custom_fields if invoice.custom_fields is not None else {},
-                "show_discount_in_pdf": invoice.show_discount_in_pdf
+                "show_discount_in_pdf": invoice.show_discount_in_pdf,
+                "has_attachment": bool(invoice.attachment_filename) if invoice.attachment_filename is not None else False,
+                "attachment_filename": invoice.attachment_filename if invoice.attachment_filename is not None else None
             }
             result.append(invoice_dict)
 
@@ -242,18 +587,14 @@ async def read_invoices(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to fetch invoices: {str(e)}"
-        )
-    finally:
-        db.close()
-
-# Recycle Bin Endpoints (must come before /{invoice_id} route)
+        )# Recycle Bin Endpoints (must come before /{invoice_id} route)
 
 @router.get("/recycle-bin", response_model=List[DeletedInvoice])
 async def get_deleted_invoices(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Get all deleted invoices in the recycle bin"""
     try:
@@ -302,7 +643,7 @@ async def get_deleted_invoices(
 @router.post("/recycle-bin/empty", response_model=dict)
 async def empty_recycle_bin(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Empty the entire recycle bin (admin only)"""
     try:
@@ -338,7 +679,7 @@ async def empty_recycle_bin(
             db=db,
             user_id=current_user.id,
             user_email=current_user.email,
-            action="EMPTY_RECYCLE_BIN",
+            action="Empty Recycle Bin",
             resource_type="invoice",
             resource_id=None,
             resource_name=None,
@@ -367,7 +708,7 @@ async def restore_invoice(
     invoice_id: int,
     restore_request: RestoreInvoiceRequest = RestoreInvoiceRequest(),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Restore an invoice from the recycle bin"""
     try:
@@ -412,7 +753,7 @@ async def restore_invoice(
             db=db,
             user_id=current_user.id,
             user_email=current_user.email,
-            action="RESTORE",
+            action="Restore",
             resource_type="invoice",
             resource_id=str(invoice_id),
             resource_name=f"Invoice {db_invoice.number}",
@@ -441,7 +782,7 @@ async def restore_invoice(
 async def permanently_delete_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Permanently delete an invoice from the recycle bin"""
     try:
@@ -460,6 +801,19 @@ async def permanently_delete_invoice(
         # Only admins can permanently delete invoices
         require_admin(current_user, "permanently delete invoices")
         
+        # Unlink any bank statement transactions that reference this invoice  
+        try:
+            from models.models_per_tenant import BankStatementTransaction
+            linked_transactions = db.query(BankStatementTransaction).filter(
+                BankStatementTransaction.invoice_id == invoice_id
+            ).all()
+            for txn in linked_transactions:
+                txn.invoice_id = None
+            if linked_transactions:
+                logger.info(f"Unlinked {len(linked_transactions)} bank transactions from permanently deleted invoice {invoice_id}")
+        except Exception as e:
+            logger.warning(f"Failed to unlink bank transactions from permanently deleted invoice {invoice_id}: {e}")
+
         # Log the permanent deletion before deleting
         from models.models_per_tenant import InvoiceHistory
         history_entry = InvoiceHistory(
@@ -485,7 +839,7 @@ async def permanently_delete_invoice(
             db=db,
             user_id=current_user.id,
             user_email=current_user.email,
-            action="PERMANENT_DELETE",
+            action="Permanent Delete",
             resource_type="invoice",
             resource_id=str(invoice_id),
             resource_name=f"Invoice {db_invoice.number}",
@@ -510,15 +864,37 @@ async def permanently_delete_invoice(
             detail=f"Failed to permanently delete invoice: {str(e)}"
         )
 
+@router.get("/ai-status")
+async def get_ai_status(
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Check if AI/LLM is configured and available for PDF processing"""
+    try:
+        from models.models_per_tenant import AIConfig as AIConfigModel
+        
+        # Check if there's at least one active and tested AI configuration
+        active_config = db.query(AIConfigModel).filter(
+            AIConfigModel.is_active == True,
+            AIConfigModel.tested == True
+        ).first()
+        
+        return {
+            "configured": active_config is not None
+        }
+    except Exception as e:
+        logger.error(f"Error checking AI status: {str(e)}")
+        return {
+            "configured": False
+        }
+
 @router.get("/{invoice_id}", response_model=InvoiceWithClient)
 async def read_invoice(
     invoice_id: int,
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
-    # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
+    logger.info(f"🔍 READ_INVOICE ENDPOINT CALLED - invoice_id: {invoice_id}, user: {current_user.email}")
     try:
         # Get invoice with client information and payment status
         # No tenant_id filtering needed since we're in the tenant's database
@@ -538,6 +914,7 @@ async def read_invoice(
         ).first()
 
         if invoice_tuple is None:
+            logger.warning(f"User {current_user.email} attempted to access invoice {invoice_id} which doesn't exist in their tenant database")
             raise HTTPException(
                 status_code=404,
                 detail="Invoice not found"
@@ -548,23 +925,64 @@ async def read_invoice(
         logger.info(f"[DEBUG] Invoice from DB - custom_fields: {invoice.custom_fields}")
         logger.info(f"[DEBUG] Invoice from DB - type of custom_fields: {type(invoice.custom_fields)}")
         
-        # Get invoice items
-        items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).all()
-        items_data = [
-            {
+        # Force refresh of database session to ensure we get latest data
+        db.expire_all()
+
+        # Get invoice items with inventory details
+        items_query = db.query(InvoiceItem).options(
+            joinedload(InvoiceItem.inventory_item)
+        ).filter(InvoiceItem.invoice_id == invoice_id).all()
+        
+        logger.info(f"Raw items from database query: {[(item.id, item.description) for item in items_query]}")
+
+        items_data = []
+        for item in items_query:
+            item_data = {
                 "id": item.id,
                 "invoice_id": item.invoice_id,
                 "description": item.description,
                 "quantity": item.quantity,
                 "price": item.price,
-                "amount": item.amount
+                "amount": item.amount,
+                "inventory_item_id": item.inventory_item_id,
+                "unit_of_measure": item.unit_of_measure
             }
-            for item in items
-        ]
-        
+            
+            # Add inventory item details if linked
+            if item.inventory_item_id and item.inventory_item:
+                item_data["inventory_item"] = {
+                    "id": item.inventory_item.id,
+                    "name": item.inventory_item.name,
+                    "description": item.inventory_item.description,
+                    "sku": item.inventory_item.sku,
+                    "unit_price": item.inventory_item.unit_price,
+                    "cost_price": item.inventory_item.cost_price,
+                    "currency": item.inventory_item.currency,
+                    "track_stock": item.inventory_item.track_stock,
+                    "current_stock": item.inventory_item.current_stock,
+                    "minimum_stock": item.inventory_item.minimum_stock,
+                    "unit_of_measure": item.inventory_item.unit_of_measure,
+                    "item_type": item.inventory_item.item_type,
+                    "is_active": item.inventory_item.is_active,
+                    "barcode": item.inventory_item.barcode,
+                    "category_id": item.inventory_item.category_id
+                }
+            else:
+                item_data["inventory_item"] = None
+                
+            items_data.append(item_data)
+
         logger.info(f"Returning {len(items_data)} items for invoice {invoice_id}: {[{'id': item['id'], 'description': item['description'], 'description_length': len(item['description']) if item['description'] else 0} for item in items_data]}")
         
+        # Get new-style attachments for read endpoint
+        from models.models_per_tenant import InvoiceAttachment
+        new_attachments = db.query(InvoiceAttachment).filter(
+            InvoiceAttachment.invoice_id == invoice_id,
+            InvoiceAttachment.is_active == True
+        ).all()
+        
         invoice_dict = {
+            "date": invoice.created_at.isoformat() if invoice.created_at else None,
             "id": invoice.id,
             "number": invoice.number,
             "amount": float(invoice.amount),
@@ -584,11 +1002,39 @@ async def read_invoice(
             "subtotal": float(invoice.subtotal) if invoice.subtotal else float(invoice.amount),
             "custom_fields": invoice.custom_fields if invoice.custom_fields is not None else {},
             "items": items_data,
-            "show_discount_in_pdf": invoice.show_discount_in_pdf
+            "show_discount_in_pdf": invoice.show_discount_in_pdf,
+            "has_attachment": bool(invoice.attachment_filename) if invoice.attachment_filename is not None else False,
+            "attachment_filename": invoice.attachment_filename if invoice.attachment_filename is not None else None,
+            "attachments": [{
+                "id": att.id,
+                "filename": att.filename,
+                "file_size": att.file_size,
+                "attachment_type": att.attachment_type,
+                "created_at": att.created_at.isoformat()
+            } for att in new_attachments],
+            "attachment_count": len(new_attachments)
         }
+        
+
         logger.info(f"[DEBUG] Final invoice_dict response - custom_fields: {invoice_dict.get('custom_fields')}")
         logger.info(f"[DEBUG] Final invoice_dict response - custom_fields type: {type(invoice_dict.get('custom_fields'))}")
         logger.info(f"[DEBUG] Final invoice_dict response - all keys: {list(invoice_dict.keys())}")
+        logger.info(f"🔍 ATTACHMENT DEBUG - DB values: attachment_path={invoice.attachment_path}, attachment_filename={invoice.attachment_filename}")
+        logger.info(f"🔍 ATTACHMENT DEBUG - DB attachment_filename type: {type(invoice.attachment_filename)}")
+        logger.info(f"🔍 ATTACHMENT DEBUG - DB attachment_filename repr: {repr(invoice.attachment_filename)}")
+        logger.info(f"🔍 ATTACHMENT DEBUG - bool(invoice.attachment_filename): {bool(invoice.attachment_filename)}")
+        logger.info(f"🔍 ATTACHMENT DEBUG - Response values: has_attachment={invoice_dict['has_attachment']}, attachment_filename={invoice_dict['attachment_filename']}")
+        logger.info(f"🔍 ATTACHMENT DEBUG - Response attachment_filename type: {type(invoice_dict['attachment_filename'])}")
+        logger.info(f"🔍 ATTACHMENT DEBUG - Response attachment_filename repr: {repr(invoice_dict['attachment_filename'])}")
+        
+        # Check the actual invoice object attributes
+        logger.info(f"🔍 INVOICE OBJECT DEBUG - hasattr attachment_filename: {hasattr(invoice, 'attachment_filename')}")
+        logger.info(f"🔍 INVOICE OBJECT DEBUG - hasattr attachment_path: {hasattr(invoice, 'attachment_path')}")
+        if hasattr(invoice, 'attachment_filename'):
+            logger.info(f"🔍 INVOICE OBJECT DEBUG - invoice.attachment_filename: {invoice.attachment_filename}")
+        if hasattr(invoice, 'attachment_path'):
+            logger.info(f"🔍 INVOICE OBJECT DEBUG - invoice.attachment_path: {invoice.attachment_path}")
+        
         return invoice_dict
     except HTTPException:
         raise
@@ -599,32 +1045,49 @@ async def read_invoice(
             status_code=500,
             detail=FAILED_TO_FETCH_INVOICE
         )
-    finally:
-        db.close()
 
-@router.put("/{invoice_id}", response_model=InvoiceSchema)
+@router.put("/{invoice_id}", response_model=InvoiceWithClient)
 async def update_invoice(
     invoice_id: int,
     invoice: InvoiceUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
-    logger.info("Invoice update endpoint called")
+    from models.database import get_tenant_context
+    current_tenant = get_tenant_context()
+    logger.info(f"Invoice update endpoint called - User: {current_user.email}, Tenant: {current_tenant}, Invoice ID: {invoice_id}")
     logger.debug(f"[DEBUG] Received custom_fields in update: {invoice.custom_fields}")
     # Check if user has permission to update invoices
     require_non_viewer(current_user, "update invoices")
     
     try:
-        # No tenant_id filtering needed since we're in the tenant's database (exclude soft-deleted)
+        # Query invoice in current tenant's database (exclude soft-deleted)
         db_invoice = db.query(Invoice).filter(
             Invoice.id == invoice_id,
             Invoice.is_deleted == False
         ).first()
         if db_invoice is None:
+            logger.warning(f"User {current_user.email} (tenant {current_tenant}) attempted to access invoice {invoice_id} which doesn't exist in their tenant database")
             raise HTTPException(
                 status_code=404,
                 detail="Invoice not found"
             )
+        
+        # Check if invoice is paid and prevent updates except status and payment-related changes
+        update_data = invoice.model_dump(exclude_unset=True)
+        if db_invoice.status == "paid" and "status" in update_data:
+            # If changing status from paid, allow the change
+            pass
+        elif db_invoice.status == "paid":
+            # Allow status updates and payment-related updates for paid invoices
+            non_allowed_updates = {k: v for k, v in update_data.items()
+                                 if k not in ["status", "paid_amount", "total_paid"]}
+            if non_allowed_updates:
+                logger.warning(f"User {current_user.email} attempted to modify paid invoice {invoice_id} (fields: {list(non_allowed_updates.keys())})")
+                raise HTTPException(
+                    status_code=400,
+                    detail="Paid invoices can only be modified for status and payment updates"
+                )
         
         # Initialize currency service for validation
         currency_service = CurrencyService(db)
@@ -637,9 +1100,11 @@ async def update_invoice(
         old_notes = db_invoice.notes
         old_custom_fields = db_invoice.custom_fields
         old_show_discount_in_pdf = db_invoice.show_discount_in_pdf
+        old_status = db_invoice.status
+        old_client_id = db_invoice.client_id
 
         # Update invoice fields
-        update_data = invoice.dict(exclude_unset=True)
+        update_data = invoice.model_dump(exclude_unset=True)
         logger.info(f"[DEBUG] Update data received: {update_data}")
         for key, value in update_data.items():
             if key != "items":
@@ -652,6 +1117,44 @@ async def update_invoice(
                             status_code=400,
                             detail=f"Invalid currency code: {value}"
                         )
+                elif key == 'due_date' and value is not None:
+                    # Normalize due_date to naive midnight to avoid timezone shifts
+                    value = normalize_to_midnight_naive(value)
+                elif key == 'date' and value is not None:
+                    # Map invoice.date to created_at for persistence
+                    db_invoice.created_at = normalize_to_midnight_utc(value)
+                    db_invoice.updated_at = db_invoice.created_at
+                    continue  # don't setattr a non-existent column 'date'
+                elif key == 'attachment_filename' and value is None:
+                    # Handle attachment deletion
+                    if db_invoice.attachment_path and os.path.exists(db_invoice.attachment_path):
+                        try:
+                            os.remove(db_invoice.attachment_path)
+                            logger.info(f"Deleted attachment file: {db_invoice.attachment_path}")
+                        except Exception as e:
+                            logger.warning(f"Failed to delete attachment file: {e}")
+                    db_invoice.attachment_path = None
+                    db_invoice.attachment_filename = None
+                    continue
+                elif key == 'paid_amount' and value is not None:
+                    # Create a payment adjustment if allowed
+                    if db_invoice.status == "paid":
+                        # Already paid invoices cannot be modified except status; skip
+                        continue
+                    try:
+                        pay = Payment(
+                            invoice_id=db_invoice.id,
+                            amount=float(value),
+                            currency=db_invoice.currency,
+                            payment_date=datetime.now(timezone.utc),
+                            payment_method="manual",
+                            reference_number=f"ADJ-{db_invoice.number}-{int(datetime.now(timezone.utc).timestamp())}",
+                            notes="Manual paid amount update via invoice API"
+                        )
+                        db.add(pay)
+                    except Exception:
+                        logger.warning("Failed to create payment from paid_amount update", exc_info=True)
+                    continue
                 setattr(db_invoice, key, value)
         
         logger.info(f"[DEBUG] After setting fields, custom_fields in DB: {db_invoice.custom_fields}")
@@ -706,10 +1209,24 @@ async def update_invoice(
             for item_id, item in existing_items_dict.items():
                 if item_id not in updated_item_ids:
                     db.delete(item)
-        
+
+        # Commit all item changes (updates, creates, deletes) to the database
+        db.commit()
+        logger.info(f"Committed all item changes for invoice {invoice_id}")
+
+        # Refresh the database session to ensure we see the latest changes
+        db.refresh(db_invoice)
+        logger.info(f"Refreshed invoice object after item changes")
+
+        # Verify items were saved by fetching them again
+        updated_items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).all()
+        logger.info(f"Verified {len(updated_items)} items in database after commit: {[(item.id, item.description[:30] + '...' if len(item.description) > 30 else item.description) for item in updated_items]}")
+
         # Create history entry for the update only if there are actual changes
         from models.models_per_tenant import InvoiceHistory as InvoiceHistoryModel
         changes = []
+        if invoice.status is not None and old_status != invoice.status:
+            changes.append(f"Status changed from {old_status} to {invoice.status}")
         if invoice.currency and old_currency != invoice.currency:
             changes.append(f"Currency changed from {old_currency} to {invoice.currency}")
         if invoice.discount_value is not None and old_discount_value != invoice.discount_value:
@@ -723,14 +1240,76 @@ async def update_invoice(
                 changes.append("Notes removed")
             else:
                 changes.append("Notes updated")
-        if invoice.custom_fields is not None and old_custom_fields != invoice.custom_fields:
-            changes.append("Custom fields updated")
-            logger.info(f"[DEBUG] Custom fields changed from {old_custom_fields} to {invoice.custom_fields}")
+        # Only track custom fields changes if there are actual differences
+        if invoice.custom_fields is not None:
+            # Normalize both for comparison (handle None vs empty dict)
+            old_cf = old_custom_fields or {}
+            new_cf = invoice.custom_fields or {}
+            if old_cf != new_cf:
+                changes.append("Custom fields updated")
+                logger.info(f"[DEBUG] Custom fields changed from {old_custom_fields} to {invoice.custom_fields}")
         if invoice.show_discount_in_pdf is not None and old_show_discount_in_pdf != invoice.show_discount_in_pdf:
             changes.append(f"Show discount in PDF changed from {old_show_discount_in_pdf} to {invoice.show_discount_in_pdf}")
+
+        # Track client change
+        if invoice.client_id is not None and old_client_id != invoice.client_id:
+            try:
+                old_client = db.query(Client).filter(Client.id == old_client_id).first()
+                new_client = db.query(Client).filter(Client.id == invoice.client_id).first()
+                
+                # Format client info as "Name (email)" or fallback to ID
+                if old_client:
+                    old_client_info = f"{old_client.name}"
+                    if old_client.email:
+                        old_client_info += f" ({old_client.email})"
+                else:
+                    old_client_info = f"Client ID {old_client_id}"
+                
+                if new_client:
+                    new_client_info = f"{new_client.name}"
+                    if new_client.email:
+                        new_client_info += f" ({new_client.email})"
+                else:
+                    new_client_info = f"Client ID {invoice.client_id}"
+                
+                changes.append(f"Client changed from {old_client_info} to {new_client_info}")
+            except Exception as e:
+                # Fallback to IDs if names cannot be resolved
+                print(f"Error resolving client names: {e}")
+                changes.append(f"Client changed from Client ID {old_client_id} to Client ID {invoice.client_id}")
         
+        # Handle inventory stock movements for status changes
+        if "status" in update_data and old_status != invoice.status:
+            from services.inventory_integration_service import InventoryIntegrationService
+            integration_service = InventoryIntegrationService(db)
+
+            # Process stock movements when invoice becomes payable
+            if invoice.status in ['paid', 'completed']:
+                try:
+                    logger.info(f"Triggering stock movement processing for invoice {invoice_id} with status '{invoice.status}'")
+                    movements = integration_service.process_invoice_stock_movements(db_invoice, current_user.id)
+                    if movements:
+                        logger.info(f"Successfully processed {len(movements)} stock movements for invoice {invoice_id}")
+                        changes.append(f"Processed {len(movements)} inventory stock movements")
+                    else:
+                        logger.info(f"No stock movements were processed for invoice {invoice_id} (no inventory items found)")
+                except Exception as e:
+                    logger.error(f"Failed to process stock movements for invoice {invoice_id}: {e}")
+                    # Don't fail the invoice update, just log the error
+
+            # Reverse stock movements when invoice is cancelled/refunded
+            elif invoice.status in ['cancelled', 'refunded'] and old_status in ['paid', 'completed']:
+                try:
+                    movements = integration_service.reverse_invoice_stock_movements(db_invoice, current_user.id)
+                    if movements:
+                        logger.info(f"Reversed {len(movements)} stock movements for invoice {invoice_id}")
+                        changes.append(f"Reversed {len(movements)} inventory stock movements")
+                except Exception as e:
+                    logger.error(f"Failed to reverse stock movements for invoice {invoice_id}: {e}")
+                    # Don't fail the invoice update, just log the error
+
         # Only create history entry if there are actual changes
-        if changes:
+        if changes and len(changes) > 0:
             history_entry = InvoiceHistoryModel(
                 invoice_id=invoice_id,
                 user_id=current_user.id,
@@ -741,7 +1320,9 @@ async def update_invoice(
                     'discount_value': old_discount_value,
                     'discount_type': old_discount_type,
                     'amount': old_amount,
-                    'notes': old_notes
+                    'notes': old_notes,
+                    'client_id': old_client_id,
+                    'show_discount_in_pdf': old_show_discount_in_pdf
                 },
                 current_values={
                     'currency': db_invoice.currency,
@@ -749,7 +1330,8 @@ async def update_invoice(
                     'discount_type': db_invoice.discount_type,
                     'amount': db_invoice.amount,
                     'notes': db_invoice.notes,
-                    'show_discount_in_pdf': db_invoice.show_discount_in_pdf
+                    'show_discount_in_pdf': db_invoice.show_discount_in_pdf,
+                    'client_id': db_invoice.client_id
                 }
             )
             db.add(history_entry)
@@ -788,23 +1370,62 @@ async def update_invoice(
                 status="success"
             )
             
-            # Get updated items to include in response
-            items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).all()
-            items_data = [
-                {
+            # Get updated items to include in response with inventory information
+            items = db.query(InvoiceItem).options(
+                joinedload(InvoiceItem.inventory_item)
+            ).filter(InvoiceItem.invoice_id == invoice_id).all()
+            
+            items_data = []
+            for item in items:
+                item_data = {
                     "id": item.id,
                     "invoice_id": item.invoice_id,
+                    "inventory_item_id": item.inventory_item_id,
                     "description": item.description,
                     "quantity": item.quantity,
                     "price": item.price,
-                    "amount": item.amount
+                    "amount": item.amount,
+                    "unit_of_measure": item.unit_of_measure
                 }
-                for item in items
-            ]
+                
+                # Add inventory item details if linked
+                if item.inventory_item_id and item.inventory_item:
+                    item_data["inventory_item"] = {
+                        "id": item.inventory_item.id,
+                        "name": item.inventory_item.name,
+                        "description": item.inventory_item.description,
+                        "sku": item.inventory_item.sku,
+                        "unit_price": item.inventory_item.unit_price,
+                        "cost_price": item.inventory_item.cost_price,
+                        "currency": item.inventory_item.currency,
+                        "track_stock": item.inventory_item.track_stock,
+                        "current_stock": item.inventory_item.current_stock,
+                        "minimum_stock": item.inventory_item.minimum_stock,
+                        "unit_of_measure": item.inventory_item.unit_of_measure,
+                        "item_type": item.inventory_item.item_type,
+                        "is_active": item.inventory_item.is_active,
+                        "barcode": item.inventory_item.barcode,
+                        "category_id": item.inventory_item.category_id
+                    }
+                else:
+                    item_data["inventory_item"] = None
+                    
+                items_data.append(item_data)
             
             logger.info(f"Returning {len(items_data)} items in response: {[{'id': item['id'], 'description': item['description'], 'description_length': len(item['description']) if item['description'] else 0} for item in items_data]}")
             
+            # Get client name and total paid for response
+            client = db.query(Client).filter(Client.id == db_invoice.client_id).first()
+            total_paid = db.query(func.coalesce(func.sum(Payment.amount), 0)).filter(Payment.invoice_id == invoice_id).scalar() or 0
+            
             # Convert to response format
+            # Get new-style attachments for update endpoint
+            from models.models_per_tenant import InvoiceAttachment
+            new_attachments = db.query(InvoiceAttachment).filter(
+                InvoiceAttachment.invoice_id == invoice_id,
+                InvoiceAttachment.is_active == True
+            ).all()
+            
             invoice_dict = {
                 "id": db_invoice.id,
                 "number": db_invoice.number,
@@ -814,6 +1435,8 @@ async def update_invoice(
                 "status": db_invoice.status,
                 "notes": db_invoice.notes,
                 "client_id": db_invoice.client_id,
+                "client_name": client.name if client else "Unknown",
+                "total_paid": float(total_paid),
                 "created_at": db_invoice.created_at.isoformat() if db_invoice.created_at else None,
                 "updated_at": db_invoice.updated_at.isoformat() if db_invoice.updated_at else None,
                 "is_recurring": db_invoice.is_recurring,
@@ -822,11 +1445,73 @@ async def update_invoice(
                 "discount_value": float(db_invoice.discount_value) if db_invoice.discount_value else 0,
                 "subtotal": float(db_invoice.subtotal) if db_invoice.subtotal else float(db_invoice.amount),
                 "items": items_data,
-                "show_discount_in_pdf": db_invoice.show_discount_in_pdf
+                "show_discount_in_pdf": db_invoice.show_discount_in_pdf,
+                "has_attachment": bool(db_invoice.attachment_filename),
+                "attachment_filename": db_invoice.attachment_filename,
+                "attachments": [{
+                    "id": att.id,
+                    "filename": att.filename,
+                    "file_size": att.file_size,
+                    "attachment_type": att.attachment_type,
+                    "created_at": att.created_at.isoformat()
+                } for att in new_attachments],
+                "attachment_count": len(new_attachments)
             }
             return invoice_dict
         else:
-            # If no changes, just return the current state
+            # If no changes, just return the current state with actual items
+            items = db.query(InvoiceItem).options(
+                joinedload(InvoiceItem.inventory_item)
+            ).filter(InvoiceItem.invoice_id == invoice_id).all()
+            
+            items_data = []
+            for item in items:
+                item_data = {
+                    "id": item.id,
+                    "invoice_id": item.invoice_id,
+                    "inventory_item_id": item.inventory_item_id,
+                    "description": item.description,
+                    "quantity": item.quantity,
+                    "price": item.price,
+                    "amount": item.amount,
+                    "unit_of_measure": item.unit_of_measure
+                }
+                
+                # Add inventory item details if linked
+                if item.inventory_item_id and item.inventory_item:
+                    item_data["inventory_item"] = {
+                        "id": item.inventory_item.id,
+                        "name": item.inventory_item.name,
+                        "description": item.inventory_item.description,
+                        "sku": item.inventory_item.sku,
+                        "unit_price": item.inventory_item.unit_price,
+                        "cost_price": item.inventory_item.cost_price,
+                        "currency": item.inventory_item.currency,
+                        "track_stock": item.inventory_item.track_stock,
+                        "current_stock": item.inventory_item.current_stock,
+                        "minimum_stock": item.inventory_item.minimum_stock,
+                        "unit_of_measure": item.inventory_item.unit_of_measure,
+                        "item_type": item.inventory_item.item_type,
+                        "is_active": item.inventory_item.is_active,
+                        "barcode": item.inventory_item.barcode,
+                        "category_id": item.inventory_item.category_id
+                    }
+                else:
+                    item_data["inventory_item"] = None
+                    
+                items_data.append(item_data)
+            
+            # Get client name and total paid for response
+            client = db.query(Client).filter(Client.id == db_invoice.client_id).first()
+            total_paid = db.query(func.coalesce(func.sum(Payment.amount), 0)).filter(Payment.invoice_id == invoice_id).scalar() or 0
+            
+            # Get new-style attachments for update endpoint (no changes case)
+            from models.models_per_tenant import InvoiceAttachment
+            new_attachments = db.query(InvoiceAttachment).filter(
+                InvoiceAttachment.invoice_id == invoice_id,
+                InvoiceAttachment.is_active == True
+            ).all()
+            
             return {
                 "id": db_invoice.id,
                 "number": db_invoice.number,
@@ -836,6 +1521,8 @@ async def update_invoice(
                 "status": db_invoice.status,
                 "notes": db_invoice.notes,
                 "client_id": db_invoice.client_id,
+                "client_name": client.name if client else "Unknown",
+                "total_paid": float(total_paid),
                 "created_at": db_invoice.created_at.isoformat() if db_invoice.created_at else None,
                 "updated_at": db_invoice.updated_at.isoformat() if db_invoice.updated_at else None,
                 "is_recurring": db_invoice.is_recurring,
@@ -843,8 +1530,18 @@ async def update_invoice(
                 "discount_type": db_invoice.discount_type,
                 "discount_value": float(db_invoice.discount_value) if db_invoice.discount_value else 0,
                 "subtotal": float(db_invoice.subtotal) if db_invoice.subtotal else float(db_invoice.amount),
-                "items": [], # No items if no changes
-                "show_discount_in_pdf": db_invoice.show_discount_in_pdf
+                "items": items_data,
+                "show_discount_in_pdf": db_invoice.show_discount_in_pdf,
+                "has_attachment": bool(db_invoice.attachment_filename),
+                "attachment_filename": db_invoice.attachment_filename,
+                "attachments": [{
+                    "id": att.id,
+                    "filename": att.filename,
+                    "file_size": att.file_size,
+                    "attachment_type": att.attachment_type,
+                    "created_at": att.created_at.isoformat()
+                } for att in new_attachments],
+                "attachment_count": len(new_attachments)
             }
     except HTTPException:
         raise
@@ -861,7 +1558,7 @@ async def update_invoice(
 async def delete_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Move an invoice to the recycle bin (soft delete)"""
     try:
@@ -877,6 +1574,19 @@ async def delete_invoice(
                 detail="Invoice not found or already deleted"
             )
         
+        # Unlink any bank statement transactions that reference this invoice
+        try:
+            from models.models_per_tenant import BankStatementTransaction
+            linked_transactions = db.query(BankStatementTransaction).filter(
+                BankStatementTransaction.invoice_id == invoice_id
+            ).all()
+            for txn in linked_transactions:
+                txn.invoice_id = None
+            if linked_transactions:
+                logger.info(f"Unlinked {len(linked_transactions)} bank transactions from deleted invoice {invoice_id}")
+        except Exception as e:
+            logger.warning(f"Failed to unlink bank transactions from invoice {invoice_id}: {e}")
+
         # Soft delete the invoice
         db_invoice.is_deleted = True
         db_invoice.deleted_at = datetime.now(timezone.utc)
@@ -900,7 +1610,7 @@ async def delete_invoice(
             db=db,
             user_id=current_user.id,
             user_email=current_user.email,
-            action="DELETE",
+            action="Soft Delete",
             resource_type="invoice",
             resource_id=str(invoice_id),
             resource_name=f"Invoice {db_invoice.number}",
@@ -927,8 +1637,7 @@ async def delete_invoice(
 @router.post("/{invoice_id}/send-email")
 async def send_invoice_email(
     invoice_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Send invoice via email - redirect to email service"""
     from fastapi import Request
@@ -945,7 +1654,7 @@ async def send_invoice_email(
 @router.get("/stats/total-income", response_model=dict)
 async def get_total_income(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     try:
         # Calculate total income from all paid invoices (exclude soft-deleted)
@@ -970,7 +1679,7 @@ async def get_total_income(
 async def calculate_discount(
     subtotal: float,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Calculate the applicable discount for a given subtotal using discount rules"""
     try:
@@ -1016,13 +1725,13 @@ async def calculate_discount(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to calculate discount: {str(e)}"
-        ) 
+        )
 
 @router.get("/{invoice_id}/history")
 async def get_invoice_history(
     invoice_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Get update history for a specific invoice, including user name"""
     try:
@@ -1072,7 +1781,7 @@ async def create_invoice_history_entry(
     invoice_id: int,
     history_entry: InvoiceHistoryCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Create a new history entry for an invoice"""
     try:
@@ -1112,59 +1821,506 @@ async def create_invoice_history_entry(
         raise HTTPException(
             status_code=500,
             detail="Failed to create invoice history entry"
-        ) 
+        )
+
+
 
 @router.get("/{invoice_id}/pdf")
 async def download_invoice_pdf(
     invoice_id: int,
+    template: str = 'modern',
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Download or preview the invoice PDF, respecting the invoice's show_discount_in_pdf field."""
-    # Fetch invoice, client, and company/tenant info
-    invoice = db.query(Invoice).filter(Invoice.id == invoice_id, Invoice.is_deleted == False).first()
-    if not invoice:
-        raise HTTPException(status_code=404, detail="Invoice not found")
-    client = db.query(Client).filter(Client.id == invoice.client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-    # Optionally fetch tenant/company info if available
-    company_data = {"name": "Your Company"}
-    # Prepare invoice data
-    invoice_data = {
-        'id': invoice.id,
-        'number': invoice.number,
-        'date': invoice.created_at.strftime('%Y-%m-%d') if invoice.created_at else '',
-        'due_date': invoice.due_date.strftime('%Y-%m-%d') if invoice.due_date else '',
-        'amount': float(invoice.amount),
-        'subtotal': float(invoice.subtotal) if invoice.subtotal else float(invoice.amount),
-        'discount_type': invoice.discount_type,
-        'discount_value': float(invoice.discount_value) if invoice.discount_value else 0,
-        'paid_amount': 0,  # Optionally calculate from payments
-        'status': invoice.status,
-        'notes': invoice.notes or '',
-        'items': [item.__dict__ for item in invoice.items] if invoice.items else []
-    }
-    client_data = {
-        'id': client.id,
-        'name': client.name,
-        'email': client.email,
-        'phone': client.phone or '',
-        'address': client.address or ''
-    }
-    # Generate PDF using the invoice's show_discount_in_pdf field
-    pdf_bytes = generate_invoice_pdf(
-        invoice_data=invoice_data,
-        client_data=client_data,
-        company_data=company_data,
-        items=invoice.items,
-        db=db,
-        show_discount=invoice.show_discount_in_pdf
-    )
-    return StreamingResponse(
-        iter([pdf_bytes]),
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": f"inline; filename=invoice-{invoice.number}.pdf"
+    try:
+        # Fetch invoice, client, and company/tenant info
+        invoice = db.query(Invoice).filter(Invoice.id == invoice_id, Invoice.is_deleted == False).first()
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        client = db.query(Client).filter(Client.id == invoice.client_id).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="Client not found")
+        # Optionally fetch tenant/company info if available
+        company_data = {"name": "Your Company"}
+        # Prepare invoice data
+        invoice_data = {
+            'id': invoice.id,
+            'number': invoice.number,
+            'date': invoice.created_at.strftime('%Y-%m-%d') if invoice.created_at else '',
+            'due_date': invoice.due_date.strftime('%Y-%m-%d') if invoice.due_date else '',
+            'amount': float(invoice.amount),
+            'subtotal': float(invoice.subtotal) if invoice.subtotal else float(invoice.amount),
+            'discount_type': invoice.discount_type,
+            'discount_value': float(invoice.discount_value) if invoice.discount_value else 0,
+            'paid_amount': 0,  # Optionally calculate from payments
+            'status': invoice.status,
+            'notes': invoice.notes or '',
+            'items': [item.__dict__ for item in invoice.items] if invoice.items else []
         }
-    ) 
+        client_data = {
+            'id': client.id,
+            'name': client.name,
+            'email': client.email,
+            'phone': client.phone or '',
+            'address': client.address or ''
+        }
+        # Generate PDF using the invoice's show_discount_in_pdf field
+        pdf_bytes = generate_invoice_pdf(
+            invoice_data=invoice_data,
+            client_data=client_data,
+            company_data=company_data,
+            items=invoice.items,
+            db=db,
+            show_discount=invoice.show_discount_in_pdf,
+            template_name=template
+        )
+        return StreamingResponse(
+            iter([pdf_bytes]),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"inline; filename=invoice-{invoice.number}.pdf"
+            }
+        )
+    finally:
+        db.close()
+
+@router.post("/{invoice_id}/upload-attachment")
+async def upload_invoice_attachment(
+    invoice_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Upload an attachment for an invoice"""
+    logger.info(f"🔍 UPLOAD ENDPOINT CALLED - invoice_id: {invoice_id}, filename: {file.filename}, content_type: {file.content_type}")
+    try:
+        # Verify invoice exists
+        invoice = db.query(Invoice).filter(
+            Invoice.id == invoice_id,
+            Invoice.is_deleted == False
+        ).first()
+        
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        
+        # Validate file type
+        allowed_types = {
+            'application/pdf': '.pdf',
+            'application/msword': '.doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+            'image/jpeg': '.jpg',
+            'image/png': '.png'
+        }
+        
+        if file.content_type not in allowed_types:
+            raise HTTPException(
+                status_code=400,
+                detail="File type not allowed. Supported types: PDF, DOC, DOCX, JPG, PNG"
+            )
+        
+        # Enforce max file size (e.g., 10 MB)
+        MAX_BYTES = 10 * 1024 * 1024
+        contents = await file.read()
+        if len(contents) > MAX_BYTES:
+            raise HTTPException(
+                status_code=400,
+                detail="File too large. Maximum size is 10 MB"
+            )
+        # Reset file to allow saving later
+        await file.seek(0)
+        
+        # Basic content sniffing for PDFs (starts with %PDF)
+        if file.content_type == 'application/pdf':
+            header_bytes = contents[:4]
+            if header_bytes != b'%PDF':
+                raise HTTPException(status_code=400, detail="Invalid PDF file")
+        
+        # Create tenant-scoped attachments directory
+        from models.database import get_tenant_context
+        tenant_id = get_tenant_context()
+        tenant_folder = f"tenant_{tenant_id}" if tenant_id else "tenant_unknown"
+        attachments_dir = Path("attachments") / tenant_folder / "invoices"
+        attachments_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Sanitize filename and ensure safe extension
+        original_name = file.filename or "attachment"
+        # Remove any path components and unsafe characters
+        base_name = os.path.basename(original_name)
+        base_name = re.sub(r"[^A-Za-z0-9._-]", "_", base_name)
+        name_without_ext = os.path.splitext(base_name)[0][:100]
+        # Prefer extension from content type; fallback to sanitized original
+        ext_from_ct = allowed_types[file.content_type]
+        ext_from_name = os.path.splitext(base_name)[1].lower()
+        file_extension = ext_from_ct if ext_from_ct else (ext_from_name if ext_from_name in allowed_types.values() else ".bin")
+        
+        # Create filename in format: invoice_<id>_<sanitized>.ext
+        filename = f"invoice_{invoice_id}_{name_without_ext}{file_extension}"
+        file_path = attachments_dir / filename
+        
+        # Remove old attachment if exists
+        if invoice.attachment_path and os.path.exists(invoice.attachment_path):
+            try:
+                os.remove(invoice.attachment_path)
+                logger.info(f"Removed old attachment: {invoice.attachment_path}")
+            except Exception as e:
+                logger.warning(f"Failed to remove old attachment: {e}")
+        
+        # Save file safely (we already validated size via in-memory read cap)
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Update invoice with attachment info
+        invoice.attachment_path = str(file_path)
+        invoice.attachment_filename = file.filename
+        invoice.updated_at = datetime.now(timezone.utc)
+        
+        # Create history entry for attachment upload
+        from models.models_per_tenant import InvoiceHistory as InvoiceHistoryModel
+        history_entry = InvoiceHistoryModel(
+            invoice_id=invoice_id,
+            user_id=current_user.id,
+            action='attachment_uploaded',
+            details=f'Attachment uploaded: {file.filename}',
+            current_values={
+                'attachment_filename': file.filename,
+                'file_size': len(contents),
+                'content_type': file.content_type
+            }
+        )
+        db.add(history_entry)
+        
+        logger.info(f"🔍 BEFORE COMMIT - invoice {invoice_id}: path={file_path}, filename={file.filename}")
+        logger.info(f"🔍 BEFORE COMMIT - invoice object: attachment_path={invoice.attachment_path}, attachment_filename={invoice.attachment_filename}")
+        
+        try:
+            db.commit()
+            logger.info(f"✅ DATABASE COMMIT SUCCESSFUL for invoice {invoice_id}")
+        except Exception as commit_error:
+            logger.error(f"❌ DATABASE COMMIT FAILED for invoice {invoice_id}: {commit_error}")
+            db.rollback()
+            raise
+        
+        db.refresh(invoice)
+        
+        logger.info(f"✅ AFTER COMMIT - invoice {invoice_id}: attachment_path={invoice.attachment_path}, attachment_filename={invoice.attachment_filename}")
+        
+        # Verify the data was saved by querying again
+        verification_invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+        logger.info(f"🔍 VERIFICATION QUERY - invoice {invoice_id}: attachment_path={verification_invoice.attachment_path}, attachment_filename={verification_invoice.attachment_filename}")
+        logger.info(f"🔍 VERIFICATION QUERY - has_attachment would be: {bool(verification_invoice.attachment_filename)}")
+        
+        # Also check what the API response would return
+        api_has_attachment = bool(verification_invoice.attachment_filename)
+        logger.info(f"🔍 API RESPONSE CHECK - has_attachment: {api_has_attachment}, attachment_filename: '{verification_invoice.attachment_filename}'")
+        
+        logger.info(f"✅ UPLOAD ENDPOINT SUCCESS - Returning response for invoice {invoice_id}")
+        return {
+            "message": "Attachment uploaded successfully",
+            "filename": file.filename,
+            "size": os.path.getsize(file_path),
+            "attachment_path": str(file_path),
+            "attachment_filename": verification_invoice.attachment_filename,
+            "has_attachment": api_has_attachment
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading attachment: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to upload attachment: {str(e)}"
+        )
+
+@router.get("/{invoice_id}/download-attachment")
+async def download_invoice_attachment(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Download an invoice attachment"""
+    try:
+        # Verify invoice exists and has attachment
+        invoice = db.query(Invoice).filter(
+            Invoice.id == invoice_id,
+            Invoice.is_deleted == False
+        ).first()
+        
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        
+        if not invoice.attachment_path or not invoice.attachment_filename:
+            raise HTTPException(status_code=404, detail="No attachment found for this invoice")
+        
+        # Check if file exists
+        if not os.path.exists(invoice.attachment_path):
+            raise HTTPException(status_code=404, detail="Attachment file not found on disk")
+        
+        return FileResponse(
+            path=invoice.attachment_path,
+            filename=invoice.attachment_filename,
+            media_type='application/octet-stream'
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error downloading attachment: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to download attachment: {str(e)}"
+        ) 
+
+
+@router.get("/{invoice_id}/attachment-info")
+async def get_invoice_attachment_info(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Return metadata for the invoice attachment so the UI can decide to preview or download."""
+    try:
+        invoice = db.query(Invoice).filter(
+            Invoice.id == invoice_id,
+            Invoice.is_deleted == False
+        ).first()
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+
+        has_attachment = bool(getattr(invoice, "attachment_path", None) and os.path.exists(invoice.attachment_path))
+        content_type, _ = (mimetypes.guess_type(invoice.attachment_filename or "") if has_attachment else (None, None))
+        size_bytes = os.path.getsize(invoice.attachment_path) if has_attachment else None
+        return {
+            "has_attachment": has_attachment,
+            "filename": invoice.attachment_filename,
+            "content_type": content_type or "application/octet-stream",
+            "size_bytes": size_bytes,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting attachment info for invoice {invoice_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get attachment info")
+
+
+@router.get("/{invoice_id}/preview-attachment")
+async def preview_invoice_attachment(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Serve the invoice attachment with inline Content-Disposition for browser preview (PDF/images)."""
+    try:
+        invoice = db.query(Invoice).filter(
+            Invoice.id == invoice_id,
+            Invoice.is_deleted == False
+        ).first()
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+
+        if not invoice.attachment_path or not os.path.exists(invoice.attachment_path):
+            raise HTTPException(status_code=404, detail="Attachment file not found")
+
+        # Guess media type from filename; fallback to octet-stream
+        media_type, _ = mimetypes.guess_type(invoice.attachment_filename or "")
+        media_type = media_type or "application/octet-stream"
+
+        headers = {
+            # Inline to allow preview in browser tabs for supported types (e.g., PDF, images)
+            "Content-Disposition": f"inline; filename={invoice.attachment_filename or 'attachment'}"
+        }
+        return FileResponse(
+            path=invoice.attachment_path,
+            filename=invoice.attachment_filename,
+            media_type=media_type,
+            headers=headers
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error previewing attachment for invoice {invoice_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to preview attachment")
+
+
+# === Invoice Attachments Endpoints ===
+
+@router.post("/{invoice_id}/attachments/")
+@router.post("/{invoice_id}/attachments")
+async def upload_invoice_attachment_new(
+    invoice_id: int,
+    file: UploadFile = File(...),
+    attachment_type: Optional[str] = Query("document", description="Attachment type: 'image' or 'document'"),
+    document_type: Optional[str] = Query(None, description="Document type (for documents)"),
+    description: Optional[str] = Query(None, description="Optional description"),
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """
+    Upload a new attachment for an invoice (using new attachment system)
+    """
+    try:
+        # Check if user has permission
+        require_non_viewer(current_user, "upload attachments")
+        
+        # Verify invoice exists
+        invoice = db.query(Invoice).filter(
+            Invoice.id == invoice_id,
+            Invoice.is_deleted == False
+        ).first()
+        
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        
+        # Basic validation
+        if attachment_type and attachment_type not in ['image', 'document']:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="attachment_type must be 'image' or 'document'"
+            )
+        
+        # Default to document if not specified
+        if not attachment_type:
+            attachment_type = "document"
+        
+        # Read file content for validation
+        file_content = await file.read()
+        
+        if not file_content:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Empty file provided"
+            )
+        
+        # Import the InvoiceAttachment model
+        from models.models_per_tenant import InvoiceAttachment
+        import uuid
+        import hashlib
+        from pathlib import Path
+        
+        # Create attachments directory
+        from models.database import get_tenant_context
+        tenant_id = get_tenant_context()
+        tenant_folder = f"tenant_{tenant_id}" if tenant_id else "tenant_unknown"
+        attachments_dir = Path("attachments") / tenant_folder / "invoices"
+        attachments_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate unique filename
+        file_extension = Path(file.filename or "attachment").suffix
+        stored_filename = f"{uuid.uuid4()}{file_extension}"
+        file_path = attachments_dir / stored_filename
+        
+        # Save file to disk
+        with open(file_path, "wb") as f:
+            f.write(file_content)
+        
+        # Calculate file hash
+        file_hash = hashlib.sha256(file_content).hexdigest()
+        
+        # Create attachment record
+        attachment = InvoiceAttachment(
+            invoice_id=invoice_id,
+            filename=file.filename or "attachment",
+            stored_filename=stored_filename,
+            file_path=str(file_path),
+            file_size=len(file_content),
+            content_type=file.content_type,
+            file_hash=file_hash,
+            attachment_type=attachment_type,
+            document_type=document_type,
+            description=description,
+            uploaded_by=current_user.id,
+            is_active=True
+        )
+        
+        db.add(attachment)
+        db.commit()
+        db.refresh(attachment)
+        
+        return {
+            "id": attachment.id,
+            "invoice_id": invoice_id,
+            "filename": attachment.filename,
+            "file_size": attachment.file_size,
+            "attachment_type": attachment.attachment_type,
+            "document_type": attachment.document_type,
+            "description": attachment.description,
+            "created_at": attachment.created_at.isoformat(),
+            "status": "success",
+            "message": "Attachment uploaded successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to process invoice attachment upload: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process file upload"
+        )
+
+
+@router.get("/{invoice_id}/attachments/")
+@router.get("/{invoice_id}/attachments")
+async def get_invoice_attachments(
+    invoice_id: int,
+    attachment_type: Optional[str] = Query(None, description="Filter by attachment type"),
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """
+    Get all attachments for an invoice
+    """
+    try:
+        # Verify invoice exists
+        invoice = db.query(Invoice).filter(
+            Invoice.id == invoice_id,
+            Invoice.is_deleted == False
+        ).first()
+        
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        
+        # Import the InvoiceAttachment model
+        from models.models_per_tenant import InvoiceAttachment
+        
+        # Query attachments
+        query = db.query(InvoiceAttachment).filter(
+            InvoiceAttachment.invoice_id == invoice_id,
+            InvoiceAttachment.is_active == True
+        )
+        
+        if attachment_type:
+            query = query.filter(InvoiceAttachment.attachment_type == attachment_type)
+        
+        attachments = query.order_by(InvoiceAttachment.created_at.desc()).all()
+        
+        # Format response
+        attachment_list = []
+        for attachment in attachments:
+            attachment_list.append({
+                "id": attachment.id,
+                "filename": attachment.filename,
+                "file_size": attachment.file_size,
+                "content_type": attachment.content_type,
+                "attachment_type": attachment.attachment_type,
+                "document_type": attachment.document_type,
+                "description": attachment.description,
+                "created_at": attachment.created_at.isoformat(),
+                "uploaded_by": attachment.uploaded_by
+            })
+        
+        return {
+            "invoice_id": invoice_id,
+            "attachments": attachment_list,
+            "total_count": len(attachment_list)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get invoice attachments: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve attachments"
+        )

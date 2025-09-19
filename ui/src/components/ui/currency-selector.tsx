@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select';
 import { Label } from './label';
 import { currencyApi } from '@/lib/api';
@@ -35,17 +35,23 @@ export function CurrencySelector({
   className = "",
   onCurrenciesLoaded,
 }: CurrencySelectorProps) {
+  // Handle empty/null values by using fallback
+  const effectiveValue = value || "";
   const [currencies, setCurrencies] = useState<Currency[]>(FALLBACK_CURRENCIES);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
+    if (hasLoadedRef.current) return;
+    
     const fetchCurrencies = async () => {
       setLoading(true);
       try {
         const data = await currencyApi.getSupportedCurrencies();
-        if (data.currencies && data.currencies.length > 0) {
-          setCurrencies(data.currencies);
+        if (data && data.length > 0) {
+          setCurrencies(data);
+          console.log("Currencies loaded:", data.length, "currencies");
         } else {
           setError('No currencies available from API.');
         }
@@ -53,6 +59,7 @@ export function CurrencySelector({
         setError('API unavailable - using default currencies');
       } finally {
         setLoading(false);
+        hasLoadedRef.current = true;
         if (onCurrenciesLoaded) {
           onCurrenciesLoaded();
         }
@@ -60,7 +67,7 @@ export function CurrencySelector({
     };
 
     fetchCurrencies();
-  }, [onCurrenciesLoaded]);
+  }, []);
 
   const activeCurrencies = currencies.filter(c => c.is_active);
 
@@ -71,7 +78,7 @@ export function CurrencySelector({
   if (loading) {
     return (
       <div className={className}>
-        <Select disabled>
+        <Select value={effectiveValue} onValueChange={onValueChange} disabled>
           <SelectTrigger>
             <SelectValue placeholder="Loading currencies..." />
           </SelectTrigger>
@@ -82,7 +89,7 @@ export function CurrencySelector({
 
   return (
     <div className={className}>
-      <Select value={value} onValueChange={onValueChange} disabled={disabled}>
+      <Select value={effectiveValue} onValueChange={onValueChange} disabled={disabled}>
         <SelectTrigger>
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>

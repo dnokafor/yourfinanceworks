@@ -27,6 +27,7 @@ ui/*.tsbuildinfo
 ui/next-env.d.ts
 
 
+api/.coverage
 api/venv
 api/**/__pycache__
 api/.env
@@ -39,3 +40,8 @@ api/static/logos/*
 !api/static/logos/
 # Allow .gitkeep to ensure the directory is tracked
 !api/static/logos/.gitkeep
+
+# Ignore all files under api/attachments/
+api/attachments/*
+# But do not ignore the directory itself
+!api/attachments/.gitkeep
