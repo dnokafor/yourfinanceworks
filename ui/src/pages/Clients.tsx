@@ -19,9 +19,49 @@ const Clients = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [currentTenantId, setCurrentTenantId] = useState<string | null>(null);
 
   // Check if user can perform actions (not a viewer)
   const canPerformAction = canPerformActions();
+  
+  // Get current tenant ID to trigger refetch when organization switches
+  const getCurrentTenantId = () => {
+    try {
+      const selectedTenantId = localStorage.getItem('selected_tenant_id');
+      if (selectedTenantId) {
+        return selectedTenantId;
+      }
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        return user?.tenant_id?.toString();
+      }
+    } catch (e) {
+      console.error('Error getting tenant ID:', e);
+    }
+    return null;
+  };
+  
+  // Update tenant ID when it changes
+  useEffect(() => {
+    const updateTenantId = () => {
+      const tenantId = getCurrentTenantId();
+      if (tenantId !== currentTenantId) {
+        console.log(`🔄 Clients: Tenant ID changed from ${currentTenantId} to ${tenantId}`);
+        setCurrentTenantId(tenantId);
+      }
+    };
+    
+    updateTenantId();
+    
+    // Listen for storage changes
+    const handleStorageChange = () => {
+      updateTenantId();
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [currentTenantId]);
   
   useEffect(() => {
     const fetchClients = async () => {
@@ -42,7 +82,7 @@ const Clients = () => {
     };
     
     fetchClients();
-  }, []);
+  }, [currentTenantId]); // Use state variable as dependency
   
   const filteredClients = (clients || []).filter(client => 
     client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

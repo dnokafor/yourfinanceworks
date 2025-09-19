@@ -1,7 +1,9 @@
 import { toast } from 'sonner';
-import { useTranslation } from 'react-i18next';
+import { EXPENSE_CATEGORY_OPTIONS } from '@/constants/expenses';
 
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+// API base URL comes from env var. Set VITE_API_URL in your environment.
+// When running in containers, use nginx proxy on port 8080
+export const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
 // Type definitions
 export interface Client {
@@ -10,6 +12,7 @@ export interface Client {
   email: string;
   phone: string;
   address: string;
+  company?: string;
   balance: number;
   paid_amount: number;
   outstanding_balance?: number;
@@ -34,6 +37,25 @@ export interface InvoiceItem {
   price: number;
   amount: number;
   invoice_id?: number;
+  inventory_item_id?: number;
+  unit_of_measure?: string;
+  inventory_item?: {
+    id: number;
+    name: string;
+    description?: string;
+    sku?: string;
+    unit_price: number;
+    cost_price?: number;
+    currency: string;
+    track_stock: boolean;
+    current_stock: number;
+    minimum_stock: number;
+    unit_of_measure: string;
+    item_type: string;
+    is_active: boolean;
+    barcode?: string;
+    category_id?: number;
+  };
 }
 
 export type InvoiceStatus = "draft" | "pending" | "paid" | "overdue" | "partially_paid";
@@ -61,7 +83,18 @@ export interface Invoice {
   subtotal?: number;
   custom_fields?: Record<string, any>;
   show_discount_in_pdf?: boolean; // New property added
+  has_attachment?: boolean;
+  attachment_filename?: string;
 }
+
+export const linkApi = {
+  // Simple invoice list for selectors
+  getInvoicesBasic: async () => {
+    const list = await invoiceApi.getInvoicesWithParams({ limit: 1000 });
+    // Map to minimal data
+    return list.map(inv => ({ id: inv.id, number: inv.number, client_name: inv.client_name, amount: inv.amount, status: inv.status }));
+  },
+};
 
 export interface Payment {
   id: number;
@@ -79,6 +112,443 @@ export interface Payment {
   created_at: string;
   updated_at: string;
 }
+
+// Inventory Management Types
+export interface InventoryCategory {
+  id: number;
+  name: string;
+  description?: string;
+  color?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InventoryItem {
+  id: number;
+  name: string;
+  description?: string;
+  sku?: string;
+  category_id?: number;
+  category?: InventoryCategory;
+  unit_price: number;
+  cost_price?: number;
+  currency: string;
+  track_stock: boolean;
+  current_stock: number;
+  minimum_stock: number;
+  unit_of_measure: string;
+  item_type: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StockMovement {
+  id: number;
+  item_id: number;
+  movement_type: string;
+  quantity: number;
+  unit_cost?: number;
+  reference_type?: string;
+  reference_id?: number;
+  notes?: string;
+  user_id: number;
+  movement_date: string;
+  created_at: string;
+  item?: InventoryItem;
+}
+
+export interface StockMovementCreate {
+  item_id: number;
+  movement_type: string;
+  quantity: number;
+  unit_cost?: number;
+  reference_type?: string;
+  reference_id?: number;
+  notes?: string;
+  movement_date: string;
+}
+
+export interface InventoryAnalytics {
+  total_items: number;
+  active_items: number;
+  low_stock_items: number;
+  total_value: number;
+  currency: string;
+}
+
+export interface InventorySearchFilters {
+  query?: string;
+  category_id?: number;
+  item_type?: string;
+  is_active?: boolean;
+  track_stock?: boolean;
+  low_stock_only?: boolean;
+  min_price?: number;
+  max_price?: number;
+}
+
+export interface InventoryListResponse {
+  items: InventoryItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  has_more: boolean;
+}
+
+export interface InventoryValueReport {
+  total_inventory_value: number;
+  total_cost_value: number;
+  potential_profit: number;
+  currency: string;
+  items: any[];
+}
+
+export interface InventoryPurchaseItem {
+  item_id: number;
+  quantity: number;
+  unit_cost: number;
+  item_name?: string;
+}
+
+export interface InventoryPurchaseCreate {
+  vendor: string;
+  reference_number?: string;
+  purchase_date: string;
+  currency: string;
+  items: InventoryPurchaseItem[];
+  notes?: string;
+  payment_method?: string;
+  tax_rate?: number;
+}
+
+export interface LowStockAlert {
+  item_id: number;
+  item_name: string;
+  sku?: string;
+  current_stock: number;
+  minimum_stock: number;
+  sold_last_30_days: number;
+  daily_sales_rate: number;
+  days_until_empty?: number;
+  weeks_stock_remaining?: number;
+  alert_level: 'critical' | 'warning' | 'normal';
+  message: string;
+}
+
+export interface LowStockAlertsResponse {
+  generated_at: string;
+  threshold_days: number;
+  alerts: LowStockAlert[];
+  summary: {
+    total_items: number;
+    critical_alerts: number;
+    warning_alerts: number;
+    normal_items: number;
+  };
+}
+
+// Invoice-Inventory Linking Interfaces
+export interface InvoiceInventoryLink {
+  id: number;
+  number: string;
+  amount: number;
+  currency: string;
+  status: string;
+  due_date?: string;
+  created_at: string;
+  client_id: number;
+  invoice_items: Array<{
+    quantity: number;
+    price: number;
+    amount: number;
+  }>;
+  stock_movements: Array<{
+    id: number;
+    quantity: number;
+    movement_type: string;
+    movement_date: string;
+    notes?: string;
+  }>;
+}
+
+export interface InventoryStockSummary {
+  item_id: number;
+  movement_summary: Record<string, {
+    total_quantity: number;
+    count: number;
+  }>;
+  recent_movements: Array<{
+    id: number;
+    movement_type: string;
+    quantity: number;
+    reference_type?: string;
+    reference_id?: number;
+    movement_date: string;
+    notes?: string;
+  }>;
+  linked_references: {
+    invoices: Array<{
+      id: number;
+      number: string;
+      amount: number;
+      currency: string;
+      status: string;
+      client_id: number;
+    }>;
+    expenses: Array<{
+      id: number;
+      amount: number;
+      currency: string;
+      category?: string;
+      vendor?: string;
+    }>;
+  };
+  period_days: number;
+}
+
+export interface ProfitabilityAnalysis {
+  period: {
+    start_date: string;
+    end_date: string;
+  };
+  summary: {
+    total_revenue: number;
+    total_cost: number;
+    total_profit: number;
+    overall_margin_percent: number;
+  };
+  items: any[];
+}
+
+export interface InventoryTurnoverAnalysis {
+  analysis_period_months: number;
+  summary: {
+    total_inventory_value: number;
+    total_cogs: number;
+    overall_turnover_ratio: number;
+    items_analyzed: number;
+  };
+  turnover_categories: {
+    excellent: number;
+    good: number;
+    fair: number;
+    slow: number;
+    very_slow: number;
+  };
+  items: any[];
+}
+
+export interface CategoryPerformanceReport {
+  period: {
+    start_date: string;
+    end_date: string;
+  };
+  categories: any[];
+  summary: {
+    total_categories: number;
+    total_revenue: number;
+    total_inventory_value: number;
+  };
+}
+
+export interface InventoryDashboardData {
+  analytics: InventoryAnalytics;
+  alerts: {
+    critical_alerts: number;
+    warning_alerts: number;
+    normal_items: number;
+  };
+  recent_activity: {
+    period_days: number;
+    total_sold: number;
+    total_revenue: number;
+    invoice_count: number;
+  };
+  top_selling_items: Array<{
+    item_name: string;
+    total_sold: number;
+    total_revenue: number;
+  }>;
+  generated_at: string;
+}
+
+export interface Expense {
+  id: number;
+  amount: number;
+  currency?: string;
+  expense_date: string;
+  category: string;
+  vendor?: string;
+  labels?: string[];
+  tax_rate?: number;
+  tax_amount?: number;
+  total_amount?: number;
+  payment_method?: string;
+  reference_number?: string;
+  status: string;
+  notes?: string;
+  receipt_filename?: string;
+  attachments_count?: number;
+  invoice_id?: number | null;
+  created_at: string;
+  updated_at: string;
+  imported_from_attachment?: boolean;
+  analysis_status?: 'not_started' | 'queued' | 'processing' | 'done' | 'failed' | 'cancelled';
+  manual_override?: boolean;
+}
+
+export interface ExpenseAttachmentMeta {
+  id: number;
+  filename: string;
+  content_type?: string;
+  size_bytes?: number;
+  uploaded_at?: string;
+}
+
+export interface BankTransactionEntry {
+  id?: number;
+  date: string;
+  description: string;
+  amount: number;
+  transaction_type: 'debit' | 'credit';
+  balance?: number | null;
+  category?: string | null;
+  invoice_id?: number | null;
+  expense_id?: number | null;
+}
+
+export interface BankStatementSummary {
+  id: number;
+  original_filename: string;
+  stored_filename: string;
+  file_path: string;
+  status: string;
+  extracted_count: number;
+  labels?: string[] | null;
+  notes?: string | null;
+  created_at?: string;
+}
+
+export interface BankStatementDetail extends BankStatementSummary {
+  transactions: BankTransactionEntry[];
+}
+
+export const bankStatementApi = {
+  uploadAndExtract: async (
+    files: File[]
+  ): Promise<{ success: boolean; statements: BankStatementSummary[] }> => {
+    const token = localStorage.getItem('token');
+    const tenantId = localStorage.getItem('selected_tenant_id') || (() => {
+      try { const user = JSON.parse(localStorage.getItem('user') || '{}'); return user.tenant_id?.toString(); } catch { return undefined; }
+    })();
+
+    const formData = new FormData();
+    files.slice(0, 12).forEach((f) => formData.append('files', f));
+
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (tenantId) headers['X-Tenant-ID'] = tenantId;
+
+    const url = `${API_BASE_URL}/statements/upload`;
+    const resp = await fetch(url, { method: 'POST', headers, body: formData });
+    const text = await resp.text();
+    if (!resp.ok) {
+      try { throw new Error(JSON.parse(text).detail || 'Failed to process bank statements'); }
+      catch { throw new Error(text || 'Failed to process bank statements'); }
+    }
+    return JSON.parse(text);
+  },
+
+  list: async (): Promise<BankStatementSummary[]> => {
+    const data = await apiRequest<{ success: boolean; statements: BankStatementSummary[] }>(
+      '/statements',
+      { method: 'GET' }
+    );
+    return data.statements;
+  },
+
+  get: async (statementId: number): Promise<BankStatementDetail> => {
+    const data = await apiRequest<{ success: boolean; statement: BankStatementDetail }>(
+      `/statements/${statementId}`,
+      { method: 'GET' }
+    );
+    return data.statement;
+  },
+
+  updateMeta: async (
+    statementId: number,
+    updates: { labels?: string[] | null; notes?: string | null }
+  ): Promise<{ success: boolean; statement: BankStatementSummary }> => {
+    return apiRequest<{ success: boolean; statement: BankStatementSummary }>(
+      `/statements/${statementId}`,
+      { method: 'PUT', body: JSON.stringify(updates) }
+    );
+  },
+
+  replaceTransactions: async (
+    statementId: number,
+    transactions: BankTransactionEntry[]
+  ): Promise<{ success: boolean; updated_count: number }> => {
+    return apiRequest<{ success: boolean; updated_count: number }>(
+      `/statements/${statementId}/transactions`,
+      { method: 'PUT', body: JSON.stringify({ transactions }) }
+    );
+  },
+
+  reprocess: async (statementId: number): Promise<{ success: boolean; message: string }> => {
+    return apiRequest<{ success: boolean; message: string }>(
+      `/statements/${statementId}/reprocess`,
+      { method: 'POST' }
+    );
+  },
+
+  // Build URLs for preview/download (relative if API_BASE_URL is relative)
+  fileUrl: (statementId: number, inline = true): string => {
+    const base = API_BASE_URL.replace(/\/$/, '');
+    return `${base}/statements/${statementId}/file${inline ? '?inline=true' : ''}`;
+  },
+
+  fetchFileBlob: async (
+    statementId: number,
+    inline = true
+  ): Promise<{ blob: Blob; filename: string; contentType: string }> => {
+    const token = localStorage.getItem('token');
+    const tenantId = localStorage.getItem('selected_tenant_id') || (() => {
+      try { const user = JSON.parse(localStorage.getItem('user') || '{}'); return user.tenant_id?.toString(); } catch { return undefined; }
+    })();
+    const base = API_BASE_URL.replace(/\/$/, '');
+    const url = `${base}/statements/${statementId}/file${inline ? '?inline=true' : ''}`;
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (tenantId) headers['X-Tenant-ID'] = tenantId;
+    const resp = await fetch(url, { method: 'GET', headers });
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      throw new Error(text || `Failed to fetch file (${resp.status})`);
+    }
+    const cd = resp.headers.get('content-disposition') || '';
+    const ct = resp.headers.get('content-type') || '';
+    let filename = `statement-${statementId}.pdf`;
+    try {
+      const m = cd.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
+      const raw = decodeURIComponent((m?.[1] || m?.[2] || '').trim());
+      if (raw) filename = raw;
+    } catch { /* noop */ }
+    const blob = await resp.blob();
+    const type = ct || blob.type || 'application/pdf';
+    const normalizedBlob = blob.type === type ? blob : new Blob([blob], { type });
+    return { blob: normalizedBlob, filename, contentType: type };
+  },
+
+  delete: async (statementId: number): Promise<void> => {
+    await apiRequest<{ success: boolean }>(
+      `/statements/${statementId}`,
+      { method: 'DELETE' }
+    );
+  },
+};
 
 // Add settings types
 export interface CompanyInfo {
@@ -108,6 +578,7 @@ export interface Settings {
 // AI Configuration types
 export interface AIConfig {
   id: number;
+  tenant_id?: number;
   provider_name: string;
   provider_url?: string;
   api_key?: string;
@@ -115,6 +586,11 @@ export interface AIConfig {
   is_active: boolean;
   is_default: boolean;
   tested: boolean;
+  ocr_enabled: boolean;
+  max_tokens: number;
+  temperature: number;
+  usage_count: number;
+  last_used_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -127,6 +603,9 @@ export interface AIConfigCreate {
   is_active?: boolean;
   is_default?: boolean;
   tested?: boolean;
+  ocr_enabled?: boolean;
+  max_tokens?: number;
+  temperature?: number;
 }
 
 export interface AIConfigUpdate {
@@ -137,6 +616,34 @@ export interface AIConfigUpdate {
   is_active?: boolean;
   is_default?: boolean;
   tested?: boolean;
+  ocr_enabled?: boolean;
+  max_tokens?: number;
+  temperature?: number;
+}
+
+export interface AIConfigTestRequest {
+  custom_prompt?: string;
+  test_text?: string;
+}
+
+export interface AIConfigTestResponse {
+  success: boolean;
+  message: string;
+  response_time_ms?: number;
+  response?: string;
+  error?: string;
+}
+
+export interface AIProviderInfo {
+  name: string;
+  display_name: string;
+  description: string;
+  website?: string;
+  models: string[];
+  supports_ocr: boolean;
+  requires_api_key: boolean;
+  default_model: string;
+  default_max_tokens: number;
 }
 
 // Discount rule types
@@ -216,14 +723,23 @@ export async function apiRequest<T>(
   try {
     // Get JWT token from localStorage
     const token = localStorage.getItem('token');
-    // Get tenantId from localStorage.user if available
+    // Get tenantId from localStorage - check for selected tenant first, then fallback to user's default
     let tenantId: string | undefined = undefined;
     try {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        if (user && user.tenant_id) {
-          tenantId = String(user.tenant_id);
+      // First check if user has selected a specific tenant
+      const selectedTenantId = localStorage.getItem('selected_tenant_id');
+      if (selectedTenantId) {
+        tenantId = selectedTenantId;
+        console.log(`🔍 API Request: Using selected tenant ID: ${tenantId} for ${url}`);
+      } else {
+        // Fallback to user's default tenant
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          if (user && user.tenant_id) {
+            tenantId = String(user.tenant_id);
+            console.log(`🔍 API Request: Using user's default tenant ID: ${tenantId} for ${url}`);
+          }
         }
       }
     } catch (e) {
@@ -231,7 +747,6 @@ export async function apiRequest<T>(
     }
     
     const requestUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
-    console.log(`Making API request to ${requestUrl}`, options);
     let extraHeaders: Record<string, string> = {};
     if (options.headers) {
       if (options.headers instanceof Headers) {
@@ -244,12 +759,35 @@ export async function apiRequest<T>(
       }
     }
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
       ...(token && { 'Authorization': `Bearer ${token}` }),
       ...extraHeaders,
     };
+    
+    // Only set Content-Type for non-FormData requests
+    // FormData requests need the browser to set Content-Type with boundary
+    if (!(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
     if (!config.skipTenant && tenantId) {
-      headers['X-Tenant-ID'] = tenantId;
+      // Ensure tenant ID is a valid number string
+      const numericTenantId = parseInt(tenantId, 10);
+      if (!isNaN(numericTenantId)) {
+        headers['X-Tenant-ID'] = numericTenantId.toString();
+        console.log(`🔄 API Request: ${requestUrl} with X-Tenant-ID: ${numericTenantId}`);
+      } else {
+        console.warn(`⚠️ Invalid tenant ID: ${tenantId}`);
+      }
+    } else if (!config.skipTenant) {
+      console.warn(`⚠️ No tenant ID available for request to ${requestUrl}`);
+      console.log('Debug info:', { 
+        selectedTenantId: localStorage.getItem('selected_tenant_id'),
+        userTenantId: (() => {
+          try {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            return user.tenant_id;
+          } catch { return 'parse error'; }
+        })()
+      });
     }
     const response = await fetch(requestUrl, {
       ...options,
@@ -261,7 +799,7 @@ export async function apiRequest<T>(
     
     // Log the raw response text for debugging
     const responseText = await response.text();
-    console.log('API Raw response text:', responseText);
+    // console.log('API Raw response text:', responseText);
     
     if (!response.ok) {
       // Try to parse error response
@@ -280,6 +818,7 @@ export async function apiRequest<T>(
         // Only log out on 401 (unauthorized) - token is invalid/expired
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        localStorage.removeItem('selected_tenant_id');
         // Show toast and redirect to login
         toast.error('Session expired. Please log in again.');
         // Use window.location.replace for reliability
@@ -294,6 +833,7 @@ export async function apiRequest<T>(
           // This is a session/tenant context issue - log out the user
           localStorage.removeItem('token');
           localStorage.removeItem('user');
+          localStorage.removeItem('selected_tenant_id');
           toast.error('Session expired. Please log in again.');
           window.location.replace('/login');
           throw new Error('Session expired. Please log in again.');
@@ -309,6 +849,7 @@ export async function apiRequest<T>(
         // This is a session/tenant context issue - log out the user
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        localStorage.removeItem('selected_tenant_id');
         toast.error('Session expired. Please log in again.');
         window.location.replace('/login');
         throw new Error('Session expired. Please log in again.');
@@ -381,6 +922,183 @@ export function getErrorMessage(error: any, t: (key: string) => string): string 
   return t('errors.unknown_error');
 }
 
+// Report error handling types
+export interface ReportError {
+  error_code: string;
+  message: string;
+  details?: Record<string, any>;
+  suggestions?: string[];
+  field?: string;
+  retryable?: boolean;
+}
+
+export interface ReportApiError extends Error {
+  status?: number;
+  error_code?: string;
+  details?: Record<string, any>;
+  suggestions?: string[];
+  retryable?: boolean;
+}
+
+// Report types and interfaces
+export interface ReportFilters {
+  date_from?: string;
+  date_to?: string;
+  client_ids?: number[];
+  currency?: string;
+  status?: string[];
+  amount_min?: number;
+  amount_max?: number;
+  categories?: string[];
+  labels?: string[];
+  payment_methods?: string[];
+  include_items?: boolean;
+  include_attachments?: boolean;
+  include_unmatched?: boolean;
+  include_reconciliation?: boolean;
+  account_ids?: number[];
+  transaction_types?: string[];
+  vendor?: string;
+  balance_min?: number;
+  balance_max?: number;
+  include_inactive?: boolean;
+  is_recurring?: boolean;
+}
+
+export interface ReportGenerateRequest {
+  report_type: 'client' | 'invoice' | 'payment' | 'expense' | 'statement';
+  filters: ReportFilters;
+  columns?: string[];
+  export_format: 'pdf' | 'csv' | 'excel' | 'json';
+  template_id?: number;
+}
+
+export interface ReportPreviewRequest {
+  report_type: 'client' | 'invoice' | 'payment' | 'expense' | 'statement';
+  filters: ReportFilters;
+  limit?: number;
+}
+
+export interface ReportTemplate {
+  id: number;
+  name: string;
+  report_type: 'client' | 'invoice' | 'payment' | 'expense' | 'statement';
+  filters: ReportFilters;
+  columns?: string[];
+  formatting?: Record<string, any>;
+  is_shared: boolean;
+  user_id: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReportTemplateCreate {
+  name: string;
+  report_type: 'client' | 'invoice' | 'payment' | 'expense' | 'statement';
+  filters: ReportFilters;
+  columns?: string[];
+  formatting?: Record<string, any>;
+  is_shared?: boolean;
+}
+
+export interface ReportData {
+  report_type: string;
+  summary: {
+    total_records: number;
+    total_amount?: number;
+    currency?: string;
+    date_range?: { date_from?: string; date_to?: string };
+    key_metrics: Record<string, any>;
+  };
+  data: Record<string, any>[];
+  metadata: {
+    generated_at: string;
+    generated_by: number;
+    export_format: string;
+    file_size?: number;
+    generation_time?: number;
+  };
+  filters: ReportFilters;
+}
+
+export interface ReportResult {
+  success: boolean;
+  report_id?: number;
+  data?: ReportData;
+  file_path?: string;
+  download_url?: string;
+  
+  // Enhanced error handling fields
+  error_message?: string;
+  error_code?: string;
+  error_details?: Record<string, any>;
+  suggestions?: string[];
+  retryable?: boolean;
+  
+  // Retry and performance information
+  retry_attempts?: number;
+  generation_time?: number;
+  circuit_breaker_triggered?: boolean;
+}
+
+export interface ReportHistory {
+  id: number;
+  report_type: string;
+  parameters: Record<string, any>;
+  status: 'pending' | 'generating' | 'completed' | 'failed';
+  error_message?: string;
+  template_id?: number;
+  generated_by: number;
+  file_path?: string;
+  generated_at: string;
+  expires_at?: string;
+}
+
+export interface ScheduleConfig {
+  schedule_type: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  day_of_week?: number; // 0-6 for weekly
+  day_of_month?: number; // 1-31 for monthly
+  month?: number; // 1-12 for yearly
+  hour?: number; // 0-23
+  minute?: number; // 0-59
+  timezone?: string;
+}
+
+export interface ScheduledReport {
+  id: number;
+  template_id: number;
+  schedule_config: ScheduleConfig;
+  recipients: string[];
+  is_active: boolean;
+  last_run?: string;
+  next_run?: string;
+  created_at: string;
+  updated_at: string;
+  template?: ReportTemplate;
+}
+
+export interface ScheduledReportCreate {
+  template_id: number;
+  schedule_config: ScheduleConfig;
+  recipients: string[];
+  is_active?: boolean;
+}
+
+export interface ScheduledReportUpdate {
+  schedule_config?: ScheduleConfig;
+  recipients?: string[];
+  is_active?: boolean;
+}
+
+export interface ReportType {
+  type: string;
+  name: string;
+  description: string;
+  available_filters: string[];
+  available_columns: string[];
+  default_columns: string[];
+}
+
 // Client API methods
 export const clientApi = {
   getClients: () => apiRequest<Client[]>("/clients/"),
@@ -448,7 +1166,7 @@ export const authApi = {
     apiRequest<any>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData),
-    }),
+    }, { isLogin: true }),
   checkOrganizationNameAvailability: (name: string) =>
     apiRequest<{ available: boolean; name: string }>(`/tenants/check-name-availability?name=${encodeURIComponent(name)}`, {
       method: 'GET',
@@ -467,7 +1185,7 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ token, new_password: newPassword }),
     }),
-  activateUser: (inviteId: number, activationData: { password: string; first_name?: string; last_name?: string }) =>
+  activateUser: (inviteId: number, activationData: { password?: string; first_name?: string; last_name?: string }) =>
     apiRequest<any>(`/auth/invites/${inviteId}/activate`, {
       method: 'POST',
       body: JSON.stringify(activationData),
@@ -476,6 +1194,40 @@ export const authApi = {
 
 // Invoice API methods
 export const invoiceApi = {
+  getInvoicesWithParams: async (opts: { status?: string; skip?: number; limit?: number } = {}): Promise<Invoice[]> => {
+    try {
+      const params = new URLSearchParams();
+      if (opts.status) params.set('status_filter', opts.status);
+      if (typeof opts.skip === 'number') params.set('skip', String(opts.skip));
+      if (typeof opts.limit === 'number') params.set('limit', String(opts.limit));
+      const response = await apiRequest<any[]>(`/invoices/${params.toString() ? `?${params.toString()}` : ''}`);
+      const mappedInvoices: Invoice[] = response.map(apiInvoice => ({
+        id: apiInvoice.id,
+        number: apiInvoice.number || '',
+        client_id: apiInvoice.client_id,
+        client_name: apiInvoice.client_name || '',
+        client_email: '',
+        date: apiInvoice.created_at || apiInvoice.date || '',
+        due_date: apiInvoice.due_date || '',
+        amount: apiInvoice.amount || 0,
+        currency: apiInvoice.currency || 'USD',
+        paid_amount: apiInvoice.total_paid || 0,
+        status: apiInvoice.status || 'pending',
+        notes: apiInvoice.notes || '',
+        items: [],
+        created_at: apiInvoice.created_at,
+        updated_at: apiInvoice.updated_at,
+        is_recurring: apiInvoice.is_recurring,
+        recurring_frequency: apiInvoice.recurring_frequency,
+        has_attachment: apiInvoice.has_attachment || false,
+        attachment_filename: apiInvoice.attachment_filename || undefined,
+      }));
+      return mappedInvoices;
+    } catch (error) {
+      console.error('Failed to fetch invoices with params:', error);
+      throw error;
+    }
+  },
   getInvoices: async (status?: string): Promise<Invoice[]> => {
     try {
       const response = await apiRequest<any[]>(`/invoices/${status ? `?status_filter=${status}` : ''}`);
@@ -499,6 +1251,8 @@ export const invoiceApi = {
         updated_at: apiInvoice.updated_at,
         is_recurring: apiInvoice.is_recurring,
         recurring_frequency: apiInvoice.recurring_frequency,
+        has_attachment: apiInvoice.has_attachment || false,
+        attachment_filename: apiInvoice.attachment_filename || undefined,
       }));
       
       console.log("Mapped invoices with paid amounts:", mappedInvoices);
@@ -534,7 +1288,10 @@ export const invoiceApi = {
           description: item.description || '',
           quantity: item.quantity || 1,
           price: item.price || 0,
-          amount: item.amount || (item.quantity || 1) * (item.price || 0)
+          amount: item.amount || (item.quantity || 1) * (item.price || 0),
+          inventory_item_id: item.inventory_item_id,
+          unit_of_measure: item.unit_of_measure,
+          inventory_item: item.inventory_item // Include the inventory item data!
         })) : [],
         created_at: apiResponse.created_at || '',
         updated_at: apiResponse.updated_at || '',
@@ -545,8 +1302,20 @@ export const invoiceApi = {
         subtotal: apiResponse.subtotal,
         custom_fields: apiResponse.custom_fields,
         show_discount_in_pdf: apiResponse.show_discount_in_pdf || false, // Map show_discount_in_pdf from API response
+        has_attachment: apiResponse.has_attachment || false,
+        attachment_filename: apiResponse.attachment_filename || undefined,
       };
       
+      console.log("🔍 API CLIENT - Raw apiResponse keys:", Object.keys(apiResponse));
+      console.log("🔍 API CLIENT - Raw apiResponse:", JSON.stringify(apiResponse, null, 2));
+      console.log("🔍 API RESPONSE ATTACHMENT DEBUG:", {
+        'raw apiResponse.has_attachment': apiResponse.has_attachment,
+        'raw apiResponse.attachment_filename': apiResponse.attachment_filename,
+        'typeof has_attachment': typeof apiResponse.has_attachment,
+        'typeof attachment_filename': typeof apiResponse.attachment_filename,
+        'mapped has_attachment': invoice.has_attachment,
+        'mapped attachment_filename': invoice.attachment_filename
+      });
       console.log("Mapped invoice object:", invoice);
       
       return invoice;
@@ -565,8 +1334,133 @@ export const invoiceApi = {
       method: 'PUT',
       body: JSON.stringify(invoiceData),
     }),
+  cloneInvoice: (id: number) =>
+    apiRequest<Invoice>(`/invoices/${id}/clone`, { method: 'POST' }),
   deleteInvoice: (id: number) => 
     apiRequest(`/invoices/${id}`, { method: 'DELETE' }),
+  
+  // Recycle bin methods
+  getDeletedInvoices: () => 
+    apiRequest<any[]>('/invoices/recycle-bin'),
+  restoreInvoice: (id: number, newStatus: string = 'draft') => 
+    apiRequest(`/invoices/${id}/restore`, {
+      method: 'POST',
+      body: JSON.stringify({ new_status: newStatus }),
+    }),
+  permanentlyDeleteInvoice: (id: number) => 
+    apiRequest(`/invoices/${id}/permanent`, { method: 'DELETE' }),
+  emptyRecycleBin: () => 
+    apiRequest('/invoices/recycle-bin/empty', { method: 'POST' }),
+  
+  // Attachment methods
+  uploadAttachment: async (invoiceId: number, file: File) => {
+    const token = localStorage.getItem('token');
+    const tenantId = localStorage.getItem('selected_tenant_id') || 
+      (() => {
+        try {
+          const user = JSON.parse(localStorage.getItem('user') || '{}');
+          return user.tenant_id?.toString();
+        } catch { return undefined; }
+      })();
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${token}`,
+    };
+    if (tenantId) {
+      headers['X-Tenant-ID'] = tenantId;
+    }
+    
+    const uploadUrl = `${API_BASE_URL}/invoices/${invoiceId}/upload-attachment`;
+    console.log("🔍 UPLOAD API DEBUG - API_BASE_URL:", API_BASE_URL);
+    console.log("🔍 UPLOAD API DEBUG - Calling URL:", uploadUrl);
+    console.log("🔍 UPLOAD API DEBUG - Full URL:", uploadUrl);
+    console.log("🔍 UPLOAD API DEBUG - Headers:", headers);
+    console.log("🔍 UPLOAD API DEBUG - FormData keys:", Array.from(formData.keys()));
+    
+    const response = await fetch(uploadUrl, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    
+    console.log("🔍 UPLOAD API DEBUG - Response status:", response.status);
+    console.log("🔍 UPLOAD API DEBUG - Response ok:", response.ok);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorMessage = 'Failed to upload attachment';
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.detail || errorMessage;
+      } catch {
+        errorMessage = errorText || errorMessage;
+      }
+      throw new Error(errorMessage);
+    }
+    
+    const responseText = await response.text();
+    try {
+      return JSON.parse(responseText);
+    } catch (e) {
+      console.error('Failed to parse upload response as JSON:', responseText);
+      throw new Error('Invalid response from server');
+    }
+  },
+  downloadAttachment: (invoiceId: number) => {
+    const token = localStorage.getItem('token');
+    const tenantId = localStorage.getItem('selected_tenant_id') || 
+      (() => {
+        try {
+          const user = JSON.parse(localStorage.getItem('user') || '{}');
+          return user.tenant_id?.toString();
+        } catch { return undefined; }
+      })();
+    
+    // Create a form to submit with proper headers
+    const form = document.createElement('form');
+    form.method = 'GET';
+    form.action = `${API_BASE_URL}/invoices/${invoiceId}/download-attachment`;
+    form.target = '_blank';
+    
+    // Add token as query parameter since we can't set headers on form submission
+    const url = new URL(form.action);
+    url.searchParams.set('token', token || '');
+    if (tenantId) {
+      url.searchParams.set('tenant_id', tenantId);
+    }
+    form.action = url.toString();
+    
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
+  },
+  getAttachmentInfo: (invoiceId: number) =>
+    apiRequest<{ has_attachment: boolean; filename?: string; content_type?: string; size_bytes?: number }>(`/invoices/${invoiceId}/attachment-info`),
+  previewAttachmentBlob: async (invoiceId: number): Promise<Blob> => {
+    const token = localStorage.getItem('token');
+    const tenantId = localStorage.getItem('selected_tenant_id') || (() => {
+      try {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        return user.tenant_id?.toString();
+      } catch { return undefined; }
+    })();
+
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (tenantId) headers['X-Tenant-ID'] = tenantId;
+
+    const url = `${API_BASE_URL}/invoices/${invoiceId}/preview-attachment`;
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) {
+      const text = await resp.text();
+      try { throw new Error(JSON.parse(text).detail || 'Failed to preview'); }
+      catch { throw new Error(text || 'Failed to preview'); }
+    }
+    return await resp.blob();
+  },
   
   // Invoice history methods
   getInvoiceHistory: (invoiceId: number) => 
@@ -606,6 +1500,122 @@ export const paymentApi = {
   deletePayment: (id: number) => 
     apiRequest(`/payments/${id}`, {
       method: 'DELETE',
+    }),
+};
+
+// Expense API methods
+export const expenseApi = {
+  getExpenses: async (category?: string, label?: string) => {
+    const params = new URLSearchParams();
+    if (category && category !== 'all') params.set('category', category);
+    if (label) params.set('label', label);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const list = await apiRequest<Expense[]>(`/expenses/${query}`);
+    // Normalize category to a known option; fallback to 'General'
+    const validCategories = EXPENSE_CATEGORY_OPTIONS;
+    return list.map(e => ({
+      ...e,
+      category: validCategories.includes(e.category) ? e.category : 'General'
+    }));
+  },
+  getExpensesFiltered: async (opts: { category?: string; label?: string; invoiceId?: number; unlinkedOnly?: boolean; skip?: number; limit?: number } = {}) => {
+    const params = new URLSearchParams();
+    if (opts.category && opts.category !== 'all') params.set('category', opts.category);
+    if (opts.label) params.set('label', opts.label);
+    if (typeof opts.invoiceId === 'number') params.set('invoice_id', String(opts.invoiceId));
+    if (opts.unlinkedOnly) params.set('unlinked_only', 'true');
+    if (typeof opts.skip === 'number') params.set('skip', String(opts.skip));
+    if (typeof opts.limit === 'number') params.set('limit', String(opts.limit));
+    const qs = params.toString();
+    const url = `/expenses/${qs ? `?${qs}` : ''}`;
+    return apiRequest<Expense[]>(url);
+  },
+  getExpense: async (id: number) => {
+    const e = await apiRequest<Expense>(`/expenses/${id}`);
+    const validCategories = EXPENSE_CATEGORY_OPTIONS;
+    return {
+      ...e,
+      category: validCategories.includes(e.category) ? e.category : 'General'
+    };
+  },
+  createExpense: (expense: Omit<Expense, 'id' | 'created_at' | 'updated_at' | 'receipt_filename'>) =>
+    apiRequest<Expense>(`/expenses/`, {
+      method: 'POST',
+      body: JSON.stringify(expense),
+    }),
+  updateExpense: (id: number, expense: Partial<Expense>) =>
+    apiRequest<Expense>(`/expenses/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(expense),
+    }),
+  bulkLabels: (expenseIds: number[], operation: 'add' | 'remove', label: string) =>
+    apiRequest<{ updated: number }>(`/expenses/bulk-labels`, {
+      method: 'POST',
+      body: JSON.stringify({ expense_ids: expenseIds, operation, label }),
+    }),
+  deleteExpense: (id: number) => apiRequest(`/expenses/${id}`, { method: 'DELETE' }),
+  uploadReceipt: async (expenseId: number, file: File) => {
+    const token = localStorage.getItem('token');
+    const tenantId = localStorage.getItem('selected_tenant_id') || (() => {
+      try {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        return user.tenant_id?.toString();
+      } catch { return undefined; }
+    })();
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${token}`,
+    };
+    if (tenantId) headers['X-Tenant-ID'] = tenantId;
+
+    const uploadUrl = `${API_BASE_URL}/expenses/${expenseId}/upload-receipt`;
+    const response = await fetch(uploadUrl, { method: 'POST', headers, body: formData });
+    if (!response.ok) {
+      const errorText = await response.text();
+      try { throw new Error(JSON.parse(errorText).detail || 'Failed to upload receipt'); }
+      catch { throw new Error(errorText || 'Failed to upload receipt'); }
+    }
+    return response.json();
+  },
+  listAttachments: async (expenseId: number) => {
+    return apiRequest<ExpenseAttachmentMeta[]>(`/expenses/${expenseId}/attachments`);
+  },
+  deleteAttachment: async (expenseId: number, attachmentId: number) => {
+    return apiRequest(`/expenses/${expenseId}/attachments/${attachmentId}`, { method: 'DELETE' });
+  },
+  downloadAttachmentBlob: async (expenseId: number, attachmentId: number): Promise<Blob> => {
+    const token = localStorage.getItem('token');
+    const tenantId = localStorage.getItem('selected_tenant_id') || (() => {
+      try {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        return user.tenant_id?.toString();
+      } catch { return undefined; }
+    })();
+
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (tenantId) headers['X-Tenant-ID'] = tenantId;
+
+    const url = `${API_BASE_URL}/expenses/${expenseId}/attachments/${attachmentId}/download`;
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) {
+      const text = await resp.text();
+      try { throw new Error(JSON.parse(text).detail || 'Failed to download'); }
+      catch { throw new Error(text || 'Failed to download'); }
+    }
+    return await resp.blob();
+  },
+  reprocessExpense: (expenseId: number) =>
+    apiRequest<{ message: string; status: string }>(`/expenses/${expenseId}/reprocess`, {
+      method: 'POST',
+    }),
+  bulkCreateExpenses: (expenses: Omit<Expense, 'id' | 'created_at' | 'updated_at' | 'receipt_filename'>[]) =>
+    apiRequest<Expense[]>(`/expenses/bulk-create`, {
+      method: 'POST',
+      body: JSON.stringify({ expenses }),
     }),
 };
 
@@ -876,22 +1886,33 @@ export const discountRulesApi = {
 export const aiConfigApi = {
   getAIConfigs: () => apiRequest<AIConfig[]>("/ai-config/"),
   getAIConfig: (id: number) => apiRequest<AIConfig>(`/ai-config/${id}`),
-  createAIConfig: (config: AIConfigCreate) => 
+  createAIConfig: (config: AIConfigCreate) =>
     apiRequest<AIConfig>("/ai-config/", {
       method: 'POST',
       body: JSON.stringify(config),
     }),
-  updateAIConfig: (id: number, config: AIConfigUpdate) => 
+  updateAIConfig: (id: number, config: AIConfigUpdate) =>
     apiRequest<AIConfig>(`/ai-config/${id}`, {
       method: 'PUT',
       body: JSON.stringify(config),
     }),
-  deleteAIConfig: (id: number) => 
+  deleteAIConfig: (id: number) =>
     apiRequest(`/ai-config/${id}`, {
       method: 'DELETE',
     }),
-  testAIConfig: (id: number) => 
-    apiRequest<{success: boolean, message: string, response?: string}>(`/ai-config/test/${id}`),
+  testAIConfig: (id: number, testRequest?: AIConfigTestRequest) =>
+    apiRequest<AIConfigTestResponse>(`/ai-config/${id}/test`, {
+      method: 'POST',
+      body: JSON.stringify(testRequest || {}),
+    }),
+  getSupportedProviders: () => apiRequest<{providers: Record<string, AIProviderInfo>, count: number}>("/ai-config/providers"),
+  getConfigUsage: (id: number) => apiRequest<{
+    config_id: number,
+    usage_count: number,
+    last_used_at?: string,
+    created_at: string,
+    updated_at: string
+  }>(`/ai-config/${id}/usage`),
   markAsTested: (id: number) =>
     apiRequest<{message: string}>(`/ai-config/mark-tested/${id}`, {
       method: 'POST',
@@ -909,13 +1930,34 @@ export const aiApi = {
     }),
 };
 
+// Tenant API methods
+export const tenantApi = {
+  getTenantInfo: () => apiRequest<{
+    id: number;
+    name: string;
+    default_currency: string;
+    email: string;
+    phone?: string;
+    address?: string;
+    tax_id?: string;
+    company_logo_url?: string;
+    enable_ai_assistant: boolean;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+  }>("/tenants/me", { method: 'GET' }, { skipTenant: true }),
+};
+
 // Generic API client for direct calls
 export const api = {
   get: <T>(url: string, config?: { isLogin?: boolean }) => apiRequest<T>(url, { method: 'GET' }, config),
   post: <T>(url: string, data?: any, config?: { isLogin?: boolean }) => apiRequest<T>(url, { method: 'POST', body: JSON.stringify(data) }, config),
   put: <T>(url: string, data?: any, config?: { isLogin?: boolean }) => apiRequest<T>(url, { method: 'PUT', body: JSON.stringify(data) }, config),
   delete: <T>(url: string, config?: { isLogin?: boolean }) => apiRequest<T>(url, { method: 'DELETE' }, config),
-}; 
+};
+
+// Export apiClient as alias for api for compatibility
+export const apiClient = api; 
 
 export const superAdminApi = {
   demoteSuperAdmin: async (email: string) => {
@@ -923,5 +1965,533 @@ export const superAdminApi = {
       method: "POST",
       body: JSON.stringify({ email }),
     }, { skipTenant: true });
+  },
+};
+
+// Report error handling utilities
+export const handleReportError = (error: any): ReportApiError => {
+  const reportError = new Error() as ReportApiError;
+  
+  if (error.detail && typeof error.detail === 'object') {
+    // Handle structured error response from backend
+    reportError.message = error.detail.message || 'An error occurred';
+    reportError.error_code = error.detail.error_code;
+    reportError.details = error.detail.details;
+    reportError.suggestions = error.detail.suggestions;
+    reportError.retryable = error.detail.retryable;
+  } else if (typeof error.detail === 'string') {
+    // Handle simple string error
+    reportError.message = error.detail;
+  } else {
+    // Handle generic error
+    reportError.message = error.message || 'An unexpected error occurred';
+  }
+  
+  reportError.status = error.status;
+  return reportError;
+};
+
+export const getReportErrorMessage = (error: ReportApiError): string => {
+  // Return user-friendly error messages based on error codes
+  const errorMessages: Record<string, string> = {
+    'REPORT_001': 'Invalid report type selected. Please choose a valid report type.',
+    'VALIDATION_001': 'Invalid date range. Please check your start and end dates.',
+    'VALIDATION_003': 'Invalid filters provided. Please check your filter values.',
+    'VALIDATION_004': 'One or more selected clients could not be found.',
+    'VALIDATION_005': 'Invalid amount range. Please check your minimum and maximum amounts.',
+    'VALIDATION_006': 'Invalid currency selected. Please choose a valid currency.',
+    'VALIDATION_007': 'Invalid export format selected.',
+    'TEMPLATE_001': 'Report template not found.',
+    'TEMPLATE_003': 'You do not have permission to access this template.',
+    'TEMPLATE_004': 'A template with this name already exists.',
+    'SCHEDULE_001': 'Invalid schedule configuration.',
+    'SCHEDULE_004': 'Scheduled report not found.',
+    'EXPORT_001': 'Export format not supported.',
+    'REPORT_004': 'Report generation failed. Please try again.',
+    'REPORT_007': 'Report generation timed out. Please try with smaller date range.',
+  };
+
+  if (error.error_code && errorMessages[error.error_code]) {
+    return errorMessages[error.error_code];
+  }
+
+  return error.message || 'An unexpected error occurred';
+};
+
+export const showReportError = (error: ReportApiError) => {
+  const message = getReportErrorMessage(error);
+  
+  // Show suggestions if available
+  if (error.suggestions && error.suggestions.length > 0) {
+    const suggestionText = error.suggestions.join(' ');
+    toast.error(`${message} ${suggestionText}`);
+  } else {
+    toast.error(message);
+  }
+  
+  // Log detailed error for debugging
+  console.error('Report API Error:', {
+    code: error.error_code,
+    message: error.message,
+    details: error.details,
+    suggestions: error.suggestions,
+    retryable: error.retryable
+  });
+};
+
+// Report API methods
+export const reportApi = {
+  getReportTypes: async () => {
+    try {
+      return await apiRequest<{ report_types: ReportType[] }>("/reports/types");
+    } catch (error) {
+      const reportError = handleReportError(error);
+      showReportError(reportError);
+      throw reportError;
+    }
+  },
+  
+  generateReport: async (request: ReportGenerateRequest) => {
+    try {
+      return await apiRequest<ReportResult>("/reports/generate", {
+        method: 'POST',
+        body: JSON.stringify(request),
+      });
+    } catch (error) {
+      const reportError = handleReportError(error);
+      showReportError(reportError);
+      throw reportError;
+    }
+  },
+  
+  previewReport: async (request: ReportPreviewRequest) => {
+    try {
+      return await apiRequest<ReportData>("/reports/preview", {
+        method: 'POST',
+        body: JSON.stringify(request),
+      });
+    } catch (error) {
+      const reportError = handleReportError(error);
+      showReportError(reportError);
+      throw reportError;
+    }
+  },
+  
+  // Template management
+  getTemplates: () => apiRequest<{ templates: ReportTemplate[]; total: number }>("/reports/templates"),
+  
+  getTemplate: (id: number) => apiRequest<ReportTemplate>(`/reports/templates/${id}`),
+  
+  createTemplate: (template: ReportTemplateCreate) =>
+    apiRequest<ReportTemplate>("/reports/templates", {
+      method: 'POST',
+      body: JSON.stringify(template),
+    }),
+  
+  updateTemplate: (id: number, template: Partial<ReportTemplateCreate>) =>
+    apiRequest<ReportTemplate>(`/reports/templates/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(template),
+    }),
+  
+  deleteTemplate: (id: number) =>
+    apiRequest(`/reports/templates/${id}`, {
+      method: 'DELETE',
+    }),
+  
+  // Report history
+  getHistory: (limit?: number, offset?: number, reportType?: string, status?: string) => {
+    const params = new URLSearchParams();
+    if (limit) params.set('limit', limit.toString());
+    if (offset) params.set('offset', offset.toString());
+    if (reportType) params.set('report_type', reportType);
+    if (status) params.set('status', status);
+    return apiRequest<{ reports: ReportHistory[]; total: number }>(`/reports/history${params.toString() ? `?${params.toString()}` : ''}`);
+  },
+
+  regenerateReport: (reportId: number, newParameters?: any) =>
+    apiRequest<ReportResult>(`/reports/regenerate/${reportId}`, {
+      method: 'POST',
+      body: JSON.stringify(newParameters || {}),
+    }),
+
+  deleteReport: (reportId: number) =>
+    apiRequest(`/reports/history/${reportId}`, {
+      method: 'DELETE',
+    }),
+
+  shareReport: (reportId: number, shareSettings: any) =>
+    apiRequest<{ shareUrl: string; shareId: string }>(`/reports/share/${reportId}`, {
+      method: 'POST',
+      body: JSON.stringify(shareSettings),
+    }),
+  
+  downloadReport: async (reportId: number) => {
+    try {
+      console.log('DownloadReport: Starting download for report ID:', reportId);
+
+      // For downloads, we need to bypass the JSON parsing in apiRequest
+      const token = localStorage.getItem('token');
+      const tenantId = localStorage.getItem('selected_tenant_id') || (() => {
+        try { const user = JSON.parse(localStorage.getItem('user') || '{}'); return user.tenant_id?.toString(); } catch { return undefined; }
+      })();
+
+      console.log('DownloadReport: Auth check - token exists:', !!token, 'tenantId:', tenantId);
+
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (tenantId) headers['X-Tenant-ID'] = tenantId;
+
+      const downloadUrl = `${API_BASE_URL}/reports/download/${reportId}`;
+      console.log('DownloadReport: Making request to:', downloadUrl);
+
+      const response = await fetch(downloadUrl, {
+        method: 'GET',
+        headers,
+      });
+
+      console.log('DownloadReport: Response status:', response.status, response.statusText);
+
+      // Handle 401 errors specifically for downloads
+      if (response.status === 401) {
+        console.error('DownloadReport: 401 Unauthorized - clearing auth data');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('selected_tenant_id');
+        window.location.replace('/login');
+        throw new Error('Authentication failed. Please log in again.');
+      }
+
+      if (!response.ok) {
+        console.error('DownloadReport: Request failed with status:', response.status, response.statusText);
+        throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+      }
+
+      console.log('DownloadReport: Download successful');
+      return response;
+    } catch (error) {
+      console.error('Download report error:', error);
+      throw error;
+    }
+  },
+
+  // Scheduled reports
+  getScheduledReports: (activeOnly?: boolean) => {
+    const params = new URLSearchParams();
+    if (activeOnly) params.set('active_only', 'true');
+    return apiRequest<{ scheduled_reports: ScheduledReport[]; total: number }>(`/reports/scheduled${params.toString() ? `?${params.toString()}` : ''}`);
+  },
+
+  createScheduledReport: (scheduledReport: ScheduledReportCreate) =>
+    apiRequest<ScheduledReport>("/reports/scheduled", {
+      method: 'POST',
+      body: JSON.stringify(scheduledReport),
+    }),
+
+  updateScheduledReport: (id: number, scheduledReport: ScheduledReportUpdate) =>
+    apiRequest<ScheduledReport>(`/reports/scheduled/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(scheduledReport),
+    }),
+
+  deleteScheduledReport: (id: number) =>
+    apiRequest(`/reports/scheduled/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+// === INVENTORY MANAGEMENT API ===
+
+export const inventoryApi = {
+  // Categories
+  getCategories: (activeOnly = true) =>
+    apiRequest<InventoryCategory[]>(`/inventory/categories?active_only=${activeOnly}`),
+
+  getCategory: (id: number) =>
+    apiRequest<InventoryCategory>(`/inventory/categories/${id}`),
+
+  createCategory: (category: Omit<InventoryCategory, 'id' | 'created_at' | 'updated_at'>) =>
+    apiRequest<InventoryCategory>('/inventory/categories', {
+      method: 'POST',
+      body: JSON.stringify(category),
+    }),
+
+  updateCategory: (id: number, category: Partial<Omit<InventoryCategory, 'id' | 'created_at' | 'updated_at'>>) =>
+    apiRequest<InventoryCategory>(`/inventory/categories/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(category),
+    }),
+
+  deleteCategory: (id: number) =>
+    apiRequest(`/inventory/categories/${id}`, {
+      method: 'DELETE',
+    }),
+
+  // Items
+  getItems: (params?: {
+    skip?: number;
+    limit?: number;
+    query?: string;
+    category_id?: number;
+    item_type?: string;
+    is_active?: boolean;
+    track_stock?: boolean;
+    low_stock_only?: boolean;
+    min_price?: number;
+    max_price?: number;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.skip !== undefined) searchParams.set('skip', params.skip.toString());
+    if (params?.limit !== undefined) searchParams.set('limit', params.limit.toString());
+    if (params?.query) searchParams.set('query', params.query);
+    if (params?.category_id !== undefined) searchParams.set('category_id', params.category_id.toString());
+    if (params?.item_type) searchParams.set('item_type', params.item_type);
+    if (params?.is_active !== undefined) searchParams.set('is_active', params.is_active.toString());
+    if (params?.track_stock !== undefined) searchParams.set('track_stock', params.track_stock.toString());
+    if (params?.low_stock_only !== undefined) searchParams.set('low_stock_only', params.low_stock_only.toString());
+    if (params?.min_price !== undefined) searchParams.set('min_price', params.min_price.toString());
+    if (params?.max_price !== undefined) searchParams.set('max_price', params.max_price.toString());
+
+    const queryString = searchParams.toString();
+    return apiRequest<InventoryListResponse>(`/inventory/items${queryString ? `?${queryString}` : ''}`);
+  },
+
+  searchItems: (query: string, limit = 50) =>
+    apiRequest<{ results: InventoryItem[]; total: number }>(`/inventory/items/search?q=${encodeURIComponent(query)}&limit=${limit}`),
+
+  getItem: (id: number) =>
+    apiRequest<InventoryItem>(`/inventory/items/${id}`),
+
+  createItem: (item: Omit<InventoryItem, 'id' | 'created_at' | 'updated_at'>) =>
+    apiRequest<InventoryItem>('/inventory/items', {
+      method: 'POST',
+      body: JSON.stringify(item),
+    }),
+
+  updateItem: (id: number, item: Partial<Omit<InventoryItem, 'id' | 'created_at' | 'updated_at'>>) =>
+    apiRequest<InventoryItem>(`/inventory/items/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(item),
+    }),
+
+  deleteItem: (id: number) =>
+    apiRequest(`/inventory/items/${id}`, {
+      method: 'DELETE',
+    }),
+
+  // Stock Management
+  adjustStock: (itemId: number, quantity: number, reason: string) =>
+    apiRequest(`/inventory/items/${itemId}/stock/adjust`, {
+      method: 'POST',
+      body: JSON.stringify({ quantity, reason }),
+    }),
+
+  getStockMovements: (itemId: number, limit = 50, movementType?: string) => {
+    const params = new URLSearchParams({ limit: limit.toString() });
+    if (movementType) params.set('movement_type', movementType);
+    return apiRequest<StockMovement[]>(`/inventory/items/${itemId}/stock/movements?${params.toString()}`);
+  },
+
+  getStockMovementsByReference: (referenceType: string, referenceId: number) =>
+    apiRequest<StockMovement[]>(`/inventory/movements/by-reference/${referenceType}/${referenceId}`),
+
+  // Invoice-Inventory Linking
+  getInvoicesLinkedToInventoryItem: (itemId: number) =>
+    apiRequest<InvoiceInventoryLink[]>(`/inventory/items/${itemId}/linked-invoices`),
+
+  getInventoryItemStockSummary: (itemId: number, days = 30) =>
+    apiRequest<InventoryStockSummary>(`/inventory/items/${itemId}/stock-movement-summary?days=${days}`),
+
+  getLowStockAlerts: (thresholdDays = 30) =>
+    apiRequest<LowStockAlertsResponse>(`/inventory/alerts/low-stock?threshold_days=${thresholdDays}`),
+
+  checkStockAvailability: (itemId: number, requestedQuantity: number) =>
+    apiRequest(`/inventory/items/${itemId}/availability?requested_quantity=${requestedQuantity}`),
+
+  // Analytics & Reporting
+  getAnalytics: () =>
+    apiRequest<InventoryAnalytics>('/inventory/analytics'),
+
+  getAdvancedAnalytics: (startDate?: string, endDate?: string) => {
+    const params = new URLSearchParams();
+    if (startDate) params.set('start_date', startDate);
+    if (endDate) params.set('end_date', endDate);
+    const queryString = params.toString();
+    return apiRequest(`/inventory/analytics/advanced${queryString ? `?${queryString}` : ''}`);
+  },
+
+  getSalesVelocity: (days = 30) =>
+    apiRequest(`/inventory/analytics/sales-velocity?days=${days}`),
+
+  getForecasting: (forecastDays = 90) =>
+    apiRequest(`/inventory/analytics/forecasting?forecast_days=${forecastDays}`),
+
+  getValueReport: () =>
+    apiRequest<InventoryValueReport>('/inventory/reports/value'),
+
+  getProfitabilityAnalysis: (startDate?: string, endDate?: string) => {
+    const params = new URLSearchParams();
+    if (startDate) params.set('start_date', startDate);
+    if (endDate) params.set('end_date', endDate);
+    const queryString = params.toString();
+    return apiRequest<ProfitabilityAnalysis>(`/inventory/reports/profitability${queryString ? `?${queryString}` : ''}`);
+  },
+
+  getTurnoverAnalysis: (months = 12) =>
+    apiRequest<InventoryTurnoverAnalysis>(`/inventory/reports/turnover?months=${months}`),
+
+  getCategoryPerformance: (startDate?: string, endDate?: string) => {
+    const params = new URLSearchParams();
+    if (startDate) params.set('start_date', startDate);
+    if (endDate) params.set('end_date', endDate);
+    const queryString = params.toString();
+    return apiRequest<CategoryPerformanceReport>(`/inventory/reports/categories${queryString ? `?${queryString}` : ''}`);
+  },
+
+  getSalesVelocityReport: (days = 30) =>
+    apiRequest(`/inventory/reports/sales-velocity?days=${days}`),
+
+  getDashboardData: () =>
+    apiRequest<InventoryDashboardData>('/inventory/reports/dashboard'),
+
+  getStockMovementSummary: (itemId?: number, days = 30) => {
+    const params = new URLSearchParams({ days: days.toString() });
+    if (itemId !== undefined) params.set('item_id', itemId.toString());
+    return apiRequest(`/inventory/reports/stock-movements?${params.toString()}`);
+  },
+
+  // Integration APIs
+  populateInvoiceItem: (inventoryItemId: number, quantity = 1) =>
+    apiRequest(`/inventory/invoice-items/populate?inventory_item_id=${inventoryItemId}&quantity=${quantity}`),
+
+  validateInvoiceStock: (invoiceItems: any[]) =>
+    apiRequest('/inventory/invoice-items/validate-stock', {
+      method: 'POST',
+      body: JSON.stringify({ invoice_items: invoiceItems }),
+    }),
+
+  getInvoiceInventorySummary: (invoiceId: number) =>
+    apiRequest(`/inventory/invoice/${invoiceId}/inventory-summary`),
+
+  createInventoryPurchase: (purchase: InventoryPurchaseCreate) =>
+    apiRequest('/inventory/expenses/purchase', {
+      method: 'POST',
+      body: JSON.stringify(purchase),
+    }),
+
+  getInventoryPurchaseSummary: (params?: {
+    start_date?: string;
+    end_date?: string;
+    vendor?: string;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.start_date) searchParams.set('start_date', params.start_date);
+    if (params?.end_date) searchParams.set('end_date', params.end_date);
+    if (params?.vendor) searchParams.set('vendor', params.vendor);
+    const queryString = searchParams.toString();
+    return apiRequest(`/inventory/expenses/purchase-summary${queryString ? `?${queryString}` : ''}`);
+  },
+
+  getExpenseInventorySummary: (expenseId: number) =>
+    apiRequest(`/inventory/expense/${expenseId}/inventory-summary`),
+
+  // Bulk Operations
+  createCategoriesBulk: (categories: Omit<InventoryCategory, 'id' | 'created_at' | 'updated_at'>[]) =>
+    apiRequest<InventoryCategory[]>('/inventory/categories/bulk', {
+      method: 'POST',
+      body: JSON.stringify(categories),
+    }),
+
+  createItemsBulk: (items: Omit<InventoryItem, 'id' | 'created_at' | 'updated_at'>[]) =>
+    apiRequest<InventoryItem[]>('/inventory/items/bulk', {
+      method: 'POST',
+      body: JSON.stringify(items),
+    }),
+
+  createStockMovementsBulk: (movements: StockMovementCreate[]) =>
+    apiRequest<StockMovement[]>('/inventory/stock-movements/bulk', {
+      method: 'POST',
+      body: JSON.stringify(movements),
+    }),
+
+  // Barcode Management
+  getItemByBarcode: (barcode: string) =>
+    apiRequest<InventoryItem>(`/inventory/items/barcode/${encodeURIComponent(barcode)}`),
+
+  updateItemBarcode: (itemId: number, barcodeData: {
+    barcode: string;
+    barcode_type?: string;
+    barcode_format?: string;
+  }) =>
+    apiRequest(`/inventory/items/${itemId}/barcode`, {
+      method: 'POST',
+      body: JSON.stringify(barcodeData),
+    }),
+
+  validateBarcode: (barcode: string) =>
+    apiRequest(`/inventory/barcode/validate`, {
+      method: 'POST',
+      body: JSON.stringify({ barcode }),
+    }),
+
+  getBarcodeSuggestions: (itemName: string, sku?: string) => {
+    const params = new URLSearchParams({ item_name: itemName });
+    if (sku) params.set('sku', sku);
+    return apiRequest<{ suggestions: string[] }>(`/inventory/barcode/suggestions?${params.toString()}`);
+  },
+
+  bulkUpdateBarcodes: (barcodeUpdates: Array<{
+    item_id: number;
+    barcode: string;
+    barcode_type?: string;
+    barcode_format?: string;
+  }>) =>
+    apiRequest('/inventory/barcode/bulk-update', {
+      method: 'POST',
+      body: JSON.stringify(barcodeUpdates),
+    }),
+
+  // Import/Export
+  importInventoryCSV: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiRequest('/inventory/import/csv', {
+      method: 'POST',
+      body: formData,
+      headers: {}, // Let browser set content-type for FormData
+    });
+  },
+
+  exportInventoryCSV: async (params?: {
+    include_inactive?: boolean;
+    category_id?: number;
+  }) => {
+    const token = localStorage.getItem('token');
+    const tenantId = localStorage.getItem('selected_tenant_id') ||
+      (() => {
+        try { const user = JSON.parse(localStorage.getItem('user') || '{}'); return user.tenant_id?.toString(); } catch { return undefined; }
+      })();
+
+    const searchParams = new URLSearchParams();
+    if (params?.include_inactive) searchParams.set('include_inactive', 'true');
+    if (params?.category_id) searchParams.set('category_id', params.category_id.toString());
+    const queryString = searchParams.toString();
+
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (tenantId) headers['X-Tenant-ID'] = tenantId;
+
+    const response = await fetch(`${API_BASE_URL}/inventory/export/csv${queryString ? `?${queryString}` : ''}`, {
+      method: 'GET',
+      headers,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      try { throw new Error(JSON.parse(errorText).detail || 'Export failed'); }
+      catch { throw new Error(errorText || 'Export failed'); }
+    }
+
+    return response.blob();
   },
 };

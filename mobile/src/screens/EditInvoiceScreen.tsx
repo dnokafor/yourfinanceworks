@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { logger } from '../utils/logger';
 import {
   View,
   Text,
@@ -14,7 +15,10 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import apiService, { CreateClientData } from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import apiService, { CreateClientData, Invoice } from '../services/api';
+import EnhancedFileUpload from '../components/EnhancedFileUpload';
+import { FileData } from '../components/FileUpload';
 
 interface InvoiceItem {
   id?: number;
@@ -30,21 +34,6 @@ interface Client {
   email: string;
 }
 
-interface Invoice {
-  id: number;
-  number: string;
-  client_name: string;
-  client_id: number;
-  date: string;
-  due_date: string;
-  amount: number;
-  total_paid: number;
-  status: string;
-  currency: string;
-  notes?: string;
-  items?: InvoiceItem[];
-}
-
 interface EditInvoiceFormData {
   client: string;
   invoiceNumber: string;
@@ -55,6 +44,7 @@ interface EditInvoiceFormData {
   paidAmount: number;
   items: InvoiceItem[];
   notes: string;
+  attachment_filename?: string | null;
 }
 
 interface EditInvoiceScreenProps {
@@ -78,30 +68,147 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
     client: invoice.client_id.toString(),
     invoiceNumber: invoice.number,
     currency: invoice.currency || 'USD',
-    date: (invoice.date || new Date().toISOString()).split('T')[0],
-    dueDate: (invoice.due_date || new Date().toISOString()).split('T')[0],
+    date: (() => {
+      try {
+        if (invoice.date) {
+          const dateObj = new Date(invoice.date);
+          if (!isNaN(dateObj.getTime())) {
+            return dateObj.toISOString().split('T')[0];
+          }
+        }
+        return new Date().toISOString().split('T')[0];
+      } catch (error) {
+        logger.warn('Invalid date value for invoice.date, using current date:', error);
+        return new Date().toISOString().split('T')[0];
+      }
+    })(),
+    dueDate: (() => {
+      try {
+        if (invoice.due_date) {
+          const dateObj = new Date(invoice.due_date);
+          if (!isNaN(dateObj.getTime())) {
+            return dateObj.toISOString().split('T')[0];
+          }
+        }
+        return new Date().toISOString().split('T')[0];
+      } catch (error) {
+        logger.warn('Invalid date value for invoice.due_date, using current date:', error);
+        return new Date().toISOString().split('T')[0];
+      }
+    })(),
     status: invoice.status,
     paidAmount: invoice.total_paid || 0,
     items: (() => {
       const items = invoice.items || [];
+      logger.debug('Processing invoice items for formData', {
+        originalItems: items,
+        itemsCount: items.length,
+        descriptions: items.map(item => item.description)
+      });
+
       // If no items or all items have invalid prices, create a default item
       if (items.length === 0 || items.every(item => !item.price || item.price <= 0)) {
+        logger.debug('Creating default item due to no items or invalid prices');
         return [{ id: Date.now(), description: '', quantity: 1, price: 1, amount: 1 }];
       }
       // Otherwise, ensure all items have valid values
-      return items.map(item => ({
+      const processedItems = items.map(item => ({
         ...item,
         quantity: item.quantity || 1,
         price: item.price || 1, // Ensure price is at least 1
         amount: (item.quantity || 1) * (item.price || 1) // Ensure amount is calculated
       }));
+
+      logger.debug('Processed items for formData', {
+        processedItemsCount: processedItems.length,
+        descriptions: processedItems.map(item => item.description)
+      });
+
+      return processedItems;
     })(),
     notes: invoice.notes || '',
   });
 
+  // Attachment file management
+  const [attachmentFiles, setAttachmentFiles] = useState<FileData[]>([]);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
+  const [filesToDelete, setFilesToDelete] = useState<Set<number>>(new Set()); // Track files marked for deletion by index
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [fileToDeleteIndex, setFileToDeleteIndex] = useState<number | null>(null);
+
+  // Check if invoice is paid and should be protected from editing
+  const isPaidInvoice = invoice.status === 'paid' || invoice.status === 'partially_paid';
+  const isFullyPaidInvoice = isPaidInvoice && invoice.total_paid >= (invoice.amount || 0);
+  const isInvoiceProtected = isFullyPaidInvoice;
+
+  // Function to refresh invoice data from server
+  const refreshInvoiceData = async () => {
+    try {
+      const updatedInvoice = await apiService.getInvoice(invoice.id);
+    logger.debug('Starting refreshInvoiceData');      logger.debug('Refreshed invoice data after update:', updatedInvoice);
+
+      // Update form data with refreshed invoice
+      logger.debug('API response received, processing dates');      setFormData(prev => ({
+        ...prev,
+        client: updatedInvoice.client_id.toString(),
+        invoiceNumber: updatedInvoice.number,
+        currency: updatedInvoice.currency || 'USD',
+        date: (() => {
+          try {
+            if (updatedInvoice.date) {
+              const dateObj = new Date(updatedInvoice.date);
+              if (!isNaN(dateObj.getTime())) {
+                return dateObj.toISOString().split('T')[0];
+              }
+            }
+            return new Date().toISOString().split('T')[0];
+          } catch (error) {
+            logger.warn('Invalid date value for updatedInvoice.date, using current date:', error);
+            return new Date().toISOString().split('T')[0];
+          }
+        })(),
+        dueDate: (() => {
+          try {
+            if (updatedInvoice.due_date) {
+              const dateObj = new Date(updatedInvoice.due_date);
+              if (!isNaN(dateObj.getTime())) {
+                return dateObj.toISOString().split('T')[0];
+              }
+            }
+            return new Date().toISOString().split('T')[0];
+          } catch (error) {
+            logger.warn('Invalid date value for updatedInvoice.due_date, using current date:', error);
+            return new Date().toISOString().split('T')[0];
+          }
+        })(),        status: updatedInvoice.status,
+        paidAmount: updatedInvoice.total_paid || 0,
+        items: updatedInvoice.items || [],
+        notes: updatedInvoice.notes || '',
+      }));
+
+      // Clear files to delete and reset attachment state
+      setFilesToDelete(new Set());
+      setAttachmentFiles([]);
+
+      // Update attachment info
+      if (updatedInvoice.has_attachment || updatedInvoice.attachment_filename) {
+        setAttachmentInfo({
+          has_attachment: true,
+          filename: updatedInvoice.attachment_filename || null
+        });
+      } else {
+        setAttachmentInfo(null);
+      }
+
+      logger.debug('Invoice data refreshed successfully');
+    } catch (error) {
+      logger.error('Failed to refresh invoice data:', error);
+    }
+  };
+
   // Debug invoice data
   useEffect(() => {
-    console.log('Invoice data received:', {
+    logger.debug('Invoice data received', {
       id: invoice.id,
       notes: invoice.notes,
       notesType: typeof invoice.notes,
@@ -117,7 +224,20 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
         amount: item.amount
       }))
     });
+
   }, [invoice]);
+
+  // Debug formData changes
+  useEffect(() => {
+    logger.debug('FormData updated', {
+      formDataItemsCount: formData.items.length,
+      formDataItemDescriptions: formData.items.map(item => ({
+        id: item.id,
+        description: item.description,
+        descriptionLength: item.description?.length || 0
+      }))
+    });
+  }, [formData.items]);
 
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -133,15 +253,60 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
   const [addClientForm, setAddClientForm] = useState({ name: '', email: '', phone: '', address: '' });
   const [addClientLoading, setAddClientLoading] = useState(false);
   const [addClientError, setAddClientError] = useState<string | null>(null);
+  const [loadingAttachments, setLoadingAttachments] = useState(false);
+  const [attachmentInfo, setAttachmentInfo] = useState<{ has_attachment: boolean; filename: string | null } | null>(null);
 
   // Debug modal states
   useEffect(() => {
-    console.log('Modal states changed:', {
+    logger.debug('Modal states changed', {
       showClientModal,
       showAddClientModal,
       clientsCount: clients.length
     });
   }, [showClientModal, showAddClientModal, clients.length]);
+
+  // Load existing attachment when invoice changes
+  useEffect(() => {
+    const loadAttachment = async () => {
+      if (invoice.id) {
+        try {
+          setLoadingAttachments(true);
+          const attachmentInfo = await apiService.getInvoiceAttachmentInfo(invoice.id);
+          logger.debug('Loaded attachment info', attachmentInfo);
+
+          // Check if invoice has an attachment
+          if (attachmentInfo.has_attachment) {
+            // Convert API attachment format to FileData format
+            const fileData: FileData = {
+              uri: `/invoices/${invoice.id}/download-attachment`, // Use download endpoint as URI
+              name: attachmentInfo.filename,
+              type: attachmentInfo.content_type,
+              size: attachmentInfo.size_bytes,
+              isExisting: true,
+              attachmentId: invoice.id // Use invoice ID as attachment ID for single attachment
+            };
+
+            setAttachmentFiles([fileData]); // Single attachment, so array with one item
+          } else {
+            // No attachment exists
+            setAttachmentFiles([]);
+          }
+
+          // Clear any pending deletions when loading fresh data
+          setFilesToDelete(new Set());
+        } catch (error) {
+          logger.error('Failed to load attachment', error);
+          // Don't show error to user, just log it - attachment loading failure shouldn't block invoice editing
+          setAttachmentFiles([]);
+          setFilesToDelete(new Set());
+        } finally {
+          setLoadingAttachments(false);
+        }
+      }
+    };
+
+    loadAttachment();
+  }, [invoice.id]);
 
 
 
@@ -154,7 +319,7 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
   };
 
   const handleItemChange = (index: number, field: keyof InvoiceItem, value: any) => {
-    console.log('handleItemChange called:', { index, field, value, currentItems: formData.items });
+    logger.debug('handleItemChange called', { index, field, value, currentItems: formData.items });
     
     const newItems = [...formData.items];
     newItems[index] = {
@@ -169,7 +334,13 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
       newItems[index].amount = quantity * price;
     }
 
-    console.log('Updated item:', newItems[index]);
+    logger.debug('Updated item', newItems[index]);
+    logger.debug('All items after change', newItems.map(item => ({
+      id: item.id,
+      description: item.description,
+      quantity: item.quantity,
+      price: item.price
+    })));
     handleChange('items', newItems);
   };
 
@@ -209,7 +380,7 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
   };
 
   const validateForm = (): boolean => {
-    console.log('Validating form:', {
+    logger.debug('Validating form', {
       client: formData.client,
       invoiceNumber: formData.invoiceNumber,
       date: formData.date,
@@ -264,13 +435,13 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
 
   const handleUpdate = async () => {
     if (!validateForm()) {
-      return;
+    logger.debug('Starting handleUpdate for invoice:', invoice.id);      return;
     }
 
     try {
       setSubmitting(true);
       setError(null);
-      console.log('Sending update data:', {
+      logger.debug('Sending update data', {
         invoiceId: invoice.id,
         formData: formData,
         items: formData.items,
@@ -281,13 +452,161 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
           descriptionType: typeof item.description
         }))
       });
-      await onUpdateInvoice(invoice.id, formData);
+
+      // Prepare update data - include attachment deletion if needed
+      let updateData = {
+        ...formData,
+        // Map field names to match API expectations
+        client_id: parseInt(formData.client),
+        amount: calculateTotal(),
+        due_date: formData.dueDate,
+        paid_amount: formData.paidAmount
+      };
+
+      // Remove fields that don't match API interface
+      delete (updateData as any).client;
+      delete (updateData as any).invoiceNumber;
+      delete (updateData as any).dueDate;
+      delete (updateData as any).paidAmount;
+
+      logger.debug('Field mapping completed', {
+        originalPaidAmount: formData.paidAmount,
+        mappedPaidAmount: updateData.paid_amount,
+        updateDataKeys: Object.keys(updateData),
+        updateDataSnippet: {
+          client_id: updateData.client_id,
+          amount: updateData.amount,
+          paid_amount: updateData.paid_amount,
+          status: updateData.status
+        }
+      });
+
+      // If we have files marked for deletion, include attachment_filename: null in the update
+      if (filesToDelete.size > 0) {
+        updateData = {
+          ...updateData,
+          attachment_filename: null
+        };
+        logger.debug('Attachment deletion flag added', { attachment_filename: updateData.attachment_filename });
+      }
+
+      logger.debug('Sending update to API', {
+        invoiceId: invoice.id,
+        updateData: updateData,
+        paidAmount: updateData.paid_amount, // Specifically log paid_amount
+        formPaidAmount: formData.paidAmount, // Log original form value
+        itemsInUpdate: updateData.items?.map(item => ({
+          id: item.id,
+          description: item.description,
+          quantity: item.quantity,
+          price: item.price
+        }))
+      });
+
+      await onUpdateInvoice(invoice.id, updateData);
+
+      // Upload attachments if any (excluding files marked for deletion)
+      const filesToUpload = attachmentFiles.filter((_, index) => !filesToDelete.has(index));
+      if (filesToUpload.length > 0) {
+      logger.debug('About to call onUpdateInvoice');        setUploadingAttachments(true);
+        try {
+      logger.debug('API call completed, about to refresh invoice data');
+      await Promise.all(
+        filesToUpload.map(file => uploadAttachmentToInvoice(invoice.id, file))
+      );
+      logger.debug('About to call refreshInvoiceData');          logger.error('Failed to upload attachments', uploadError);
+          Alert.alert('Warning', 'Invoice updated but some attachments failed to upload. You can upload them later.');
+        } finally {
+          setUploadingAttachments(false);
+        }
+      }
+
+      // Log successful attachment deletion (if any)
+      if (filesToDelete.size > 0) {
+        logger.info('Successfully marked attachments for deletion in invoice update');
+        // Clear the deletion marks after successful update
+        setFilesToDelete(new Set());
+      }
+
+      // Refresh invoice data from server to show the latest state
+      await refreshInvoiceData();
     } catch (error: any) {
-      console.error('Update error:', error);
+      logger.error('Update error', error);
       setError(error.message || 'Failed to update invoice');
+      // Clear filesToDelete on error so user can try again
+      setFilesToDelete(new Set());
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const uploadAttachmentToInvoice = async (invoiceId: number, file: FileData) => {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: file.uri,
+      name: file.name,
+      type: file.type,
+    } as any);
+
+    // Make direct API call since we need to handle FormData
+    const token = await AsyncStorage.getItem('auth_token');
+    const userData = await AsyncStorage.getItem('user_data');
+    const user = userData ? JSON.parse(userData) : null;
+    const tenantId = user?.tenant_id;
+
+    // Get the API base URL from the apiService
+    const apiService = await import('../services/api');
+    const API_BASE_URL = apiService.default.baseURL;
+
+    const response = await fetch(`${API_BASE_URL}/invoices/${invoiceId}/upload-attachment`, {
+      method: 'POST',
+      headers: {
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+        ...(tenantId && { 'X-Tenant-ID': tenantId }),
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  };
+
+  const handleFilesSelected = (files: FileData[]) => {
+    // For invoices, only allow one attachment - replace existing with new
+    if (files.length > 0) {
+      setAttachmentFiles([files[0]]); // Take only the first file
+    }
+  };
+
+  const handleRemoveFile = (index: number) => {
+    // Show confirmation modal instead of immediately deleting
+    setFileToDeleteIndex(index);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteFile = () => {
+    if (fileToDeleteIndex === null) return;
+
+    const index = fileToDeleteIndex;
+    const fileToRemove = attachmentFiles[index];
+
+    // Mark file for deletion (don't actually delete from backend yet)
+    setFilesToDelete(prev => new Set([...prev, index]));
+
+    // Close modal and reset state
+    setShowDeleteConfirm(false);
+    setFileToDeleteIndex(null);
+
+    logger.info('File marked for deletion', { fileName: fileToRemove?.name, index });
+  };
+
+  const cancelDeleteFile = () => {
+    setShowDeleteConfirm(false);
+    setFileToDeleteIndex(null);
   };
 
   const formatCurrency = (amount: number) => {
@@ -324,7 +643,7 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
   };
 
   const renderAddClientModal = () => {
-    console.log('Rendering add client modal, visible:', showAddClientModal);
+    logger.debug('Rendering add client modal', { visible: showAddClientModal });
     return (
       <Modal
         visible={showAddClientModal}
@@ -388,7 +707,7 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
   };
 
   const renderClientSelector = () => {
-    console.log('Rendering client selector modal, visible:', showClientModal, 'clients count:', clients.length);
+    logger.debug('Rendering client selector modal', { visible: showClientModal, clientsCount: clients.length });
     return (
       <Modal
         visible={showClientModal}
@@ -498,27 +817,34 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
             </TouchableOpacity>
           </View>
           <View style={styles.modalBody}>
-            {['pending', 'paid', 'overdue', 'draft'].map(status => (
-              <TouchableOpacity
-                key={status}
-                style={[
-                  styles.statusOption,
-                  formData.status === status && styles.statusOptionSelected
-                ]}
-                onPress={() => {
-                  handleChange('status', status);
-                  setShowStatusModal(false);
-                }}
-              >
+            {['pending', 'paid', 'overdue', 'draft'].map(status => {
+              const isDisabled = isInvoiceProtected && status !== 'paid';
+              return (
+                <TouchableOpacity
+                  key={status}
+                  style={[
+                    styles.statusOption,
+                    formData.status === status && styles.statusOptionSelected,
+                    isDisabled && styles.statusOptionDisabled
+                  ]}
+                  onPress={() => {
+                    if (!isDisabled) {
+                      handleChange('status', status);
+                      setShowStatusModal(false);
+                    }
+                  }}
+                  disabled={isDisabled}
+                >
                 <Text style={[
                   styles.statusOptionText,
                   formData.status === status && styles.statusOptionTextSelected
                 ]}>{formatStatus(status)}</Text>
-                {formData.status === status && (
-                  <Ionicons name="checkmark" size={20} color="#007AFF" />
-                )}
-              </TouchableOpacity>
-            ))}
+                  {formData.status === status && (
+                    <Ionicons name="checkmark" size={20} color="#007AFF" />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
       </View>
@@ -538,9 +864,9 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Edit Invoice</Text>
         <TouchableOpacity
-          style={[styles.saveButton, submitting && styles.saveButtonDisabled]}
+          style={[styles.saveButton, (submitting || isInvoiceProtected) && styles.saveButtonDisabled]}
           onPress={handleUpdate}
-          disabled={submitting}
+          disabled={submitting || isInvoiceProtected}
         >
           {submitting ? (
             <ActivityIndicator size="small" color="#fff" />
@@ -549,6 +875,16 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Warning banner for protected invoices */}
+      {isInvoiceProtected && (
+        <View style={styles.warningBanner}>
+          <Ionicons name="warning" size={20} color="#92400E" />
+          <Text style={styles.warningText}>
+            This invoice has been paid and is protected from editing to maintain financial integrity.
+          </Text>
+        </View>
+      )}
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {error && (
@@ -653,10 +989,15 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
                 <Text style={styles.itemNumber}>Item {index + 1}</Text>
                 {formData.items.length > 1 && (
                   <TouchableOpacity
-                    style={styles.removeItemButton}
+                    style={[styles.removeItemButton, isInvoiceProtected && styles.removeItemButtonDisabled]}
                     onPress={() => removeItem(index)}
+                    disabled={isInvoiceProtected}
                   >
-                    <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                    <Ionicons
+                      name="trash-outline"
+                      size={16}
+                      color={isInvoiceProtected ? "#9CA3AF" : "#EF4444"}
+                    />
                   </TouchableOpacity>
                 )}
               </View>
@@ -702,9 +1043,15 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
             </View>
           ))}
           
-          <TouchableOpacity style={styles.addItemButton} onPress={addItem}>
-            <Ionicons name="add" size={20} color="#007AFF" />
-            <Text style={styles.addItemText}>Add Item</Text>
+          <TouchableOpacity
+            style={[styles.addItemButton, isInvoiceProtected && styles.addItemButtonDisabled]}
+            onPress={addItem}
+            disabled={isInvoiceProtected}
+          >
+            <Ionicons name="add" size={20} color={isInvoiceProtected ? "#9CA3AF" : "#007AFF"} />
+            <Text style={[styles.addItemText, isInvoiceProtected && styles.addItemTextDisabled]}>
+              Add Item
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -725,7 +1072,7 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Notes</Text>
-          
+
           <View style={styles.inputContainer}>
             <TextInput
               style={[styles.input, styles.textArea]}
@@ -738,6 +1085,17 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
             />
           </View>
         </View>
+
+        {/* Attachments */}
+        <EnhancedFileUpload
+          title="Attachment"
+          maxFiles={1}
+          allowedTypes={['image/*', 'application/pdf']}
+          onFilesSelected={handleFilesSelected}
+          selectedFiles={attachmentFiles}
+          onRemoveFile={handleRemoveFile}
+          uploading={uploadingAttachments}
+        />
 
         <View style={styles.summarySection}>
           <Text style={styles.summaryTitle}>Invoice Summary</Text>
@@ -822,6 +1180,39 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={showDeleteConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={cancelDeleteFile}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.deleteModalContent}>
+            <Text style={styles.deleteModalTitle}>Delete Attachment</Text>
+            <Text style={styles.deleteModalMessage}>
+              Are you sure you want to delete this attachment? It will be permanently removed when you save the invoice.
+            </Text>
+
+            <View style={styles.deleteModalButtons}>
+              <TouchableOpacity
+                style={[styles.deleteModalButton, styles.cancelButton]}
+                onPress={cancelDeleteFile}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.deleteModalButton, styles.confirmButton]}
+                onPress={confirmDeleteFile}
+              >
+                <Text style={styles.confirmButtonText}>Mark for Deletion</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </KeyboardAvoidingView>
   );
@@ -1017,6 +1408,17 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontWeight: '600',
   },
+  addItemButtonDisabled: {
+    backgroundColor: '#F9FAFB',
+    borderColor: '#E5E7EB',
+  },
+  addItemTextDisabled: {
+    color: '#9CA3AF',
+  },
+  removeItemButtonDisabled: {
+    backgroundColor: '#F9FAFB',
+    borderColor: '#E5E7EB',
+  },
   summarySection: {
     backgroundColor: '#fff',
     margin: 20,
@@ -1137,6 +1539,10 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontWeight: '600',
   },
+  statusOptionDisabled: {
+    opacity: 0.5,
+    backgroundColor: '#F9FAFB',
+  },
   addClientButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1155,6 +1561,71 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#007AFF',
     fontWeight: '600',
+  },
+  deleteModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 24,
+    marginHorizontal: 32,
+    alignItems: 'center',
+  },
+  deleteModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 12,
+  },
+  deleteModalMessage: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  deleteModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  deleteModalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#F3F4F6',
+  },
+  confirmButton: {
+    backgroundColor: '#EF4444',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  confirmButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderRadius: 8,
+    padding: 12,
+    marginHorizontal: 20,
+    marginBottom: 16,
+  },
+  warningText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#92400E',
+    marginLeft: 8,
+    lineHeight: 20,
   },
 });
 

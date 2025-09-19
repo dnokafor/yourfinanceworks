@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { logger } from '../utils/logger';
 import { View, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -15,18 +16,18 @@ const LanguageSwitcher: React.FC = () => {
 
   const currentLanguage = languages.find(lang => lang.code === i18n.language) || languages[0];
   
-  console.log('LanguageSwitcher rendering, current language:', i18n.language, currentLanguage);
-  console.log('i18n object:', i18n);
-  console.log('Available languages:', languages);
+  logger.debug('LanguageSwitcher rendering', { currentLanguage: i18n.language, currentLanguage });
+  logger.debug('i18n object', i18n);
+  logger.debug('Available languages', languages);
 
   const handleLanguageChange = async (languageCode: string) => {
     try {
-      console.log('Changing language to:', languageCode);
+      logger.debug('Changing language to', languageCode);
       await i18n.changeLanguage(languageCode);
-      console.log('Language changed successfully to:', i18n.language);
+      logger.info('Language changed successfully to', i18n.language);
       setShowModal(false);
     } catch (error) {
-      console.error('Error changing language:', error);
+      logger.error('Error changing language', error);
     }
   };
 

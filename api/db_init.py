@@ -1,33 +1,157 @@
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, event, text, inspect
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine import Engine
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import logging
 from sqlalchemy.engine.url import make_url
 import os
+import time
+from alembic.config import Config
+from alembic import command
+from alembic.script import ScriptDirectory
+from alembic.runtime.migration import MigrationContext
 
-from models.models import Base, User, Client, Invoice, Settings, Payment, Invite, ClientNote, DiscountRule, SupportedCurrency, CurrencyRate, InvoiceItem, InvoiceHistory, AIConfig
+from models.models import Base
 from models.models_per_tenant import Base as TenantBase, User as TenantUser
 from models.database import SQLALCHEMY_DATABASE_URL, get_master_db, set_tenant_context
-from utils.auth import get_password_hash
 from scripts.reset_users_id_sequences import reset_all_users_id_sequences
-from scripts.migrate_database import migrate_database
 from services.tenant_database_manager import tenant_db_manager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Enable foreign key support for SQLite
+# Enable foreign key support for SQLite (kept minimal)
 if make_url(SQLALCHEMY_DATABASE_URL).get_backend_name() == "sqlite":
-    from sqlalchemy import event
-    from sqlalchemy.engine import Engine
-
     @event.listens_for(Engine, "connect")
     def set_sqlite_pragma(dbapi_connection, connection_record):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
+
+def wait_for_database(database_url, max_retries=30, retry_delay=2):
+    """Wait for database to be available."""
+    logger.info("Waiting for database to be available...")
+    
+    for attempt in range(max_retries):
+        try:
+            engine = create_engine(database_url)
+            with engine.connect() as conn:
+                conn.execute(text('SELECT 1'))
+            logger.info("Database is available")
+            return True
+        except Exception as e:
+            logger.info(f"Database not ready (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+    
+    logger.error("Database did not become available within the timeout period")
+    return False
+
+def ensure_alembic_version_table_structure(database_url):
+    """Ensure alembic_version table has correct column length."""
+    try:
+        engine = create_engine(database_url)
+        
+        with engine.connect() as conn:
+            inspector = inspect(conn)
+            
+            # Check if alembic_version table exists
+            if 'alembic_version' in inspector.get_table_names():
+                # Check column length
+                result = conn.execute(text(
+                    "SELECT character_maximum_length FROM information_schema.columns "
+                    "WHERE table_name = 'alembic_version' AND column_name = 'version_num'"
+                ))
+                current_length = result.fetchone()
+                
+                if current_length and current_length[0] < 128:
+                    logger.info(f"Expanding alembic_version.version_num column from {current_length[0]} to 128 characters")
+                    conn.execute(text('ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(128)'))
+                    conn.commit()
+                    logger.info("Successfully expanded alembic_version column")
+                else:
+                    logger.info("alembic_version column already has correct length")
+            else:
+                logger.info("alembic_version table does not exist yet")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error ensuring alembic_version table structure: {e}")
+        return False
+
+def ensure_required_columns(database_url):
+    """Ensure required columns exist in master_users table."""
+    try:
+        engine = create_engine(database_url)
+        
+        with engine.connect() as conn:
+            inspector = inspect(conn)
+            
+            # Check if master_users table exists
+            if 'master_users' not in inspector.get_table_names():
+                logger.info("master_users table does not exist yet")
+                return True
+            
+            # Get existing columns
+            columns = inspector.get_columns('master_users')
+            existing_columns = {col['name'] for col in columns}
+            
+            # Required columns that should exist
+            required_columns = {
+                'must_reset_password': 'BOOLEAN NOT NULL DEFAULT FALSE',
+                'show_analytics': 'BOOLEAN NOT NULL DEFAULT FALSE'
+            }
+            
+            # Add missing columns
+            for col_name, col_definition in required_columns.items():
+                if col_name not in existing_columns:
+                    logger.info(f"Adding missing column: {col_name}")
+                    conn.execute(text(f'ALTER TABLE master_users ADD COLUMN {col_name} {col_definition}'))
+                    conn.commit()
+                    logger.info(f"Successfully added column: {col_name}")
+                else:
+                    logger.info(f"Column {col_name} already exists")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error ensuring required columns: {e}")
+        return False
+
+def run_database_migrations():
+    """Run alembic migrations to ensure database is up to date."""
+    try:
+        # Create alembic config
+        alembic_cfg = Config('alembic.ini')
+        
+        # Check current revision
+        engine = create_engine(SQLALCHEMY_DATABASE_URL)
+        
+        with engine.connect() as conn:
+            context = MigrationContext.configure(conn)
+            current_rev = context.get_current_revision()
+            
+            # Get script directory
+            script = ScriptDirectory.from_config(alembic_cfg)
+            head_rev = script.get_current_head()
+            
+            logger.info(f"Current revision: {current_rev}")
+            logger.info(f"Head revision: {head_rev}")
+            
+            if current_rev != head_rev:
+                logger.info("Running migrations to bring database up to date...")
+                command.upgrade(alembic_cfg, 'head')
+                logger.info("Migrations completed successfully")
+            else:
+                logger.info("Database is already up to date")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error running migrations: {e}")
+        return False
 
 def sync_users_to_tenant_db(tenant_id: int):
     """Sync only admin users from master database to tenant database"""
@@ -109,22 +233,32 @@ def sync_users_to_tenant_db(tenant_id: int):
         logger.error(f"Error syncing admin user to tenant database {tenant_id}: {str(e)}")
         raise e
 
-def run_migrations():
-    """Run all necessary migrations"""
-    try:
-        logger.info("Running database migrations...")
-        
-        # Import and run the tested field migration for all tenants
-        from scripts.migrate_ai_config_tested_all_tenants import add_tested_field_to_all_tenant_databases
-        add_tested_field_to_all_tenant_databases()
-        
-        logger.info("Database migrations completed successfully")
-    except Exception as e:
-        logger.error(f"Error running migrations: {str(e)}")
-        # Don't raise the exception - migrations are optional for initial setup
-        logger.warning("Continuing with database initialization despite migration errors")
+def init_db(skip_migrations=True):
+    """Initialize database with essential setup, optionally skipping migrations."""
+    logger.info("Starting essential database initialization...")
 
-def init_db():
+    # Step 1: Wait for database to be available
+    if not wait_for_database(SQLALCHEMY_DATABASE_URL):
+        logger.error("Database is not available")
+        raise Exception("Database connection failed")
+
+    # Step 2: Ensure required columns exist (fallback for manual fixes)
+    if not ensure_required_columns(SQLALCHEMY_DATABASE_URL):
+        logger.error("Failed to ensure required columns")
+        # Continue anyway as tables might not exist yet
+
+    # Step 3: Skip migrations if requested (to avoid hanging)
+    if not skip_migrations:
+        # Step 3a: Ensure alembic_version table has correct structure
+        if not ensure_alembic_version_table_structure(SQLALCHEMY_DATABASE_URL):
+            logger.error("Failed to ensure alembic_version table structure")
+            # Continue anyway as this might be first run
+
+        # Step 3b: Run migrations to ensure database is up to date
+        if not run_database_migrations():
+            logger.error("Failed to run migrations")
+            # Continue anyway to allow basic table creation
+    
     # Create database engine
     if make_url(SQLALCHEMY_DATABASE_URL).get_backend_name() == "sqlite":
         engine = create_engine(
@@ -134,22 +268,23 @@ def init_db():
     else:
         engine = create_engine(SQLALCHEMY_DATABASE_URL)
     
-    
-    
     # Create all tables in the main (master) DB
+    # Note: Schema creation is now handled by Alembic migrations
+    # The following ALTER TABLE operations have been moved to proper migrations:
+    # - must_reset_password column: 2b1a_must_reset_password_master.py
+    # - show_analytics column: add_show_analytics_column.py
     Base.metadata.create_all(bind=engine)
 
-    
-
-    # Run recent migration logic before post-setup steps
-    migrate_database()
+    # Create analytics table in master DB
+    from models.analytics import Base as AnalyticsBase
+    AnalyticsBase.metadata.create_all(bind=engine)
 
     # Create all tables for every tenant
     master_db = next(get_master_db())
     from models.models import Tenant
     tenants = master_db.query(Tenant).all()
     for tenant in tenants:
-        print(f"Ensuring tables for tenant {tenant.id}...")
+        logger.info(f"Ensuring tables for tenant {tenant.id}...")
         db_url_template = os.environ.get("TENANT_DB_URL_TEMPLATE", "postgresql://postgres:password@postgres-master:5432/tenant_{tenant_id}")
         tenant_db_url = db_url_template.format(tenant_id=tenant.id)
         db_name = f"tenant_{tenant.id}"
@@ -160,50 +295,16 @@ def init_db():
             result = conn.execute(text(f"SELECT 1 FROM pg_database WHERE datname=:db_name"), {"db_name": db_name})
             if not result.scalar():
                 conn.execute(text(f"CREATE DATABASE {db_name}"))
-                print(f"Created database {db_name}")
+                logger.info(f"Created database {db_name}")
         # Now create tables in the tenant DB
         tenant_engine = create_engine(tenant_db_url)
         logger.info(f"Tables to be created for tenant {tenant.id}: {TenantBase.metadata.tables.keys()}")
         try:
+            # Create tenant database tables
+            # Note: For tenant databases, metadata.create_all is still used since
+            # databases are created dynamically and need immediate schema setup
             TenantBase.metadata.create_all(bind=tenant_engine)
-            print(f"Tables created for tenant {tenant.id}")
-            
-            # Add the 'theme' column to 'users' table in tenant DB if it doesn't exist
-            from sqlalchemy import inspect
-            inspector = inspect(tenant_engine)
-            columns = [col['name'] for col in inspector.get_columns('users')]
-            if 'theme' not in columns:
-                try:
-                    with tenant_engine.connect() as connection:
-                        connection.execute(text("ALTER TABLE users ADD COLUMN theme VARCHAR(255) DEFAULT 'system'"))
-                        connection.commit()
-                    logger.info(f"Successfully added 'theme' column to 'users' table for tenant {tenant.id}.")
-                except Exception as e:
-                    logger.error(f"Error adding 'theme' column to 'users' table for tenant {tenant.id}: {e}")
-
-            # Add the 'show_discount_in_pdf' column to 'invoices' table in tenant DB if it doesn't exist
-            columns = [col['name'] for col in inspector.get_columns('invoices')]
-            if 'show_discount_in_pdf' not in columns:
-                try:
-                    tenant_engine.execute(text('ALTER TABLE invoices ADD COLUMN show_discount_in_pdf BOOLEAN DEFAULT TRUE NOT NULL'))
-                    logger.info(f"Successfully added 'show_discount_in_pdf' column to 'invoices' table for tenant {tenant.id}.")
-                except Exception as e:
-                    logger.error(f"Error adding 'show_discount_in_pdf' column to 'invoices' table for tenant {tenant.id}: {e}")
-
-            # Add email_notification_settings table if it doesn't exist
-            if 'email_notification_settings' not in inspector.get_table_names():
-                try:
-                    from models.models_per_tenant import EmailNotificationSettings
-                    EmailNotificationSettings.__table__.create(tenant_engine)
-                    logger.info(f"Created email_notification_settings table for tenant {tenant.id}")
-                except Exception as e:
-                    logger.error(f"Error creating email_notification_settings table for tenant {tenant.id}: {e}")
-            
-            # Verify if audit_logs table exists
-            if 'audit_logs' in inspector.get_table_names():
-                logger.info(f"audit_logs table successfully created for tenant {tenant.id}")
-            else:
-                logger.error(f"audit_logs table NOT found for tenant {tenant.id} after create_all")
+            logger.info(f"Tables created for tenant {tenant.id}")
         except Exception as e:
             logger.error(f"Error creating tables for tenant {tenant.id}: {str(e)}")
         
@@ -252,9 +353,9 @@ def init_db():
     finally:
         db.close()
     
-    # Run comprehensive migrations after initial setup
-    from scripts.run_all_migrations import run_all_migrations
-    run_all_migrations()
+    # Skip migrations to avoid multiple heads issue
+    # from scripts.run_all_migrations import run_all_migrations
+    # run_all_migrations()
     # Reset users.id sequences for all tenant DBs
     reset_all_users_id_sequences()
     

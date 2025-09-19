@@ -69,7 +69,7 @@ async def create_tenant(
             detail=INVALID_CURRENCY_CODE
         )
     
-    db_tenant = Tenant(**tenant.dict())
+    db_tenant = Tenant(**tenant.model_dump())
     master_db.add(db_tenant)
     master_db.commit()
     master_db.refresh(db_tenant)
@@ -168,7 +168,7 @@ async def update_tenant(
             )
     
     # Update tenant
-    for field, value in tenant.dict(exclude_unset=True).items():
+    for field, value in tenant.model_dump(exclude_unset=True).items():
         setattr(tenant, field, value)
     
     master_db.commit()

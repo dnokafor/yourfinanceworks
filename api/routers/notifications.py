@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 import logging
 
-from models.database import get_db, get_master_db, set_tenant_context
+from models.database import get_db, get_master_db
 from models.models_per_tenant import EmailNotificationSettings, User
 from models.models import MasterUser
 from schemas.email_notifications import (
@@ -21,14 +21,11 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 @router.get("/settings", response_model=EmailNotificationSettingsSchema)
 async def get_notification_settings(
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Get current user's notification settings"""
     # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
     try:
         # Find or create the tenant user by email
         tenant_user = db.query(User).filter(User.email == current_user.email).first()
@@ -65,9 +62,7 @@ async def get_notification_settings(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get notification settings"
         )
-    finally:
-        db.close()
-
+    
 @router.put("/settings", response_model=EmailNotificationSettingsSchema)
 async def update_notification_settings(
     settings_update: EmailNotificationSettingsUpdate,
@@ -84,12 +79,12 @@ async def update_notification_settings(
             # Create new settings
             settings = EmailNotificationSettings(
                 user_id=current_user.id,
-                **settings_update.dict()
+                **settings_update.model_dump()
             )
             db.add(settings)
         else:
             # Update existing settings
-            for field, value in settings_update.dict().items():
+            for field, value in settings_update.model_dump().items():
                 setattr(settings, field, value)
         
         db.commit()
@@ -104,7 +99,7 @@ async def update_notification_settings(
             resource_type="notification_settings",
             resource_id=str(settings.id),
             resource_name="Email Notification Settings",
-            details=settings_update.dict(),
+            details=settings_update.model_dump(),
             status="success"
         )
         

@@ -1,15 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime, timezone
 from fastapi import status
 
-from models.database import get_master_db, set_tenant_context
+from models.database import set_tenant_context
 from models.models import MasterUser
 from models.models_per_tenant import ClientNote, Client
 from schemas.crm import ClientNoteCreate, ClientNote as ClientNoteSchema
 from routers.auth import get_current_user
 from services.tenant_database_manager import tenant_db_manager
+from utils.audit import log_audit_event
 
 router = APIRouter(prefix="/crm", tags=["crm"])
 
@@ -21,9 +21,9 @@ async def create_client_note(
 ):
     # Manually set tenant context and get tenant database
     set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
+    SessionLocal = tenant_db_manager.get_tenant_session(current_user.tenant_id)
+    db = SessionLocal()
+
     try:
         # Check if client exists
         db_client = db.query(Client).filter(Client.id == client_id).first()
@@ -31,7 +31,7 @@ async def create_client_note(
             raise HTTPException(status_code=404, detail="Client not found")
 
         db_note = ClientNote(
-            **note.dict(),
+            **note.model_dump(),
             client_id=client_id,
             user_id=current_user.id,
             created_at=datetime.now(timezone.utc),
@@ -40,7 +40,21 @@ async def create_client_note(
         db.add(db_note)
         db.commit()
         db.refresh(db_note)
-        return db_note
+        # Audit log
+        log_audit_event(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="CREATE",
+            resource_type="client_note",
+            resource_id=str(db_note.id),
+            resource_name=f"Client {client_id} Note",
+            details=note.model_dump(),
+            status="success",
+        )
+        # Return before closing session to avoid DetachedInstanceError
+        result = db_note
+        return result
     finally:
         db.close()
 
@@ -53,9 +67,9 @@ async def update_client_note(
 ):
     # Manually set tenant context and get tenant database
     set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
+    SessionLocal = tenant_db_manager.get_tenant_session(current_user.tenant_id)
+    db = SessionLocal()
+
     try:
         # Check if client exists
         db_client = db.query(Client).filter(Client.id == client_id).first()
@@ -73,10 +87,24 @@ async def update_client_note(
         # Update the note
         db_note.note = note.note
         db_note.updated_at = datetime.now(timezone.utc)
-        
+
         db.commit()
         db.refresh(db_note)
-        return db_note
+        # Audit log update
+        log_audit_event(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="UPDATE",
+            resource_type="client_note",
+            resource_id=str(db_note.id),
+            resource_name=f"Client {client_id} Note",
+            details={"note": note.note},
+            status="success",
+        )
+        # Return before closing session to avoid DetachedInstanceError
+        result = db_note
+        return result
     finally:
         db.close()
 
@@ -88,8 +116,8 @@ async def delete_client_note(
 ):
     # Manually set tenant context and get tenant database
     set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
+    SessionLocal = tenant_db_manager.get_tenant_session(current_user.tenant_id)
+    db = SessionLocal()
     
     try:
         # Check if client exists
@@ -108,6 +136,18 @@ async def delete_client_note(
         # Delete the note
         db.delete(db_note)
         db.commit()
+        # Audit log delete
+        log_audit_event(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="DELETE",
+            resource_type="client_note",
+            resource_id=str(db_note.id),
+            resource_name=f"Client {client_id} Note",
+            details={"message": "Client note deleted"},
+            status="success",
+        )
     finally:
         db.close()
 
@@ -118,9 +158,9 @@ async def get_client_notes(
 ):
     # Manually set tenant context and get tenant database
     set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
-    
+    SessionLocal = tenant_db_manager.get_tenant_session(current_user.tenant_id)
+    db = SessionLocal()
+
     try:
         # Check if client exists
         db_client = db.query(Client).filter(Client.id == client_id).first()
@@ -128,6 +168,8 @@ async def get_client_notes(
             raise HTTPException(status_code=404, detail="Client not found")
 
         notes = db.query(ClientNote).filter(ClientNote.client_id == client_id).all()
-        return notes
+        # Return before closing session to avoid DetachedInstanceError
+        result = notes
+        return result
     finally:
         db.close()

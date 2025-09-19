@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import StatusIndicator from '../components/StatusIndicator';
 
 interface Invoice {
   id: number;
@@ -120,11 +121,11 @@ const InvoicesScreen: React.FC<InvoicesScreenProps> = ({
             <Ionicons name="document-text-outline" size={16} color="#6B7280" />
             <Text style={styles.invoiceNumber}>{item.number}</Text>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusBackground(item.status) }]}>
-            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-              {formatStatus(item.status)}
-            </Text>
-          </View>
+          <StatusIndicator
+            status={item.status as any}
+            size="small"
+            customText={formatStatus(item.status)}
+          />
         </View>
         
         <Text style={styles.clientName}>{item.client_name}</Text>

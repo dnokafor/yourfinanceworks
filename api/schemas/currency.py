@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 
@@ -22,8 +22,7 @@ class SupportedCurrency(SupportedCurrencyBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class CurrencyRateBase(BaseModel):
     from_currency: str = Field(..., description="Source currency code")
@@ -44,8 +43,7 @@ class CurrencyRate(CurrencyRateBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class CurrencyConversion(BaseModel):
     from_currency: str

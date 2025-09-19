@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
+import apiService from '../services/api';
 
 interface SignupFormData {
   first_name: string;
@@ -23,12 +25,20 @@ interface SignupFormData {
   organization_name: string;
 }
 
+interface AvailabilityState {
+  isChecking: boolean;
+  isAvailable: boolean | null;
+  error: string | null;
+}
+
 interface SignupScreenProps {
   onSignup: (formData: Omit<SignupFormData, 'confirmPassword'>) => Promise<void>;
   onNavigateToLogin: () => void;
 }
 
 const SignupScreen: React.FC<SignupScreenProps> = ({ onSignup, onNavigateToLogin }) => {
+  const { t } = useTranslation();
+  
   const [formData, setFormData] = useState<SignupFormData>({
     first_name: '',
     last_name: '',
@@ -41,15 +51,148 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ onSignup, onNavigateToLogin
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Availability checking state
+  const [orgAvailability, setOrgAvailability] = useState<AvailabilityState>({
+    isChecking: false,
+    isAvailable: null,
+    error: null,
+  });
+  const [emailAvailability, setEmailAvailability] = useState<AvailabilityState>({
+    isChecking: false,
+    isAvailable: null,
+    error: null,
+  });
+  
+  // Refs for debouncing
+  const orgTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const emailTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Debounced organization name availability check
+  const checkOrgAvailability = useCallback(async (name: string) => {
+    if (!name || name.length < 2) {
+      setOrgAvailability({
+        isChecking: false,
+        isAvailable: null,
+        error: name.length > 0 && name.length < 2 ? t('auth.signup.availability.org_min_length') : null,
+      });
+      return;
+    }
+
+    setOrgAvailability({
+      isChecking: true,
+      isAvailable: null,
+      error: null,
+    });
+
+    try {
+      const result = await apiService.checkOrganizationNameAvailability(name);
+      setOrgAvailability({
+        isChecking: false,
+        isAvailable: result.available,
+        error: null,
+      });
+    } catch (error: any) {
+      setOrgAvailability({
+        isChecking: false,
+        isAvailable: null,
+        error: t('auth.signup.availability.error_checking'),
+      });
+    }
+  }, [t]);
+
+  // Debounced email availability check
+  const checkEmailAvailability = useCallback(async (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    if (!email) {
+      setEmailAvailability({
+        isChecking: false,
+        isAvailable: null,
+        error: null,
+      });
+      return;
+    }
+
+    if (!emailRegex.test(email)) {
+      setEmailAvailability({
+        isChecking: false,
+        isAvailable: null,
+        error: t('auth.signup.availability.valid_email'),
+      });
+      return;
+    }
+
+    setEmailAvailability({
+      isChecking: true,
+      isAvailable: null,
+      error: null,
+    });
+
+    try {
+      const result = await apiService.checkEmailAvailability(email);
+      setEmailAvailability({
+        isChecking: false,
+        isAvailable: result.available,
+        error: null,
+      });
+    } catch (error: any) {
+      setEmailAvailability({
+        isChecking: false,
+        isAvailable: null,
+        error: t('auth.signup.availability.error_checking'),
+      });
+    }
+  }, [t]);
 
   const handleChange = (field: keyof SignupFormData, value: string) => {
     setFormData(prev => ({
       ...prev,
       [field]: value,
     }));
+    
     // Clear error when user starts typing
     if (error) {
       setError(null);
+    }
+
+    // Handle availability checking with debouncing
+    if (field === 'organization_name') {
+      // Clear previous timeout
+      if (orgTimeoutRef.current) {
+        clearTimeout(orgTimeoutRef.current);
+      }
+      
+      // Reset state immediately
+      setOrgAvailability({
+        isChecking: false,
+        isAvailable: null,
+        error: null,
+      });
+      
+      // Set new timeout for checking
+      orgTimeoutRef.current = setTimeout(() => {
+        checkOrgAvailability(value.trim());
+      }, 500); // 500ms debounce
+    }
+
+    if (field === 'email') {
+      // Clear previous timeout
+      if (emailTimeoutRef.current) {
+        clearTimeout(emailTimeoutRef.current);
+      }
+      
+      // Reset state immediately
+      setEmailAvailability({
+        isChecking: false,
+        isAvailable: null,
+        error: null,
+      });
+      
+      // Set new timeout for checking
+      emailTimeoutRef.current = setTimeout(() => {
+        checkEmailAvailability(value.trim());
+      }, 500); // 500ms debounce
     }
   };
 
@@ -125,6 +268,69 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ onSignup, onNavigateToLogin
     Alert.alert('Coming Soon', 'Google SSO will be available soon!');
   };
 
+  // Render availability status indicator
+  const renderAvailabilityStatus = (availability: AvailabilityState, fieldType: 'org' | 'email') => {
+    if (availability.isChecking) {
+      return (
+        <View style={styles.availabilityContainer}>
+          <ActivityIndicator size="small" color="#007AFF" />
+          <Text style={styles.availabilityTextChecking}>
+            {t('auth.signup.availability.checking')}
+          </Text>
+        </View>
+      );
+    }
+
+    if (availability.error) {
+      return (
+        <View style={styles.availabilityContainer}>
+          <Ionicons name="warning" size={16} color="#e74c3c" />
+          <Text style={styles.availabilityTextError}>{availability.error}</Text>
+        </View>
+      );
+    }
+
+    if (availability.isAvailable === true) {
+      return (
+        <View style={styles.availabilityContainer}>
+          <Ionicons name="checkmark-circle" size={16} color="#27ae60" />
+          <Text style={styles.availabilityTextAvailable}>
+            {fieldType === 'org' 
+              ? t('auth.signup.availability.org_available')
+              : t('auth.signup.availability.email_available')
+            }
+          </Text>
+        </View>
+      );
+    }
+
+    if (availability.isAvailable === false) {
+      return (
+        <View style={styles.availabilityContainer}>
+          <Ionicons name="close-circle" size={16} color="#e74c3c" />
+          <Text style={styles.availabilityTextTaken}>
+            {fieldType === 'org' 
+              ? t('auth.signup.availability.org_taken')
+              : t('auth.signup.availability.email_taken')
+            }
+          </Text>
+          {fieldType === 'org' && (
+            <Text style={styles.availabilityTip}>
+              {t('auth.signup.tips.org_taken_tip')}
+            </Text>
+          )}
+          {fieldType === 'email' && (
+            <Text style={styles.availabilityTip}>
+              {t('auth.signup.tips.email_taken_tip')}
+            </Text>
+          )}
+        </View>
+      );
+    }
+
+    return null;
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -133,9 +339,9 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ onSignup, onNavigateToLogin
       <StatusBar style="dark" />
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.header}>
-          <Text style={styles.title}>Create your account</Text>
+          <Text style={styles.title}>{t('auth.signup.title')}</Text>
           <Text style={styles.subtitle}>
-            Start managing your invoices today
+            {t('auth.signup.subtitle')}
           </Text>
         </View>
 
@@ -148,28 +354,29 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ onSignup, onNavigateToLogin
 
           {/* Organization Name */}
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Organization Name</Text>
+            <Text style={styles.label}>{t('auth.signup.organization_name')}</Text>
             <View style={styles.inputWithIcon}>
               <Ionicons name="business-outline" size={20} color="#6B7280" style={styles.inputIcon} />
               <TextInput
                 style={[styles.input, styles.inputWithIconPadding]}
                 value={formData.organization_name}
                 onChangeText={(value) => handleChange('organization_name', value)}
-                placeholder="Your company or organization name"
+                placeholder={t('auth.signup.organization_placeholder')}
                 autoCapitalize="words"
                 autoCorrect={false}
               />
             </View>
+            {renderAvailabilityStatus(orgAvailability, 'org')}
           </View>
 
           {/* First Name */}
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>First Name</Text>
+            <Text style={styles.label}>{t('auth.signup.first_name')}</Text>
             <TextInput
               style={styles.input}
               value={formData.first_name}
               onChangeText={(value) => handleChange('first_name', value)}
-              placeholder="First name"
+              placeholder={t('auth.signup.first_name_placeholder')}
               autoCapitalize="words"
               autoCorrect={false}
             />
@@ -177,12 +384,12 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ onSignup, onNavigateToLogin
 
           {/* Last Name */}
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Last Name</Text>
+            <Text style={styles.label}>{t('auth.signup.last_name')}</Text>
             <TextInput
               style={styles.input}
               value={formData.last_name}
               onChangeText={(value) => handleChange('last_name', value)}
-              placeholder="Last name"
+              placeholder={t('auth.signup.last_name_placeholder')}
               autoCapitalize="words"
               autoCorrect={false}
             />
@@ -190,27 +397,28 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ onSignup, onNavigateToLogin
 
           {/* Email */}
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Email Address</Text>
+            <Text style={styles.label}>{t('auth.signup.email_address')}</Text>
             <TextInput
               style={styles.input}
               value={formData.email}
               onChangeText={(value) => handleChange('email', value)}
-              placeholder="Email address"
+              placeholder={t('auth.signup.email_placeholder')}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
             />
+            {renderAvailabilityStatus(emailAvailability, 'email')}
           </View>
 
           {/* Password */}
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Password</Text>
+            <Text style={styles.label}>{t('auth.signup.password')}</Text>
             <View style={styles.passwordContainer}>
               <TextInput
                 style={[styles.input, styles.passwordInput]}
                 value={formData.password}
                 onChangeText={(value) => handleChange('password', value)}
-                placeholder="Password (min. 6 characters)"
+                placeholder={t('auth.signup.password_placeholder')}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -230,13 +438,13 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ onSignup, onNavigateToLogin
 
           {/* Confirm Password */}
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Confirm Password</Text>
+            <Text style={styles.label}>{t('auth.signup.confirm_password')}</Text>
             <View style={styles.passwordContainer}>
               <TextInput
                 style={[styles.input, styles.passwordInput]}
                 value={formData.confirmPassword}
                 onChangeText={(value) => handleChange('confirmPassword', value)}
-                placeholder="Confirm password"
+                placeholder={t('auth.signup.confirm_password_placeholder')}
                 secureTextEntry={!showConfirmPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -444,6 +652,45 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 16,
     color: '#333',
+  },
+  availabilityContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingHorizontal: 4,
+  },
+  availabilityTextChecking: {
+    fontSize: 12,
+    color: '#007AFF',
+    marginLeft: 6,
+    fontStyle: 'italic',
+  },
+  availabilityTextAvailable: {
+    fontSize: 12,
+    color: '#27ae60',
+    marginLeft: 6,
+    fontWeight: '500',
+  },
+  availabilityTextTaken: {
+    fontSize: 12,
+    color: '#e74c3c',
+    marginLeft: 6,
+    fontWeight: '500',
+    flex: 1,
+  },
+  availabilityTextError: {
+    fontSize: 12,
+    color: '#e74c3c',
+    marginLeft: 6,
+    flex: 1,
+  },
+  availabilityTip: {
+    fontSize: 11,
+    color: '#666',
+    fontStyle: 'italic',
+    marginTop: 4,
+    marginLeft: 22,
+    lineHeight: 16,
   },
 });
 

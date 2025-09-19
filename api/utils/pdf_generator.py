@@ -11,28 +11,29 @@ import logging
 from sqlalchemy.orm import Session
 from models.database import get_db
 from models.models import SupportedCurrency
-from sqlalchemy.orm import Session
-from models.database import get_db
-from models.models import SupportedCurrency
+from templates.invoice_templates import get_template
 
 logger = logging.getLogger(__name__)
 
 class InvoicePDFGenerator:
     """Generate PDF invoices using ReportLab"""
     
-    def __init__(self):
+    def __init__(self, template_name: str = 'modern'):
         self.styles = getSampleStyleSheet()
+        self.template = get_template(template_name)
         self._create_custom_styles()
     
     def _create_custom_styles(self):
         """Create custom paragraph styles"""
+        template_colors = self.template.get_colors()
+        
         self.styles.add(ParagraphStyle(
             name='InvoiceTitle',
             parent=self.styles['Heading1'],
             fontSize=24,
             spaceAfter=30,
             alignment=TA_CENTER,
-            textColor=colors.darkblue
+            textColor=template_colors['title']
         ))
         
         self.styles.add(ParagraphStyle(
@@ -41,7 +42,7 @@ class InvoicePDFGenerator:
             fontSize=16,
             spaceAfter=12,
             alignment=TA_LEFT,
-            textColor=colors.darkblue
+            textColor=template_colors['header']
         ))
         
         self.styles.add(ParagraphStyle(
@@ -50,7 +51,7 @@ class InvoicePDFGenerator:
             fontSize=12,
             spaceBefore=12,
             spaceAfter=6,
-            textColor=colors.darkblue
+            textColor=template_colors['header']
         ))
         
         self.styles.add(ParagraphStyle(
@@ -438,8 +439,9 @@ def generate_invoice_pdf(
     company_data: Dict[str, Any],
     items: List[Dict[str, Any]] = None,
     db: Session = None,
-    show_discount: bool = False
+    show_discount: bool = False,
+    template_name: str = 'modern'
 ) -> bytes:
     """Convenience function to generate invoice PDF"""
-    generator = InvoicePDFGenerator()
+    generator = InvoicePDFGenerator(template_name)
     return generator.generate_invoice_pdf(invoice_data, client_data, company_data, items, db, show_discount) 

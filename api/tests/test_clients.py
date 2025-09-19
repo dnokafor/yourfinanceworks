@@ -1,4 +1,5 @@
 import pytest
+from uuid import uuid4
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -6,20 +7,23 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi.testclient import TestClient
 
 @pytest.fixture
-def auth_headers(client: TestClient):
+def auth_headers(client: TestClient, test_user_registry):
     # Create and login user
+    unique_email = f"test_{uuid4().hex}@example.com"
     client.post(
-        "/api/v1/auth/signup",
+        "/api/v1/auth/register",
         json={
-            "email": "test@example.com",
+            "email": unique_email,
             "password": "testpass123",
-            "full_name": "Test User"
+            "first_name": "Test",
+            "last_name": "User"
         }
     )
+    test_user_registry.append(unique_email)
     
     response = client.post(
         "/api/v1/auth/login",
-        data={"username": "test@example.com", "password": "testpass123"}
+        json={"email": unique_email, "password": "testpass123"}
     )
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
@@ -55,3 +59,48 @@ def test_get_clients(client: TestClient, auth_headers):
     data = response.json()
     assert len(data) == 1
     assert data[0]["name"] == "Test Client"
+
+def test_delete_client_with_invoices(client: TestClient, auth_headers):
+    # Create a client
+    client_response = client.post(
+        "/api/v1/clients/",
+        json={
+            "name": "Test Client",
+            "email": "client@example.com"
+        },
+        headers=auth_headers
+    )
+    client_id = client_response.json()["id"]
+    
+    # Create an invoice for the client
+    client.post(
+        "/api/v1/invoices/",
+        json={
+            "client_id": client_id,
+            "amount": 100.0,
+            "due_date": "2024-12-31",
+            "items": [{"description": "Test item", "quantity": 1, "price": 100.0}]
+        },
+        headers=auth_headers
+    )
+    
+    # Try to delete the client - should fail
+    response = client.delete(f"/api/v1/clients/{client_id}", headers=auth_headers)
+    assert response.status_code == 400
+    assert response.json()["detail"] == "CLIENT_HAS_INVOICES"
+
+def test_delete_client_without_invoices(client: TestClient, auth_headers):
+    # Create a client
+    client_response = client.post(
+        "/api/v1/clients/",
+        json={
+            "name": "Test Client",
+            "email": "client@example.com"
+        },
+        headers=auth_headers
+    )
+    client_id = client_response.json()["id"]
+    
+    # Delete the client - should succeed
+    response = client.delete(f"/api/v1/clients/{client_id}", headers=auth_headers)
+    assert response.status_code == 204

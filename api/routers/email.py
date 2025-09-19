@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import Dict, Any, List
 import logging
 
@@ -22,30 +22,23 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/email", tags=["email"])
 
 def get_email_service(
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ) -> EmailService:
     """Get configured email service for the current tenant"""
-    
-    # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
     
     try:
         # Get email configuration from settings
         email_settings = db.query(Settings).filter(
             Settings.key == "email_config"
         ).first()
-    finally:
-        db.close()
+        
+        if not email_settings or not email_settings.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email service not configured. Please configure email settings first."
+            )
     
-    if not email_settings or not email_settings.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email service not configured. Please configure email settings first."
-        )
-    
-    try:
         email_config_data = email_settings.value
         
         # Create email provider config
@@ -60,7 +53,8 @@ def get_email_service(
         )
         
         return EmailService(config)
-        
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to initialize email service: {str(e)}")
         raise HTTPException(
@@ -117,7 +111,7 @@ async def send_invoice_email(
             'paid_amount': 0,  # Calculate from payments if needed
             'status': invoice.status,
             'notes': invoice.notes or '',
-            'items': [item.dict() for item in invoice.items] if invoice.items else [] # Ensure items are included
+            'items': [item.model_dump() for item in invoice.items] if hasattr(invoice, 'items') and invoice.items else [] # Ensure items are included
         }
         
         # Prepare client data
@@ -197,8 +191,6 @@ async def send_invoice_email(
 @router.post("/test", response_model=EmailResponse)
 async def test_email_configuration(
     request: EmailTestRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
     email_service: EmailService = Depends(get_email_service)
 ):
     """Test email configuration by sending a test email"""
@@ -261,43 +253,48 @@ async def validate_email_configuration(
 
 @router.get("/config", response_model=EmailConfig)
 async def get_email_configuration(
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
     """Get current email configuration"""
-    
-    # Manually set tenant context and get tenant database
-    set_tenant_context(current_user.tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
-    db = tenant_session()
     
     try:
         # Get email configuration from settings
         email_settings = db.query(Settings).filter(
             Settings.key == "email_config"
         ).first()
-    finally:
-        db.close()
-    
-    if not email_settings or not email_settings.value:
-        # Return default configuration
+        
+        if not email_settings or not email_settings.value:
+            # Return default configuration
+            return EmailConfig(
+                provider="aws_ses",
+                enabled=False,
+                from_name="Your Company",
+                from_email="noreply@example.com"
+            )
+
+        config_data = email_settings.value or {}
+
+        # Ensure all required fields are included with sensible defaults
         return EmailConfig(
-            provider="aws_ses",
-            enabled=False,
-            from_name="Your Company",
-            from_email="noreply@example.com"
+            provider=config_data.get('provider', 'aws_ses'),
+            from_name=config_data.get('from_name', 'Your Company'),
+            from_email=config_data.get('from_email', 'noreply@example.com'),
+            enabled=bool(config_data.get('enabled', False)),
+            aws_access_key_id=config_data.get('aws_access_key_id'),
+            aws_secret_access_key=config_data.get('aws_secret_access_key'),
+            aws_region=config_data.get('aws_region'),
+            azure_connection_string=config_data.get('azure_connection_string'),
+            mailgun_api_key=config_data.get('mailgun_api_key'),
+            mailgun_domain=config_data.get('mailgun_domain')
         )
-    
-    config_data = email_settings.value
-    
-    return EmailConfig(
-        provider=config_data.get('provider', 'aws_ses'),
-        aws_access_key_id=config_data.get('aws_access_key_id'),
-        aws_secret_access_key=config_data.get('aws_secret_access_key'),
-        aws_region=config_data.get('aws_region'),
-        azure_connection_string=config_data.get('azure_connection_string'),
-        mailgun_api_key=config_data.get('mailgun_api_key'),
-        mailgun_domain=config_data.get('mailgun_domain')
-    )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get email configuration: {str(e)}"
+        )
 
 @router.put("/config", response_model=EmailConfig)
 async def update_email_configuration(

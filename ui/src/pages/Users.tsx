@@ -98,11 +98,12 @@ export default function UsersPage() {
     setLoading(true);
     try {
       const res = await api.get("/auth/users");
+      console.log("Fetched users from API:", res);
       // The API returns the array directly, not wrapped in a data property
       setUsers(Array.isArray(res) ? res : []);
     } catch (e: any) {
       console.error("Failed to load users:", e);
-      toast.error(t('users.failedToLoadUsers'));
+      toast.error(getErrorMessage(e, t));
       setUsers([]); // Set empty array on error
     } finally {
       setLoading(false);
@@ -124,6 +125,22 @@ export default function UsersPage() {
   useEffect(() => {
     fetchUsers();
     fetchInvites();
+  }, []);
+
+  // Refetch data when tenant changes
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'selected_tenant_id') {
+        fetchUsers();
+        fetchInvites();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
   const handleInviteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -150,7 +167,9 @@ export default function UsersPage() {
 
   const handleRoleChange = async (userId: number, newRole: string) => {
     try {
+      console.log("Updating role for user", userId, "to", newRole);
       await api.put(`/auth/users/${userId}/role`, { role: newRole });
+      console.log("Role update successful");
       toast.success(t('users.roleUpdated'));
       fetchUsers();
     } catch (err: any) {
@@ -237,6 +256,11 @@ export default function UsersPage() {
   const filteredUsers = users.filter(user =>
     user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
     [user.first_name, user.last_name].filter(Boolean).join(" ").toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Sort users by email (case-insensitive)
+  const sortedUsers = [...filteredUsers].sort((a, b) =>
+    a.email.localeCompare(b.email, undefined, { sensitivity: 'base' })
   );
 
   return (
@@ -426,7 +450,7 @@ export default function UsersPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredUsers.map((user) => (
+                    sortedUsers.map((user) => (
                       <TableRow key={user.id}>
                         <TableCell>{user.email}</TableCell>
                         <TableCell>{[user.first_name, user.last_name].filter(Boolean).join(" ") || "-"}</TableCell>
@@ -472,8 +496,8 @@ export default function UsersPage() {
                 value={activationForm.password}
                 onChange={handleActivationFormChange}
                 placeholder={t('users.enterPasswordForUserPlaceholder')}
-                required
               />
+              <p className="text-xs text-muted-foreground">{t('users.optionalPasswordHint') || 'Optional: leave blank to send an invite email and require the user to set a password on first login.'}</p>
               <div className="flex gap-2">
                 <Input
                   type="text"

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import psycopg2
+import psycopg
 import os
 
 def add_soft_delete_columns_postgres():

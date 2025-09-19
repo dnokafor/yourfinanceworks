@@ -1,5 +1,63 @@
 # FastMCP Refactoring Changes
 
+## Latest Changes (2024-12-19)
+
+### AI-Powered Intent Classification for MCP Integration
+
+#### 🤖 AI-Based Intent Classification System
+- **✅ Eliminated Hardcoded Patterns**: Replaced keyword pattern matching with AI-based intent classification
+- **✅ Dynamic Tool Selection**: AI automatically determines which MCP tool to use based on message meaning
+- **✅ Natural Language Understanding**: Supports natural language variations without maintaining pattern lists
+- **✅ Improved Accuracy**: AI classification provides better understanding of user intent
+- **✅ Automatic Default Config**: System automatically sets single active AI config as default
+- **✅ Enhanced Debugging**: Added comprehensive logging for intent classification and tool selection
+
+#### 🔧 Technical Implementation
+  - **AI Intent Classification**: Uses AI to classify user messages into business categories (analyze_patterns, payments, clients, invoices, expenses, statements, currencies, outstanding, overdue, statistics, general)
+- **Dynamic MCP Tool Routing**: Based on AI classification, automatically routes to appropriate MCP tools
+- **Fallback to LLM**: General queries not related to business data use configured LLM
+- **Request Format Fix**: Fixed 422 error by updating AI chat endpoint to accept JSON request body
+
+#### 📝 Usage Examples
+```
+# These all get classified as "statements" intent:
+"Show bank statements"
+"What statements do I have?"
+"Display my banking information"
+"List all my bank account statements"
+
+# These all get classified as "expenses" intent:
+"List all expenses"
+"What did I spend money on?"
+"Show my business expenses"
+"Display expense information"
+```
+
+## Latest Code Quality & Performance Updates
+
+### Performance Optimizations (Current Session)
+- **`api_client.py`**: Fixed performance inefficiencies in search methods
+  - Implemented batch processing for `search_clients` and `search_invoices`
+  - Added early termination when sufficient results found
+  - Reduced memory usage with 100-item batch processing
+  - Optimized field access with individual checks instead of array creation
+
+### Security Fixes (Current Session)
+- **`auth_client.py`**: Fixed CWE-396,397 generic exception handling
+  - Replaced generic `Exception` with specific types: `FileNotFoundError`, `json.JSONDecodeError`, `KeyError`, `ValueError`
+  - Follows security best practices for exception handling
+
+### Import Optimizations (Current Session)
+- **`api_client.py`**: Improved import efficiency
+  - Changed from `import httpx` to `from httpx import AsyncClient, HTTPStatusError`
+  - Enhanced performance, clarity, and maintainability
+
+### Code Maintainability (Current Session)
+- **`tools.py`**: Refactored complex date parsing logic
+  - Extracted repetitive date parsing into `_parse_date_filter` helper method
+  - Reduced code duplication in `query_payments` method
+  - Improved readability and maintainability
+
 ## New Tools Added (Latest Update)
 
 The MCP server has been expanded with comprehensive new tools to support the full invoice application functionality:
@@ -28,6 +86,23 @@ The MCP server has been expanded with comprehensive new tools to support the ful
 - **`send_invoice_email`**: Send invoices via email with customizable messages
 - **`test_email_configuration`**: Test email setup and configuration
 
+### Expense Management Tools
+- **`list_expenses`**: List all expenses with filtering and pagination
+- **`get_expense`**: Get detailed expense information by ID
+- **`create_expense`**: Create new business expenses with tax calculations
+- **`update_expense`**: Update existing expense details
+- **`delete_expense`**: Remove expenses from the system
+- **`upload_expense_receipt`**: Upload receipt attachments (PDF, JPG, PNG)
+- **`list_expense_attachments`**: List all attachments for an expense
+- **`delete_expense_attachment`**: Remove specific expense attachments
+
+### Statement Management Tools
+- **`list_statements`**: List all imported statements
+- **`get_bank_statement`**: Get detailed bank statement information
+- **`reprocess_bank_statement`**: Reprocess bank statement for transaction matching
+- **`update_bank_statement_meta`**: Update bank statement metadata
+- **`delete_bank_statement`**: Remove bank statements from the system
+
 ### Example Usage of New Tools
 
 ```bash
@@ -41,6 +116,19 @@ python -m MCP --email user@example.com --password password
 # Payment Management
 # - "Record a payment of $500 for invoice #123"
 # - "List all payments from last month"
+
+# Expense Management
+# - "List all expenses from this quarter"
+# - "Create an expense for office supplies costing $150"
+# - "Upload a receipt for expense #456"
+# - "Show me unlinked expenses"
+# - "Update expense #789 with new category"
+
+# Statement Management
+# - "List all imported bank statements"
+# - "Get details for bank statement #123"
+# - "Reprocess bank statement for better matching"
+# - "Delete old bank statement #456"
 
 # Settings & Configuration
 # - "Get my company settings"
@@ -67,6 +155,14 @@ The complete list of available tools now includes:
 
 **Invoice Management:**
 - `list_invoices`, `search_invoices`, `get_invoice`, `create_invoice`
+
+**Expense Management:**
+- `list_expenses`, `get_expense`, `create_expense`, `update_expense`, `delete_expense`
+- `upload_expense_receipt`, `list_expense_attachments`, `delete_expense_attachment`
+
+**Statement Management:**
+- `list_statements`, `get_bank_statement`, `reprocess_bank_statement`
+- `update_bank_statement_meta`, `delete_bank_statement`
 
 **Analytics:**
 - `get_clients_with_outstanding_balance`, `get_overdue_invoices`, `get_invoice_stats`
@@ -256,4 +352,4 @@ python -m MCP.server --email user@example.com --password password
 
 ## Conclusion
 
-The FastMCP refactoring maintains all existing functionality while significantly simplifying the codebase and improving developer experience. The API remains the same for end users, but development and maintenance are now much easier. 
+The FastMCP refactoring maintains all existing functionality while significantly simplifying the codebase and improving developer experience. The API remains the same for end users, but development and maintenance are now much easier.
