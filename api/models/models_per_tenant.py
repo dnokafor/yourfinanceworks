@@ -23,6 +23,8 @@ class User(Base):
     first_name = Column(String, nullable=True)
     last_name = Column(String, nullable=True)
     google_id = Column(String, unique=True, nullable=True)  # For Google SSO
+    azure_ad_id = Column(String, unique=True, nullable=True)  # For Azure AD SSO (Object ID)
+    azure_tenant_id = Column(String, nullable=True)  # Azure AD Tenant ID
     theme = Column(String, default="system")
     show_analytics = Column(Boolean, default=False)  # Show/hide analytics menu
 

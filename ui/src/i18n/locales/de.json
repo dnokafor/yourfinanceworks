@@ -92,6 +92,7 @@
     "signing_in": "Anmeldung läuft...",
     "or_continue_with": "Oder fortfahren mit",
     "sign_in_with_google": "Mit Google anmelden",
+    "sign_in_with_microsoft": "Mit Microsoft anmelden",
     "no_account": "Haben Sie noch kein Konto?",
     "google_sso_coming_soon": "Google SSO wird bald verfügbar sein!",
     "signup": {
