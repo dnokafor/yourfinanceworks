@@ -36,7 +36,7 @@ import { InventoryInvoiceItem } from "./InventoryInvoiceItem";
 
 const invoiceItemSchema = z.object({
   description: z.string().min(1, "Description is required"),
-  quantity: z.coerce.number().min(1, "Quantity must be at least 1"),
+  quantity: z.coerce.number().positive("Quantity must be greater than 0"),
   price: z.coerce.number().min(0.01, "Price must be greater than 0"),
   id: z.number().optional(),
   inventory_item_id: z.number().optional(),

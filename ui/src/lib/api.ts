@@ -66,6 +66,7 @@ export interface Invoice {
   client_id: number;
   client_name: string;
   client_email: string;
+  client_company?: string;
   date: string;
   due_date: string;
   amount: number;
@@ -1324,7 +1325,25 @@ export const invoiceApi = {
       throw error;
     }
   },
-  createInvoice: (invoiceData: Omit<Invoice, 'id' | 'created_at' | 'updated_at'>) => 
+  createInvoice: (invoiceData: {
+    number?: string;
+    client_id: number;
+    date?: string;
+    due_date?: string;
+    amount: number;
+    currency?: string;
+    paid_amount?: number;
+    status?: string;
+    notes?: string;
+    is_recurring?: boolean;
+    recurring_frequency?: string;
+    discount_type?: string;
+    discount_value?: number;
+    subtotal?: number;
+    custom_fields?: Record<string, any>;
+    show_discount_in_pdf?: boolean;
+    items?: any[];
+  }) => 
     apiRequest<Invoice>('/invoices/', {
       method: 'POST',
       body: JSON.stringify(invoiceData),

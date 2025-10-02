@@ -55,7 +55,7 @@ def normalize_to_midnight_utc(dt: Optional[datetime]) -> Optional[datetime]:
         return None
     return datetime(dt.year, dt.month, dt.day, tzinfo=timezone.utc)
 
-@router.post("/", response_model=InvoiceSchema, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=InvoiceWithClient, status_code=status.HTTP_201_CREATED)
 async def create_invoice(
     invoice: InvoiceCreate,
     db: Session = Depends(get_db),
@@ -299,35 +299,86 @@ async def create_invoice(
             for item in items
         ]
 
+        # Get invoice with client information and payment status (same as read_invoice)
+        invoice_tuple = db.query(
+            Invoice,
+            Client.name.label('client_name'),
+            Client.company.label('client_company'),
+            func.coalesce(func.sum(Payment.amount), 0).label('total_paid')
+        ).join(
+            Client, Invoice.client_id == Client.id
+        ).outerjoin(
+            Payment, Invoice.id == Payment.invoice_id
+        ).filter(
+            Invoice.id == db_invoice.id,
+            Invoice.is_deleted == False
+        ).group_by(
+            Invoice.id, Client.name, Client.company
+        ).first()
+
+        if invoice_tuple is None:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to retrieve created invoice"
+            )
+
+        invoice, client_name, client_company, total_paid = invoice_tuple
+
+        # Force refresh of database session to ensure we get latest data
+        db.expire_all()
+
+        # Get invoice items with inventory details
+        items_query = db.query(InvoiceItem).options(
+            joinedload(InvoiceItem.inventory_item)
+        ).filter(InvoiceItem.invoice_id == db_invoice.id).all()
+
+        items_data = []
+        for item in items_query:
+            item_data = {
+                "id": item.id,
+                "invoice_id": item.invoice_id,
+                "inventory_item_id": item.inventory_item_id,
+                "description": item.description,
+                "quantity": item.quantity,
+                "price": item.price,
+                "amount": item.amount,
+                "unit_of_measure": item.unit_of_measure,
+                "inventory_item": item.inventory_item.__dict__ if item.inventory_item else None
+            }
+            items_data.append(item_data)
+
         # Get new-style attachments
         from models.models_per_tenant import InvoiceAttachment
         new_attachments = db.query(InvoiceAttachment).filter(
             InvoiceAttachment.invoice_id == db_invoice.id,
             InvoiceAttachment.is_active == True
         ).all()
-        
+
         return {
-            "id": db_invoice.id,
-            "number": db_invoice.number,
-            "amount": float(db_invoice.amount),
-            "currency": db_invoice.currency,
-            "due_date": db_invoice.due_date.isoformat() if db_invoice.due_date else None,
-            "status": db_invoice.status,
-            "notes": db_invoice.notes,
-            "description": db_invoice.notes,
-            "client_id": db_invoice.client_id,
-            "created_at": db_invoice.created_at.isoformat() if db_invoice.created_at else None,
-            "updated_at": db_invoice.updated_at.isoformat() if db_invoice.updated_at else None,
-            "is_recurring": db_invoice.is_recurring,
-            "recurring_frequency": db_invoice.recurring_frequency,
-            "discount_type": db_invoice.discount_type,
-            "discount_value": float(db_invoice.discount_value) if db_invoice.discount_value else 0,
-            "subtotal": float(db_invoice.subtotal) if db_invoice.subtotal else float(db_invoice.amount),
+            "id": invoice.id,
+            "number": invoice.number,
+            "amount": float(invoice.amount),
+            "currency": invoice.currency,
+            "due_date": invoice.due_date.isoformat() if invoice.due_date else None,
+            "status": invoice.status,
+            "notes": invoice.notes,
+            "description": invoice.notes,
+            "client_id": invoice.client_id,
+            "client_name": client_name,
+            "client_company": client_company,
+            "created_at": invoice.created_at.isoformat() if invoice.created_at else None,
+            "updated_at": invoice.updated_at.isoformat() if invoice.updated_at else None,
+            "total_paid": float(total_paid),
+            "is_recurring": invoice.is_recurring,
+            "recurring_frequency": invoice.recurring_frequency,
+            "discount_type": invoice.discount_type,
+            "discount_value": float(invoice.discount_value) if invoice.discount_value else 0,
+            "subtotal": float(invoice.subtotal) if invoice.subtotal else float(invoice.amount),
             "items": items_data,
-            "custom_fields": db_invoice.custom_fields if db_invoice.custom_fields is not None else {},
-            "show_discount_in_pdf": db_invoice.show_discount_in_pdf,
-            "has_attachment": bool(db_invoice.attachment_filename) if hasattr(db_invoice, 'attachment_filename') else False,
-            "attachment_filename": getattr(db_invoice, 'attachment_filename', None),
+            "custom_fields": invoice.custom_fields if invoice.custom_fields is not None else {},
+            "show_discount_in_pdf": invoice.show_discount_in_pdf,
+            "has_attachment": bool(invoice.attachment_filename) if hasattr(invoice, 'attachment_filename') else False,
+            "attachment_filename": getattr(invoice, 'attachment_filename', None),
             "attachments": [{
                 "id": att.id,
                 "filename": att.filename,
@@ -901,6 +952,7 @@ async def read_invoice(
         invoice_tuple = db.query(
             Invoice,
             Client.name.label('client_name'),
+            Client.company.label('client_company'),
             func.coalesce(func.sum(Payment.amount), 0).label('total_paid')
         ).join(
             Client, Invoice.client_id == Client.id
@@ -910,7 +962,7 @@ async def read_invoice(
             Invoice.id == invoice_id,
             Invoice.is_deleted == False
         ).group_by(
-            Invoice.id, Client.name
+            Invoice.id, Client.name, Client.company
         ).first()
 
         if invoice_tuple is None:
@@ -920,7 +972,7 @@ async def read_invoice(
                 detail="Invoice not found"
             )
 
-        invoice, client_name, total_paid = invoice_tuple
+        invoice, client_name, client_company, total_paid = invoice_tuple
         
         logger.info(f"[DEBUG] Invoice from DB - custom_fields: {invoice.custom_fields}")
         logger.info(f"[DEBUG] Invoice from DB - type of custom_fields: {type(invoice.custom_fields)}")
@@ -992,6 +1044,7 @@ async def read_invoice(
             "notes": invoice.notes,
             "client_id": invoice.client_id,
             "client_name": client_name,
+            "client_company": client_company,
             "created_at": invoice.created_at.isoformat() if invoice.created_at else None,
             "updated_at": invoice.updated_at.isoformat() if invoice.updated_at else None,
             "total_paid": float(total_paid),

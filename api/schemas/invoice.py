@@ -91,8 +91,9 @@ class Invoice(InvoiceBase):
 
 class InvoiceWithClient(Invoice):
     client_name: str
+    client_company: Optional[str] = None
     total_paid: float = 0.0
-    items: List[InvoiceItemWithInventory] = [] 
+    items: List[InvoiceItemWithInventory] = []
     custom_fields: Optional[Dict[str, Any]] = Field(default=None, description="Custom fields for the invoice")
     has_attachment: Optional[bool] = False
     attachment_filename: Optional[str] = None

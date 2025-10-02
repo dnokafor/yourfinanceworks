@@ -40,11 +40,11 @@ import { InventoryItemSelector } from "@/components/inventory/InventoryItemSelec
 
 const invoiceItemSchema = z.object({
   description: z.string().min(1, "Description is required"),
-  quantity: z.coerce.number().min(1, "Quantity must be at least 1"),
+  quantity: z.coerce.number().min(0.01, "Quantity must be greater than 0"),
   price: z.coerce.number().min(0.01, "Price must be greater than 0"),
   id: z.number().optional(),
-  inventory_item_id: z.number().optional(),
-  unit_of_measure: z.string().optional(),
+  inventory_item_id: z.number().optional().nullable(),
+  unit_of_measure: z.string().optional().nullable(),
 });
 
 const isValidInvoiceStatus = (status: string): status is InvoiceStatus => {
@@ -500,7 +500,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
         return {
           id: item.id,
           description: item.description || '',
-          quantity: item.quantity || 1,
+          quantity: item.quantity || 1, // Use existing quantity or default to 1
           price: item.price || 0,
           amount: (item.quantity || 1) * (item.price || 0),
           inventory_item_id: item.inventory_item_id,
@@ -544,7 +544,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
       customFields: customFields,
       showDiscountInPdf: invoice?.show_discount_in_pdf || false,
     },
-    mode: "onChange"
+    mode: "onSubmit"
   });
   
   // Load draft on component mount for new invoices
@@ -898,6 +898,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
           number: value.invoiceNumber || previewInvoice?.number || '',
           client_name: selectedClient?.name || '',
           client_email: selectedClient?.email || '',
+          client_company: selectedClient?.company || '',
           date: value.date ? format(value.date, 'yyyy-MM-dd') : previewInvoice?.date || '',
           due_date: value.dueDate ? format(value.dueDate, 'yyyy-MM-dd') : previewInvoice?.due_date || '',
           status: value.status || previewInvoice?.status || 'pending',
@@ -1011,6 +1012,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
 
   // For new invoices, isInvoicePaid should always be false
   const isInvoicePaid = isEdit && currentStatus === "paid";
+  
 
   // Calculation functions - moved here to avoid lexical declaration errors
   const calculateSubtotal = (itemsToUse?: any[]) => {
@@ -1394,7 +1396,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
             discount_type: data.discountType === "rule" && appliedDiscountRule ? appliedDiscountRule.discount_type : data.discountType,
             discount_value: data.discountType === "rule" && appliedDiscountRule ? appliedDiscountRule.discount_value : (data.discountValue || 0),
             currency: data.currency,
-            due_date: format(data.dueDate, "yyyy-MM-dd'T'HH:mm:ss"),
+            due_date: data.dueDate,
             notes: data.notes || "",
             status: data.status,
             client_id: Number(data.client),
@@ -1587,148 +1589,9 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
           
           toast.success("Invoice updated successfully!");
           
-          // Refresh the invoice data to show updated values
-          try {
-            // Capture current discount values before refresh for change tracking
-            const currentDiscountValue = form.getValues("discountValue") || 0;
-            const currentDiscountType = form.getValues("discountType") || 'percentage';
-            
-            const updatedInvoice = await invoiceApi.getInvoice(invoice.id);
-            
-            // Update attachmentInfo from refreshed invoice data
-            if (updatedInvoice.has_attachment || updatedInvoice.attachment_filename) {
-              setAttachmentInfo({
-                has_attachment: updatedInvoice.has_attachment || true,
-                filename: updatedInvoice.attachment_filename
-              });
-              console.log("🔍 Updated attachmentInfo from refreshed invoice:", {
-                has_attachment: updatedInvoice.has_attachment || true,
-                filename: updatedInvoice.attachment_filename
-              });
-            }
-            console.log("Refreshed invoice data after update:", updatedInvoice);
-            console.log("Discount data from updated invoice:", {
-              discount_type: updatedInvoice.discount_type,
-              discount_value: updatedInvoice.discount_value,
-              amount: updatedInvoice.amount
-            });
-            
-            // Update the form with the new data
-            const newDiscountValue = updatedInvoice.discount_value !== undefined ? updatedInvoice.discount_value : 0;
-            
-            // Check if this discount value matches any available discount rule
-            let newDiscountType: "percentage" | "fixed" | "rule" = "percentage";
-            let matchingRule = null;
-            
-            if (newDiscountValue > 0) {
-              const subtotal = calculateSubtotal();
-              matchingRule = availableDiscountRules.find(rule => {
-                // Check if this rule matches the saved discount type and value
-                const typeMatches = rule.discount_type === updatedInvoice.discount_type;
-                const valueMatches = rule.discount_value === newDiscountValue;
-                const isActive = rule.is_active;
-                const meetsMinimum = subtotal >= rule.min_amount;
-                
-                const matches = isActive && typeMatches && valueMatches && meetsMinimum;
-                
-                console.log(`Checking rule "${rule.name}":`, {
-                  is_active: isActive,
-                  rule_type: rule.discount_type,
-                  rule_value: rule.discount_value,
-                  rule_min_amount: rule.min_amount,
-                  invoice_type: updatedInvoice.discount_type,
-                  invoice_value: newDiscountValue,
-                  invoice_subtotal: subtotal,
-                  type_matches: typeMatches,
-                  value_matches: valueMatches,
-                  meets_minimum: meetsMinimum,
-                  matches: matches
-                });
-                return matches;
-              });
-              
-              if (matchingRule) {
-                newDiscountType = "rule";
-                setAppliedDiscountRule({
-                  id: matchingRule.id,
-                  name: matchingRule.name,
-                  min_amount: matchingRule.min_amount,
-                  discount_type: matchingRule.discount_type,
-                  discount_value: matchingRule.discount_value
-                });
-              } else {
-                newDiscountType = (updatedInvoice.discount_type === "percentage" || updatedInvoice.discount_type === "fixed") ? (updatedInvoice.discount_type as "percentage" | "fixed") : "percentage";
-                setAppliedDiscountRule(null);
-              }
-            } else {
-              newDiscountType = (updatedInvoice.discount_type === "percentage" || updatedInvoice.discount_type === "fixed") ? (updatedInvoice.discount_type as "percentage" | "fixed") : "percentage";
-              setAppliedDiscountRule(null);
-            }
-            
-            console.log("Setting form values:", {
-              discountType: newDiscountType,
-              discountValue: newDiscountValue,
-              paidAmount: updatedInvoice.paid_amount || 0,
-              matchingRule: matchingRule?.name
-            });
-            
-            setIsRefreshingForm(true);
-            form.setValue("discountType", newDiscountType);
-            form.setValue("discountValue", newDiscountValue);
-            form.setValue("paidAmount", updatedInvoice.paid_amount || 0);
-            
-            // Reset the flag after a short delay
-            setTimeout(() => {
-              setIsRefreshingForm(false);
-            }, 200);
-            
-            // Refresh the update history with the updated invoice data and previous discount info
-            console.log("Calling fetchUpdateHistory with:", {
-              invoiceId: updatedInvoice.id
-            });
-            
-            await fetchUpdateHistory(updatedInvoice.id);
-            
-            // Update preview invoice with the updated data including attachment info
-            setPreviewInvoice(prev => ({
-              ...prev,
-              ...updatedInvoice,
-              id: updatedInvoice.id,
-              has_attachment: updatedInvoice.has_attachment,
-              attachment_filename: updatedInvoice.attachment_filename
-            }));
-            
-            // Notify parent component about the updated invoice
-            if (onInvoiceUpdate) {
-              onInvoiceUpdate(updatedInvoice);
-              console.log("🔍 CALLED onInvoiceUpdate with regular update:", updatedInvoice);
-            }
-            
-            // Handle attachment upload BEFORE refreshing invoice data
-            if (invoiceAttachment && invoice.id) {
-              console.log("🔍 HANDLING ATTACHMENT UPLOAD after invoice update");
-              try {
-                const uploadResult = await invoiceApi.uploadAttachment(invoice.id, invoiceAttachment);
-                console.log("✅ UPLOAD COMPLETED - Upload result:", uploadResult);
-                
-                // Update attachmentInfo immediately
-                setAttachmentInfo({
-                  has_attachment: true,
-                  filename: uploadResult.filename
-                });
-                
-                setInvoiceAttachment(null);
-                toast.success("Attachment uploaded successfully!");
-                
-              } catch (attachmentError) {
-                console.error("❌ ATTACHMENT UPLOAD FAILED:", attachmentError);
-                toast.error("Failed to upload attachment");
-              }
-            }
-
-          } catch (refreshError) {
-            console.error("Failed to refresh invoice data after update:", refreshError);
-          }
+          // Redirect to invoices list after successful update
+          navigate('/invoices');
+          return;
         } catch (error) {
           console.error("API error:", error);
           const errorMessage = error instanceof Error ? error.message : String(error);
@@ -1765,8 +1628,6 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
         const invoiceData = {
           number: data.invoiceNumber || undefined,
           client_id: Number(data.client),
-          client_name: selectedClient?.name || '',
-          client_email: selectedClient?.email || '',
           date: formattedDate,
           due_date: formattedDueDate,
           amount: totalAmount,
@@ -1852,7 +1713,10 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
         } else {
           toast.success("Invoice created successfully!");
         }
-        
+
+        // Set preview invoice with complete data including client information
+        setPreviewInvoice(newInvoice);
+
         navigate("/invoices"); // Only navigate back for new invoices
       }
     } catch (err) {
@@ -1880,7 +1744,6 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
     }
   }, [customFields, form]);
 
-  console.log("🔍 InvoiceForm: Component render - loading:", loading, "clients.length:", clients.length);
 
   if (loading) {
     console.log("🔍 InvoiceForm: Showing loading state");
@@ -2327,8 +2190,8 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                             <div className="relative">
                               <Input
                                 type="number"
-                                min="0"
-                                step="1"
+                                min="0.01"
+                                step="any"
                                 placeholder={t('invoices.qty')}
                                 {...field}
                                 disabled={isInvoicePaid}
@@ -2356,7 +2219,6 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                             <Input
                               type="number"
                               min="0.01"
-                              step="0.01"
                               placeholder={t('invoices.price')}
                               {...field}
                               disabled={isInvoicePaid}
@@ -2906,10 +2768,10 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                           render={({ field }) => (
                             <FormItem>
                               <FormControl>
-                                <Input
+                                  <Input
                                   type="number"
-                                  min="0"
-                                  step="1"
+                                  min="0.01"
+                                  step="any"
                                   placeholder={t('invoices.qty')}
                                   {...field}
                                   onChange={(e) => {
@@ -2933,7 +2795,6 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                                 <Input
                                   type="number"
                                   min="0.01"
-                                  step="0.01"
                                   placeholder={t('invoices.price')}
                                   {...field}
                                 />
@@ -3714,8 +3575,8 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                                 <FormControl>
                                   <Input
                                     type="number"
-                                    min="0"
-                                    step="1"
+                                    min="0.01"
+                                    step="any"
                                     placeholder={t('invoices.qty')}
                                     {...field}
                                     disabled={isInvoicePaid}
@@ -3740,7 +3601,6 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                                   <Input
                                     type="number"
                                     min="0.01"
-                                    step="0.01"
                                     placeholder={t('invoices.price')}
                                     {...field}
                                     disabled={isInvoicePaid}
@@ -4410,7 +4270,10 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                   </div>
 
                     <div className="flex justify-end gap-4">
-                      <Button type="submit">
+                      <Button 
+                        type="submit"
+                        disabled={submitting || isInvoicePaid}
+                      >
                         {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         {t('invoices.update_invoice')}
                       </Button>
@@ -4436,12 +4299,15 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                 <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
                   <div className="h-[500px] overflow-auto">
                     <React.Suspense fallback={<div className="p-4">{t('invoices.loading_preview')}</div>}>
-                      {previewInvoice && settings && (
-                        <PDFDownloadLink 
+                      {previewInvoice && settings && (() => {
+                        const selectedClient = clients.find(c => c.id.toString() === form.watch("client"));
+                        return (
+                          <PDFDownloadLink
                           document={
-                            <InvoicePDF 
-                              invoice={previewInvoice} 
-                              companyName={settings.company_info?.name || "Your Company"} 
+                            <InvoicePDF
+                              invoice={previewInvoice}
+                              companyName={settings.company_info?.name || "Your Company"}
+                              clientCompany={previewInvoice.client_company || selectedClient?.company}
                               showDiscount={form.watch("showDiscountInPdf")}
                               template={selectedTemplate}
                             />
@@ -4461,17 +4327,21 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                             )
                           }
                         </PDFDownloadLink>
-                      )}
+                        );
+                      })()}
                     </React.Suspense>
                   </div>
                   <div className="p-2 border-t flex justify-between items-center">
-                    {previewInvoice && settings ? (
-                      <div className="flex items-center gap-2">
-                        <PDFDownloadLink 
+                    {previewInvoice && settings ? (() => {
+                      const selectedClient = clients.find(c => c.id.toString() === form.watch("client"));
+                      return (
+                        <div className="flex items-center gap-2">
+                          <PDFDownloadLink
                           document={
-                            <InvoicePDF 
-                              invoice={previewInvoice} 
-                              companyName={settings.company_info?.name || "Your Company"} 
+                            <InvoicePDF
+                              invoice={previewInvoice}
+                              companyName={settings.company_info?.name || "Your Company"}
+                              clientCompany={previewInvoice.client_company || selectedClient?.company}
                               showDiscount={form.watch("showDiscountInPdf")}
                               template={selectedTemplate}
                             />
@@ -4483,8 +4353,9 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                           }
                         </PDFDownloadLink>
                         <span className="text-xs text-gray-500">({selectedTemplate})</span>
-                      </div>
-                    ) : (
+                        </div>
+                      );
+                    })() : (
                       <span className="text-gray-500 text-sm">{t('invoices.save_invoice_first')}</span>
                     )}
                     
