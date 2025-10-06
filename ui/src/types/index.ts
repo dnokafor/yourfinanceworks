@@ -116,24 +116,6 @@ export interface User {
   updated_at?: string;
 }
 
-export interface ApprovalRule {
-  id: number;
-  name: string;
-  min_amount: number;
-  max_amount?: number;
-  category_filter?: string;
-  currency: string;
-  approval_level: number;
-  approver_id: number;
-  is_active: boolean;
-  priority: number;
-  auto_approve_below?: number;
-  approver?: {
-    id: number;
-    name: string;
-    email: string;
-  };
-}
 
 export interface ApprovalHistoryEntry {
   id: number;

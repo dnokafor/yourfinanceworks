@@ -11,55 +11,6 @@ class ApprovalStatus(str, Enum):
     REJECTED = "rejected"
 
 
-class ApprovalRuleBase(BaseModel):
-    """Base schema for approval rules"""
-    name: str = Field(..., description="Name of the approval rule")
-    min_amount: Optional[float] = Field(None, ge=0, description="Minimum amount threshold")
-    max_amount: Optional[float] = Field(None, ge=0, description="Maximum amount threshold")
-    category_filter: Optional[str] = Field(None, description="JSON array of expense categories")
-    currency: str = Field("USD", description="Currency code for the rule")
-    approval_level: int = Field(1, ge=1, description="Approval level (1 = first level)")
-    approver_id: int = Field(..., description="ID of the user who can approve at this level")
-    is_active: bool = Field(True, description="Whether the rule is active")
-    priority: int = Field(0, description="Rule priority (higher numbers = higher priority)")
-    auto_approve_below: Optional[float] = Field(None, ge=0, description="Auto-approve expenses below this amount")
-
-    @field_validator('max_amount')
-    @classmethod
-    def validate_max_amount(cls, v, info):
-        if v is not None and info.data.get('min_amount') is not None:
-            if v <= info.data['min_amount']:
-                raise ValueError('max_amount must be greater than min_amount')
-        return v
-
-
-class ApprovalRuleCreate(ApprovalRuleBase):
-    """Schema for creating approval rules"""
-    pass
-
-
-class ApprovalRuleUpdate(BaseModel):
-    """Schema for updating approval rules"""
-    name: Optional[str] = None
-    min_amount: Optional[float] = Field(None, ge=0)
-    max_amount: Optional[float] = Field(None, ge=0)
-    category_filter: Optional[str] = None
-    currency: Optional[str] = None
-    approval_level: Optional[int] = Field(None, ge=1)
-    approver_id: Optional[int] = None
-    is_active: Optional[bool] = None
-    priority: Optional[int] = None
-    auto_approve_below: Optional[float] = Field(None, ge=0)
-
-
-class ApprovalRule(ApprovalRuleBase):
-    """Schema for approval rule responses"""
-    id: int
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
 
 class ExpenseApprovalBase(BaseModel):
     """Base schema for expense approvals"""
@@ -76,6 +27,7 @@ class ExpenseApprovalBase(BaseModel):
 class ExpenseApprovalCreate(BaseModel):
     """Schema for creating expense approvals (submission)"""
     expense_id: int = Field(..., description="ID of the expense to submit for approval")
+    approver_id: int = Field(..., description="Specific approver ID to assign this approval to")
     notes: Optional[str] = Field(None, description="Optional notes for the submission")
 
 

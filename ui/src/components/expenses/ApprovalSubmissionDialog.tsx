@@ -13,6 +13,7 @@ interface ApprovalSubmissionDialogProps {
   expenseAmount: number;
   currency: string;
   category: string;
+  selectedApproverName?: string;
   loading?: boolean;
 }
 
@@ -23,6 +24,7 @@ export function ApprovalSubmissionDialog({
   expenseAmount,
   currency,
   category,
+  selectedApproverName,
   loading = false
 }: ApprovalSubmissionDialogProps) {
   const [notes, setNotes] = useState('');
@@ -55,7 +57,7 @@ export function ApprovalSubmissionDialog({
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              This expense will be submitted for approval according to your organization's approval rules.
+              Confirm submission for approval. The selected approver will be notified to review your expense.
             </AlertDescription>
           </Alert>
 
@@ -66,6 +68,11 @@ export function ApprovalSubmissionDialog({
             <div className="text-sm">
               <span className="font-medium">Category:</span> {category}
             </div>
+            {selectedApproverName && (
+              <div className="text-sm">
+                <span className="font-medium">Approver:</span> {selectedApproverName}
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">

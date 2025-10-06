@@ -34,9 +34,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Link } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { expenseApi, Expense, ExpenseAttachmentMeta, api, linkApi } from '@/lib/api';
+import { expenseApi, approvalApi, Expense, ExpenseAttachmentMeta, api, linkApi } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { CurrencySelector } from '@/components/ui/currency-selector';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Users } from 'lucide-react';
 import { EXPENSE_CATEGORY_OPTIONS } from '@/constants/expenses';
 import { canPerformActions } from '@/utils/auth';
 
@@ -97,6 +100,11 @@ const Expenses = () => {
   const [editReceiptFile, setEditReceiptFile] = useState<File | null>(null);
   const [attachmentPreviewOpen, setAttachmentPreviewOpen] = useState<{ expenseId: number | null }>({ expenseId: null });
   const [attachments, setAttachments] = useState<Record<number, ExpenseAttachmentMeta[]>>({});
+
+  // Approval workflow state for new expense modal
+  const [submitNewForApproval, setSubmitNewForApproval] = useState(false);
+  const [selectedNewApproverId, setSelectedNewApproverId] = useState<string>('');
+  const [availableNewApprovers, setAvailableNewApprovers] = useState<Array<{ id: number; name: string; email: string }>>([]);
   const [preview, setPreview] = useState<{ open: boolean; url: string | null; contentType: string | null; filename: string | null }>({ open: false, url: null, contentType: null, filename: null });
   const [isBulkCreateOpen, setIsBulkCreateOpen] = useState(false);
   const [invoiceOptions, setInvoiceOptions] = useState<Array<{ id: number; number: string; client_name: string }>>([]);
@@ -167,6 +175,18 @@ const Expenses = () => {
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, [currentTenantId]);
+
+  useEffect(() => {
+    const fetchApprovers = async () => {
+      try {
+        const response = await approvalApi.getApprovers();
+        setAvailableNewApprovers(response);
+      } catch (error) {
+        console.error('Failed to fetch approvers:', error);
+      }
+    };
+    fetchApprovers();
+  }, []);
 
   const fetchExpenses = async () => {
     setLoading(true);
@@ -240,6 +260,8 @@ const Expenses = () => {
     setNewReceiptFile(null);
     setIsNewInventoryConsumption(false);
     setNewConsumptionItems([]);
+    setSubmitNewForApproval(false);
+    setSelectedNewApproverId('');
     setIsCreateOpen(true);
   };
 
@@ -297,9 +319,24 @@ const Expenses = () => {
           setNewReceiptFile(null);
         }
       }
+      // Submit for approval if requested
+      if (submitNewForApproval && selectedNewApproverId) {
+        try {
+          await approvalApi.submitForApproval(createdWithReceipt.id, undefined, parseInt(selectedNewApproverId));
+          toast.success('Expense created and submitted for approval');
+        } catch (approvalError) {
+          console.error('Approval submission failed:', approvalError);
+          toast.error('Expense created but failed to submit for approval');
+        }
+      } else {
+        toast.success('Expense created');
+      }
+
+      // Reset approval workflow state
+      setSubmitNewForApproval(false);
+      setSelectedNewApproverId('');
       setExpenses(prev => [createdWithReceipt, ...prev]);
       setIsCreateOpen(false);
-      toast.success('Expense created');
     } catch (e: any) {
       toast.error(e?.message || 'Failed to create expense');
     }
@@ -1011,10 +1048,58 @@ const Expenses = () => {
                   onChange={(ev) => setNewReceiptFile(ev.target.files?.[0] || null)}
                 />
               </div>
+
+              {/* Approval Workflow Section */}
+              <div className="sm:col-span-2 border-t pt-4 mt-4">
+                <h4 className="text-sm font-medium mb-3">Approval Workflow</h4>
+                <div className="flex items-center space-x-2 mb-2">
+                  <Checkbox
+                    id="submit-new-for-approval"
+                    checked={submitNewForApproval}
+                    onCheckedChange={(checked) => setSubmitNewForApproval(checked as boolean)}
+                  />
+                  <label
+                    htmlFor="submit-new-for-approval"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Submit this expense for approval after creation
+                  </label>
+                </div>
+                {submitNewForApproval && (
+                  <div className="mt-3 space-y-3">
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm text-blue-700">
+                        This expense will be submitted for approval. You'll be able to add additional notes before final submission.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="new-approver-select" className="flex items-center gap-2 text-sm font-medium">
+                        <Users className="h-4 w-4" />
+                        Select Approver *
+                      </Label>
+                      <Select value={selectedNewApproverId} onValueChange={setSelectedNewApproverId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose an approver" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableNewApprovers.map((approver) => (
+                            <SelectItem key={approver.id} value={approver.id.toString()}>
+                              {approver.name} ({approver.email})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="p-4 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setIsCreateOpen(false)}>{t('cancel')}</Button>
-              <Button onClick={handleCreate}>{t('expenses.buttons.create')}</Button>
+              <Button onClick={handleCreate} disabled={submitNewForApproval && !selectedNewApproverId}>
+                {submitNewForApproval ? 'Create & Submit for Approval' : t('expenses.buttons.create')}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>

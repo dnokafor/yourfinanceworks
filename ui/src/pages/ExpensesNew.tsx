@@ -16,6 +16,8 @@ import { FileUpload, FileData } from '@/components/ui/file-upload';
 import { InventoryPurchaseForm } from '@/components/inventory/InventoryPurchaseForm';
 import { InventoryConsumptionForm } from '@/components/inventory/InventoryConsumptionForm';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Users } from 'lucide-react';
 import { ApprovalSubmissionDialog } from '@/components/expenses/ApprovalSubmissionDialog';
 
 export default function ExpensesNew() {
@@ -37,11 +39,25 @@ export default function ExpensesNew() {
   const [submitForApproval, setSubmitForApproval] = useState(false);
   const [showApprovalDialog, setShowApprovalDialog] = useState(false);
   const [createdExpenseId, setCreatedExpenseId] = useState<number | null>(null);
+  const [selectedApproverId, setSelectedApproverId] = useState<string>('');
+  const [availableApprovers, setAvailableApprovers] = useState<Array<{ id: number; name: string; email: string }>>([]);
 
   useEffect(() => {
     (async () => {
       try { const invs = await linkApi.getInvoicesBasic(); setInvoiceOptions(invs); } catch {}
     })();
+  }, []);
+
+  useEffect(() => {
+    const fetchApprovers = async () => {
+      try {
+        const response = await approvalApi.getApprovers();
+        setAvailableApprovers(response);
+      } catch (error) {
+        console.error('Failed to fetch approvers:', error);
+      }
+    };
+    fetchApprovers();
   }, []);
 
   // Calculate amount from consumption items
@@ -144,9 +160,10 @@ export default function ExpensesNew() {
   const handleApprovalSubmission = async (notes?: string) => {
     try {
       if (!createdExpenseId) return;
-      
-      await approvalApi.submitForApproval(createdExpenseId, notes);
-      
+
+      const approverId = parseInt(selectedApproverId);
+      await approvalApi.submitForApproval(createdExpenseId, notes, approverId);
+
       toast.success('Expense submitted for approval successfully');
       setShowApprovalDialog(false);
       window.history.back();
@@ -442,20 +459,40 @@ export default function ExpensesNew() {
                 Submit this expense for approval after creation
               </label>
             </div>
-            {submitForApproval && (
-              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm text-blue-700">
-                  This expense will be submitted for approval according to your organization's approval rules. 
-                  You'll be able to add additional notes for the approver before final submission.
-                </p>
-              </div>
-            )}
+              {submitForApproval && (
+                <div className="mt-3 space-y-3">
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-700">
+                      This expense will be submitted for approval. You'll be able to add additional notes before final submission.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="approver-select" className="flex items-center gap-2 text-sm font-medium">
+                      <Users className="h-4 w-4" />
+                      Select Approver *
+                    </Label>
+                    <Select value={selectedApproverId} onValueChange={setSelectedApproverId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose an approver" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableApprovers.map((approver) => (
+                          <SelectItem key={approver.id} value={approver.id.toString()}>
+                            {approver.name} ({approver.email})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
           </CardContent>
         </Card>
 
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => window.history.back()}>Cancel</Button>
-          <Button onClick={onSubmit} disabled={saving}>
+          <Button onClick={onSubmit} disabled={saving || (submitForApproval && !selectedApproverId)}>
             {saving ? 'Saving...' : (submitForApproval ? 'Create & Submit for Approval' : 'Create Expense')}
           </Button>
         </div>
@@ -468,6 +505,7 @@ export default function ExpensesNew() {
           expenseAmount={Number(form.amount || 0)}
           currency={form.currency || 'USD'}
           category={form.category || 'General'}
+          selectedApproverName={availableApprovers.find(a => a.id.toString() === selectedApproverId)?.name}
           loading={saving}
         />
       </div>

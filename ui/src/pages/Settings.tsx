@@ -21,7 +21,6 @@ import { SearchStatus } from "@/components/search/SearchStatus";
 import { api } from "@/lib/api";
 import { getErrorMessage } from '@/lib/api';
 import APIClientManagement from "@/components/APIClientManagement/APIClientManagement";
-import { ApprovalRulesManager } from "@/components/approvals/ApprovalRulesManager";
 
 const Settings = () => {
   const { t } = useTranslation();
@@ -1060,7 +1059,6 @@ const Settings = () => {
             <TabsTrigger value="search" className="text-xs md:text-sm">{t('settings.tabs.search')}</TabsTrigger>
             <TabsTrigger value="email-notifications" className="text-xs md:text-sm">{t('settings.tabs.email_notifications')}</TabsTrigger>
             <TabsTrigger value="tax-integration" className="text-xs md:text-sm">{t('settings.tabs.tax_integration')}</TabsTrigger>
-            <TabsTrigger value="approval-rules" className="text-xs md:text-sm">{t('settings.tabs.approval_rules')}</TabsTrigger>
             <TabsTrigger value="export" className="text-xs md:text-sm">{t('settings.tabs.export')}</TabsTrigger>
           </TabsList>
           
@@ -2112,19 +2110,6 @@ const Settings = () => {
             </div>
           </TabsContent>
 
-          <TabsContent value="approval-rules" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>{t('settings.approval_rules.title')}</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  {t('settings.approval_rules.description')}
-                </p>
-              </CardHeader>
-              <CardContent>
-                <ApprovalRulesManager />
-              </CardContent>
-            </Card>
-          </TabsContent>
 
           <TabsContent value="export" className="space-y-6">
             {/* Data Overview Section */}

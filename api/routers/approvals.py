@@ -18,7 +18,6 @@ from models.models import MasterUser
 from schemas.approval import (
     ExpenseApprovalCreate, ExpenseApprovalDecision, ExpenseApproval,
     PendingApprovalSummary, ExpenseApprovalHistory, ApprovalMetrics,
-    ApprovalRuleCreate, ApprovalRuleUpdate, ApprovalRule,
     ApprovalDelegateCreate, ApprovalDelegateUpdate, ApprovalDelegate,
     ApprovalStatus
 )
@@ -34,7 +33,7 @@ from services.notification_service import NotificationService
 from services.approval_permission_service import ApprovalPermissionService
 from utils.rbac import (
     require_non_viewer, require_admin, require_approval_submission,
-    require_approval_permission, require_approval_rule_management
+    require_approval_permission
 )
 from utils.audit import log_audit_event
 
@@ -54,6 +53,57 @@ def get_approval_service(db: Session = Depends(get_db)) -> ApprovalService:
 def get_approval_permission_service(db: Session = Depends(get_db)) -> ApprovalPermissionService:
     """Get approval permission service instance."""
     return ApprovalPermissionService(db)
+
+
+@router.get("/approvers", response_model=List[dict])
+async def get_available_approvers(
+    current_user: MasterUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get list of available approvers for expense submissions.
+
+    This endpoint returns users who can serve as approvers, excluding the current user.
+    Useful for allowing users to select specific approvers when submitting expenses.
+
+    Args:
+        current_user: Currently authenticated user
+        db: Database session
+
+    Returns:
+        List of approver dictionaries with id, name, and email
+    """
+    try:
+        require_non_viewer(current_user)
+
+        # Import here to avoid circular imports
+        from models.models_per_tenant import User
+
+        # Get all users except the current user who are not viewers
+        approvers = db.query(User).filter(
+            and_(
+                User.id != current_user.id,
+                User.role != "viewer"  # Exclude viewers from approver list
+            )
+        ).order_by(User.first_name, User.last_name).all()
+
+        # Format as simple dictionaries for the frontend
+        approver_list = [
+            {
+                "id": user.id,
+                "name": f"{user.first_name} {user.last_name}".strip(),
+                "email": user.email
+            }
+            for user in approvers
+        ]
+
+        logger.info(f"Retrieved {len(approver_list)} available approvers for user {current_user.id}")
+
+        return approver_list
+
+    except Exception as e:
+        logger.error(f"Error retrieving available approvers for user {current_user.id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/expenses/{expense_id}/submit-approval", response_model=List[ExpenseApproval])
@@ -102,7 +152,8 @@ async def submit_expense_for_approval(
         approvals = approval_service.submit_for_approval(
             expense_id=expense_id,
             submitter_id=current_user.id,
-            notes=submission_data.notes
+            notes=submission_data.notes,
+            approver_id=submission_data.approver_id
         )
         
         # Log audit event
@@ -483,332 +534,6 @@ async def get_approval_metrics(
         logger.error(f"Error retrieving approval metrics: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-
-# Approval Rule Management Endpoints
-
-@router.post("/approval-rules", response_model=ApprovalRule)
-async def create_approval_rule(
-    rule_data: ApprovalRuleCreate,
-    current_user: MasterUser = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Create a new approval rule (admin only).
-    
-    This endpoint allows administrators to create new approval rules that define
-    which expenses require approval and who should approve them based on amount
-    thresholds, categories, and other criteria.
-    
-    Args:
-        rule_data: Approval rule creation data
-        current_user: Currently authenticated user (must be admin)
-        db: Database session
-        
-    Returns:
-        Created ApprovalRule record
-        
-    Raises:
-        HTTPException: 403 if user is not an admin
-        HTTPException: 400 if rule data is invalid
-        HTTPException: 422 if approver user not found
-    """
-    try:
-        require_approval_rule_management(current_user, "create approval rules")
-        
-        # Import here to avoid circular imports
-        from models.models_per_tenant import ApprovalRule as ApprovalRuleModel, User
-        
-        # Validate that the approver exists
-        approver = db.query(User).filter(User.id == rule_data.approver_id).first()
-        if not approver:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Approver with ID {rule_data.approver_id} not found"
-            )
-        
-        # Create the approval rule
-        now = datetime.now(timezone.utc)
-        approval_rule = ApprovalRuleModel(
-            name=rule_data.name,
-            min_amount=rule_data.min_amount,
-            max_amount=rule_data.max_amount,
-            category_filter=rule_data.category_filter,
-            currency=rule_data.currency,
-            approval_level=rule_data.approval_level,
-            approver_id=rule_data.approver_id,
-            is_active=rule_data.is_active,
-            priority=rule_data.priority,
-            auto_approve_below=rule_data.auto_approve_below,
-            created_at=now,
-            updated_at=now
-        )
-        
-        db.add(approval_rule)
-        db.commit()
-        db.refresh(approval_rule)
-        
-        # Log audit event
-        log_audit_event(
-            db=db,
-            user_id=current_user.id,
-            user_email=current_user.email,
-            action="approval_rule_created",
-            resource_type="approval_rule",
-            resource_id=str(approval_rule.id),
-            details={
-                "rule_name": rule_data.name,
-                "approver_id": rule_data.approver_id,
-                "approval_level": rule_data.approval_level,
-                "min_amount": rule_data.min_amount,
-                "max_amount": rule_data.max_amount
-            }
-        )
-        
-        logger.info(f"Admin {current_user.id} created approval rule {approval_rule.id}: {rule_data.name}")
-        
-        return approval_rule
-        
-    except ValidationError as e:
-        logger.warning(f"Validation error creating approval rule: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error creating approval rule: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.get("/approval-rules", response_model=List[ApprovalRule])
-async def list_approval_rules(
-    is_active: Optional[bool] = Query(None, description="Filter by active status"),
-    approver_id: Optional[int] = Query(None, description="Filter by approver ID"),
-    limit: Optional[int] = Query(None, ge=1, le=100, description="Maximum number of results"),
-    offset: Optional[int] = Query(None, ge=0, description="Number of results to skip"),
-    current_user: MasterUser = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    List approval rules.
-    
-    This endpoint returns approval rules with optional filtering by active status
-    and approver. Results can be paginated using limit and offset.
-    
-    Args:
-        is_active: Optional filter by active status
-        approver_id: Optional filter by approver ID
-        limit: Maximum number of results to return
-        offset: Number of results to skip for pagination
-        current_user: Currently authenticated user
-        db: Database session
-        
-    Returns:
-        List of ApprovalRule records
-    """
-    try:
-        require_non_viewer(current_user)
-        
-        # Import here to avoid circular imports
-        from models.models_per_tenant import ApprovalRule as ApprovalRuleModel
-        
-        # Build query with filters
-        query = db.query(ApprovalRuleModel)
-        
-        if is_active is not None:
-            query = query.filter(ApprovalRuleModel.is_active == is_active)
-        
-        if approver_id is not None:
-            query = query.filter(ApprovalRuleModel.approver_id == approver_id)
-        
-        # Order by priority (descending) then by created_at
-        query = query.order_by(desc(ApprovalRuleModel.priority), ApprovalRuleModel.created_at)
-        
-        # Apply pagination
-        if offset:
-            query = query.offset(offset)
-        if limit:
-            query = query.limit(limit)
-        
-        approval_rules = query.all()
-        
-        logger.info(f"Retrieved {len(approval_rules)} approval rules for user {current_user.id}")
-        
-        return approval_rules
-        
-    except Exception as e:
-        logger.error(f"Error retrieving approval rules: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.put("/approval-rules/{rule_id}", response_model=ApprovalRule)
-async def update_approval_rule(
-    rule_id: int,
-    rule_data: ApprovalRuleUpdate,
-    current_user: MasterUser = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Update an approval rule (admin only).
-    
-    This endpoint allows administrators to update existing approval rules.
-    Only provided fields will be updated, others will remain unchanged.
-    
-    Args:
-        rule_id: ID of the approval rule to update
-        rule_data: Approval rule update data
-        current_user: Currently authenticated user (must be admin)
-        db: Database session
-        
-    Returns:
-        Updated ApprovalRule record
-        
-    Raises:
-        HTTPException: 403 if user is not an admin
-        HTTPException: 404 if approval rule not found
-        HTTPException: 400 if update data is invalid
-        HTTPException: 422 if approver user not found
-    """
-    try:
-        require_admin(current_user, "update approval rules")
-        
-        # Import here to avoid circular imports
-        from models.models_per_tenant import ApprovalRule as ApprovalRuleModel, User
-        
-        # Get the approval rule
-        approval_rule = db.query(ApprovalRuleModel).filter(ApprovalRuleModel.id == rule_id).first()
-        if not approval_rule:
-            raise HTTPException(status_code=404, detail=f"Approval rule {rule_id} not found")
-        
-        # Validate approver if being updated
-        if rule_data.approver_id is not None:
-            approver = db.query(User).filter(User.id == rule_data.approver_id).first()
-            if not approver:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Approver with ID {rule_data.approver_id} not found"
-                )
-        
-        # Store original values for audit log
-        original_values = {
-            "name": approval_rule.name,
-            "approver_id": approval_rule.approver_id,
-            "is_active": approval_rule.is_active
-        }
-        
-        # Update fields that are provided
-        update_data = rule_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(approval_rule, field, value)
-        
-        approval_rule.updated_at = datetime.now(timezone.utc)
-        
-        db.commit()
-        db.refresh(approval_rule)
-        
-        # Log audit event
-        log_audit_event(
-            db=db,
-            user_id=current_user.id,
-            user_email=current_user.email,
-            action="approval_rule_updated",
-            resource_type="approval_rule",
-            resource_id=str(rule_id),
-            details={
-                "rule_name": approval_rule.name,
-                "original_values": original_values,
-                "updated_fields": list(update_data.keys())
-            }
-        )
-        
-        logger.info(f"Admin {current_user.id} updated approval rule {rule_id}")
-        
-        return approval_rule
-        
-    except ValidationError as e:
-        logger.warning(f"Validation error updating approval rule {rule_id}: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error updating approval rule {rule_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.delete("/approval-rules/{rule_id}")
-async def delete_approval_rule(
-    rule_id: int,
-    current_user: MasterUser = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Delete an approval rule (admin only).
-    
-    This endpoint allows administrators to delete approval rules. The rule will be
-    permanently removed from the system. Active approvals using this rule will not
-    be affected, but new expenses will not use this rule for approval assignment.
-    
-    Args:
-        rule_id: ID of the approval rule to delete
-        current_user: Currently authenticated user (must be admin)
-        db: Database session
-        
-    Returns:
-        Success message
-        
-    Raises:
-        HTTPException: 403 if user is not an admin
-        HTTPException: 404 if approval rule not found
-        HTTPException: 400 if rule is currently being used in active approvals
-    """
-    try:
-        require_admin(current_user, "delete approval rules")
-        
-        # Import here to avoid circular imports
-        from models.models_per_tenant import ApprovalRule as ApprovalRuleModel, ExpenseApproval
-        
-        # Get the approval rule
-        approval_rule = db.query(ApprovalRuleModel).filter(ApprovalRuleModel.id == rule_id).first()
-        if not approval_rule:
-            raise HTTPException(status_code=404, detail=f"Approval rule {rule_id} not found")
-        
-        # Check if rule is being used in active approvals
-        active_approvals = db.query(ExpenseApproval).filter(
-            and_(
-                ExpenseApproval.approval_rule_id == rule_id,
-                ExpenseApproval.status == ApprovalStatus.PENDING
-            )
-        ).first()
-        
-        if active_approvals:
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot delete approval rule that is currently being used in active approvals"
-            )
-        
-        # Store rule info for audit log
-        rule_info = {
-            "name": approval_rule.name,
-            "approver_id": approval_rule.approver_id,
-            "approval_level": approval_rule.approval_level
-        }
-        
-        # Delete the rule
-        db.delete(approval_rule)
-        db.commit()
-        
-        # Log audit event
-        log_audit_event(
-            db=db,
-            user_id=current_user.id,
-            user_email=current_user.email,
-            action="approval_rule_deleted",
-            resource_type="approval_rule",
-            resource_id=str(rule_id),
-            details=rule_info
-        )
-        
-        logger.info(f"Admin {current_user.id} deleted approval rule {rule_id}: {rule_info['name']}")
-        
-        return {"message": f"Approval rule {rule_id} deleted successfully"}
-        
-    except Exception as e:
-        logger.error(f"Error deleting approval rule {rule_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # Approval Delegation Endpoints

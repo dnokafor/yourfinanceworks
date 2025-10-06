@@ -6,6 +6,7 @@ It manages expense submission, approval decisions, delegation, and audit trails.
 """
 
 import json
+import logging
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
@@ -32,6 +33,8 @@ from exceptions.approval_exceptions import (
     ApprovalConcurrencyError, ApprovalTimeoutError
 )
 
+logger = logging.getLogger(__name__)
+
 
 class ApprovalService:
     """
@@ -55,26 +58,27 @@ class ApprovalService:
         self.retry_service = ApprovalNotificationRetryService(db, notification_service) if notification_service else None
     
     def submit_for_approval(
-        self, 
-        expense_id: int, 
-        submitter_id: int, 
+        self,
+        expense_id: int,
+        submitter_id: int,
+        approver_id: int,
         notes: Optional[str] = None
     ) -> List[ExpenseApproval]:
         """
         Submit an expense for approval.
-        
+
         Args:
             expense_id: ID of the expense to submit
             submitter_id: ID of the user submitting the expense
             notes: Optional notes for the submission
-            
+            approver_id: Specific approver ID to assign this approval to
+
         Returns:
             List of created ExpenseApproval records
-            
+
         Raises:
             ExpenseAlreadyApproved: If expense is already approved
-            NoApprovalRuleFound: If no approval rules match the expense
-            ValidationError: If expense data is invalid
+            ValidationError: If expense data is invalid or approver is invalid
             InsufficientApprovalPermissions: If user cannot submit for approval
             ApprovalWorkflowError: If workflow encounters an error
         """
@@ -110,37 +114,38 @@ class ApprovalService:
                         current_status=expense.status
                     )
             
-            # Check if expense should be auto-approved
+            # Direct approver selection is now mandatory
+            if not approver_id:
+                raise ValidationError("You must specify an approver for this expense")
+
+            # Validate that the approver exists and is not the submitter
+            approver = self.db.query(User).filter(User.id == approver_id).first()
+            if not approver:
+                raise ValidationError(f"Approver with ID {approver_id} not found")
+            if approver_id == submitter_id:
+                raise ValidationError("You cannot submit an expense for approval to yourself")
+
+            # Check if expense should be auto-approved (skip for direct assignments)
             if self.rule_engine.should_auto_approve(expense):
                 return self._auto_approve_expense(expense, submitter_id, notes)
-            
-            # Get approval assignments
-            approver_assignments = self.rule_engine.assign_approvers(expense)
-            
-            if not approver_assignments:
-                raise NoApprovalRuleFound(f"No approval rules found for expense {expense_id}")
-            
-            # Create approval records
+
+            # Create a single approval record for the specified approver
             created_approvals = []
             now = datetime.now(timezone.utc)
-            
-            # Determine the first (current) approval level
-            first_level = min(level for level, _, _ in approver_assignments) if approver_assignments else 1
-            
-            for level, approver, rule in approver_assignments:
-                approval = ExpenseApproval(
-                    expense_id=expense_id,
-                    approver_id=approver.id,
-                    approval_rule_id=rule.id,
-                    status=ApprovalStatus.PENDING,
-                    notes=notes,
-                    submitted_at=now,
-                    approval_level=level,
-                    is_current_level=(level == first_level)  # First level is current initially
-                )
-                
-                self.db.add(approval)
-                created_approvals.append(approval)
+
+            approval = ExpenseApproval(
+                expense_id=expense_id,
+                approver_id=approver_id,
+                approval_rule_id=None,  # No rule for direct assignment
+                status=ApprovalStatus.PENDING,
+                notes=notes,
+                submitted_at=now,
+                approval_level=1,
+                is_current_level=True
+            )
+
+            self.db.add(approval)
+            created_approvals.append(approval)
             
             # Update expense status
             expense.status = "pending_approval"

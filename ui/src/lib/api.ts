@@ -1,6 +1,6 @@
 import { toast } from 'sonner';
 import { EXPENSE_CATEGORY_OPTIONS } from '@/constants/expenses';
-import type { ExpenseApproval, ApprovalHistoryEntry, ApprovalDashboardStats, ApprovalRule, User, ApprovalDelegate, ApprovalDelegateCreate, ApprovalDelegateUpdate } from '@/types';
+import type { ExpenseApproval, ApprovalHistoryEntry, ApprovalDashboardStats, User, ApprovalDelegate, ApprovalDelegateCreate, ApprovalDelegateUpdate } from '@/types';
 
 // API base URL comes from env var. Set VITE_API_URL in your environment.
 // When running in containers, use nginx proxy on port 8080
@@ -1148,51 +1148,15 @@ export const approvalApi = {
     apiRequest<{ history: ApprovalHistoryEntry[]; }>(`/approvals/history/${expenseId}`),
 
   // Submit expense for approval
-  submitForApproval: (expenseId: number, notes?: string) => 
+  submitForApproval: (expenseId: number, notes?: string, approverId: number) =>
     apiRequest<ExpenseApproval[]>(`/approvals/expenses/${expenseId}/submit-approval`, {
       method: 'POST',
-      body: JSON.stringify({ expense_id: expenseId, notes }),
+      body: JSON.stringify({ expense_id: expenseId, notes, approver_id: approverId }),
     }),
 
-  // Approval Rules Management
-  getApprovalRules: (filters?: { 
-    is_active?: boolean; 
-    approver_id?: number; 
-    limit?: number; 
-    offset?: number; 
-  }) => {
-    const params = new URLSearchParams();
-    if (filters?.is_active !== undefined) params.append('is_active', filters.is_active.toString());
-    if (filters?.approver_id) params.append('approver_id', filters.approver_id.toString());
-    if (filters?.limit) params.append('limit', filters.limit.toString());
-    if (filters?.offset) params.append('offset', filters.offset.toString());
-    
-    const queryString = params.toString();
-    return apiRequest<ApprovalRule[]>(`/approvals/approval-rules${queryString ? `?${queryString}` : ''}`);
-  },
+  // Get list of available approvers
+  getApprovers: () => apiRequest<Array<{ id: number; name: string; email: string }>>(`/approvals/approvers`),
 
-  createApprovalRule: (ruleData: Omit<ApprovalRule, 'id' | 'approver'>) => 
-    apiRequest<ApprovalRule>('/approvals/approval-rules', {
-      method: 'POST',
-      body: JSON.stringify(ruleData),
-    }),
-
-  updateApprovalRule: (ruleId: number, ruleData: Partial<Omit<ApprovalRule, 'id' | 'approver'>>) => 
-    apiRequest<ApprovalRule>(`/approvals/approval-rules/${ruleId}`, {
-      method: 'PUT',
-      body: JSON.stringify(ruleData),
-    }),
-
-  deleteApprovalRule: (ruleId: number) => 
-    apiRequest<{ message: string }>(`/approvals/approval-rules/${ruleId}`, {
-      method: 'DELETE',
-    }),
-
-  updateApprovalRulePriority: (ruleId: number, priority: number) => 
-    apiRequest<ApprovalRule>(`/approvals/approval-rules/${ruleId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ priority }),
-    }),
 
   // Approval Delegation Management
   getDelegations: (filters?: { 

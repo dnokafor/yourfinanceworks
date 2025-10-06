@@ -17,6 +17,8 @@ import { EXPENSE_CATEGORY_OPTIONS } from '@/constants/expenses';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Users } from 'lucide-react';
 import { InventoryConsumptionForm } from '@/components/inventory/InventoryConsumptionForm';
 import { ApprovalSubmissionDialog } from '@/components/expenses/ApprovalSubmissionDialog';
 
@@ -42,6 +44,8 @@ export default function ExpensesEdit() {
   // Approval submission state
   const [submitForApproval, setSubmitForApproval] = useState(false);
   const [showApprovalDialog, setShowApprovalDialog] = useState(false);
+  const [selectedApproverId, setSelectedApproverId] = useState<string>('');
+  const [availableApprovers, setAvailableApprovers] = useState<Array<{ id: number; name: string; email: string }>>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -67,6 +71,18 @@ export default function ExpensesEdit() {
     };
     load();
   }, [id]);
+
+  useEffect(() => {
+    const fetchApprovers = async () => {
+      try {
+        const response = await approvalApi.getApprovers();
+        setAvailableApprovers(response);
+      } catch (error) {
+        console.error('Failed to fetch approvers:', error);
+      }
+    };
+    fetchApprovers();
+  }, []);
 
   // Calculate amount from consumption items
   useEffect(() => {
@@ -181,9 +197,10 @@ export default function ExpensesEdit() {
   const handleApprovalSubmission = async (notes?: string) => {
     try {
       if (!id) return;
-      
-      await approvalApi.submitForApproval(Number(id), notes);
-      
+
+      const approverId = parseInt(selectedApproverId);
+      await approvalApi.submitForApproval(Number(id), notes, approverId);
+
       toast.success('Expense submitted for approval successfully');
       setShowApprovalDialog(false);
       navigate('/expenses');
@@ -537,11 +554,31 @@ export default function ExpensesEdit() {
                 </label>
               </div>
               {submitForApproval && (
-                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-sm text-blue-700">
-                    This expense will be submitted for approval according to your organization's approval rules. 
-                    You'll be able to add additional notes for the approver before final submission.
-                  </p>
+                <div className="mt-3 space-y-3">
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-700">
+                      This expense will be submitted for approval. You'll be able to add additional notes before final submission.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="approver-select" className="flex items-center gap-2 text-sm font-medium">
+                      <Users className="h-4 w-4" />
+                      Select Approver *
+                    </Label>
+                    <Select value={selectedApproverId} onValueChange={setSelectedApproverId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose an approver" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableApprovers.map((approver) => (
+                          <SelectItem key={approver.id} value={approver.id.toString()}>
+                            {approver.name} ({approver.email})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -550,8 +587,8 @@ export default function ExpensesEdit() {
 
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => navigate('/expenses')}>{t('common.cancel')}</Button>
-          <Button onClick={onSave} disabled={saving}>
-            {saving ? t('common.saving', { defaultValue: 'Saving...' }) : 
+          <Button onClick={onSave} disabled={saving || (submitForApproval && !selectedApproverId)}>
+            {saving ? t('common.saving', { defaultValue: 'Saving...' }) :
              (submitForApproval ? 'Save & Submit for Approval' : t('expenses.buttons.save_changes'))}
           </Button>
         </div>
@@ -564,6 +601,7 @@ export default function ExpensesEdit() {
           expenseAmount={Number(form.amount || 0)}
           currency={form.currency || 'USD'}
           category={form.category || 'General'}
+          selectedApproverName={availableApprovers.find(a => a.id.toString() === selectedApproverId)?.name}
           loading={saving}
         />
         {/* File inline preview dialog */}
