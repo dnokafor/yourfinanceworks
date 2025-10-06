@@ -1271,6 +1271,36 @@ export const authApi = {
     apiRequest<{ available: boolean; email: string }>(`/auth/check-email-availability?email=${encodeURIComponent(email)}`, {
       method: 'GET',
     }),
+  
+  // Organization join request functions
+  lookupOrganization: (organizationName: string) =>
+    apiRequest<{ exists: boolean; tenant_id?: number; organization_name?: string; message: string }>('/organization-join/lookup', {
+      method: 'POST',
+      body: JSON.stringify({ organization_name: organizationName }),
+    }),
+  
+  submitJoinRequest: (requestData: any) =>
+    apiRequest<{ success: boolean; message: string; request_id?: number }>('/organization-join/request', {
+      method: 'POST',
+      body: JSON.stringify(requestData),
+    }),
+  
+  // Admin functions for managing join requests
+  getPendingJoinRequests: () =>
+    apiRequest<any[]>('/organization-join/pending', {
+      method: 'GET',
+    }),
+  
+  getJoinRequestDetails: (requestId: number) =>
+    apiRequest<any>(`/organization-join/${requestId}`, {
+      method: 'GET',
+    }),
+  
+  processJoinRequest: (requestId: number, approvalData: any) =>
+    apiRequest<{ success: boolean; message: string }>(`/organization-join/${requestId}/approve`, {
+      method: 'POST',
+      body: JSON.stringify(approvalData),
+    }),
   requestPasswordReset: (email: string) =>
     apiRequest<{ message: string; success: boolean }>(`/auth/request-password-reset`, {
       method: 'POST',

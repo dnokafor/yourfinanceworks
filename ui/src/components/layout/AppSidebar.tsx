@@ -455,7 +455,7 @@ export function AppSidebar() {
       icon: <Settings className="w-5 h-5" />,
       tourId: 'nav-settings'
     }] : []),
-    // Users is now a sub-entry under Settings for admins
+    // User Management section for admins
     ...((!roleLoading && isAdminEffective) ? [{
       path: '/users',
       label: t('navigation.users'),

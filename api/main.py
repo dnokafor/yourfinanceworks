@@ -42,7 +42,8 @@ from routers import (
     inventory,  # Add the new inventory router
     inventory_attachments,  # Add the inventory attachments router
     approvals,  # Add the new approvals router
-    approval_reports  # Add the new approval reports router
+    approval_reports,  # Add the new approval reports router
+    organization_join  # Add the new organization join router
 )
 from models.database import engine
 from models import models
@@ -213,6 +214,7 @@ app.include_router(inventory.router, prefix="/api/v1") # Include the new invento
 app.include_router(inventory_attachments.router, prefix="/api/v1") # Include the inventory attachments router
 app.include_router(approvals.router, prefix="/api/v1") # Include the new approvals router
 app.include_router(approval_reports.router, prefix="/api/v1") # Include the new approval reports router
+app.include_router(organization_join.router, prefix="/api/v1") # Include the new organization join router
 
 @app.get("/")
 def read_root():

@@ -30,6 +30,9 @@ class EmailNotificationSettingsBase(BaseModel):
     # Settings operation notifications
     settings_updated: bool = False
     
+    # Organization join request notifications
+    organization_join_request_created: bool = True
+    
     # Approval operation notifications
     expense_submitted_for_approval: bool = True
     expense_approved: bool = True
