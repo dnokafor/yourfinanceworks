@@ -1,21 +1,22 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ApprovalActionButtons } from './ApprovalActionButtons';
 import { approvalApi } from '@/lib/api';
 import { ExpenseApproval } from '@/types';
-import { 
-  Search, 
-  Filter, 
+import {
+  Search,
+  Filter,
   Calendar,
   DollarSign,
   Building,
   SortAsc,
-  SortDesc
+  SortDesc,
+  Eye
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
@@ -33,6 +34,7 @@ interface Filters {
 }
 
 export function PendingApprovalsList({ onApprovalAction }: PendingApprovalsListProps) {
+  const navigate = useNavigate();
   const [approvals, setApprovals] = useState<ExpenseApproval[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
@@ -58,8 +60,8 @@ export function PendingApprovalsList({ onApprovalAction }: PendingApprovalsListP
         offset: page * pageSize,
         ...filters
       });
-      setApprovals(data.approvals);
-      setTotal(data.total);
+      setApprovals(data.approvals || []);
+      setTotal(data.total || 0);
     } catch (error) {
       console.error('Failed to fetch pending approvals:', error);
       toast.error('Failed to load pending approvals');
@@ -95,7 +97,7 @@ export function PendingApprovalsList({ onApprovalAction }: PendingApprovalsListP
     }));
   };
 
-  const filteredApprovals = approvals.filter(approval => {
+  const filteredApprovals = (approvals || []).filter(approval => {
     if (!searchQuery) return true;
     const searchLower = searchQuery.toLowerCase();
     return (
@@ -105,7 +107,7 @@ export function PendingApprovalsList({ onApprovalAction }: PendingApprovalsListP
     );
   });
 
-  if (loading && approvals.length === 0) {
+  if (loading && (approvals || []).length === 0) {
     return (
       <div className="space-y-4">
         {[...Array(3)].map((_, i) => (
@@ -262,20 +264,24 @@ export function PendingApprovalsList({ onApprovalAction }: PendingApprovalsListP
                     
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <span>
-                        Submitted {formatDistanceToNow(new Date(approval.submitted_at))} ago
+                        Submitted {approval.submitted_at && !isNaN(new Date(approval.submitted_at).getTime()) ? formatDistanceToNow(new Date(approval.submitted_at)) : 'recently'} ago
                       </span>
-                      <span>Level {approval.approval_level}</span>
                       {approval.approval_rule && (
                         <span>Rule: {approval.approval_rule.name}</span>
                       )}
                     </div>
                   </div>
                   
-                  <div className="flex-shrink-0">
-                    <ApprovalActionButtons
-                      approval={approval}
-                      onAction={handleApprovalAction}
-                    />
+                  <div className="flex-shrink-0 flex flex-col gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate(`/expenses/view/${approval.expense_id}`)}
+                      className="w-full"
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      View Details
+                    </Button>
                   </div>
                 </div>
               </CardContent>

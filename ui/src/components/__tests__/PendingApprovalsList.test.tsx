@@ -14,19 +14,7 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
-// Mock child components
-vi.mock('../approvals/ApprovalActionButtons', () => ({
-  ApprovalActionButtons: ({ approval, onAction }: { approval: ExpenseApproval; onAction: Function }) => (
-    <div data-testid={`action-buttons-${approval.id}`}>
-      <button onClick={() => onAction(approval.id, 'approve', { notes: 'test' })}>
-        Approve
-      </button>
-      <button onClick={() => onAction(approval.id, 'reject', { reason: 'test reason' })}>
-        Reject
-      </button>
-    </div>
-  ),
-}));
+// Mock child components - ApprovalActionButtons removed from component
 
 // Mock toast
 vi.mock('sonner', () => ({
@@ -39,6 +27,11 @@ vi.mock('sonner', () => ({
 // Mock date-fns
 vi.mock('date-fns', () => ({
   formatDistanceToNow: vi.fn(() => '2 hours'),
+}));
+
+// Mock react-router-dom
+vi.mock('react-router-dom', () => ({
+  useNavigate: vi.fn(() => vi.fn()),
 }));
 
 describe('PendingApprovalsList', () => {
@@ -190,45 +183,6 @@ describe('PendingApprovalsList', () => {
     });
   });
 
-  it('handles approval action successfully', async () => {
-    vi.mocked(approvalApi.getPendingApprovals).mockResolvedValue(mockApiResponse);
-    vi.mocked(approvalApi.approveExpense).mockResolvedValue({ success: true, message: 'Approved' });
-    
-    const onApprovalAction = vi.fn();
-    render(<PendingApprovalsList onApprovalAction={onApprovalAction} />);
-    
-    await waitFor(() => {
-      expect(screen.getByTestId('action-buttons-1')).toBeInTheDocument();
-    });
-
-    const approveButton = screen.getByText('Approve');
-    await userEvent.click(approveButton);
-
-    await waitFor(() => {
-      expect(vi.mocked(approvalApi.approveExpense)).toHaveBeenCalledWith(1, 'test');
-      expect(onApprovalAction).toHaveBeenCalled();
-    });
-  });
-
-  it('handles rejection action successfully', async () => {
-    vi.mocked(approvalApi.getPendingApprovals).mockResolvedValue(mockApiResponse);
-    vi.mocked(approvalApi.rejectExpense).mockResolvedValue({ success: true, message: 'Rejected' });
-    
-    const onApprovalAction = vi.fn();
-    render(<PendingApprovalsList onApprovalAction={onApprovalAction} />);
-    
-    await waitFor(() => {
-      expect(screen.getByTestId('action-buttons-1')).toBeInTheDocument();
-    });
-
-    const rejectButton = screen.getByText('Reject');
-    await userEvent.click(rejectButton);
-
-    await waitFor(() => {
-      expect(vi.mocked(approvalApi.rejectExpense)).toHaveBeenCalledWith(1, 'test reason', undefined);
-      expect(onApprovalAction).toHaveBeenCalled();
-    });
-  });
 
   it('displays empty state when no approvals', async () => {
     vi.mocked(approvalApi.getPendingApprovals).mockResolvedValue({ approvals: [], total: 0 });

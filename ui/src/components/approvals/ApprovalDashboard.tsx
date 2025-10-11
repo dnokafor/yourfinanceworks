@@ -2,14 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { PendingApprovalsList } from './PendingApprovalsList';
+import { ProcessedExpensesList } from './ProcessedExpensesList';
 import { approvalApi } from '@/lib/api';
 import { ApprovalDashboardStats } from '@/types';
-import { 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
+import {
+  Clock,
+  CheckCircle,
+  XCircle,
   AlertTriangle,
-  Timer
+  Timer,
+  History
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ApprovalHelpTooltips, { HelpTooltip, QuickHelp } from '@/components/help/ApprovalHelpTooltips';
@@ -118,6 +120,26 @@ export function ApprovalDashboard() {
             <HelpTooltip id="bulk-actions" context="dashboard">
               <PendingApprovalsList onApprovalAction={handleApprovalAction} />
             </HelpTooltip>
+          </CardContent>
+        </Card>
+
+        {/* Processed Expenses List */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <History className="h-5 w-5" />
+                Processed Expenses
+              </div>
+              <HelpTooltip id="processed-expenses" context="dashboard">
+                <div className="text-sm text-gray-500 cursor-help">
+                  Expenses you've approved or rejected
+                </div>
+              </HelpTooltip>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ProcessedExpensesList />
           </CardContent>
         </Card>
       </div>

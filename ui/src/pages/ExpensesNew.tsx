@@ -162,7 +162,7 @@ export default function ExpensesNew() {
       if (!createdExpenseId) return;
 
       const approverId = parseInt(selectedApproverId);
-      await approvalApi.submitForApproval(createdExpenseId, notes, approverId);
+      await approvalApi.submitForApproval(createdExpenseId, approverId, notes);
 
       toast.success('Expense submitted for approval successfully');
       setShowApprovalDialog(false);

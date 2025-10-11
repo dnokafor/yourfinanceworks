@@ -425,6 +425,12 @@ export function AppSidebar() {
       tourId: 'nav-expenses'
     },
     {
+      path: '/approvals',
+      label: 'Approvals',
+      icon: <ListChecks className="w-5 h-5" />,
+      tourId: 'nav-approvals'
+    },
+    {
       path: '/inventory',
       label: t('navigation.inventory', 'Inventory'),
       icon: <Package className="w-5 h-5" />,

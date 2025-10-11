@@ -211,41 +211,56 @@ async def submit_expense_for_approval(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/pending", response_model=List[ExpenseApproval])
+@router.get("/pending")
 async def get_pending_approvals(
     limit: Optional[int] = Query(None, ge=1, le=100, description="Maximum number of results"),
     offset: Optional[int] = Query(None, ge=0, description="Number of results to skip"),
     current_user: MasterUser = Depends(get_current_user),
-    approval_service: ApprovalService = Depends(get_approval_service)
+    approval_service: ApprovalService = Depends(get_approval_service),
+    db: Session = Depends(get_db)
 ):
     """
     Get pending approvals for the current user.
-    
+
     This endpoint returns all expenses that are currently pending approval
     by the authenticated user. Results can be paginated using limit and offset.
-    
+
     Args:
         limit: Maximum number of results to return (default: no limit)
         offset: Number of results to skip for pagination (default: 0)
         current_user: Currently authenticated user
         approval_service: Approval service instance
-        
+
     Returns:
-        List of pending ExpenseApproval records assigned to the current user
+        Object containing approvals list and total count
     """
     try:
         require_non_viewer(current_user)
-        
+
         pending_approvals = approval_service.get_pending_approvals(
             approver_id=current_user.id,
             limit=limit,
             offset=offset
         )
-        
-        logger.info(f"Retrieved {len(pending_approvals)} pending approvals for user {current_user.id}")
-        
-        return pending_approvals
-        
+
+        # Get total count for pagination
+        from models.models_per_tenant import ExpenseApproval
+        from schemas.approval import ApprovalStatus
+        total = db.query(ExpenseApproval).filter(
+            and_(
+                ExpenseApproval.approver_id == current_user.id,
+                ExpenseApproval.status == ApprovalStatus.PENDING,
+                ExpenseApproval.is_current_level == True
+            )
+        ).count()
+
+        logger.info(f"Retrieved {len(pending_approvals)} pending approvals (total: {total}) for user {current_user.id}")
+
+        return {
+            "approvals": pending_approvals,
+            "total": total
+        }
+
     except Exception as e:
         logger.error(f"Error retrieving pending approvals for user {current_user.id}: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -534,6 +549,297 @@ async def get_approval_metrics(
         logger.error(f"Error retrieving approval metrics: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
+@router.get("/dashboard-stats")
+async def get_dashboard_stats(
+    current_user: MasterUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get approval dashboard statistics for the current user.
+
+    This endpoint provides aggregated statistics about the approval workflow
+    for display on the approval dashboard.
+
+    Args:
+        current_user: Currently authenticated user
+        db: Database session
+
+    Returns:
+        Dashboard statistics including pending count, approvals today, etc.
+    """
+    try:
+        require_non_viewer(current_user)
+
+        # Import here to avoid circular imports
+        from models.models_per_tenant import ExpenseApproval, Expense
+        from sqlalchemy import func, and_, or_
+        from datetime import datetime, timedelta
+
+        # Get current date for "today" calculations
+        today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = today_start + timedelta(days=1)
+
+        # Base query for approvals assigned to current user
+        base_query = db.query(ExpenseApproval).filter(
+            ExpenseApproval.approver_id == current_user.id
+        )
+
+        # Pending approvals count
+        pending_count = base_query.filter(
+            ExpenseApproval.status == "pending"
+        ).count()
+
+        # Approved today count
+        approved_today = base_query.filter(
+            and_(
+                ExpenseApproval.status == "approved",
+                ExpenseApproval.decided_at >= today_start,
+                ExpenseApproval.decided_at < today_end
+            )
+        ).count()
+
+        # Rejected today count
+        rejected_today = base_query.filter(
+            and_(
+                ExpenseApproval.status == "rejected",
+                ExpenseApproval.decided_at >= today_start,
+                ExpenseApproval.decided_at < today_end
+            )
+        ).count()
+
+        # Overdue count (pending for more than 3 days)
+        three_days_ago = datetime.now() - timedelta(days=3)
+        overdue_count = base_query.filter(
+            and_(
+                ExpenseApproval.status == "pending",
+                ExpenseApproval.created_at < three_days_ago
+            )
+        ).count()
+
+        # Average approval time in hours
+        # Get all completed approvals for this user
+        completed_approvals = base_query.filter(
+            or_(
+                ExpenseApproval.status == "approved",
+                ExpenseApproval.status == "rejected"
+            )
+        ).all()
+
+        average_approval_time_hours = 0.0
+        if completed_approvals:
+            total_hours = 0
+            count = 0
+            for approval in completed_approvals:
+                if approval.decided_at and approval.created_at:
+                    time_diff = approval.decided_at - approval.created_at
+                    total_hours += time_diff.total_seconds() / 3600  # Convert to hours
+                    count += 1
+
+            if count > 0:
+                average_approval_time_hours = total_hours / count
+
+        stats = {
+            "pending_count": pending_count,
+            "approved_today": approved_today,
+            "rejected_today": rejected_today,
+            "overdue_count": overdue_count,
+            "average_approval_time_hours": round(average_approval_time_hours, 1)
+        }
+
+        logger.info(f"Retrieved dashboard stats for user {current_user.id}: {stats}")
+
+        return stats
+
+    except Exception as e:
+        logger.error(f"Error retrieving dashboard stats for user {current_user.id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/approved-expenses")
+async def get_approved_expenses(
+    current_user: MasterUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100)
+):
+    """
+    Get expenses that have been approved by the current user.
+
+    This endpoint returns expenses that the current user has approved,
+    allowing approvers to view and track expenses they've processed.
+
+    Args:
+        current_user: Currently authenticated user
+        db: Database session
+        skip: Number of records to skip (pagination)
+        limit: Maximum number of records to return
+
+    Returns:
+        List of approved expenses with approval details
+    """
+    try:
+        require_non_viewer(current_user)
+
+        # Import here to avoid circular imports
+        from models.models_per_tenant import ExpenseApproval, Expense
+        from sqlalchemy import and_
+
+        # Query for approved expenses where current user is the approver
+        approved_expenses = db.query(Expense).join(
+            ExpenseApproval,
+            and_(
+                ExpenseApproval.expense_id == Expense.id,
+                ExpenseApproval.approver_id == current_user.id,
+                ExpenseApproval.status == "approved"
+            )
+        ).order_by(
+            ExpenseApproval.decided_at.desc()
+        ).offset(skip).limit(limit).all()
+
+        # Get total count for pagination
+        total_count = db.query(Expense).join(
+            ExpenseApproval,
+            and_(
+                ExpenseApproval.expense_id == Expense.id,
+                ExpenseApproval.approver_id == current_user.id,
+                ExpenseApproval.status == "approved"
+            )
+        ).count()
+
+        # Convert to dict format similar to expense API
+        result = []
+        for expense in approved_expenses:
+            expense_dict = {
+                "id": expense.id,
+                "amount": expense.amount,
+                "description": expense.notes or f"{expense.category} - {expense.vendor or 'Unknown vendor'}",
+                "category": expense.category,
+                "date": expense.expense_date.isoformat() if expense.expense_date else None,
+                "status": expense.status,
+                "user_id": expense.user_id,
+                "created_at": expense.created_at.isoformat() if expense.created_at else None,
+                "updated_at": expense.updated_at.isoformat() if expense.updated_at else None,
+                "receipt_path": expense.receipt_path,
+                "notes": expense.notes,
+                "vendor": expense.vendor,
+                "tax_amount": expense.tax_amount,
+                "currency": expense.currency,
+                "labels": expense.labels or [],
+                "analysis_status": expense.analysis_status,
+                "analysis_error": expense.analysis_error,
+                "invoice_id": expense.invoice_id,
+                "is_inventory_consumption": expense.is_inventory_consumption,
+                "consumption_items": expense.consumption_items or []
+            }
+            result.append(expense_dict)
+
+        logger.info(f"Retrieved {len(result)} approved expenses for user {current_user.id}")
+
+        return {
+            "expenses": result,
+            "total": total_count
+        }
+
+    except Exception as e:
+        logger.error(f"Error retrieving approved expenses for user {current_user.id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/processed-expenses")
+async def get_processed_expenses(
+    current_user: MasterUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100)
+):
+    """
+    Get expenses that have been approved or rejected by the current user.
+
+    This endpoint returns expenses that the current user has processed (approved or rejected),
+    allowing approvers to view and track their decision history.
+
+    Args:
+        current_user: Currently authenticated user
+        db: Database session
+        skip: Number of records to skip (pagination)
+        limit: Maximum number of records to return
+
+    Returns:
+        List of processed (approved/rejected) expenses with approval details
+    """
+    try:
+        require_non_viewer(current_user)
+
+        # Import here to avoid circular imports
+        from models.models_per_tenant import ExpenseApproval, Expense
+        from sqlalchemy import and_, or_
+
+        # Query for expenses where current user is the approver and status is approved OR rejected
+        processed_expenses = db.query(Expense).join(
+            ExpenseApproval,
+            and_(
+                ExpenseApproval.expense_id == Expense.id,
+                ExpenseApproval.approver_id == current_user.id,
+                or_(
+                    ExpenseApproval.status == "approved",
+                    ExpenseApproval.status == "rejected"
+                )
+            )
+        ).order_by(
+            ExpenseApproval.decided_at.desc()
+        ).offset(skip).limit(limit).all()
+
+        # Get total count for pagination
+        total_count = db.query(Expense).join(
+            ExpenseApproval,
+            and_(
+                ExpenseApproval.expense_id == Expense.id,
+                ExpenseApproval.approver_id == current_user.id,
+                or_(
+                    ExpenseApproval.status == "approved",
+                    ExpenseApproval.status == "rejected"
+                )
+            )
+        ).count()
+
+        # Convert to dict format similar to expense API
+        result = []
+        for expense in processed_expenses:
+            expense_dict = {
+                "id": expense.id,
+                "amount": expense.amount,
+                "description": expense.notes or f"{expense.category} - {expense.vendor or 'Unknown vendor'}",
+                "category": expense.category,
+                "date": expense.expense_date.isoformat() if expense.expense_date else None,
+                "status": expense.status,
+                "user_id": expense.user_id,
+                "created_at": expense.created_at.isoformat() if expense.created_at else None,
+                "updated_at": expense.updated_at.isoformat() if expense.updated_at else None,
+                "receipt_path": expense.receipt_path,
+                "notes": expense.notes,
+                "vendor": expense.vendor,
+                "tax_amount": expense.tax_amount,
+                "currency": expense.currency,
+                "labels": expense.labels or [],
+                "analysis_status": expense.analysis_status,
+                "analysis_error": expense.analysis_error,
+                "invoice_id": expense.invoice_id,
+                "is_inventory_consumption": expense.is_inventory_consumption,
+                "consumption_items": expense.consumption_items or []
+            }
+            result.append(expense_dict)
+
+        logger.info(f"Retrieved {len(result)} processed expenses for user {current_user.id}")
+
+        return {
+            "expenses": result,
+            "total": total_count
+        }
+
+    except Exception as e:
+        logger.error(f"Error retrieving processed expenses for user {current_user.id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # Approval Delegation Endpoints

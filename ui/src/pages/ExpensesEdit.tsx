@@ -14,6 +14,7 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { expenseApi, approvalApi, Expense, ExpenseAttachmentMeta, linkApi } from '@/lib/api';
 import { EXPENSE_CATEGORY_OPTIONS } from '@/constants/expenses';
+import { canEditExpense } from '@/utils/auth';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -53,8 +54,16 @@ export default function ExpensesEdit() {
         setLoading(true);
         if (!id) return;
         const exp = await expenseApi.getExpense(Number(id));
+
+        // Check if user can edit this expense
+        if (!canEditExpense(exp)) {
+          toast.error('This expense cannot be edited while it is in the approval workflow');
+          navigate('/expenses');
+          return;
+        }
+
         setForm(exp);
-        
+
         // Initialize consumption state from existing expense data
         const isConsumption = !!(exp as any).is_inventory_consumption;
         const consumptionItemsData = (exp as any).consumption_items || [];
@@ -199,7 +208,7 @@ export default function ExpensesEdit() {
       if (!id) return;
 
       const approverId = parseInt(selectedApproverId);
-      await approvalApi.submitForApproval(Number(id), notes, approverId);
+      await approvalApi.submitForApproval(Number(id), approverId, notes);
 
       toast.success('Expense submitted for approval successfully');
       setShowApprovalDialog(false);
@@ -295,10 +304,10 @@ export default function ExpensesEdit() {
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-sm">{t('expenses.labels.amount')}</label>
-              <Input 
-                type="number" 
-                value={Number(form.amount || 0)} 
-                onChange={e => setForm({ ...form, amount: Number(e.target.value) })} 
+              <Input
+                type="number"
+                value={Number(form.amount || 0)}
+                onChange={e => setForm({ ...form, amount: Number(e.target.value) })}
                 disabled={isInventoryConsumption}
                 placeholder={isInventoryConsumption ? "Calculated from items" : ""}
               />
@@ -593,7 +602,6 @@ export default function ExpensesEdit() {
           </Button>
         </div>
 
-        {/* Approval Submission Dialog */}
         <ApprovalSubmissionDialog
           open={showApprovalDialog}
           onOpenChange={setShowApprovalDialog}
@@ -604,6 +612,7 @@ export default function ExpensesEdit() {
           selectedApproverName={availableApprovers.find(a => a.id.toString() === selectedApproverId)?.name}
           loading={saving}
         />
+
         {/* File inline preview dialog */}
         <Dialog open={preview.open} onOpenChange={(o) => {
           if (!o && preview.url) URL.revokeObjectURL(preview.url);

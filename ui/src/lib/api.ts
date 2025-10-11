@@ -1129,18 +1129,44 @@ export const approvalApi = {
   // Get approval dashboard statistics
   getDashboardStats: () => apiRequest<ApprovalDashboardStats>("/approvals/dashboard-stats"),
 
+  // Get expenses approved by current user
+  getApprovedExpenses: (filters?: {
+    skip?: number;
+    limit?: number;
+  }) => {
+    const params = new URLSearchParams();
+    if (filters?.skip !== undefined) params.append('skip', filters.skip.toString());
+    if (filters?.limit !== undefined) params.append('limit', filters.limit.toString());
+
+    const queryString = params.toString();
+    return apiRequest<{ expenses: Expense[]; total: number; }>(`/approvals/approved-expenses${queryString ? `?${queryString}` : ''}`);
+  },
+
+  // Get expenses processed (approved/rejected) by current user
+  getProcessedExpenses: (filters?: {
+    skip?: number;
+    limit?: number;
+  }) => {
+    const params = new URLSearchParams();
+    if (filters?.skip !== undefined) params.append('skip', filters.skip.toString());
+    if (filters?.limit !== undefined) params.append('limit', filters.limit.toString());
+
+    const queryString = params.toString();
+    return apiRequest<{ expenses: Expense[]; total: number; }>(`/approvals/processed-expenses${queryString ? `?${queryString}` : ''}`);
+  },
+
   // Approve an expense
-  approveExpense: (approvalId: number, notes?: string) => 
+  approveExpense: (approvalId: number, notes?: string) =>
     apiRequest<{ success: boolean; message: string; }>(`/approvals/${approvalId}/approve`, {
       method: 'POST',
-      body: JSON.stringify({ notes }),
+      body: JSON.stringify({ status: 'approved', notes }),
     }),
 
   // Reject an expense
-  rejectExpense: (approvalId: number, reason: string, notes?: string) => 
+  rejectExpense: (approvalId: number, reason: string, notes?: string) =>
     apiRequest<{ success: boolean; message: string; }>(`/approvals/${approvalId}/reject`, {
       method: 'POST',
-      body: JSON.stringify({ rejection_reason: reason, notes }),
+      body: JSON.stringify({ status: 'rejected', rejection_reason: reason, notes }),
     }),
 
   // Get approval history for an expense

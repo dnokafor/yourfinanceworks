@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { vi } from 'vitest';
+import { vi, expect, it, beforeEach, describe } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import ExpensesNew from '../pages/ExpensesNew';
 import ExpensesEdit from '../pages/ExpensesEdit';
@@ -14,6 +14,8 @@ vi.mock('../lib/api', () => ({
     getExpense: vi.fn(),
     listAttachments: vi.fn(),
     uploadReceipt: vi.fn(),
+  },
+  approvalApi: {
     submitForApproval: vi.fn(),
   },
   linkApi: {
@@ -65,7 +67,7 @@ describe('Expense Approval Integration', () => {
       expense_date: '2024-01-15',
     });
     (api.expenseApi.listAttachments as any).mockResolvedValue([]);
-    (api.expenseApi.submitForApproval as any).mockResolvedValue([
+    (api.approvalApi.submitForApproval as any).mockResolvedValue([
       { id: 1, expense_id: 123, status: 'pending', approval_level: 1 }
     ]);
   });
@@ -175,7 +177,7 @@ describe('Expense Approval Integration', () => {
 
       // Check API calls
       await waitFor(() => {
-        expect(api.expenseApi.submitForApproval).toHaveBeenCalledWith(123, 'Urgent client meeting expense');
+        expect(api.approvalApi.submitForApproval).toHaveBeenCalledWith(123, 456, 'Urgent client meeting expense');
       });
     });
   });
@@ -269,7 +271,7 @@ describe('Expense Approval Integration', () => {
   describe('Approval Dialog Interaction', () => {
     it('handles approval submission errors gracefully', async () => {
       const user = userEvent.setup();
-      (api.expenseApi.submitForApproval as any).mockRejectedValue(new Error('Network error'));
+      (api.approvalApi.submitForApproval as any).mockRejectedValue(new Error('Network error'));
 
       renderWithRouter(<ExpensesNew />);
 

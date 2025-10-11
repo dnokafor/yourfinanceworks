@@ -23,6 +23,7 @@ import Payments from "./pages/Payments";
 import ExpensesNew from "./pages/ExpensesNew";
 import ExpensesImport from "./pages/ExpensesImport";
 import ExpensesEdit from "./pages/ExpensesEdit";
+import ExpensesView from "./pages/ExpensesView";
 import Expenses from "./pages/Expenses";
 import Statements from "./pages/Statements";
 import Settings from "./pages/Settings";
@@ -54,6 +55,9 @@ import NewInventoryItem from "./pages/NewInventoryItem";
 import EditInventoryItem from "./pages/EditInventoryItem";
 import InventoryItemDetail from "./pages/InventoryItemDetail";
 import NewInventoryInvoice from "./pages/NewInventoryInvoice";
+import { ApprovalDashboard } from "./components/approvals/ApprovalDashboard";
+import ApprovalReportsPage from "./pages/ApprovalReportsPage";
+import { AppLayout } from "./components/layout/AppLayout";
 
 
 const queryClient = new QueryClient();
@@ -113,8 +117,11 @@ const AppContent = () => {
           <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
           <Route path="/expenses/new" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><ExpensesNew /></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/expenses/import" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><ExpensesImport /></RoleProtectedRoute></ProtectedRoute>} />
+          <Route path="/expenses/view/:id" element={<ProtectedRoute><ExpensesView /></ProtectedRoute>} />
           <Route path="/expenses/edit/:id" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><ExpensesEdit /></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
+          <Route path="/approvals" element={<ProtectedRoute><AppLayout><ApprovalDashboard /></AppLayout></ProtectedRoute>} />
+          <Route path="/approvals/reports" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><AppLayout><ApprovalReportsPage /></AppLayout></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/statements" element={<ProtectedRoute><Statements /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin']}><TenantProtectedRoute requirePrimaryTenant={true}><Settings /></TenantProtectedRoute></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/ai-providers" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin']}><TenantProtectedRoute requirePrimaryTenant={true}><AIProviderManagement /></TenantProtectedRoute></RoleProtectedRoute></ProtectedRoute>} />

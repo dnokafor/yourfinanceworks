@@ -37,11 +37,10 @@ import { toast } from 'sonner';
 import { expenseApi, approvalApi, Expense, ExpenseAttachmentMeta, api, linkApi } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { CurrencySelector } from '@/components/ui/currency-selector';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Users } from 'lucide-react';
 import { EXPENSE_CATEGORY_OPTIONS } from '@/constants/expenses';
-import { canPerformActions } from '@/utils/auth';
+import { canPerformActions, canEditExpense, canDeleteExpense, getCurrentUser } from '@/utils/auth';
 
 
 
@@ -193,13 +192,28 @@ const Expenses = () => {
     try {
       const skip = (page - 1) * pageSize;
       const data = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip, limit: pageSize });
-      setExpenses(data);
+
+      // Get current user to filter expenses by ownership
+      const currentUser = getCurrentUser();
+      const currentUserId = currentUser?.id;
+
+      // Filter expenses: only show expenses created by current user AND exclude pending approval expenses
+      const filteredData = data.filter(expense =>
+        expense.user_id === currentUserId &&
+        expense.status !== 'pending_approval'
+      );
+      setExpenses(filteredData);
       // Probe next page existence precisely
       try {
         const probe = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip: skip + pageSize, limit: 1 });
-        setHasNextPage(Array.isArray(probe) && probe.length > 0);
+        // Apply the same filtering to probe results (ownership + status filtering)
+        const filteredProbe = probe.filter(expense =>
+          expense.user_id === currentUserId &&
+          expense.status !== 'pending_approval'
+        );
+        setHasNextPage(Array.isArray(filteredProbe) && filteredProbe.length > 0);
       } catch {
-        setHasNextPage(data.length === pageSize);
+        setHasNextPage(filteredData.length === pageSize);
       }
     } catch (e) {
       toast.error('Failed to load expenses');
@@ -322,7 +336,7 @@ const Expenses = () => {
       // Submit for approval if requested
       if (submitNewForApproval && selectedNewApproverId) {
         try {
-          await approvalApi.submitForApproval(createdWithReceipt.id, undefined, parseInt(selectedNewApproverId));
+          await approvalApi.submitForApproval(createdWithReceipt.id, parseInt(selectedNewApproverId), undefined);
           toast.success('Expense created and submitted for approval');
         } catch (approvalError) {
           console.error('Approval submission failed:', approvalError);
@@ -823,35 +837,39 @@ const Expenses = () => {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem asChild>
-                                  <Link to={`/expenses/edit/${e.id}`} className="flex items-center w-full">
-                                    <Edit className="w-4 h-4 mr-2" />
-                                    {t('edit', { defaultValue: 'Edit' })}
-                                  </Link>
-                                </DropdownMenuItem>
+                                {canEditExpense(e) && (
+                                  <DropdownMenuItem asChild>
+                                    <Link to={`/expenses/edit/${e.id}`} className="flex items-center w-full">
+                                      <Edit className="w-4 h-4 mr-2" />
+                                      {t('edit', { defaultValue: 'Edit' })}
+                                    </Link>
+                                  </DropdownMenuItem>
+                                )}
 
 
-                                
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                      <Trash2 className="w-4 h-4 mr-2" />
-                                      Delete
-                                    </DropdownMenuItem>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>{t('expenses.delete_confirm_title')}</AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        {t('expenses.delete_confirm_description')}
-                                      </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
-                                      <AlertDialogAction onClick={() => handleDelete(e.id)}>{t('delete')}</AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
+
+                                {canDeleteExpense(e) && (
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                        <Trash2 className="w-4 h-4 mr-2" />
+                                        Delete
+                                      </DropdownMenuItem>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>{t('expenses.delete_confirm_title')}</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          {t('expenses.delete_confirm_description')}
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => handleDelete(e.id)}>{t('delete')}</AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           )}
