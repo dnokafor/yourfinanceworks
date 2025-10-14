@@ -1992,6 +1992,7 @@
     "snooze": "Posponer",
     "unsnooze": "Cancelar Posposición",
     "edit": "Editar",
+    "you": "Tú",
     "form": {
       "title": "Título *",
       "title_placeholder": "Ingresa el título del recordatorio",

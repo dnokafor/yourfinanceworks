@@ -1966,6 +1966,7 @@
     "snooze": "Verschieben",
     "unsnooze": "Verschiebung Aufheben",
     "edit": "Bearbeiten",
+    "you": "Du",
     "form": {
       "title": "Titel *",
       "title_placeholder": "Erinnerungstitel eingeben",

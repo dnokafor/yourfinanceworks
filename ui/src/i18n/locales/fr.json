@@ -1968,6 +1968,7 @@
     "snooze": "Somnoler",
     "unsnooze":"Annuler la répétition",
     "edit": "Modifier",
+    "you": "Toi",
     "form": {
       "title": "Titre *",
       "title_placeholder": "Entrez le titre du rappel",

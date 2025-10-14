@@ -1994,6 +1994,7 @@
     "snooze": "Snooze",
     "unsnooze": "Unsnooze",
     "edit": "Edit",
+    "you": "You",
     "form": {
       "title": "Title *",
       "title_placeholder": "Enter reminder title",
