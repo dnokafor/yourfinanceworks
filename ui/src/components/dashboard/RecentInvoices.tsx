@@ -10,31 +10,35 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { formatDate } from "@/lib/utils";
 
-export function RecentInvoices() {
+interface RecentInvoicesProps {
+  refreshKey?: number;
+}
+
+export function RecentInvoices({ refreshKey }: RecentInvoicesProps) {
   const { t } = useTranslation();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchInvoices = async () => {
+    setLoading(true);
+    try {
+      const data = await invoiceApi.getInvoices();
+      // Sort by date and take only the most recent 5
+      const sortedInvoices = [...data]
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .slice(0, 5);
+      setInvoices(sortedInvoices);
+    } catch (error) {
+      console.error("Failed to fetch recent invoices:", error);
+      toast.error("Failed to load recent invoices");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchInvoices = async () => {
-      setLoading(true);
-      try {
-        const data = await invoiceApi.getInvoices();
-        // Sort by date and take only the most recent 5
-        const sortedInvoices = [...data]
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-          .slice(0, 5);
-        setInvoices(sortedInvoices);
-      } catch (error) {
-        console.error("Failed to fetch recent invoices:", error);
-        toast.error("Failed to load recent invoices");
-      } finally {
-        setLoading(false);
-      }
-    };
-    
     fetchInvoices();
-  }, []);
+  }, [refreshKey]);
 
   return (
     <Card className="col-span-1 border-l-4 border-l-secondary bg-gradient-to-br from-secondary/5 to-transparent hover:shadow-lg transition-all duration-300 h-full">
@@ -79,12 +83,12 @@ export function RecentInvoices() {
                   <div className="font-semibold">
                     <CurrencyDisplay amount={invoice.amount} currency={invoice.currency} />
                   </div>
-                  <Badge className={
-                    invoice.status === 'paid' ? 'status-paid' :
-                    invoice.status === 'pending' ? 'status-pending' :
-                    invoice.status === 'overdue' ? 'status-overdue' :
-                    invoice.status === 'partially_paid' ? 'status-partially-paid' :
-                    'bg-muted/50 text-muted-foreground'
+                  <Badge variant={
+                    invoice.status === 'paid' ? 'default' :
+                    invoice.status === 'pending' ? 'secondary' :
+                    invoice.status === 'overdue' ? 'destructive' :
+                    invoice.status === 'partially_paid' ? 'outline' :
+                    'secondary'
                   }>
                     {t(`invoices.status.${invoice.status}`)}
                   </Badge>

@@ -38,6 +38,7 @@ import RecycleBin from "./pages/RecycleBin";
 import Analytics from "./pages/Analytics";
 import Reports from "./pages/Reports";
 import AttachmentSearch from "./pages/AttachmentSearch";
+import { ActivityPage } from "./pages/ActivityPage";
 import { NotificationBell } from "./components/notifications/NotificationBell";
 import { useNotifications } from "./hooks/useNotifications";
 import { useExpenseStatusPolling } from "./hooks/useExpenseStatusPolling";
@@ -59,6 +60,7 @@ import { ApprovalDashboard } from "./components/approvals/ApprovalDashboard";
 import ApprovalReportsPage from "./pages/ApprovalReportsPage";
 import Reminders from "./pages/Reminders";
 import { AppLayout } from "./components/layout/AppLayout";
+
 
 
 const queryClient = new QueryClient();
@@ -134,11 +136,13 @@ const AppContent = () => {
           <Route path="/analytics" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'superuser']}><Analytics /></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><Reports /></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/attachments" element={<ProtectedRoute><AttachmentSearch /></ProtectedRoute>} />
+          <Route path="/activity" element={<ProtectedRoute><AppLayout><ActivityPage /></AppLayout></ProtectedRoute>} />
           <Route path="/inventory" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><Inventory /></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/inventory/new" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><NewInventoryItem /></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/inventory/view/:id" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><InventoryItemDetail /></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/inventory/edit/:id" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><EditInventoryItem /></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/invoices/new-inventory" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><NewInventoryInvoice /></RoleProtectedRoute></ProtectedRoute>} />
+
           <Route path="*" element={<NotFound />} />
           </Routes>
           <TourOverlay />

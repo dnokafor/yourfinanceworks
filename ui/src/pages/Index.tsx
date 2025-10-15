@@ -5,6 +5,7 @@ import { StatCard } from "@/components/dashboard/StatCard";
 import { RecentInvoices } from "@/components/dashboard/RecentInvoices";
 import { InvoiceChart } from "@/components/dashboard/InvoiceChart";
 import { QuickActions } from "@/components/dashboard/QuickActions";
+import { ProfessionalDashboard } from "@/components/dashboard/ProfessionalDashboard";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { dashboardApi } from "@/lib/api";
 import { toast } from "sonner";
@@ -34,8 +35,6 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [tenantName, setTenantName] = useState('');
   const [userName, setUserName] = useState('');
-  const [currentTenantId, setCurrentTenantId] = useState<string | null>(null);
-
   // Get current tenant ID to trigger refetch when organization switches
   const getCurrentTenantId = () => {
     try {
@@ -53,22 +52,18 @@ const Dashboard = () => {
     }
     return null;
   };
-  
-  // Update tenant ID when it changes
+
+  // Initialize with current tenant ID to avoid null state
+  const [currentTenantId, setCurrentTenantId] = useState<string | null>(() => getCurrentTenantId());
+
+  // Listen for storage changes
   useEffect(() => {
-    const updateTenantId = () => {
+    const handleStorageChange = () => {
       const tenantId = getCurrentTenantId();
       if (tenantId !== currentTenantId) {
         console.log(`🔄 Dashboard: Tenant ID changed from ${currentTenantId} to ${tenantId}`);
         setCurrentTenantId(tenantId);
       }
-    };
-    
-    updateTenantId();
-    
-    // Listen for storage changes
-    const handleStorageChange = () => {
-      updateTenantId();
     };
     
     window.addEventListener('storage', handleStorageChange);
@@ -123,58 +118,105 @@ const Dashboard = () => {
   }, [startTour]);
 
   useEffect(() => {
-    const fetchDashboardStats = async () => {
+    let isMounted = true;
+    
+    const fetchData = async () => {
+      console.log('🔄 Dashboard fetching data, currentTenantId:', currentTenantId);
+      
+      if (!isMounted) return;
+      
       setLoading(true);
+      
       try {
+        // Fetch dashboard stats
         const stats = await dashboardApi.getStats();
-        setDashboardStats(stats);
-      } catch (error) {
-        console.error("Failed to fetch dashboard stats:", error);
-        toast.error(t('dashboard.errors.load_failed'));
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    const loadUserInfo = () => {
-      const userData = localStorage.getItem('user');
-      if (userData) {
-        try {
-          const user = JSON.parse(userData);
-          setUserName(user.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : user.email);
-          console.log('Dashboard userData:', user);
-          console.log('Dashboard userName:', user.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : user.email);
-        } catch (error) {
-          console.error('Error parsing user data:', error);
+        if (isMounted) {
+          setDashboardStats(stats);
         }
-      }
-    };
+        
+        // Load user info
+        const userData = localStorage.getItem('user');
+        if (userData && isMounted) {
+          try {
+            const user = JSON.parse(userData);
+            setUserName(user.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : user.email);
+          } catch (error) {
+            console.error('Error parsing user data:', error);
+          }
+        }
 
-    const fetchTenantName = async () => {
-      try {
+        // Fetch tenant name
         const token = localStorage.getItem('token');
-        if (!token) return;
+        if (token && isMounted) {
+          try {
+            const response = await fetch(`${API_BASE_URL}/tenants/me`, {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            });
 
-        const response = await fetch(`${API_BASE_URL}/tenants/me`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (response.ok) {
-          const tenant = await response.json();
-          setTenantName(tenant.name);
+            if (response.ok) {
+              const tenant = await response.json();
+              if (isMounted) {
+                setTenantName(tenant.name);
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching tenant name:', error);
+          }
         }
       } catch (error) {
-        console.error('Error fetching tenant name:', error);
+        console.error("Failed to fetch dashboard data:", error);
+        if (isMounted) {
+          toast.error(t('dashboard.errors.load_failed'));
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
     
-    fetchDashboardStats();
-    loadUserInfo();
-    fetchTenantName();
-  }, [currentTenantId]); // Add tenant ID as dependency
+    fetchData();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [currentTenantId, t]);
+
+  // Check for professional mode (you can add a toggle later)
+  const useProfessionalMode = true;
+
+  if (useProfessionalMode) {
+    return (
+      <AppLayout>
+        <OnboardingWelcome 
+          open={showWelcome} 
+          onClose={() => setShowWelcome(false)} 
+        />
+        <ProfessionalDashboard />
+      </AppLayout>
+    );
+  }
+
+  // Professional styling object
+  const professionalCardStyle = {
+    background: 'rgba(255, 255, 255, 0.95)',
+    backdropFilter: 'blur(20px)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: '16px',
+    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.12)',
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+    overflow: 'hidden',
+    position: 'relative' as const
+  };
+
+  const professionalContainerStyle = {
+    background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.02), transparent)',
+    borderRadius: '24px',
+    padding: '8px'
+  };
 
   return (
     <AppLayout>
@@ -182,7 +224,7 @@ const Dashboard = () => {
         open={showWelcome} 
         onClose={() => setShowWelcome(false)} 
       />
-      <div className="h-full space-y-6 fade-in">
+      <div className="h-full space-y-6 fade-in" style={professionalContainerStyle}>
         <div data-tour="dashboard-welcome">
           <div className="flex items-center gap-2">
             <DisplayMD>
@@ -198,7 +240,11 @@ const Dashboard = () => {
           </BodyLG>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 slide-in" data-tour="dashboard-stats">
+        <div 
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 slide-in" 
+          data-tour="dashboard-stats"
+          style={professionalContainerStyle}
+        >
           <StatCard
             title={t('dashboard.stats.total_income')}
             value={formatMultiCurrencyString(dashboardStats.totalIncome)}
@@ -241,17 +287,36 @@ const Dashboard = () => {
           />
         </div>
         
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 slide-in" style={{ animationDelay: '100ms' }}>
+        <div 
+          className="grid grid-cols-1 lg:grid-cols-3 gap-6 slide-in" 
+          style={{ 
+            animationDelay: '100ms',
+            ...professionalContainerStyle
+          }}
+        >
           <div className="lg:col-span-2 space-y-6">
-            <div data-tour="dashboard-chart">
+            <div 
+              data-tour="dashboard-chart" 
+              style={professionalCardStyle}
+              className="hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
+            >
               <InvoiceChart />
             </div>
-            <div data-tour="dashboard-quick-actions">
+            <div 
+              data-tour="dashboard-quick-actions" 
+              style={professionalCardStyle}
+              className="hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
+            >
               <QuickActions />
             </div>
           </div>
           <div className="lg:col-span-1" data-tour="dashboard-recent">
-            <RecentInvoices />
+            <div 
+              style={professionalCardStyle}
+              className="hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
+            >
+              <RecentInvoices />
+            </div>
           </div>
         </div>
         
