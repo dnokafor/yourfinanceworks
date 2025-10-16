@@ -19,6 +19,7 @@ import { ProfessionalButton } from '@/components/ui/professional-button';
 import { QuickActions } from './QuickActions';
 import { InvoiceChart } from './InvoiceChart';
 import { RecentActivity } from './RecentActivity';
+import { HelpCenter } from '@/components/onboarding/HelpCenter';
 import { dashboardApi } from '@/lib/api';
 import { getCurrentUser } from '@/utils/auth';
 import { toast } from 'sonner';
@@ -216,8 +217,9 @@ export function ProfessionalDashboard() {
           ]}
           actions={
             <div className="flex items-center gap-3">
-              <ProfessionalButton 
-                variant="gradient" 
+              <HelpCenter />
+              <ProfessionalButton
+                variant="gradient"
                 size="sm"
                 className="group"
                 onClick={() => {

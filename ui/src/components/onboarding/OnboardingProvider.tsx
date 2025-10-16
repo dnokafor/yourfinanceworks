@@ -109,10 +109,38 @@ const TOURS: OnboardingTour[] = [
         placement: 'right'
       },
       {
+        id: 'approvals',
+        title: 'Approval Workflows',
+        content: 'Set up and manage expense approval processes to ensure proper authorization before processing expenses.',
+        target: '[data-tour="nav-approvals"]',
+        placement: 'right'
+      },
+      {
+        id: 'inventory',
+        title: 'Inventory Management',
+        content: 'Track and manage your inventory items, stock levels, and inventory transactions.',
+        target: '[data-tour="nav-inventory"]',
+        placement: 'right'
+      },
+      {
         id: 'bank-statements',
         title: 'Statement Management',
         content: 'Import and manage bank statements to reconcile transactions and maintain accurate financial records.',
         target: '[data-tour="nav-statements"]',
+        placement: 'right'
+      },
+      {
+        id: 'reminders',
+        title: 'Automated Reminders',
+        content: 'Configure automated payment reminders and notifications for overdue invoices.',
+        target: '[data-tour="nav-reminders"]',
+        placement: 'right'
+      },
+      {
+        id: 'reports',
+        title: 'Reports & Analytics',
+        content: 'Generate detailed reports and analytics to gain insights into your business performance.',
+        target: '[data-tour="nav-reports"]',
         placement: 'right'
       },
       {

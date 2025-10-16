@@ -61,6 +61,38 @@ export function HelpCenter() {
       content: 'Learn how to track payments, mark invoices as paid, and manage overdue accounts...'
     },
     {
+      id: 'approvals-workflow',
+      title: 'Approval Workflows',
+      description: 'Set up and manage invoice approval processes',
+      category: 'Approvals',
+      icon: Users,
+      content: 'Learn how to configure approval rules, manage pending approvals, and streamline your workflow...'
+    },
+    {
+      id: 'inventory-management',
+      title: 'Inventory Management',
+      description: 'Track and manage your inventory items',
+      category: 'Inventory',
+      icon: FileText,
+      content: 'Discover how to add inventory items, track stock levels, and manage inventory transactions...'
+    },
+    {
+      id: 'reminders-system',
+      title: 'Automated Reminders',
+      description: 'Set up payment reminders and notifications',
+      category: 'Reminders',
+      icon: Mail,
+      content: 'Configure automated email reminders for overdue invoices and payment notifications...'
+    },
+    {
+      id: 'reporting-analytics',
+      title: 'Reports and Analytics',
+      description: 'Generate insights from your business data',
+      category: 'Reports',
+      icon: FileText,
+      content: 'Learn how to create custom reports, analyze trends, and export business insights...'
+    },
+    {
       id: 'email-setup',
       title: 'Email Configuration',
       description: 'Set up email delivery for sending invoices',
