@@ -1989,6 +1989,9 @@
   "reminders": {
     "title": "Reminders",
     "description": "Manage your tasks and recurring reminders",
+    "no_notifications": "No notifications",
+    "you_re_all_caught_up": "You're all caught up!",
+    "notifications": "Notifications",
     "new_reminder": "New Reminder",
     "edit_reminder": "Edit Reminder",
     "create_new_reminder": "Create New Reminder",

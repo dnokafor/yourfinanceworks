@@ -1936,6 +1936,9 @@
   "reminders": {
     "title": "Erinnerungen",
     "description": "Verwalten Sie Ihre Aufgaben und wiederkehrenden Erinnerungen",
+    "no_notifications": "Keine Benachrichtigungen",
+    "you_re_all_caught_up": "Sie sind auf dem neuesten Stand!",
+    "notifications": "Benachrichtigungen",
     "new_reminder": "Neue Erinnerung",
     "edit_reminder": "Erinnerung Bearbeiten",
     "create_new_reminder": "Neue Erinnerung Erstellen",

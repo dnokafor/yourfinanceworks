@@ -1938,6 +1938,9 @@
   "reminders": {
     "title": "Rappels",
     "description": "Gérez vos tâches et rappels récurrents",
+    "no_notifications": "Aucune notification",
+    "you_re_all_caught_up": "Vous êtes à jour !",
+    "notifications": "Notifications",
     "new_reminder": "Nouveau Rappel",
     "edit_reminder": "Modifier le Rappel",
     "create_new_reminder": "Créer un Nouveau Rappel",

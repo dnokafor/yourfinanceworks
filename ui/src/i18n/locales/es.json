@@ -1962,6 +1962,9 @@
   "reminders": {
     "title": "Recordatorios",
     "description": "Gestiona tus tareas y recordatorios recurrentes",
+    "no_notifications": "Sin notificaciones",
+    "you_re_all_caught_up": "¡Estás al día!",
+    "notifications": "Notificaciones",
     "new_reminder": "Nuevo Recordatorio",
     "edit_reminder": "Editar Recordatorio",
     "create_new_reminder": "Crear Nuevo Recordatorio",
