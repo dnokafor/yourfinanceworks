@@ -1118,7 +1118,8 @@
     "refresh": "Aktualisieren",
     "total_amount": "Gesamtbetrag",
     "volatility": "Volatilität",
-    "period_amount_transactions_average": "Zeitraum\tBetrag\tTransaktionen\tDurchschnitt"
+    "period_amount_transactions_average": "Zeitraum\tBetrag\tTransaktionen\tDurchschnitt",
+    "view_expense_list": "Ausgabenliste Anzeigen"
   },
   "email": {
     "subject": "Betreff",

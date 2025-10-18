@@ -1143,7 +1143,8 @@
     "refresh": "Actualizar",
     "total_amount": "Monto Total",
     "volatility": "Volatilidad",
-    "period_amount_transactions_average": "Período\tMonto\tTransacciones\tPromedio"
+    "period_amount_transactions_average": "Período\tMonto\tTransacciones\tPromedio",
+    "view_expense_list": "Ver Lista de Gastos"
   },
   "email": {
     "subject": "Asunto",

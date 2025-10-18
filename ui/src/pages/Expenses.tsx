@@ -31,7 +31,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 // removed duplicate useEffect import
-import { Loader2, Plus, Search, Trash2, Upload, ChevronDown, MoreHorizontal, Edit, Package } from 'lucide-react';
+import { Loader2, Plus, Search, Trash2, Upload, ChevronDown, MoreHorizontal, Edit, Package, ArrowDown } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Link } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
@@ -520,6 +520,16 @@ const Expenses = () => {
           </div>
           {canPerformActions() && (
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const expenseList = document.getElementById('expense-list');
+                  expenseList?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+              >
+                <ArrowDown className="w-4 h-4 mr-2" />
+                {t('expenses.view_expense_list')}
+              </Button>
               <div className="flex">
                 <Button onClick={openCreate} className="rounded-r-none border-r-0">
                   <Plus className="w-4 h-4 mr-2" /> {t('expenses.new')}
@@ -552,7 +562,7 @@ const Expenses = () => {
         <ExpenseSummary />
         <ExpenseCharts />
 
-        <Card className="slide-in">
+        <Card id="expense-list" className="slide-in">
           <CardHeader className="pb-3">
             <div className="flex flex-col sm:flex-row justify-between gap-4">
               <CardTitle>{t('expenses.list_title')}</CardTitle>

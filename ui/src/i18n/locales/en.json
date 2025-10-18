@@ -1212,7 +1212,8 @@
     "refresh": "Refresh",
     "total_amount": "Total Amount",
     "volatility": "Volatility",
-    "period_amount_transactions_average": "Period\tAmount\tTransactions\tAverage"
+    "period_amount_transactions_average": "Period\tAmount\tTransactions\tAverage",
+    "view_expense_list": "View Expense List"
   },
   "email": {
     "subject": "Subject",
