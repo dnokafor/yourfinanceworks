@@ -39,6 +39,7 @@ from routers import (
     search,
     external_api_auth,  # Add the new external API auth router
     external_transactions,  # Add the new external transactions router
+    external_api,  # Add the new external API router
     inventory,  # Add the new inventory router
     inventory_attachments,  # Add the inventory attachments router
     approvals,  # Add the new approvals router
@@ -226,6 +227,7 @@ app.include_router(attachments.router, prefix="/api/v1") # Include the new attac
 app.include_router(search.router, prefix="/api/v1") # Include the new search router
 app.include_router(external_api_auth.router, prefix="/api/v1") # Include the new external API auth router
 app.include_router(external_transactions.router, prefix="/api/v1") # Include the new external transactions router
+app.include_router(external_api.router) # Include the new external API router (no prefix as it has its own)
 app.include_router(inventory.router, prefix="/api/v1") # Include the new inventory router
 app.include_router(inventory_attachments.router, prefix="/api/v1") # Include the inventory attachments router
 app.include_router(approvals.router, prefix="/api/v1") # Include the new approvals router
