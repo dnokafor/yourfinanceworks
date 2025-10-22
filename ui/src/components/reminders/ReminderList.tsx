@@ -334,9 +334,9 @@ export function ReminderList({ className }: ReminderListProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Reminders</h1>
+          <h1 className="text-3xl font-bold">{t('reminders.title', { count: totalCount })}</h1>
           <p className="text-muted-foreground">
-            Manage your tasks and recurring reminders
+            {t('reminders.description')}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -347,11 +347,11 @@ export function ReminderList({ className }: ReminderListProps) {
             disabled={loading}
           >
             <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
-            Refresh
+            {t('reminders.refresh')}
           </Button>
           <Button onClick={() => setShowForm(true)}>
             <Plus className="h-4 w-4 mr-2" />
-            New Reminder
+            {t('reminders.create_reminder')}
           </Button>
         </div>
       </div>
@@ -419,10 +419,10 @@ export function ReminderList({ className }: ReminderListProps) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t('reminders.all_status')}</SelectItem>
-                  <SelectItem value="pending">{t('reminders.pending')}</SelectItem>
-                  <SelectItem value="completed">{t('reminders.completed')}</SelectItem>
-                  <SelectItem value="snoozed">{t('reminders.snoozed')}</SelectItem>
-                  <SelectItem value="cancelled">{t('reminders.cancelled')}</SelectItem>
+                  <SelectItem value="pending">{t('reminders.status.pending')}</SelectItem>
+                  <SelectItem value="completed">{t('reminders.status.completed')}</SelectItem>
+                  <SelectItem value="snoozed">{t('reminders.status.snoozed')}</SelectItem>
+                  <SelectItem value="cancelled">{t('reminders.status.cancelled')}</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -432,10 +432,10 @@ export function ReminderList({ className }: ReminderListProps) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t('reminders.all_priority')}</SelectItem>
-                  <SelectItem value="urgent">{t('reminders.urgent')}</SelectItem>
-                  <SelectItem value="high">{t('reminders.high')}</SelectItem>
-                  <SelectItem value="medium">{t('reminders.medium')}</SelectItem>
-                  <SelectItem value="low">{t('reminders.low')}</SelectItem>
+                  <SelectItem value="urgent">{t('reminders.priority.urgent')}</SelectItem>
+                  <SelectItem value="high">{t('reminders.priority.high')}</SelectItem>
+                  <SelectItem value="medium">{t('reminders.priority.medium')}</SelectItem>
+                  <SelectItem value="low">{t('reminders.priority.low')}</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -521,14 +521,14 @@ export function ReminderList({ className }: ReminderListProps) {
                 <h3 className="text-lg font-semibold mb-2">{t('reminders.no_reminders_found')}</h3>
                 <p className="text-muted-foreground text-center mb-4">
                   {activeTab === 'all' 
-                    ? t('reminders.create_your_first_reminder_to_get_started')
+                    ? t('reminders.form.create_your_first_reminder_to_get_started')
                     : activeTab === 'snoozed'
                     ? t('reminders.no_snoozed_reminders_all_your_reminders_are_active')
                     : t('reminders.no_reminders', { tab: activeTab.replace('_', ' ') })}
                 </p>
                 <Button onClick={() => setShowForm(true)}>
                   <Plus className="h-4 w-4 mr-2" />
-                  {t('reminders.create_reminder')}
+                  {t('reminders.form.create_reminder')}
                 </Button>
               </CardContent>
             </Card>

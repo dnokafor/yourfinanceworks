@@ -446,6 +446,7 @@ export function ProfessionalSidebar() {
           <div className="space-y-4">
             {/* Controls */}
             <div className="flex items-center justify-between gap-2">
+              <HelpCenter />
               <div className="flex-1">
                 <LanguageSwitcher />
               </div>

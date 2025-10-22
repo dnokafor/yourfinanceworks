@@ -59,7 +59,7 @@ export function ReminderCard({
   const isDueTomorrow = isTomorrow(dueDate);
   const isAssignedToCurrentUser = reminder.assigned_to?.id === currentUserId;
   const isCreatedByCurrentUser = reminder.created_by?.id === currentUserId;
-  const canEdit = isCreatedByCurrentUser || isAssignedToCurrentUser;
+  const canEdit = isCreatedByCurrentUser;
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -244,7 +244,7 @@ export function ReminderCard({
             </>
           )}
           
-          {canEdit && (
+          {isCreatedByCurrentUser && (
             <Button
               size="sm"
               variant="outline"

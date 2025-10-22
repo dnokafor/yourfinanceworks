@@ -910,7 +910,7 @@ class ReminderNotification(Base):
     __tablename__ = "reminder_notifications"
     
     id = Column(Integer, primary_key=True, index=True)
-    reminder_id = Column(Integer, ForeignKey("reminders.id", ondelete="CASCADE"), nullable=False)
+    reminder_id = Column(Integer, ForeignKey("reminders.id", ondelete="CASCADE"), nullable=True)  # Nullable for system notifications
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     
     # Notification details

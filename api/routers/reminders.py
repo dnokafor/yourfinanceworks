@@ -202,13 +202,34 @@ def create_reminder(
 ):
     """Create a new reminder"""
     
-    # Verify assigned user exists in the current tenant
+    # Verify assigned user exists and create in tenant DB if needed
     assigned_user = db.query(User).filter(User.id == reminder_data.assigned_to_id).first()
+    
+    # If not in tenant database, check master database and create tenant user
     if not assigned_user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Assigned user not found"
-        )
+        from models.database import get_master_db
+        master_db = next(get_master_db())
+        try:
+            master_user = master_db.query(MasterUser).filter(MasterUser.id == reminder_data.assigned_to_id).first()
+            if not master_user:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Assigned user not found"
+                )
+            # Create user in tenant database to satisfy foreign key constraint
+            assigned_user = User(
+                id=master_user.id,
+                email=master_user.email,
+                first_name=master_user.first_name,
+                last_name=master_user.last_name,
+                hashed_password=master_user.hashed_password,
+                role=master_user.role,
+                is_active=True
+            )
+            db.add(assigned_user)
+            db.flush()  # Flush to make user available for foreign key
+        finally:
+            master_db.close()
     
     # Calculate next due date for recurring reminders
     next_due_date = None
@@ -286,21 +307,47 @@ def update_reminder(
             detail="Reminder not found"
         )
 
-    # Check permissions
-    check_reminder_permissions(reminder, current_user, "update")
+    # Only creator can edit reminder
+    if reminder.created_by_id != current_user.id:
+        try:
+            require_admin(current_user, "update this reminder")
+        except HTTPException:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the creator can edit this reminder"
+            )
     
     # Update fields
     update_data = reminder_data.model_dump(exclude_unset=True)
     
     for field, value in update_data.items():
         if field == "assigned_to_id" and value:
-            # Verify assigned user exists
+            # Verify assigned user exists and create in tenant DB if needed
             assigned_user = db.query(User).filter(User.id == value).first()
             if not assigned_user:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Assigned user not found"
-                )
+                from models.database import get_master_db
+                master_db = next(get_master_db())
+                try:
+                    master_user = master_db.query(MasterUser).filter(MasterUser.id == value).first()
+                    if not master_user:
+                        raise HTTPException(
+                            status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Assigned user not found"
+                        )
+                    # Create user in tenant database to satisfy foreign key constraint
+                    assigned_user = User(
+                        id=master_user.id,
+                        email=master_user.email,
+                        first_name=master_user.first_name,
+                        last_name=master_user.last_name,
+                        hashed_password=master_user.hashed_password,
+                        role=master_user.role,
+                        is_active=True
+                    )
+                    db.add(assigned_user)
+                    db.flush()
+                finally:
+                    master_db.close()
         
         setattr(reminder, field, value)
     
@@ -537,12 +584,31 @@ def bulk_update_reminders(
 
             for field, value in update_data.items():
                 if field == "assigned_to_id" and value is not None:
-                    # Verify assigned user exists in the current tenant
+                    # Verify assigned user exists and create in tenant DB if needed
                     assigned_user = db.query(User).filter(User.id == value).first()
                     if not assigned_user:
-                        failed_count += 1
-                        errors.append(f"Assigned user not found for reminder {reminder.id}")
-                        continue
+                        from models.database import get_master_db
+                        master_db = next(get_master_db())
+                        try:
+                            master_user = master_db.query(MasterUser).filter(MasterUser.id == value).first()
+                            if not master_user:
+                                failed_count += 1
+                                errors.append(f"Assigned user not found for reminder {reminder.id}")
+                                continue
+                            # Create user in tenant database to satisfy foreign key constraint
+                            assigned_user = User(
+                                id=master_user.id,
+                                email=master_user.email,
+                                first_name=master_user.first_name,
+                                last_name=master_user.last_name,
+                                hashed_password=master_user.hashed_password,
+                                role=master_user.role,
+                                is_active=True
+                            )
+                            db.add(assigned_user)
+                            db.flush()
+                        finally:
+                            master_db.close()
 
                 setattr(reminder, field, value)
             
@@ -686,36 +752,44 @@ def get_recent_notifications(
 ):
     """Get recent notifications for the current user"""
 
-    notifications = db.query(ReminderNotification).join(
+    # Get all notifications (with or without reminders)
+    notifications = db.query(ReminderNotification).outerjoin(
         Reminder, ReminderNotification.reminder_id == Reminder.id
     ).filter(
         ReminderNotification.user_id == current_user.id,
         ReminderNotification.is_sent == True,
-        Reminder.is_deleted == False
+        or_(
+            ReminderNotification.reminder_id.is_(None),  # System notifications
+            Reminder.is_deleted == False  # Reminder notifications
+        )
     ).order_by(desc(ReminderNotification.scheduled_for)).limit(limit).all()
 
     items = []
     for notif in notifications:
-        reminder = db.query(Reminder).filter(Reminder.id == notif.reminder_id).first()
-        if reminder:
-            items.append({
-                "id": notif.id,
-                "reminder_id": notif.reminder_id,
-                "user_id": notif.user_id,
-                "notification_type": notif.notification_type,
-                "channel": notif.channel,
-                "scheduled_for": notif.scheduled_for.isoformat(),
-                "subject": notif.subject,
-                "message": notif.message,
-                "sent_at": notif.sent_at.isoformat() if notif.sent_at else None,
-                "is_sent": notif.is_sent,
-                "is_read": notif.is_read,
-                "send_attempts": notif.send_attempts,
-                "last_attempt_at": notif.last_attempt_at.isoformat() if notif.last_attempt_at else None,
-                "error_message": notif.error_message,
-                "created_at": notif.created_at.isoformat(),
-                "updated_at": notif.updated_at.isoformat(),
-                "reminder": {
+        item = {
+            "id": notif.id,
+            "reminder_id": notif.reminder_id,
+            "user_id": notif.user_id,
+            "notification_type": notif.notification_type,
+            "channel": notif.channel,
+            "scheduled_for": notif.scheduled_for.isoformat(),
+            "subject": notif.subject,
+            "message": notif.message,
+            "sent_at": notif.sent_at.isoformat() if notif.sent_at else None,
+            "is_sent": notif.is_sent,
+            "is_read": notif.is_read,
+            "send_attempts": notif.send_attempts,
+            "last_attempt_at": notif.last_attempt_at.isoformat() if notif.last_attempt_at else None,
+            "error_message": notif.error_message,
+            "created_at": notif.created_at.isoformat(),
+            "updated_at": notif.updated_at.isoformat()
+        }
+        
+        # Add reminder data if it exists
+        if notif.reminder_id:
+            reminder = db.query(Reminder).filter(Reminder.id == notif.reminder_id).first()
+            if reminder:
+                item["reminder"] = {
                     "id": reminder.id,
                     "title": reminder.title,
                     "description": reminder.description,
@@ -723,7 +797,8 @@ def get_recent_notifications(
                     "priority": reminder.priority.value,
                     "status": reminder.status.value
                 }
-            })
+        
+        items.append(item)
 
     return {"items": items}
 

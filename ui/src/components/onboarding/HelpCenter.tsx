@@ -117,7 +117,7 @@ export function HelpCenter() {
         </Button>
       </DialogTrigger>
       
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden z-[1100]" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <HelpCircle className="h-5 w-5" />

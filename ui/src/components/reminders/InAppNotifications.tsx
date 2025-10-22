@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 
 interface InAppNotification {
   id: number;
-  reminder: {
+  reminder?: {
     id: number;
     title: string;
     description?: string;
@@ -26,6 +26,8 @@ interface InAppNotification {
   notification_type: string;
   scheduled_for: string;
   is_read?: boolean;
+  subject?: string;
+  message?: string;
 }
 
 interface InAppNotificationsProps {
@@ -128,7 +130,16 @@ export function InAppNotifications({ className }: InAppNotificationsProps) {
   };
 
   const getNotificationMessage = (notification: InAppNotification) => {
-    const { reminder, notification_type } = notification;
+    const { reminder, notification_type, message } = notification;
+    
+    // Handle join request notifications (no reminder linked)
+    if (notification_type === 'join_request') {
+      return message || 'New join request received';
+    }
+    
+    // Handle reminder notifications
+    if (!reminder) return message || 'Notification';
+    
     const dueDate = new Date(reminder.due_date);
     
     switch (notification_type) {
@@ -213,11 +224,19 @@ export function InAppNotifications({ className }: InAppNotificationsProps) {
                         className={cn(
                           "flex items-start gap-3 p-3 rounded-lg transition-colors hover:bg-muted/50",
                           !notification.is_read && "bg-blue-50 border border-blue-200",
-                          getPriorityColor(notification.reminder.priority)
+                          notification.reminder && getPriorityColor(notification.reminder.priority),
+                          notification.notification_type === 'join_request' && "cursor-pointer"
                         )}
+                        onClick={() => {
+                          if (notification.notification_type === 'join_request') {
+                            markAsRead(notification.id);
+                            setOpen(false);
+                            window.location.href = '/organization-join-requests';
+                          }
+                        }}
                       >
                         <div className="flex-shrink-0 mt-1">
-                          {getNotificationIcon(notification.notification_type, notification.reminder.priority)}
+                          {getNotificationIcon(notification.notification_type, notification.reminder?.priority || 'medium')}
                         </div>
                         
                         <div className="flex-1 min-w-0">
@@ -228,7 +247,7 @@ export function InAppNotifications({ className }: InAppNotificationsProps) {
                             {getNotificationMessage(notification)}
                           </p>
                           
-                          {notification.reminder.description && (
+                          {notification.reminder?.description && (
                             <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                               {notification.reminder.description}
                             </p>
@@ -239,18 +258,26 @@ export function InAppNotifications({ className }: InAppNotificationsProps) {
                               {format(new Date(notification.scheduled_for), 'MMM d, h:mm a')}
                             </span>
                             
-                            <Badge 
-                              variant="outline" 
-                              className={cn(
-                                "text-xs",
-                                notification.reminder.priority === 'urgent' && "border-red-500 text-red-700",
-                                notification.reminder.priority === 'high' && "border-orange-500 text-orange-700",
-                                notification.reminder.priority === 'medium' && "border-yellow-500 text-yellow-700",
-                                notification.reminder.priority === 'low' && "border-green-500 text-green-700"
-                              )}
-                            >
-                              {notification.reminder.priority}
-                            </Badge>
+                            {notification.reminder && (
+                              <Badge 
+                                variant="outline" 
+                                className={cn(
+                                  "text-xs",
+                                  notification.reminder.priority === 'urgent' && "border-red-500 text-red-700",
+                                  notification.reminder.priority === 'high' && "border-orange-500 text-orange-700",
+                                  notification.reminder.priority === 'medium' && "border-yellow-500 text-yellow-700",
+                                  notification.reminder.priority === 'low' && "border-green-500 text-green-700"
+                                )}
+                              >
+                                {notification.reminder.priority}
+                              </Badge>
+                            )}
+                            
+                            {notification.notification_type === 'join_request' && (
+                              <Badge variant="outline" className="text-xs border-blue-500 text-blue-700">
+                                Join Request
+                              </Badge>
+                            )}
                           </div>
                         </div>
                         

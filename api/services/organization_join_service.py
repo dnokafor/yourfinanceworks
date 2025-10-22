@@ -237,8 +237,33 @@ class OrganizationJoinService:
                 
                 self.db.commit()
                 
-                # TODO: Create tenant user record in per-tenant database
-                # This would require the tenant database creation logic
+                # Create tenant user record in per-tenant database
+                try:
+                    from services.tenant_database_manager import tenant_db_manager
+                    from models.models_per_tenant import User as TenantUser
+                    
+                    SessionLocal_tenant = tenant_db_manager.get_tenant_session(join_request.tenant_id)
+                    tenant_db = SessionLocal_tenant()
+                    
+                    try:
+                        tenant_user = TenantUser(
+                            id=new_user.id,
+                            email=new_user.email,
+                            hashed_password=new_user.hashed_password,
+                            first_name=new_user.first_name,
+                            last_name=new_user.last_name,
+                            role=new_user.role,
+                            is_active=True,
+                            is_verified=True
+                        )
+                        tenant_db.add(tenant_user)
+                        tenant_db.commit()
+                        logger.info(f"Created tenant user record for user {new_user.id} in tenant {join_request.tenant_id}")
+                    finally:
+                        tenant_db.close()
+                except Exception as e:
+                    logger.error(f"Failed to create tenant user record: {str(e)}")
+                    # Don't fail the entire operation if tenant user creation fails
                 
                 logger.info(f"Approved join request {request_id}, created user {new_user.id}")
                 
@@ -368,24 +393,37 @@ class OrganizationJoinService:
                 )
             ).all()
             
-            for admin_user in admin_users:
-                send_notification(
-                    db=self.db,
-                    event_type="organization_join_request_created",
-                    user_id=admin_user.id,
-                    resource_type="OrganizationJoinRequest",
-                    resource_id=str(join_request.id),
-                    resource_name=f"Join request from {join_request.email}",
-                    details={
-                        "requester_email": join_request.email,
-                        "requester_name": f"{join_request.first_name} {join_request.last_name}".strip() if join_request.first_name else join_request.email,
-                        "requested_role": join_request.requested_role,
-                        "message": join_request.message,
-                        "organization_name": join_request.tenant.name if join_request.tenant else "Unknown"
-                    }
-                )
+            # Create reminder notifications for each admin in their tenant database
+            from services.tenant_database_manager import tenant_db_manager
+            from models.models_per_tenant import ReminderNotification
+            
+            requester_name = f"{join_request.first_name} {join_request.last_name}".strip() if join_request.first_name else join_request.email
+            
+            # Get tenant database session
+            SessionLocal_tenant = tenant_db_manager.get_tenant_session(tenant_id)
+            tenant_db = SessionLocal_tenant()
+            
+            try:
+                for admin_user in admin_users:
+                    # Create in-app notification for the admin
+                    notification = ReminderNotification(
+                        reminder_id=None,  # Not linked to a specific reminder
+                        user_id=admin_user.id,
+                        notification_type="join_request",
+                        channel="in_app",
+                        scheduled_for=datetime.now(timezone.utc),
+                        subject="New Join Request",
+                        message=f"{requester_name} has requested to join your organization",
+                        is_sent=True,
+                        sent_at=datetime.now(timezone.utc),
+                        is_read=False
+                    )
+                    tenant_db.add(notification)
                 
-            logger.info(f"Notified {len(admin_users)} admin(s) about new join request {join_request.id}")
+                tenant_db.commit()
+                logger.info(f"Created reminder notifications for {len(admin_users)} admin(s) about new join request {join_request.id}")
+            finally:
+                tenant_db.close()
             
         except Exception as e:
             logger.error(f"Error notifying admins of new join request {join_request.id}: {str(e)}")

@@ -1387,22 +1387,18 @@ async def list_users(
                 tenant_role_map = {tu.id: tu.role for tu in tenant_users}
                 logger.info(f"Found {len(tenant_role_map)} tenant-specific roles: {tenant_role_map}")
                 
-                # Filter users to only include those who exist in the tenant database
-                filtered_users = []
+                # Update roles for users who exist in tenant database
                 for user in users:
                     if user.id in tenant_role_map:
                         # User exists in tenant, update role
-                        old_role = user.role
                         user.role = tenant_role_map[user.id]
-                        filtered_users.append(user)
                         logger.info(f"Including user {user.email} with tenant role '{user.role}'")
                     else:
-                        logger.info(f"Excluding user {user.email} - not activated for tenant")
+                        # User has access but not activated yet - keep their master role
+                        logger.info(f"Including user {user.email} with master role '{user.role}' (not yet activated in tenant)")
 
             finally:
                 tenant_db.close()
-
-            users = filtered_users
         except Exception as e:
             logger.warning(f"Failed to get tenant-specific roles for users in tenant {current_tenant_id}: {e}")
             # If tenant lookup fails, don't return any users to avoid showing unactivated users

@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, X, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { Bell, X, CheckCircle, AlertCircle, Clock, UserPlus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
 export interface Notification {
   id: string;
-  type: 'success' | 'error' | 'processing';
+  type: 'success' | 'error' | 'processing' | 'join_request';
   title: string;
   message: string;
   timestamp: Date;
   read: boolean;
+  actionUrl?: string;
 }
 
 interface NotificationBellProps {
@@ -21,6 +23,7 @@ interface NotificationBellProps {
 }
 
 export function NotificationBell({ notifications, onMarkAsRead, onClearAll, onHide }: NotificationBellProps) {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [hasNewNotifications, setHasNewNotifications] = useState(false);
 
@@ -53,6 +56,16 @@ export function NotificationBell({ notifications, onMarkAsRead, onClearAll, onHi
         return <AlertCircle className="w-4 h-4 text-red-600" />;
       case 'processing':
         return <Clock className="w-4 h-4 text-blue-600" />;
+      case 'join_request':
+        return <UserPlus className="w-4 h-4 text-purple-600" />;
+    }
+  };
+
+  const handleNotificationClick = (notification: Notification) => {
+    onMarkAsRead(notification.id);
+    if (notification.actionUrl) {
+      setIsOpen(false);
+      navigate(notification.actionUrl);
     }
   };
 
@@ -136,7 +149,7 @@ export function NotificationBell({ notifications, onMarkAsRead, onClearAll, onHi
                     className={`p-4 border-b last:border-b-0 cursor-pointer hover:bg-gray-50 transition-colors ${
                       !notification.read ? 'bg-blue-50' : ''
                     }`}
-                    onClick={() => onMarkAsRead(notification.id)}
+                    onClick={() => handleNotificationClick(notification)}
                   >
                     <div className="flex items-start gap-3">
                       {getIcon(notification.type)}

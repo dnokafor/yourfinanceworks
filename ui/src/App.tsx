@@ -42,6 +42,7 @@ import { ActivityPage } from "./pages/ActivityPage";
 import { NotificationBell } from "./components/notifications/NotificationBell";
 import { useNotifications } from "./hooks/useNotifications";
 import { useExpenseStatusPolling } from "./hooks/useExpenseStatusPolling";
+import { useJoinRequestPolling } from "./hooks/useJoinRequestPolling";
 import { getCurrentUser } from "./utils/auth";
 import { Favicon } from "./components/ui/favicon";
 import { useQuery } from "@tanstack/react-query";
@@ -61,6 +62,7 @@ import ApprovalReportsPage from "./pages/ApprovalReportsPage";
 import Reminders from "./pages/Reminders";
 import DesignSystemShowcasePage from "./pages/DesignSystemShowcase";
 import { AppLayout } from "./components/layout/AppLayout";
+import OrganizationJoinRequests from "./pages/OrganizationJoinRequests";
 
 
 
@@ -71,6 +73,11 @@ const AppContent = () => {
   const { startPolling } = useExpenseStatusPolling();
   const [bellHidden, setBellHidden] = React.useState(false);
   const isLoggedIn = getCurrentUser() !== null;
+  const currentUser = getCurrentUser();
+  const userIsAdmin = currentUser?.role === 'admin';
+  
+  // Poll for new join requests if user is admin
+  useJoinRequestPolling(userIsAdmin, addNotification);
 
   // Get company branding for favicon
   const { data: settings } = useQuery({
@@ -131,6 +138,7 @@ const AppContent = () => {
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/ai-providers" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin']}><TenantProtectedRoute requirePrimaryTenant={true}><AIProviderManagement /></TenantProtectedRoute></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin']}><Users /></RoleProtectedRoute></ProtectedRoute>} />
+          <Route path="/organization-join-requests" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin']}><OrganizationJoinRequests /></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/super-admin" element={<ProtectedRoute><TenantProtectedRoute requireSuperUser={true} requirePrimaryTenant={true}><SuperAdmin /></TenantProtectedRoute></ProtectedRoute>} />
           <Route path="/audit-log" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'superuser']}><AuditLog /></RoleProtectedRoute></ProtectedRoute>} />
           <Route path="/recycle-bin" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><RecycleBin /></RoleProtectedRoute></ProtectedRoute>} />
@@ -147,6 +155,23 @@ const AppContent = () => {
 
           <Route path="*" element={<NotFound />} />
           </Routes>
+          {isLoggedIn && !bellHidden && (
+            <NotificationBell 
+              notifications={notifications}
+              onMarkAsRead={markAsRead}
+              onClearAll={clearAll}
+              onHide={() => setBellHidden(true)}
+            />
+          )}
+          {isLoggedIn && bellHidden && notifications.some(n => !n.read) && (
+            <div 
+              className="fixed top-4 right-4 z-50 cursor-pointer"
+              onClick={() => setBellHidden(false)}
+              title="Show AI notifications"
+            >
+              <div className="w-3 h-3 bg-blue-600 rounded-full animate-pulse"></div>
+            </div>
+          )}
           <TourOverlay />
           </OnboardingProvider>
           <SearchDialog />
@@ -154,23 +179,6 @@ const AppContent = () => {
       </BrowserRouter>
       
       <AIAssistant />
-      {isLoggedIn && !bellHidden && (
-        <NotificationBell 
-          notifications={notifications}
-          onMarkAsRead={markAsRead}
-          onClearAll={clearAll}
-          onHide={() => setBellHidden(true)}
-        />
-      )}
-      {isLoggedIn && bellHidden && notifications.some(n => !n.read) && (
-        <div 
-          className="fixed top-4 right-4 z-50 cursor-pointer"
-          onClick={() => setBellHidden(false)}
-          title="Show AI notifications"
-        >
-          <div className="w-3 h-3 bg-blue-600 rounded-full animate-pulse"></div>
-        </div>
-      )}
       <Toaster position="top-center" richColors />
     </TooltipProvider>
   );

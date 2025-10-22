@@ -36,7 +36,8 @@ export function useNotifications() {
   const addNotification = useCallback((
     type: Notification['type'],
     title: string,
-    message: string
+    message: string,
+    actionUrl?: string
   ) => {
     const notification: Notification = {
       id: Date.now().toString(),
@@ -45,6 +46,7 @@ export function useNotifications() {
       message,
       timestamp: new Date(),
       read: false,
+      actionUrl,
     };
 
     setNotifications(prev => [notification, ...prev].slice(0, MAX_NOTIFICATIONS));
