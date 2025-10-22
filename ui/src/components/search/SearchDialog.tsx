@@ -1,7 +1,7 @@
 import { Command } from 'cmdk';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, FileText, Users, CreditCard, Receipt, Building, Paperclip } from 'lucide-react';
+import { Search, FileText, Users, CreditCard, Receipt, Building, Paperclip, Package, Bell } from 'lucide-react';
 
 import { useSearch } from './SearchProvider';
 import { apiClient } from '@/lib/api';
@@ -31,6 +31,8 @@ const getEntityIcon = (type: string) => {
     case 'expenses': return Receipt;
     case 'statements': return Building;
     case 'attachments': return Paperclip;
+    case 'inventory': return Package;
+    case 'reminders': return Bell;
     default: return Search;
   }
 };
@@ -43,6 +45,8 @@ const getEntityColor = (type: string) => {
     case 'expenses': return 'text-orange-600';
     case 'statements': return 'text-indigo-600';
     case 'attachments': return 'text-gray-600';
+    case 'inventory': return 'text-teal-600';
+    case 'reminders': return 'text-yellow-600';
     default: return 'text-gray-500';
   }
 };
@@ -125,7 +129,7 @@ export function SearchDialog() {
             <Command.Input 
               value={query} 
               onValueChange={setQuery}
-              placeholder="Search invoices, clients, payments, expenses..."
+              placeholder="Search invoices, clients, payments, expenses, inventory, reminders..."
               className="flex h-12 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
             />
             {loading && (

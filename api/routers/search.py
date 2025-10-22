@@ -15,7 +15,7 @@ router = APIRouter(prefix="/search", tags=["search"])
 @router.get("")
 async def global_search(
     q: str = Query(..., min_length=1, description="Search query"),
-    types: Optional[str] = Query(None, description="Comma-separated entity types to search (invoices,clients,payments,expenses,statements,attachments)"),
+    types: Optional[str] = Query(None, description="Comma-separated entity types to search (invoices,clients,payments,expenses,statements,attachments,inventory,reminders)"),
     limit: int = Query(50, ge=1, le=100, description="Maximum number of results"),
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
@@ -68,6 +68,18 @@ async def global_search(
                 url = f"/attachments"
                 title = result['data'].get('filename', f'Attachment {entity_id}')
                 subtitle = f"{result['data'].get('entity_type', 'Unknown')} attachment"
+            elif entity_type == 'inventory':
+                url = f"/inventory"
+                title = result['data'].get('name', f'Item {entity_id}')
+                sku = result['data'].get('sku', '')
+                qty = result['data'].get('quantity', 0)
+                subtitle = f"SKU: {sku} • Qty: {qty}" if sku else f"Qty: {qty}"
+            elif entity_type == 'reminders':
+                url = f"/reminders"
+                title = result['data'].get('title', f'Reminder {entity_id}')
+                priority = result['data'].get('priority', 'medium')
+                status = result['data'].get('status', 'pending')
+                subtitle = f"{priority.title()} priority • {status.title()}"
             
             enhanced_result = {
                 'id': entity_id,

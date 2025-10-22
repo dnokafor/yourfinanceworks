@@ -7,7 +7,7 @@ from opensearchpy import OpenSearch, RequestsHttpConnection
 from opensearchpy.exceptions import NotFoundError, RequestError
 from sqlalchemy.orm import Session
 
-from models.models_per_tenant import Invoice, Client, Payment, Expense, BankStatement
+from models.models_per_tenant import Invoice, Client, Payment, Expense, BankStatement, InventoryItem, Reminder
 from models.database import get_tenant_context
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -61,7 +61,7 @@ class SearchService:
         except Exception:
             return
             
-        indices = ['invoices', 'clients', 'payments', 'expenses', 'statements', 'attachments']
+        indices = ['invoices', 'clients', 'payments', 'expenses', 'statements', 'attachments', 'inventory', 'reminders']
         
         for entity_type in indices:
             index_name = self._get_tenant_index(entity_type)
@@ -158,6 +158,29 @@ class SearchService:
                     'entity_id': {'type': 'keyword'},
                     'file_content': {'type': 'text'},
                     'file_path': {'type': 'keyword'}
+                }
+            },
+            'inventory': {
+                'properties': {
+                    **base_mapping['properties'],
+                    'name': {'type': 'text'},
+                    'sku': {'type': 'keyword'},
+                    'description': {'type': 'text'},
+                    'category': {'type': 'keyword'},
+                    'quantity': {'type': 'integer'},
+                    'unit_price': {'type': 'float'},
+                    'currency': {'type': 'keyword'}
+                }
+            },
+            'reminders': {
+                'properties': {
+                    **base_mapping['properties'],
+                    'title': {'type': 'text'},
+                    'description': {'type': 'text'},
+                    'status': {'type': 'keyword'},
+                    'priority': {'type': 'keyword'},
+                    'due_date': {'type': 'date'},
+                    'assigned_to_name': {'type': 'text'}
                 }
             }
         }
@@ -256,6 +279,67 @@ class SearchService:
         except Exception as e:
             logger.error(f"Error indexing payment {payment.id}: {e}")
     
+    def index_inventory_item(self, item: InventoryItem):
+        """Index an inventory item document"""
+        if not self.enabled:
+            return
+            
+        try:
+            doc = {
+                'id': str(item.id),
+                'tenant_id': get_tenant_context(),
+                'name': item.name,
+                'sku': item.sku or '',
+                'description': item.description or '',
+                'category': item.category or '',
+                'quantity': item.quantity or 0,
+                'unit_price': float(item.unit_price or 0),
+                'currency': item.currency or 'USD',
+                'created_at': item.created_at.isoformat() if item.created_at else None,
+                'updated_at': item.updated_at.isoformat() if item.updated_at else None,
+                'searchable_text': f"{item.name} {item.sku or ''} {item.description or ''} {item.category or ''}"
+            }
+            
+            index_name = self._get_tenant_index('inventory')
+            self.client.index(
+                index=index_name,
+                id=str(item.id),
+                body=doc
+            )
+            logger.debug(f"Indexed inventory item {item.id}")
+        except Exception as e:
+            logger.error(f"Error indexing inventory item {item.id}: {e}")
+    
+    def index_reminder(self, reminder: Reminder):
+        """Index a reminder document"""
+        if not self.enabled:
+            return
+            
+        try:
+            doc = {
+                'id': str(reminder.id),
+                'tenant_id': get_tenant_context(),
+                'title': reminder.title,
+                'description': reminder.description or '',
+                'status': reminder.status,
+                'priority': reminder.priority,
+                'due_date': reminder.due_date.isoformat() if reminder.due_date else None,
+                'assigned_to_name': '',  # Can be enhanced with user lookup
+                'created_at': reminder.created_at.isoformat() if reminder.created_at else None,
+                'updated_at': reminder.updated_at.isoformat() if reminder.updated_at else None,
+                'searchable_text': f"{reminder.title} {reminder.description or ''}"
+            }
+            
+            index_name = self._get_tenant_index('reminders')
+            self.client.index(
+                index=index_name,
+                id=str(reminder.id),
+                body=doc
+            )
+            logger.debug(f"Indexed reminder {reminder.id}")
+        except Exception as e:
+            logger.error(f"Error indexing reminder {reminder.id}: {e}")
+    
     def search(self, query: str, entity_types: List[str] = None, limit: int = 50, db: Session = None) -> Dict[str, Any]:
         """Search across all indexed documents with database fallback"""
         if self.enabled and self.client:
@@ -270,7 +354,7 @@ class SearchService:
             self._ensure_indices()
             
             if not entity_types:
-                entity_types = ['invoices', 'clients', 'payments', 'expenses', 'statements', 'attachments']
+                entity_types = ['invoices', 'clients', 'payments', 'expenses', 'statements', 'attachments', 'inventory', 'reminders']
             
             indices = [self._get_tenant_index(et) for et in entity_types]
             
@@ -343,7 +427,7 @@ class SearchService:
             results = []
             
             if not entity_types:
-                entity_types = ['invoices', 'clients', 'payments', 'expenses']
+                entity_types = ['invoices', 'clients', 'payments', 'expenses', 'inventory', 'reminders']
             
             # Search invoices
             if 'invoices' in entity_types:
@@ -397,6 +481,58 @@ class SearchService:
                         'highlights': {}
                     })
             
+            # Search inventory
+            if 'inventory' in entity_types:
+                inventory_items = db.query(InventoryItem).filter(
+                    or_(
+                        InventoryItem.name.ilike(f"%{query}%"),
+                        InventoryItem.sku.ilike(f"%{query}%"),
+                        InventoryItem.description.ilike(f"%{query}%")
+                    )
+                ).limit(limit // len(entity_types)).all()
+                
+                for item in inventory_items:
+                    results.append({
+                        'id': str(item.id),
+                        'type': 'inventory',
+                        'score': 1.0,
+                        'data': {
+                            'id': str(item.id),
+                            'name': item.name,
+                            'sku': item.sku or '',
+                            'quantity': item.quantity or 0,
+                            'unit_price': float(item.unit_price or 0),
+                            'created_at': item.created_at.isoformat() if item.created_at else None
+                        },
+                        'highlights': {}
+                    })
+            
+            # Search reminders
+            if 'reminders' in entity_types:
+                reminders = db.query(Reminder).filter(
+                    or_(
+                        Reminder.title.ilike(f"%{query}%"),
+                        Reminder.description.ilike(f"%{query}%")
+                    )
+                ).limit(limit // len(entity_types)).all()
+                
+                for reminder in reminders:
+                    results.append({
+                        'id': str(reminder.id),
+                        'type': 'reminders',
+                        'score': 1.0,
+                        'data': {
+                            'id': str(reminder.id),
+                            'title': reminder.title,
+                            'description': reminder.description or '',
+                            'status': reminder.status,
+                            'priority': reminder.priority,
+                            'due_date': reminder.due_date.isoformat() if reminder.due_date else None,
+                            'created_at': reminder.created_at.isoformat() if reminder.created_at else None
+                        },
+                        'highlights': {}
+                    })
+            
             return {
                 'results': results[:limit],
                 'total': len(results),
@@ -431,7 +567,7 @@ class SearchService:
             
         try:
             # Clear existing indices
-            entity_types = ['invoices', 'clients', 'payments', 'expenses', 'statements', 'attachments']
+            entity_types = ['invoices', 'clients', 'payments', 'expenses', 'statements', 'attachments', 'inventory', 'reminders']
             for entity_type in entity_types:
                 index_name = self._get_tenant_index(entity_type)
                 try:
@@ -462,6 +598,16 @@ class SearchService:
                 invoice = db.query(Invoice).filter(Invoice.id == payment.invoice_id).first()
                 client = db.query(Client).filter(Client.id == invoice.client_id).first() if invoice else None
                 self.index_payment(payment, invoice, client)
+            
+            # Index inventory items
+            inventory_items = db.query(InventoryItem).all()
+            for item in inventory_items:
+                self.index_inventory_item(item)
+            
+            # Index reminders
+            reminders = db.query(Reminder).all()
+            for reminder in reminders:
+                self.index_reminder(reminder)
             
             logger.info(f"Reindexed all documents for tenant {tenant_id}")
             
