@@ -54,7 +54,8 @@
     "item": "Item",
     "selected": "selected",
     "unknownVendor": "Unknown Vendor",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "saving": "Saving..."
   },
   "taxIntegration": {
     "title": "Tax Service Integration",
@@ -1145,6 +1146,9 @@
       "pick_date": "Pick a date",
       "label_placeholder": "Add label"
     },
+    "receipt_attachments": "Receipt Attachments",
+    "receipt_attachments_max_10": "Receipt Attachments (max 10)",
+    "create_expense": "Create Expense",
     "buttons": {
       "create": "Create",
       "save": "Save",
@@ -1213,7 +1217,15 @@
     "total_amount": "Total Amount",
     "volatility": "Volatility",
     "period_amount_transactions_average": "Period\tAmount\tTransactions\tAverage",
-    "view_expense_list": "View Expense List"
+    "view_expense_list": "View Expense List",
+    "inventory_purchase_details": "Inventory Purchase Details",
+    "select_the_inventory_items_you_purchased_with_this_expense": "Select the inventory items you purchased with this expense",
+    "amount_calculated_from_selected_inventory_items": "Amount calculated from selected inventory items",
+    "at_least_one_inventory_item_must_be_selected_for_consumption": "At least one inventory item must be selected for consumption",
+    "all_inventory_consumption_items_must_have_quantity_greater_than_0": "All inventory consumption items must have a quantity greater than 0",
+    "consumption_expense_created_successfully": "Consumption expense created successfully",
+    "expense_submitted_for_approval_successfully": "Expense submitted for approval successfully",
+    "failed_to_submit_expense_for_approval": "Failed to submit expense for approval"
   },
   "email": {
     "subject": "Subject",

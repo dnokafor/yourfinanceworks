@@ -46,7 +46,8 @@
     "updated_at": "Mis à jour",
     "navigation": "Navigation",
     "current_language": "Langue Actuelle",
-    "available_languages": "Langues Disponibles"
+    "available_languages": "Langues Disponibles",
+    "saving": "Enregistrement..."
   },
   "navigation": {
     "dashboard": "Tableau de Bord",
@@ -1050,6 +1051,9 @@
       "pick_date": "Choisissez une date",
       "label_placeholder": "Ajouter une étiquette"
     },
+    "receipt_attachments": "Pièces Jointes de Reçu",
+    "receipt_attachments_max_10": "Pièces Jointes de Reçu (max 10)",
+    "create_expense": "Créer une Dépense",
     "buttons": {
       "create": "Créer",
       "save": "Enregistrer",
@@ -1118,7 +1122,15 @@
     "total_amount": "Montant Total",
     "volatility": "Volatilité",
     "period_amount_transactions_average": "Période\tMontant\tTransactions\tMoyenne",
-    "view_expense_list": "Voir la Liste des Dépenses"
+    "view_expense_list": "Voir la Liste des Dépenses",
+    "inventory_purchase_details": "Détails d'Achat d'Inventaire",
+    "select_the_inventory_items_you_purchased_with_this_expense": "Sélectionnez les articles d'inventaire que vous avez achetés avec cette dépense",
+    "amount_calculated_from_selected_inventory_items": "Montant calculé à partir des articles d'inventaire sélectionnés",
+    "at_least_one_inventory_item_must_be_selected_for_consumption": "Au moins un article d'inventaire doit être sélectionné pour la consommation",
+    "all_inventory_consumption_items_must_have_quantity_greater_than_0": "Tous les articles de consommation d'inventaire doivent avoir une quantité supérieure à 0",
+    "consumption_expense_created_successfully": "Dépense de consommation créée avec succès",
+    "expense_submitted_for_approval_successfully": "Dépense soumise pour approbation avec succès",
+    "failed_to_submit_expense_for_approval": "Échec de la soumission de la dépense pour approbation"
   },
   "email": {
     "subject": "Objet",

@@ -46,7 +46,8 @@
     "updated_at": "Aktualisiert",
     "navigation": "Navigation",
     "current_language": "Aktuelle Sprache",
-    "available_languages": "Verfügbare Sprachen"
+    "available_languages": "Verfügbare Sprachen",
+    "saving": "Wird gespeichert..."
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -1051,6 +1052,9 @@
       "pick_date": "Datum auswählen",
       "label_placeholder": "Label hinzufügen"
     },
+    "receipt_attachments": "Beleg-Anhänge",
+    "receipt_attachments_max_10": "Beleg-Anhänge (max 10)",
+    "create_expense": "Ausgabe erstellen",
     "buttons": {
       "create": "Erstellen",
       "save": "Speichern",
@@ -1119,7 +1123,15 @@
     "total_amount": "Gesamtbetrag",
     "volatility": "Volatilität",
     "period_amount_transactions_average": "Zeitraum\tBetrag\tTransaktionen\tDurchschnitt",
-    "view_expense_list": "Ausgabenliste Anzeigen"
+    "view_expense_list": "Ausgabenliste Anzeigen",
+    "inventory_purchase_details": "Inventar-Einkaufsdetails",
+    "select_the_inventory_items_you_purchased_with_this_expense": "Wählen Sie die Inventarartikel aus, die Sie mit dieser Ausgabe gekauft haben",
+    "amount_calculated_from_selected_inventory_items": "Betrag berechnet aus ausgewählten Inventarartikeln",
+    "at_least_one_inventory_item_must_be_selected_for_consumption": "Mindestens ein Inventarartikel muss für den Verbrauch ausgewählt werden",
+    "all_inventory_consumption_items_must_have_quantity_greater_than_0": "Alle Inventar-Verbrauchsartikel müssen eine Menge größer als 0 haben",
+    "consumption_expense_created_successfully": "Verbrauchsausgabe erfolgreich erstellt",
+    "expense_submitted_for_approval_successfully": "Ausgabe erfolgreich zur Genehmigung eingereicht",
+    "failed_to_submit_expense_for_approval": "Ausgabe konnte nicht zur Genehmigung eingereicht werden"
   },
   "email": {
     "subject": "Betreff",

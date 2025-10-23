@@ -1076,6 +1076,9 @@
       "pick_date": "Selecciona una fecha",
       "label_placeholder": "Agregar etiqueta"
     },
+    "receipt_attachments": "Adjuntos de Recibo",
+    "receipt_attachments_max_10": "Adjuntos de Recibo (máx 10)",
+    "create_expense": "Crear Gasto",
     "buttons": {
       "create": "Crear",
       "save": "Guardar",
@@ -1144,7 +1147,15 @@
     "total_amount": "Monto Total",
     "volatility": "Volatilidad",
     "period_amount_transactions_average": "Período\tMonto\tTransacciones\tPromedio",
-    "view_expense_list": "Ver Lista de Gastos"
+    "view_expense_list": "Ver Lista de Gastos",
+    "inventory_purchase_details": "Detalles de Compra de Inventario",
+    "select_the_inventory_items_you_purchased_with_this_expense": "Selecciona los artículos de inventario que compraste con este gasto",
+    "amount_calculated_from_selected_inventory_items": "Monto calculado a partir de los artículos de inventario seleccionados",
+    "at_least_one_inventory_item_must_be_selected_for_consumption": "Al menos un artículo de inventario debe ser seleccionado para consumo",
+    "all_inventory_consumption_items_must_have_quantity_greater_than_0": "Todos los artículos de consumo de inventario deben tener una cantidad mayor a 0",
+    "consumption_expense_created_successfully": "Gasto de consumo creado exitosamente",
+    "expense_submitted_for_approval_successfully": "Gasto enviado para aprobación exitosamente",
+    "failed_to_submit_expense_for_approval": "Error al enviar gasto para aprobación"
   },
   "email": {
     "subject": "Asunto",

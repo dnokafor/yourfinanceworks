@@ -46,7 +46,7 @@ export default function ExpensesNew() {
 
   useEffect(() => {
     (async () => {
-      try { const invs = await linkApi.getInvoicesBasic(); setInvoiceOptions(invs); } catch {}
+      try { const invs = await linkApi.getInvoicesBasic(); setInvoiceOptions(invs); } catch { }
     })();
   }, []);
 
@@ -80,24 +80,24 @@ export default function ExpensesNew() {
 
   const validateExpenseForm = () => {
     if ((!form.amount || Number(form.amount) === 0) && files.length === 0) {
-      toast.error('Amount is required unless importing from files');
+      toast.error(t('expenses.amount_required'));
       return false;
     }
     if (!form.category) {
-      toast.error('Category is required');
+      toast.error(t('expenses.category_required'));
       return false;
     }
 
     // Validate consumption items
     if (isInventoryConsumption) {
       if (!consumptionItems || consumptionItems.length === 0) {
-        toast.error('At least one inventory item must be selected for consumption');
+        toast.error(t('expenses.at_least_one_inventory_item_must_be_selected_for_consumption'));
         return false;
       }
       // Validate that all consumption items have valid quantities
       const invalidItems = consumptionItems.filter(item => !item.quantity || item.quantity <= 0);
       if (invalidItems.length > 0) {
-        toast.error('All inventory consumption items must have a quantity greater than 0');
+        toast.error(t('expenses.all_inventory_consumption_items_must_have_quantity_greater_than_0'));
         return false;
       }
     }
@@ -110,7 +110,7 @@ export default function ExpensesNew() {
     if (files.length > 0) {
       addNotification?.('processing', 'Processing Expense Receipts', `Analyzing ${files.length} receipt files with AI...`);
     }
-    
+
     const payload = {
       amount: Number(form.amount),
       currency: form.currency || 'USD',
@@ -130,13 +130,13 @@ export default function ExpensesNew() {
       is_inventory_consumption: isInventoryConsumption,
       consumption_items: isInventoryConsumption ? consumptionItems : undefined,
     } as any;
-    
-    const created = await expenseApi.createExpense({ 
-      ...payload, 
-      imported_from_attachment: files.length > 0, 
-      analysis_status: files.length > 0 ? 'queued' : 'not_started' 
+
+    const created = await expenseApi.createExpense({
+      ...payload,
+      imported_from_attachment: files.length > 0,
+      analysis_status: files.length > 0 ? 'queued' : 'not_started'
     } as any);
-    
+
     // Upload up to 10 files
     let uploadedCount = 0;
     for (let i = 0; i < Math.min(files.length, 10); i++) {
@@ -144,10 +144,10 @@ export default function ExpensesNew() {
         await expenseApi.uploadReceipt(created.id, files[i].file);
         uploadedCount++;
       } catch (e) {
-        console.error(e); 
+        console.error(e);
       }
     }
-    
+
     if (files.length > 0) {
       if (uploadedCount === files.length) {
         addNotification?.('success', 'Expense Receipts Processed', `Successfully uploaded ${uploadedCount} receipt files. AI analysis in progress.`);
@@ -166,11 +166,11 @@ export default function ExpensesNew() {
       const approverId = parseInt(selectedApproverId);
       await approvalApi.submitForApproval(createdExpenseId, approverId, notes);
 
-      toast.success('Expense submitted for approval successfully');
+      toast.success(t('expenses.expense_submitted_for_approval_successfully'));
       setShowApprovalDialog(false);
       window.history.back();
     } catch (e: any) {
-      toast.error(e?.message || 'Failed to submit expense for approval');
+      toast.error(e?.message || t('expenses.failed_to_submit_expense_for_approval'));
       throw e; // Re-throw to prevent dialog from closing
     }
   };
@@ -178,19 +178,19 @@ export default function ExpensesNew() {
   const onSubmit = async () => {
     try {
       setSaving(true);
-      
+
       if (!validateExpenseForm()) {
         return;
       }
 
       const created = await createExpense();
-      
+
       if (submitForApproval) {
         // Store the created expense ID and show approval dialog
         setCreatedExpenseId(created.id);
         setShowApprovalDialog(true);
       } else {
-        toast.success(isInventoryConsumption ? 'Consumption expense created successfully' : 'Expense created');
+        toast.success(isInventoryConsumption ? t('expenses.consumption_expense_created_successfully') : t('expenses.expense_created'));
         window.history.back();
       }
     } catch (e: any) {
@@ -198,7 +198,7 @@ export default function ExpensesNew() {
       if (files.length > 0) {
         addNotification?.('error', 'Expense Processing Failed', `Failed to process expense receipts: ${e?.message || 'Unknown error'}`);
       }
-      toast.error(e?.message || 'Failed to create expense');
+      toast.error(e?.message || t('expenses.failed_to_create'));
     } finally {
       setSaving(false);
     }
@@ -208,39 +208,39 @@ export default function ExpensesNew() {
     <AppLayout>
       <div className="h-full space-y-6 fade-in">
         <div>
-          <h1 className="text-3xl font-bold">New Expense</h1>
-          <p className="text-muted-foreground">Create a new expense with optional inventory integration and upload up to 5 attachments.</p>
+          <h1 className="text-3xl font-bold">{t('expenses.new_title')}</h1>
+          <p className="text-muted-foreground">{t('expenses.new_description')}</p>
         </div>
 
         <Card className="slide-in">
           <CardHeader>
-            <CardTitle>Details</CardTitle>
+            <CardTitle>{t('expenses.details')}</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="text-sm">Amount</label>
+              <label className="text-sm">{t('expenses.labels.amount')}</label>
               <Input
                 type="number"
                 value={Number(form.amount || 0)}
                 onChange={e => setForm({ ...form, amount: Number(e.target.value) })}
                 disabled={isInventoryConsumption}
-                placeholder={isInventoryConsumption ? "Calculated from items" : undefined}
+                placeholder={isInventoryConsumption ? t('expenses.calculated_from_items') : undefined}
               />
               {isInventoryConsumption && (
-                <p className="text-xs text-muted-foreground mt-1">Amount calculated from selected inventory items</p>
+                <p className="text-xs text-muted-foreground mt-1">{t('expenses.amount_calculated_from_selected_inventory_items')}</p>
               )}
             </div>
             <div>
-              <label className="text-sm">Currency</label>
+              <label className="text-sm">{t('expenses.labels.currency')}</label>
               <CurrencySelector value={form.currency || 'USD'} onValueChange={v => setForm({ ...form, currency: v })} />
             </div>
             <div>
-              <label className="text-sm">Date</label>
+              <label className="text-sm">{t('expenses.labels.date')}</label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="w-full justify-start text-left font-normal">
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {form.expense_date ? format(new Date(form.expense_date as string), 'PPP') : 'Pick a date'}
+                    {form.expense_date ? format(new Date(form.expense_date as string), 'PPP') : t('expenses.labels.pick_date')}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
@@ -262,13 +262,13 @@ export default function ExpensesNew() {
               </Popover>
             </div>
             <div>
-              <label className="text-sm">Link to Invoice (optional)</label>
+              <label className="text-sm">{t('expenses.link_to_invoice')}</label>
               <Select value={form.invoice_id ? String(form.invoice_id) : undefined} onValueChange={v => setForm({ ...form, invoice_id: v === 'none' ? undefined : Number(v) })}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select invoice" />
+                  <SelectValue placeholder={t('expenses.select_invoice')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="none">{t('expenses.none')}</SelectItem>
                   {invoiceOptions.map(inv => (
                     <SelectItem key={inv.id} value={String(inv.id)}>{inv.number} — {inv.client_name}</SelectItem>
                   ))}
@@ -276,10 +276,10 @@ export default function ExpensesNew() {
               </Select>
             </div>
             <div>
-              <label className="text-sm">Category</label>
+              <label className="text-sm">{t('expenses.labels.category')}</label>
               <Select value={(form.category as string) || 'General'} onValueChange={v => setForm({ ...form, category: v })}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select category" />
+                  <SelectValue placeholder={t('expenses.select_category')} />
                 </SelectTrigger>
                 <SelectContent>
                   {categoryOptions.map(c => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
@@ -287,19 +287,19 @@ export default function ExpensesNew() {
               </Select>
             </div>
             <div>
-              <label className="text-sm">Vendor</label>
+              <label className="text-sm">{t('expenses.labels.vendor')}</label>
               <Input value={form.vendor || ''} onChange={e => setForm({ ...form, vendor: e.target.value })} />
             </div>
             <div>
-              <label className="text-sm">Payment method</label>
+              <label className="text-sm">{t('expenses.labels.payment_method')}</label>
               <Input value={form.payment_method || ''} onChange={e => setForm({ ...form, payment_method: e.target.value })} />
             </div>
             <div>
-              <label className="text-sm">Reference #</label>
+              <label className="text-sm">{t('expenses.labels.reference_number')}</label>
               <Input value={form.reference_number || ''} onChange={e => setForm({ ...form, reference_number: e.target.value })} />
             </div>
             <div className="sm:col-span-2">
-              <label className="text-sm">Notes</label>
+              <label className="text-sm">{t('expenses.labels.notes')}</label>
               <Input value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} />
             </div>
           </CardContent>
@@ -461,41 +461,41 @@ export default function ExpensesNew() {
                 {t('expenses.submit_this_expense_for_approval_after_creation')}
               </label>
             </div>
-              {submitForApproval && (
-                <div className="mt-3 space-y-3">
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-sm text-blue-700">
-                      {t('expenses.this_expense_will_be_submitted_for_approval')}
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="approver-select" className="flex items-center gap-2 text-sm font-medium">
-                      <Users className="h-4 w-4" />
-                      {t('expenses.select_approver')} *
-                    </Label>
-                    <Select value={selectedApproverId} onValueChange={setSelectedApproverId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder={t('expenses.choose_an_approver')} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableApprovers.map((approver) => (
-                          <SelectItem key={approver.id} value={approver.id.toString()}>
-                            {approver.name} ({approver.email})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+            {submitForApproval && (
+              <div className="mt-3 space-y-3">
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-700">
+                    {t('expenses.this_expense_will_be_submitted_for_approval')}
+                  </p>
                 </div>
-              )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="approver-select" className="flex items-center gap-2 text-sm font-medium">
+                    <Users className="h-4 w-4" />
+                    {t('expenses.select_approver')} *
+                  </Label>
+                  <Select value={selectedApproverId} onValueChange={setSelectedApproverId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('expenses.choose_an_approver')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableApprovers.map((approver) => (
+                        <SelectItem key={approver.id} value={approver.id.toString()}>
+                          {approver.name} ({approver.email})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => window.history.back()}>{t('common.cancel')}</Button>
           <Button onClick={onSubmit} disabled={saving || (submitForApproval && !selectedApproverId)}>
-            {saving ? t('saving') : (submitForApproval ? t('expenses.create_and_submit_for_approval') : t('expenses.create_expense'))}
+            {saving ? t('common.saving') : (submitForApproval ? t('expenses.create_and_submit_for_approval') : t('expenses.create_expense'))}
           </Button>
         </div>
 
