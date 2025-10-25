@@ -115,8 +115,8 @@ Respond with JSON only:"""
         model_name = ai_config.model_name
         if ai_config.provider_name == "ollama":
             model_name = f"ollama/{ai_config.model_name}"
-        elif ai_config.provider_name == "openai":
-            model_name = ai_config.model_name
+        elif ai_config.provider_name == "openrouter":
+            model_name = f"openrouter/{ai_config.model_name}"
         elif ai_config.provider_name == "anthropic":
             model_name = f"anthropic/{ai_config.model_name}"
 
@@ -133,7 +133,11 @@ Respond with JSON only:"""
 
         if ai_config.provider_name == "openai" and ai_config.api_key:
             kwargs["api_key"] = ai_config.api_key
-        if ai_config.provider_name == "ollama" and ai_config.provider_url:
+        elif ai_config.provider_name == "openrouter":
+            if ai_config.api_key:
+                kwargs["api_key"] = ai_config.api_key
+            kwargs["api_base"] = ai_config.provider_url or "https://openrouter.ai/api/v1"
+        elif ai_config.provider_name == "ollama" and ai_config.provider_url:
             kwargs["api_base"] = ai_config.provider_url
         elif ai_config.provider_name == "anthropic" and ai_config.api_key:
             kwargs["api_key"] = ai_config.api_key

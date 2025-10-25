@@ -2033,7 +2033,7 @@ async def upload_invoice_attachment(
 
         # Validate file path before any file operations
         from utils.file_validation import validate_file_path
-        validated_path = validate_file_path(str(file_path))
+        validated_path = validate_file_path(str(file_path), must_exist=False)
         
         # Remove old attachment if exists
         if invoice.attachment_path and os.path.exists(invoice.attachment_path):

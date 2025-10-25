@@ -893,7 +893,7 @@ async def upload_receipt(
 
         # Validate file path before writing
         from utils.file_validation import validate_file_path
-        validated_path = validate_file_path(str(file_path))
+        validated_path = validate_file_path(str(file_path), must_exist=False)
 
         with open(validated_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)

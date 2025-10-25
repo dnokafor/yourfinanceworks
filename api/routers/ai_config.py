@@ -90,7 +90,7 @@ async def get_ai_configs(
     """Get all AI configurations for the current tenant"""
     try:
         # No tenant_id filtering needed since we're in the tenant's database
-        configs = db.query(AIConfigModel).all()
+        configs = db.query(AIConfigModel).order_by(AIConfigModel.provider_name, AIConfigModel.model_name).all()
         return configs
     except HTTPException:
         raise

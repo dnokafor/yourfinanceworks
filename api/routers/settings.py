@@ -105,8 +105,8 @@ async def update_settings(
         tenant.phone = company_info.get("phone", tenant.phone)
         tenant.address = company_info.get("address", tenant.address)
         tenant.tax_id = company_info.get("tax_id", tenant.tax_id)
-        tenant.company_logo_url = company_info.get("logo", tenant.company_logo_url)
-    
+        # Logo is managed separately via /upload-logo endpoint, don't update it here
+
     # Update AI assistant setting
     if "enable_ai_assistant" in settings:
         tenant.enable_ai_assistant = settings["enable_ai_assistant"]
@@ -874,7 +874,7 @@ async def upload_company_logo(
     static_dir = os.path.join(os.path.dirname(__file__), "..", "static", "logos")
     static_dir = os.path.abspath(static_dir)
     tenant_dir = os.path.join(static_dir, str(current_user.tenant_id))
-    tenant_dir = validate_file_path(tenant_dir)
+    tenant_dir = os.path.abspath(tenant_dir)
 
     # Ensure tenant_dir is within static_dir
     if not tenant_dir.startswith(static_dir):
@@ -887,7 +887,7 @@ async def upload_company_logo(
     if ext not in [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"]:
         ext = ".png"
     filename = f"logo{ext}"
-    file_path = validate_file_path(os.path.join(tenant_dir, filename))
+    file_path = validate_file_path(os.path.join(tenant_dir, filename), must_exist=False)
 
     # Final validation: ensure file_path is within tenant_dir
     if not file_path.startswith(tenant_dir):
@@ -910,8 +910,36 @@ async def upload_company_logo(
         
         # Return the public URL
         logo_url = f"/static/logos/{current_user.tenant_id}/{filename}"
+
+        # Save logo URL to tenant record in master database using manual session
+        from sqlalchemy import text
+        from models.database import SessionLocal
+        logger.info(f"Saving logo URL to tenant {current_user.tenant_id}: {logo_url}")
+
+        db = SessionLocal()
+        try:
+            result = db.execute(
+                text("UPDATE tenants SET company_logo_url = :logo_url WHERE id = :tenant_id"),
+                {"logo_url": logo_url, "tenant_id": current_user.tenant_id}
+            )
+            db.commit()
+            logger.info(f"Logo URL updated in database, rows affected: {result.rowcount}")
+
+            # Verify the update
+            verify = db.execute(
+                text("SELECT company_logo_url FROM tenants WHERE id = :tenant_id"),
+                {"tenant_id": current_user.tenant_id}
+            ).fetchone()
+            logger.info(f"Verification query result: {verify[0] if verify else 'NOT FOUND'}")
+        except Exception as e:
+            logger.error(f"Database error: {e}")
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
         return {"url": logo_url}
-        
+
     except Exception as e:
         print(f"Failed to save logo to {file_path}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save logo: {e}")
