@@ -68,7 +68,7 @@ def get_reminders(
     due_date_to: Optional[datetime] = Query(None, description="Filter by due date to"),
     search: Optional[str] = Query(None, max_length=100, description="Search in title and description"),
     sort_by: str = Query("due_date", description="Sort by field"),
-    sort_order: str = Query("asc", regex="^(asc|desc)$", description="Sort order"),
+    sort_order: str = Query("asc", pattern="^(asc|desc)$", description="Sort order"),
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
