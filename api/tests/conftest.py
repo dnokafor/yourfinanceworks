@@ -6,8 +6,16 @@ from unittest.mock import Mock
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
+from fastapi.testclient import TestClient
 
 from models.models_per_tenant import Base
+from main import app
+
+
+@pytest.fixture
+def client():
+    """Create FastAPI test client"""
+    return TestClient(app)
 
 
 @pytest.fixture

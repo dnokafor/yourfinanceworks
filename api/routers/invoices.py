@@ -487,7 +487,9 @@ async def clone_invoice(
                 description=s_item.description,
                 quantity=float(s_item.quantity),
                 price=float(s_item.price),
-                amount=float(s_item.quantity) * float(s_item.price)
+                amount=float(s_item.quantity) * float(s_item.price),
+                inventory_item_id=s_item.inventory_item_id,
+                unit_of_measure=s_item.unit_of_measure
             )
             db.add(db_item)
 
@@ -533,10 +535,12 @@ async def clone_invoice(
             {
                 "id": item.id,
                 "invoice_id": item.invoice_id,
+                "inventory_item_id": item.inventory_item_id,
                 "description": item.description,
                 "quantity": item.quantity,
                 "price": item.price,
-                "amount": item.amount
+                "amount": item.amount,
+                "unit_of_measure": item.unit_of_measure
             }
             for item in items
         ]
@@ -562,7 +566,9 @@ async def clone_invoice(
             "custom_fields": cloned_invoice.custom_fields if cloned_invoice.custom_fields is not None else {},
             "show_discount_in_pdf": cloned_invoice.show_discount_in_pdf,
             "has_attachment": False,
-            "attachment_filename": None
+            "attachment_filename": None,
+            "attachments": [],
+            "attachment_count": 0
         }
     except HTTPException:
         db.rollback()
