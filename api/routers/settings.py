@@ -308,14 +308,14 @@ async def import_tenant_data(
     from services.tenant_database_manager import tenant_db_manager
     try:
         require_admin(current_user, "import data")
-        
+
         # Validate file type
         if not file.filename or not file.filename.endswith('.sqlite'):
             raise HTTPException(
                 status_code=400,
                 detail="File must be a SQLite database (.sqlite extension)"
             )
-        
+
         # Create temporary directory for import file
         temp_dir = tempfile.mkdtemp()
         import_file = os.path.join(temp_dir, "import.sqlite")
@@ -324,7 +324,7 @@ async def import_tenant_data(
             with open(import_file, "wb") as buffer:
                 content = file.file.read()
                 buffer.write(content)
-            
+
             # Connect to import database
             import_engine = create_engine(f"sqlite:///{import_file}")
             ImportSession = sessionmaker(bind=import_engine)
@@ -918,8 +918,18 @@ async def get_company_logo(
         # Assuming company_logo_url is like /static/logos/<tenant_id>/logo.png
         # We need to convert this to an absolute file system path
         relative_path = tenant_record.company_logo_url.lstrip("/") # Remove leading slash
+        
+        # Validate path to prevent directory traversal
+        if ".." in relative_path or not relative_path.startswith("static/logos/"):
+            raise HTTPException(status_code=400, detail="Invalid logo path")
+        
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-        file_path = os.path.join(base_dir, relative_path)
+        file_path = os.path.abspath(os.path.join(base_dir, relative_path))
+        
+        # Ensure the resolved path is still within the expected directory
+        expected_dir = os.path.abspath(os.path.join(base_dir, "static", "logos"))
+        if not file_path.startswith(expected_dir):
+            raise HTTPException(status_code=400, detail="Invalid logo path")
         
         if not os.path.exists(file_path):
             logger.error(f"Logo file not found on disk: {file_path}")
