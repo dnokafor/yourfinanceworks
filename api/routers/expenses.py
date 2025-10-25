@@ -94,8 +94,8 @@ async def list_expenses(
         try:
             for ex in expenses:
                 ex.attachments_count = db.query(ExpenseAttachment).filter(ExpenseAttachment.expense_id == ex.id).count()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to get attachment count for expenses: {e}")
         return expenses
     except Exception as e:
         logger.error(f"Failed to list expenses: {e}")
@@ -113,8 +113,8 @@ async def get_expense(
         raise HTTPException(status_code=404, detail="Expense not found")
     try:
         expense.attachments_count = db.query(ExpenseAttachment).filter(ExpenseAttachment.expense_id == expense_id).count()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to get attachment count for expense {expense_id}: {e}")
 
     return expense
 
@@ -841,6 +841,17 @@ async def upload_receipt(
         if not expense:
             raise HTTPException(status_code=404, detail="Expense not found")
 
+        # Validate filename exists
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="Filename is required")
+
+        # Validate file extension
+        file_ext = os.path.splitext(file.filename.lower())[1]
+        allowed_extensions = {'.pdf', '.jpg', '.jpeg', '.png'}
+        if file_ext not in allowed_extensions:
+            raise HTTPException(status_code=400, detail=f"File type not allowed. Supported: {', '.join(allowed_extensions)}")
+
+        # Validate content type
         allowed_types = {
             'application/pdf': '.pdf',
             'image/jpeg': '.jpg',
@@ -849,6 +860,7 @@ async def upload_receipt(
         if file.content_type not in allowed_types:
             raise HTTPException(status_code=400, detail="File type not allowed. Supported: PDF, JPG, PNG")
 
+        # Read and validate file size
         MAX_BYTES = 10 * 1024 * 1024
         contents = await file.read()
         if len(contents) > MAX_BYTES:
@@ -879,7 +891,11 @@ async def upload_receipt(
         if existing_count >= 10:
             raise HTTPException(status_code=400, detail="Maximum of 10 attachments per expense")
 
-        with open(file_path, "wb") as buffer:
+        # Validate file path before writing
+        from utils.file_validation import validate_file_path
+        validated_path = validate_file_path(str(file_path))
+
+        with open(validated_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
         # Save as attachment record
@@ -1062,10 +1078,15 @@ async def download_expense_attachment(
     ).first()
     if not att:
         raise HTTPException(status_code=404, detail="Attachment not found")
-    if not att.file_path or not os.path.exists(att.file_path):
+    if not att.file_path:
         raise HTTPException(status_code=404, detail="Attachment file not found")
+
+    # Validate file path before serving
+    from utils.file_validation import validate_file_path
+    validated_path = validate_file_path(att.file_path)
+
     media_type = att.content_type or 'application/octet-stream'
-    return FileResponse(path=att.file_path, filename=att.filename, media_type=media_type)
+    return FileResponse(path=validated_path, filename=att.filename, media_type=media_type)
 
 
 # Expense Analytics Endpoints

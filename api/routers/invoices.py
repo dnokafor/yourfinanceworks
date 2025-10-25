@@ -2030,17 +2030,22 @@ async def upload_invoice_attachment(
         # Create filename in format: invoice_<id>_<sanitized>.ext
         filename = f"invoice_{invoice_id}_{name_without_ext}{file_extension}"
         file_path = attachments_dir / filename
+
+        # Validate file path before any file operations
+        from utils.file_validation import validate_file_path
+        validated_path = validate_file_path(str(file_path))
         
         # Remove old attachment if exists
         if invoice.attachment_path and os.path.exists(invoice.attachment_path):
             try:
-                os.remove(invoice.attachment_path)
+                old_validated_path = validate_file_path(invoice.attachment_path)
+                os.remove(old_validated_path)
                 logger.info(f"Removed old attachment: {invoice.attachment_path}")
             except Exception as e:
                 logger.warning(f"Failed to remove old attachment: {e}")
         
         # Save file safely (we already validated size via in-memory read cap)
-        with open(file_path, "wb") as buffer:
+        with open(validated_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
         # Update invoice with attachment info
@@ -2126,12 +2131,12 @@ async def download_invoice_attachment(
         if not invoice.attachment_path or not invoice.attachment_filename:
             raise HTTPException(status_code=404, detail="No attachment found for this invoice")
         
-        # Check if file exists
-        if not os.path.exists(invoice.attachment_path):
-            raise HTTPException(status_code=404, detail="Attachment file not found on disk")
+        # Validate file path
+        from utils.file_validation import validate_file_path
+        validated_path = validate_file_path(invoice.attachment_path)
         
         return FileResponse(
-            path=invoice.attachment_path,
+            path=validated_path,
             filename=invoice.attachment_filename,
             media_type='application/octet-stream'
         )
@@ -2192,8 +2197,12 @@ async def preview_invoice_attachment(
         if not invoice:
             raise HTTPException(status_code=404, detail="Invoice not found")
 
-        if not invoice.attachment_path or not os.path.exists(invoice.attachment_path):
+        if not invoice.attachment_path:
             raise HTTPException(status_code=404, detail="Attachment file not found")
+
+        # Validate file path
+        from utils.file_validation import validate_file_path
+        validated_path = validate_file_path(invoice.attachment_path)
 
         # Guess media type from filename; fallback to octet-stream
         media_type, _ = mimetypes.guess_type(invoice.attachment_filename or "")
@@ -2204,7 +2213,7 @@ async def preview_invoice_attachment(
             "Content-Disposition": f"inline; filename={invoice.attachment_filename or 'attachment'}"
         }
         return FileResponse(
-            path=invoice.attachment_path,
+            path=validated_path,
             filename=invoice.attachment_filename,
             media_type=media_type,
             headers=headers
@@ -2256,6 +2265,15 @@ async def upload_invoice_attachment_new(
         if not attachment_type:
             attachment_type = "document"
         
+        # Validate file type before reading
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="Filename is required")
+
+        file_ext = os.path.splitext(file.filename.lower())[1]
+        allowed_extensions = {'.pdf', '.jpg', '.jpeg', '.png', '.gif', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv'}
+        if file_ext not in allowed_extensions:
+            raise HTTPException(status_code=400, detail=f"File type not allowed. Allowed: {', '.join(allowed_extensions)}")
+        
         # Read file content for validation
         file_content = await file.read()
         
@@ -2265,6 +2283,11 @@ async def upload_invoice_attachment_new(
                 detail="Empty file provided"
             )
         
+        # Validate file size (max 10MB)
+        MAX_FILE_SIZE = 10 * 1024 * 1024
+        if len(file_content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail=f"File too large. Maximum size is 10MB")
+
         # Import the InvoiceAttachment model
         from models.models_per_tenant import InvoiceAttachment
         import uuid
@@ -2273,23 +2296,34 @@ async def upload_invoice_attachment_new(
         
         # Create attachments directory
         from models.database import get_tenant_context
+        from utils.file_validation import validate_file_path
+
         tenant_id = get_tenant_context()
-        tenant_folder = f"tenant_{tenant_id}" if tenant_id else "tenant_unknown"
+        if not tenant_id:
+            raise HTTPException(status_code=400, detail="Tenant context not available")
+
+        tenant_folder = f"tenant_{tenant_id}"
         attachments_dir = Path("attachments") / tenant_folder / "invoices"
         attachments_dir.mkdir(parents=True, exist_ok=True)
         
-        # Generate unique filename
+        # Generate unique filename with validated extension
         file_extension = Path(file.filename or "attachment").suffix
+        if file_extension not in allowed_extensions:
+            file_extension = ".txt"  # Safe fallback
+
         stored_filename = f"{uuid.uuid4()}{file_extension}"
         file_path = attachments_dir / stored_filename
-        
+
+        # Validate file path before saving
+        validated_path = validate_file_path(str(file_path))
+
         # Save file to disk
-        with open(file_path, "wb") as f:
+        with open(validated_path, "wb") as f:
             f.write(file_content)
-        
+
         # Calculate file hash
         file_hash = hashlib.sha256(file_content).hexdigest()
-        
+
         # Create attachment record
         attachment = InvoiceAttachment(
             invoice_id=invoice_id,
@@ -2305,11 +2339,11 @@ async def upload_invoice_attachment_new(
             uploaded_by=current_user.id,
             is_active=True
         )
-        
+
         db.add(attachment)
         db.commit()
         db.refresh(attachment)
-        
+
         return {
             "id": attachment.id,
             "invoice_id": invoice_id,
@@ -2322,7 +2356,7 @@ async def upload_invoice_attachment_new(
             "status": "success",
             "message": "Attachment uploaded successfully"
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -2350,24 +2384,24 @@ async def get_invoice_attachments(
             Invoice.id == invoice_id,
             Invoice.is_deleted == False
         ).first()
-        
+
         if not invoice:
             raise HTTPException(status_code=404, detail="Invoice not found")
-        
+
         # Import the InvoiceAttachment model
         from models.models_per_tenant import InvoiceAttachment
-        
+
         # Query attachments
         query = db.query(InvoiceAttachment).filter(
             InvoiceAttachment.invoice_id == invoice_id,
             InvoiceAttachment.is_active == True
         )
-        
+
         if attachment_type:
             query = query.filter(InvoiceAttachment.attachment_type == attachment_type)
-        
+
         attachments = query.order_by(InvoiceAttachment.created_at.desc()).all()
-        
+
         # Format response
         attachment_list = []
         for attachment in attachments:
@@ -2382,13 +2416,13 @@ async def get_invoice_attachments(
                 "created_at": attachment.created_at.isoformat(),
                 "uploaded_by": attachment.uploaded_by
             })
-        
+
         return {
             "invoice_id": invoice_id,
             "attachments": attachment_list,
             "total_count": len(attachment_list)
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:

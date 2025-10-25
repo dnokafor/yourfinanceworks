@@ -17,6 +17,7 @@ from schemas.report import (
     ReportHistoryCreate, ReportHistory as ReportHistorySchema,
     ReportStatus, ExportFormat
 )
+from utils.file_validation import validate_file_path
 
 
 class ReportHistoryError(Exception):
@@ -287,56 +288,68 @@ class ReportHistoryService:
         if report.status != ReportStatus.COMPLETED:
             return None
         
-        if not report.file_path or not os.path.exists(report.file_path):
+        if not report.file_path:
             return None
-        
+
+        try:
+            safe_path = validate_file_path(report.file_path)
+        except ValueError:
+            return None
+
+        if not os.path.exists(safe_path):
+            return None
+
         # Check if report has expired
         if report.expires_at and datetime.now(timezone.utc) > report.expires_at:
             return None
-        
+
         return report.file_path
-    
+
     def delete_report_file(self, report_id: int, user_id: int) -> bool:
         """
         Delete a report file with access control.
-        
+
         Args:
             report_id: ID of the report
             user_id: ID of the requesting user
-            
+
         Returns:
             True if deleted successfully, False otherwise
         """
         try:
             report = self.get_report_history(report_id, user_id)
-            
+
             if not report or not report.file_path:
                 return False
-            
+
             # Delete the physical file
-            if os.path.exists(report.file_path):
-                os.remove(report.file_path)
-            
+            try:
+                safe_path = validate_file_path(report.file_path)
+                if os.path.exists(safe_path):
+                    os.remove(safe_path)
+            except ValueError:
+                pass
+
             # Clear file path from database
             report.file_path = None
             self.db.commit()
-            
+
             return True
-            
+
         except Exception as e:
             self.db.rollback()
             raise ReportHistoryError(f"Failed to delete report file: {str(e)}")
-    
+
     def cleanup_expired_reports(self) -> Dict[str, int]:
         """
         Clean up expired report files and update database records.
-        
+
         Returns:
             Dictionary with cleanup statistics
         """
         try:
             now = datetime.now()
-            
+
             # Find expired reports
             expired_reports = self.db.query(ReportHistory).filter(
                 and_(
@@ -344,96 +357,101 @@ class ReportHistoryService:
                     ReportHistory.file_path.isnot(None)
                 )
             ).all()
-            
+
             files_deleted = 0
             records_updated = 0
             errors = 0
-            
+
             for report in expired_reports:
                 try:
                     # Delete physical file if it exists
-                    if report.file_path and os.path.exists(report.file_path):
-                        os.remove(report.file_path)
-                        files_deleted += 1
-                    
+                    if report.file_path:
+                        try:
+                            safe_path = validate_file_path(report.file_path)
+                            if os.path.exists(safe_path):
+                                os.remove(safe_path)
+                                files_deleted += 1
+                        except ValueError:
+                            pass
+
                     # Clear file path from database
                     report.file_path = None
                     records_updated += 1
-                    
+
                 except Exception as e:
                     errors += 1
                     # Log error but continue with other files
                     print(f"Error cleaning up report {report.id}: {str(e)}")
-            
+
             self.db.commit()
-            
+
             return {
                 "expired_reports_found": len(expired_reports),
                 "files_deleted": files_deleted,
                 "records_updated": records_updated,
                 "errors": errors
             }
-            
+
         except Exception as e:
             self.db.rollback()
             raise ReportHistoryError(f"Failed to cleanup expired reports: {str(e)}")
-    
+
     def cleanup_orphaned_files(self) -> Dict[str, int]:
         """
         Clean up orphaned report files that no longer have database records.
-        
+
         Returns:
             Dictionary with cleanup statistics
         """
         try:
             if not os.path.exists(self.storage_path):
                 return {"files_deleted": 0, "errors": 0}
-            
+
             files_deleted = 0
             errors = 0
-            
+
             # Get all file paths from database
             db_file_paths = set()
             reports_with_files = self.db.query(ReportHistory).filter(
                 ReportHistory.file_path.isnot(None)
             ).all()
-            
+
             for report in reports_with_files:
                 if report.file_path:
                     db_file_paths.add(os.path.abspath(report.file_path))
-            
+
             # Walk through storage directory
             for root, dirs, files in os.walk(self.storage_path):
                 for file in files:
                     file_path = os.path.abspath(os.path.join(root, file))
-                    
+
                     # Skip if file is referenced in database
                     if file_path in db_file_paths:
                         continue
-                    
+
                     # Skip if file is not a report file (basic check)
                     if not any(file.startswith(prefix) for prefix in ["report_", "client_", "invoice_", "payment_", "expense_", "statement_"]):
                         continue
-                    
+
                     try:
                         os.remove(file_path)
                         files_deleted += 1
                     except Exception as e:
                         errors += 1
                         print(f"Error deleting orphaned file {file_path}: {str(e)}")
-            
+
             return {
                 "files_deleted": files_deleted,
                 "errors": errors
             }
-            
+
         except Exception as e:
             raise ReportHistoryError(f"Failed to cleanup orphaned files: {str(e)}")
-    
+
     def get_storage_stats(self) -> Dict[str, Any]:
         """
         Get statistics about report file storage.
-        
+
         Returns:
             Dictionary with storage statistics
         """
@@ -445,19 +463,19 @@ class ReportHistoryService:
                 "expired_reports": 0,
                 "storage_path": self.storage_path
             }
-            
+
             # Database statistics
             stats["total_reports"] = self.db.query(ReportHistory).count()
             stats["reports_with_files"] = self.db.query(ReportHistory).filter(
                 ReportHistory.file_path.isnot(None)
             ).count()
-            
+
             # Count expired reports
             now = datetime.now()
             stats["expired_reports"] = self.db.query(ReportHistory).filter(
                 ReportHistory.expires_at < now
             ).count()
-            
+
             # File system statistics
             if os.path.exists(self.storage_path):
                 total_size = 0
@@ -468,15 +486,15 @@ class ReportHistoryService:
                             total_size += os.path.getsize(file_path)
                         except OSError:
                             pass  # Skip files that can't be accessed
-                
+
                 stats["total_file_size"] = total_size
                 stats["total_file_size_mb"] = round(total_size / (1024 * 1024), 2)
-            
+
             return stats
-            
+
         except Exception as e:
             raise ReportHistoryError(f"Failed to get storage stats: {str(e)}")
-    
+
     def _get_file_extension(self, export_format: ExportFormat) -> str:
         """Get file extension for export format"""
         extension_map = {
@@ -486,7 +504,7 @@ class ReportHistoryService:
             ExportFormat.JSON: "json"
         }
         return extension_map.get(export_format, "bin")
-    
+
     def regenerate_report(
         self,
         report_id: int,
@@ -495,26 +513,26 @@ class ReportHistoryService:
     ) -> ReportHistory:
         """
         Create a new report history entry based on an existing one.
-        
+
         Args:
             report_id: ID of the original report
             user_id: ID of the requesting user
             new_parameters: Optional new parameters to override
-            
+
         Returns:
             New ReportHistory instance
         """
         try:
             original_report = self.get_report_history(report_id, user_id)
-            
+
             if not original_report:
                 raise ReportHistoryError("Original report not found or access denied")
-            
+
             # Merge parameters
             parameters = original_report.parameters.copy()
             if new_parameters:
                 parameters.update(new_parameters)
-            
+
             # Create new report history entry
             new_report = self.create_report_history(
                 report_type=original_report.report_type,
@@ -522,8 +540,8 @@ class ReportHistoryService:
                 user_id=user_id,
                 template_id=original_report.template_id
             )
-            
+
             return new_report
-            
+
         except Exception as e:
             raise ReportHistoryError(f"Failed to regenerate report: {str(e)}")

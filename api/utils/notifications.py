@@ -10,9 +10,9 @@ logger = logging.getLogger(__name__)
 def get_notification_service(db: Session) -> Optional[NotificationService]:
     """Get configured notification service"""
     try:
-        # Get email configuration
+        # Get email configuration using parameterized query
         email_settings = db.query(Settings).filter(
-            Settings.key == "email_config"
+            Settings.key == "email_config"  # SQLAlchemy ORM - safe parameterized query
         ).first()
         
         if not email_settings or not email_settings.value:

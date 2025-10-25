@@ -302,14 +302,18 @@ class InvoiceAPIClient:
         content_type: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Upload a receipt/attachment file for a given expense"""
+        # Validate file path before opening
+        from utils.file_validation import validate_file_path
+        validated_path = validate_file_path(file_path)
+
         headers = await self.auth_client.get_auth_headers()
         # httpx requires no Content-Type header set for multipart; remove if present
         headers.pop("Content-Type", None)
 
-        final_filename = filename or os.path.basename(file_path)
+        final_filename = filename or os.path.basename(validated_path)
         final_content_type = content_type or (mimetypes.guess_type(final_filename)[0] or "application/octet-stream")
 
-        with open(file_path, "rb") as fp:
+        with open(validated_path, "rb") as fp:
             files = {"file": (final_filename, fp, final_content_type)}
             resp = await self._client.post(
                 url=f"{self.base_url}/expenses/{expense_id}/upload-receipt",
@@ -544,12 +548,16 @@ class InvoiceAPIClient:
 
     async def process_pdf_upload(self, file_path: str, filename: str = None) -> Dict[str, Any]:
         """Upload and process a PDF file"""
+        # Validate file path before opening
+        from utils.file_validation import validate_file_path
+        validated_path = validate_file_path(file_path)
+
         headers = await self.auth_client.get_auth_headers()
         # httpx requires no Content-Type header set for multipart; remove if present
         headers.pop("Content-Type", None)
 
-        with open(file_path, "rb") as fp:
-            files = {"file": (filename or os.path.basename(file_path), fp, "application/pdf")}
+        with open(validated_path, "rb") as fp:
+            files = {"file": (filename or os.path.basename(validated_path), fp, "application/pdf")}
             resp = await self._client.post(
                 url=f"{self.base_url}/invoices/upload-pdf",
                 headers=headers,

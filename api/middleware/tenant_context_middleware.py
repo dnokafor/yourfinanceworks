@@ -69,11 +69,6 @@ def record_failed_auth(client_ip: str):
 def is_safe_static_file(path: str) -> bool:
     """Validate static file access for security"""
     try:
-        # SECURITY IMPROVEMENT 4: Validate file extension
-        file_path = Path(path)
-        if file_path.suffix.lower() not in ALLOWED_STATIC_EXTENSIONS:
-            return False
-        
         # SECURITY IMPROVEMENT 5: Prevent path traversal
         if '..' in path or '//' in path:
             return False
@@ -82,6 +77,13 @@ def is_safe_static_file(path: str) -> bool:
         if not path.startswith('/static/logos/'):
             return False
         
+        # SECURITY IMPROVEMENT 4: Validate file extension
+        # Sanitize path before using Path()
+        safe_path = os.path.basename(path)
+        file_path = Path(safe_path)
+        if file_path.suffix.lower() not in ALLOWED_STATIC_EXTENSIONS:
+            return False
+
         return True
     except Exception:
         return False

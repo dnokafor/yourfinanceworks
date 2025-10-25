@@ -401,7 +401,13 @@ async def _run_ocr(file_path: str, custom_prompt: Optional[str] = None, ai_confi
                     kwargs["api_base"] = base_url
 
                 # Encode image to base64
-                with open(file_path, "rb") as image_file:
+                from utils.file_validation import validate_file_path
+                try:
+                    safe_path = validate_file_path(file_path)
+                except ValueError as e:
+                    logger.error(str(e))
+                    return {"error": f"Invalid file path: {e}"}
+                with open(safe_path, "rb") as image_file:
                     image_data = base64.b64encode(image_file.read()).decode('utf-8')
 
                 # Determine image format

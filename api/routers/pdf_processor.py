@@ -65,7 +65,9 @@ async def process_pdf_with_ai(pdf_path: str, ai_config) -> Dict[str, Any]:
 
         # Extract text from PDF
         from pypdf import PdfReader
-        with open(pdf_path, 'rb') as file:
+        from utils.file_validation import validate_file_path
+        validated_path = validate_file_path(pdf_path)
+        with open(validated_path, 'rb') as file:
             pdf_reader = PdfReader(file)
             text = ""
             for page_num, page in enumerate(pdf_reader.pages):

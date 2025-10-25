@@ -246,14 +246,14 @@ class TenantDatabaseManager:
         try:
             db_name = f"tenant_{tenant_id}"
             logger.warning(f"Dropping database for tenant {tenant_id}: {db_name}")
-            
+
             # Close any existing connections
             tenant_key = f"tenant_{tenant_id}"
             if tenant_key in self.tenant_engines:
                 self.tenant_engines[tenant_key].dispose()
                 del self.tenant_engines[tenant_key]
                 del self.tenant_sessions[tenant_key]
-            
+
             # Terminate connections before dropping
             self.terminate_db_connections(db_name)
             # Drop the database
@@ -261,15 +261,18 @@ class TenantDatabaseManager:
                 conn.execute(text("COMMIT"))
                 conn.execute(text(f"DROP DATABASE IF EXISTS {db_name}"))
                 logger.info(f"Database {db_name} dropped successfully")
-            
+
             return True
-            
+
         except SQLAlchemyError as e:
             logger.error(f"Failed to drop database for tenant {tenant_id}: {e}")
             return False
         except Exception as e:
             logger.error(f"Unexpected error dropping database for tenant {tenant_id}: {e}")
             return False
+
+    # Alias for compatibility with tests
+    delete_tenant_database = drop_tenant_database
     
     def migrate_tenant_schema(self, tenant_id: int):
         """Apply schema migrations to a tenant database"""
@@ -352,4 +355,4 @@ class TenantDatabaseManager:
             logger.warning(f"Failed to terminate connections for {db_name}: {e}")
 
 # Global instance
-tenant_db_manager = TenantDatabaseManager() 
+tenant_db_manager = TenantDatabaseManager()

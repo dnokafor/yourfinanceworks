@@ -1023,4 +1023,4 @@ async def demote_super_admin(
         # Log error but don't fail the operation
         print(f"Failed to log demotion to tenant audit log: {e}")
     
-    return {"message": f"User '{request.email}' has been demoted from super admin."} 
+    return {"message": f"User '{request.email}' has been demoted from super admin."}

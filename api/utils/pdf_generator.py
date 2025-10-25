@@ -398,22 +398,25 @@ class InvoicePDFGenerator:
     def _format_currency(self, amount: float, currency_code: str, db: Session) -> str:
         """Format amount with proper currency code and decimal places"""
         try:
+            # Sanitize currency_code to alphanumeric only (prevent injection)
+            safe_currency_code = ''.join(c for c in str(currency_code).upper() if c.isalnum())[:10]
+
             # Get currency info from database
             currency = db.query(SupportedCurrency).filter(
-                SupportedCurrency.code == currency_code.upper(),
+                SupportedCurrency.code == safe_currency_code,
                 SupportedCurrency.is_active == True
             ).first()
             
             if currency:
                 decimal_places = currency.decimal_places
                 formatted_amount = f"{amount:.{decimal_places}f}"
-                return f"{formatted_amount} {currency_code.upper()}"
+                return f"{formatted_amount} {safe_currency_code}"
             else:
                 # Fallback for unknown currencies
-                return f"{amount:.2f} {currency_code.upper()}"
+                return f"{amount:.2f} {safe_currency_code}"
                 
         except Exception as e:
-            logger.warning(f"Error formatting currency {currency_code}: {e}")
+            logger.warning(f"Error formatting currency: {e}")
             # Fallback to USD formatting
             return f"{amount:.2f} USD"
 

@@ -5,6 +5,7 @@ import os
 import shutil
 import uuid
 import logging
+from utils.file_validation import validate_file_path
 
 from models.database import get_db
 from sqlalchemy.orm import Session
@@ -495,7 +496,16 @@ async def download_statement_file(
     )
     if not s:
         raise HTTPException(status_code=404, detail="Statement not found")
-    if not s.file_path or not os.path.exists(s.file_path):
+    if not s.file_path:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Validate file path
+    try:
+        safe_path = validate_file_path(s.file_path)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Invalid file path")
+    
+    if not os.path.exists(safe_path):
         raise HTTPException(status_code=404, detail="File not found")
 
     # Infer content type based on extension
@@ -506,9 +516,9 @@ async def download_statement_file(
     headers = None
     if inline:
         headers = {"Content-Disposition": f"inline; filename=\"{_name}\""}
-        return FileResponse(path=s.file_path, media_type=media_type, headers=headers)
+        return FileResponse(path=safe_path, media_type=media_type, headers=headers)
     # Attachment with filename
-    return FileResponse(path=s.file_path, media_type=media_type, filename=_name)
+    return FileResponse(path=safe_path, media_type=media_type, filename=_name)
 
 
 @router.delete("/{statement_id}", response_model=Dict[str, Any])

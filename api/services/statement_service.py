@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Union
 
 import requests
 from services.ocr_service import track_ai_usage
+from utils.file_validation import validate_file_path
 
 logger = logging.getLogger(__name__)
 # Custom error to signal LLM unavailability to callers that want to retry
@@ -469,7 +470,13 @@ JSON:"""
     # Include the same PDF loading and processing methods as the original class
     def load_pdf_with_langchain(self, pdf_path: str, loader_names: List[str] = None) -> List[Document]:
         """Load PDF using LangChain loaders with automatic fallback"""
-        pdf_path = Path(pdf_path)
+        # Validate pdf_path to prevent path traversal
+        try:
+            safe_path = validate_file_path(pdf_path)
+        except ValueError as e:
+            logger.error(str(e))
+            raise FileNotFoundError(f"Invalid PDF path: {e}")
+        pdf_path = Path(safe_path)
         
         if not pdf_path.exists():
             raise FileNotFoundError(f"PDF file not found: {pdf_path}")
@@ -949,7 +956,13 @@ JSON:"""
                                pdf_path: str, 
                                loader_names: List[str] = None) -> List[Document]:
         """Load PDF using LangChain loaders with automatic fallback"""
-        pdf_path = Path(pdf_path)
+        # Validate pdf_path to prevent path traversal
+        try:
+            safe_path = validate_file_path(pdf_path)
+        except ValueError as e:
+            logger.error(str(e))
+            raise FileNotFoundError(f"Invalid PDF path: {e}")
+        pdf_path = Path(safe_path)
         
         if not pdf_path.exists():
             raise FileNotFoundError(f"PDF file not found: {pdf_path}")
@@ -986,7 +999,13 @@ JSON:"""
 
         Returns a list of Documents where page_content contains CSV text suitable for prompting.
         """
-        csv_path = Path(csv_path)
+        # Validate csv_path to prevent path traversal
+        try:
+            safe_path = validate_file_path(csv_path)
+        except ValueError as e:
+            logger.error(str(e))
+            raise FileNotFoundError(f"Invalid CSV path: {e}")
+        csv_path = Path(safe_path)
         if not csv_path.exists():
             raise FileNotFoundError(f"CSV file not found: {csv_path}")
 
@@ -1027,7 +1046,13 @@ JSON:"""
         # Fallback 2: builtin csv module
         import csv
         try:
-            with open(csv_path, "r", encoding="utf-8", newline="") as f:
+            # Validate csv_path to prevent path traversal
+            try:
+                safe_path = validate_file_path(str(csv_path))
+            except ValueError as e:
+                logger.error(str(e))
+                return []
+            with open(safe_path, "r", encoding="utf-8", newline="") as f:
                 reader = csv.reader(f)
                 rows = [",".join(row) for row in reader]
                 combined = "\n".join(rows)
@@ -1582,8 +1607,14 @@ def _parse_csv_file_basic(csv_path: str) -> List[Dict[str, Any]]:
     import csv as _csv
     rows: List[Dict[str, Any]] = []
     try:
+        # Validate csv_path to prevent path traversal
+        try:
+            safe_path = validate_file_path(csv_path)
+        except ValueError as e:
+            logger.error(str(e))
+            return []
         # Read all lines first to locate the header row
-        with open(csv_path, "r", encoding="utf-8", newline="") as f:
+        with open(safe_path, "r", encoding="utf-8", newline="") as f:
             lines = [ln.rstrip("\n\r") for ln in f]
 
         # Find header index: line with at least 3 commas and includes expected keywords
@@ -1754,9 +1785,14 @@ def process_bank_pdf_with_llm(pdf_path: str, ai_config: Optional[Dict[str, Any]]
                 # Fallback to regex extraction
                 try:
                     from pathlib import Path as _P
-                    ext = _P(pdf_path).suffix.lower()
+                    try:
+                        safe_path = validate_file_path(pdf_path)
+                    except ValueError as e:
+                        logger.error(str(e))
+                        return []
+                    ext = _P(safe_path).suffix.lower()
                     if ext == ".csv":
-                        txns = _parse_csv_file_basic(pdf_path)
+                        txns = _parse_csv_file_basic(safe_path)
                     else:
                         try:
                             from pypdf import PdfReader
@@ -1764,7 +1800,7 @@ def process_bank_pdf_with_llm(pdf_path: str, ai_config: Optional[Dict[str, Any]]
                             logger.error("pypdf not available for fallback extraction")
                             return []
                         texts = []
-                        with open(pdf_path, "rb") as f:
+                        with open(safe_path, "rb") as f:
                             reader = PdfReader(f)
                             for page in reader.pages:
                                 texts.append(page.extract_text() or "")
@@ -1803,10 +1839,15 @@ def process_bank_pdf_with_llm(pdf_path: str, ai_config: Optional[Dict[str, Any]]
                 # Fallback to simple PDF loading and regex extraction
                 try:
                     from pathlib import Path as _P
-                    ext = _P(pdf_path).suffix.lower()
+                    try:
+                        safe_path = validate_file_path(pdf_path)
+                    except ValueError as e:
+                        logger.error(str(e))
+                        raise BankLLMUnavailableError(f"Invalid file path: {e}")
+                    ext = _P(safe_path).suffix.lower()
                     if ext == ".csv":
                         # Robust CSV fallback parser that skips preamble lines
-                        txns = _parse_csv_file_basic(pdf_path)
+                        txns = _parse_csv_file_basic(safe_path)
                     else:
                         # Simple fallback PDF loader
                         try:
@@ -1815,7 +1856,7 @@ def process_bank_pdf_with_llm(pdf_path: str, ai_config: Optional[Dict[str, Any]]
                             logger.error("pypdf not available for fallback extraction")
                             raise BankLLMUnavailableError("LLM not reachable and fallback unavailable")
                         texts = []
-                        with open(pdf_path, "rb") as f:
+                        with open(safe_path, "rb") as f:
                             reader = PdfReader(f)
                             for page in reader.pages:
                                 texts.append(page.extract_text() or "")
@@ -1834,12 +1875,18 @@ def process_bank_pdf_with_llm(pdf_path: str, ai_config: Optional[Dict[str, Any]]
         
         # Dispatch based on file extension (supports PDF and CSV)
         from pathlib import Path as _P
-        _ext = _P(pdf_path).suffix.lower()
+        # Validate pdf_path to prevent path traversal
+        try:
+            safe_path = validate_file_path(pdf_path)
+        except ValueError as e:
+            logger.error(str(e))
+            return []
+        _ext = _P(safe_path).suffix.lower()
         if _ext == ".csv":
-            df = extractor.process_csv(pdf_path, categorize=True, save_debug=False)
+            df = extractor.process_csv(safe_path, categorize=True, save_debug=False)
         else:
             df = extractor.process_pdf(
-                pdf_path,
+                safe_path,
                 loader_names=['pymupdf', 'pdfplumber', 'pdfium2', 'pypdf'],
                 categorize=True,
                 save_debug=False
@@ -1866,18 +1913,26 @@ def process_bank_pdf_with_llm(pdf_path: str, ai_config: Optional[Dict[str, Any]]
         # Final fallback to regex extraction
         try:
             from pathlib import Path as _P
-            _ext = _P(pdf_path).suffix.lower()
+            # Validate pdf_path to prevent path traversal
+            try:
+                safe_path = validate_file_path(pdf_path)
+            except ValueError as e:
+                logger.error(str(e))
+                return []
+            _ext = _P(safe_path).suffix.lower()
             if _ext == ".csv":
                 # Robust CSV fallback
-                return _parse_csv_file_basic(pdf_path)
+                return _parse_csv_file_basic(safe_path)
             else:
                 try:
                     from pypdf import PdfReader
                 except ImportError:
                     logger.error("pypdf not available for final fallback extraction")
                     return []
+                # safe_path already validated above
+
                 texts = []
-                with open(pdf_path, "rb") as f:
+                with open(safe_path, "rb") as f:
                     reader = PdfReader(f)
                     for page in reader.pages:
                         texts.append(page.extract_text() or "")
@@ -1954,8 +2009,15 @@ def extract_transactions_from_pdf_paths(pdf_paths: List[str]) -> List[Dict[str, 
                     logger.error(f"pypdf not available for {pdf_path}")
                     continue
                     
+                # Validate pdf_path to prevent path traversal
+                try:
+                    safe_path = validate_file_path(pdf_path)
+                except ValueError as e:
+                    logger.error(str(e))
+                    continue
+
                 texts = []
-                with open(pdf_path, "rb") as f:
+                with open(safe_path, "rb") as f:
                     reader = PdfReader(f)
                     for page in reader.pages:
                         texts.append(page.extract_text() or "")

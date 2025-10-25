@@ -457,14 +457,11 @@ async def get_thumbnail(
             )
 
         # For now, return the original image (thumbnail generation can be implemented later)
-        if not os.path.exists(attachment.file_path):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Image file not found"
-            )
+        from utils.file_validation import validate_file_path
+        validated_path = validate_file_path(attachment.file_path)
 
         # Read file and return
-        with open(attachment.file_path, 'rb') as f:
+        with open(validated_path, 'rb') as f:
             file_content = f.read()
 
         # Set cache headers for thumbnails
@@ -511,14 +508,12 @@ async def download_attachment(
                 detail="Attachment not found"
             )
 
-        if not os.path.exists(attachment.file_path):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="File not found on disk"
-            )
+        # Validate file path before reading
+        from utils.file_validation import validate_file_path
+        validated_path = validate_file_path(attachment.file_path)
 
         # Read file and return
-        with open(attachment.file_path, 'rb') as f:
+        with open(validated_path, 'rb') as f:
             file_content = f.read()
 
         # Return file with appropriate headers

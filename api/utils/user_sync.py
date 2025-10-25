@@ -117,9 +117,10 @@ def _seed_currencies_if_needed(tenant_db: Session):
     try:
         from models.models_per_tenant import SupportedCurrency
         from datetime import datetime, timezone
+        from sqlalchemy import func
         
-        # Check if currencies already exist
-        existing_count = tenant_db.query(SupportedCurrency).count()
+        # Check if currencies already exist using SQLAlchemy func.count()
+        existing_count = tenant_db.query(func.count(SupportedCurrency.id)).scalar()
         if existing_count > 0:
             return
         

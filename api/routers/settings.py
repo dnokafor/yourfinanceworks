@@ -207,8 +207,10 @@ async def export_tenant_data(
     db = tenant_session()
 
     # Create a temporary SQLite file
+    from utils.file_validation import validate_file_path
     temp_dir = tempfile.mkdtemp()
     sqlite_path = os.path.join(temp_dir, f"data_export_{current_user.tenant_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.sqlite")
+    sqlite_path = os.path.abspath(sqlite_path)  # Normalize path
     sqlite_url = f"sqlite:///{sqlite_path}"
     sqlite_engine = sqlalchemy.create_engine(sqlite_url, connect_args={"check_same_thread": False})
     TenantBase.metadata.create_all(sqlite_engine)
@@ -217,6 +219,7 @@ async def export_tenant_data(
 
     try:
         # Copy all data from the current tenant's database
+        # NOTE: SQLAlchemy ORM queries are safe and automatically parameterized - not vulnerable to SQL injection
         # 1. Users
         for obj in db.query(User).all():
             sqlite_session.add(User(**{c.name: getattr(obj, c.name) for c in User.__table__.columns}))
@@ -275,12 +278,14 @@ async def export_tenant_data(
         sqlite_session.close()
 
         # Return the file as a download
+        validated_path = validate_file_path(sqlite_path)
+
         def cleanup():
             shutil.rmtree(temp_dir, ignore_errors=True)
         atexit.register(cleanup)
         return FileResponse(
-            path=sqlite_path,
-            filename=os.path.basename(sqlite_path),
+            path=validated_path,
+            filename=os.path.basename(validated_path),
             media_type="application/x-sqlite3",
             background=None  # atexit will handle cleanup
         )
@@ -822,34 +827,21 @@ async def upload_company_logo(
     # Debug logging to see what we're receiving
     logger.info(f"🔍 Logo upload request - filename: {file.filename}, content_type: {file.content_type}, size: {file.size if hasattr(file, 'size') else 'unknown'}")
     
-    # Check for allowed image types more explicitly
-    allowed_image_types = {
-        'image/jpeg',
-        'image/jpg', 
-        'image/png',
-        'image/gif',
-        'image/webp',
-        'image/svg+xml'
-    }
-    
-    # Get file extension as fallback
-    file_ext = None
-    if file.filename:
-        file_ext = os.path.splitext(file.filename.lower())[1]
-    
-    # Validate content type or file extension
-    is_valid_image = False
-    if file.content_type and file.content_type.lower() in allowed_image_types:
-        is_valid_image = True
-    elif file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg']:
-        is_valid_image = True
-        logger.info(f"Accepted image based on file extension: {file_ext}")
-    
-    if not is_valid_image:
-        logger.error(f"Rejected upload: not an image file. Content-Type: {file.content_type}, filename: {file.filename}, extension: {file_ext}")
-        raise HTTPException(status_code=400, detail=f"Only image files are allowed. Received content-type: {file.content_type}, filename: {file.filename}")
+    # Validate file extension first
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Filename is required")
 
-    # Check file size (limit to 5MB for logos)
+    file_ext = os.path.splitext(file.filename.lower())[1]
+    allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'}
+    if file_ext not in allowed_extensions:
+        raise HTTPException(status_code=400, detail=f"Invalid file type. Allowed: {', '.join(allowed_extensions)}")
+    
+    # Validate content type
+    allowed_content_types = {'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'}
+    if file.content_type and file.content_type.lower() not in allowed_content_types:
+        raise HTTPException(status_code=400, detail=f"Invalid content type: {file.content_type}")
+
+    # Read and validate file content
     try:
         file_content = await file.read()
         file_size = len(file_content)
@@ -859,25 +851,48 @@ async def upload_company_logo(
         if file_size > MAX_LOGO_SIZE:
             raise HTTPException(status_code=400, detail=f"Logo file too large. Maximum size is 5MB, received {file_size} bytes")
         
-        # Reset file pointer for later processing
-        await file.seek(0)
+        # Validate magic numbers (file signature) for common image types
+        if len(file_content) < 4:
+            raise HTTPException(status_code=400, detail="File too small to be a valid image")
+
+        magic = file_content[:4]
+        valid_magic = (
+            magic[:2] == b'\xff\xd8' or  # JPEG
+            magic[:3] == b'\x89PNG' or   # PNG
+            magic[:3] == b'GIF' or       # GIF
+            magic[:4] == b'RIFF' or      # WEBP
+            magic[:2] == b'<?' or magic[:4] == b'<svg'  # SVG
+        )
+        if not valid_magic:
+            raise HTTPException(status_code=400, detail="File content does not match image format")
     except Exception as e:
         logger.error(f"Error reading file for size check: {e}")
         raise HTTPException(status_code=400, detail="Error processing uploaded file")
 
     # Ensure static/logos/<tenant_id> directory exists
+    from utils.file_validation import validate_file_path
     static_dir = os.path.join(os.path.dirname(__file__), "..", "static", "logos")
     static_dir = os.path.abspath(static_dir)
     tenant_dir = os.path.join(static_dir, str(current_user.tenant_id))
+    tenant_dir = validate_file_path(tenant_dir)
+
+    # Ensure tenant_dir is within static_dir
+    if not tenant_dir.startswith(static_dir):
+        raise HTTPException(status_code=400, detail="Invalid tenant directory")
+
     os.makedirs(tenant_dir, exist_ok=True)
 
     # Use consistent filename for each tenant (overwrites existing logo)
     ext = os.path.splitext(file.filename)[1].lower() or ".png"
     if ext not in [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"]:
-        ext = ".png" # Default to png if extension is something else
+        ext = ".png"
     filename = f"logo{ext}"
-    file_path = os.path.join(tenant_dir, filename)
-    
+    file_path = validate_file_path(os.path.join(tenant_dir, filename))
+
+    # Final validation: ensure file_path is within tenant_dir
+    if not file_path.startswith(tenant_dir):
+        raise HTTPException(status_code=400, detail="Invalid file path")
+
     print(f"Attempting to save logo to {file_path}")
 
     try:
@@ -923,19 +938,20 @@ async def get_company_logo(
         if ".." in relative_path or not relative_path.startswith("static/logos/"):
             raise HTTPException(status_code=400, detail="Invalid logo path")
         
+        from utils.file_validation import validate_file_path
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-        file_path = os.path.abspath(os.path.join(base_dir, relative_path))
+        file_path = os.path.join(base_dir, relative_path)
+        validated_path = validate_file_path(file_path)
         
         # Ensure the resolved path is still within the expected directory
         expected_dir = os.path.abspath(os.path.join(base_dir, "static", "logos"))
-        if not file_path.startswith(expected_dir):
+        if not validated_path.startswith(expected_dir):
             raise HTTPException(status_code=400, detail="Invalid logo path")
         
-        if not os.path.exists(file_path):
-            logger.error(f"Logo file not found on disk: {file_path}")
+        if not os.path.exists(validated_path):
             raise HTTPException(status_code=404, detail="Logo file not found on server.")
         
-        return FileResponse(file_path)
+        return FileResponse(validated_path)
         
     except HTTPException:
         raise

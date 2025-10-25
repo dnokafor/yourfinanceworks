@@ -16,6 +16,7 @@ from datetime import datetime
 
 from config import config
 from services.file_security_service import file_security_service
+from utils.file_validation import validate_file_path
 
 logger = logging.getLogger(__name__)
 
@@ -277,7 +278,13 @@ class FileStorageService:
             True if deleted successfully, False otherwise
         """
         try:
-            path = Path(file_path)
+            # Validate file path
+            try:
+                safe_path = validate_file_path(file_path)
+            except ValueError as e:
+                logger.error(f"Invalid file path: {e}")
+                return False
+            path = Path(safe_path)
             if path.exists():
                 path.unlink()
                 logger.info(f"Successfully deleted file: {file_path}")
@@ -300,7 +307,13 @@ class FileStorageService:
             FileInfo with file details
         """
         try:
-            path = Path(file_path)
+            # Validate file path
+            try:
+                safe_path = validate_file_path(file_path)
+            except ValueError as e:
+                logger.error(f"Invalid file path: {e}")
+                return FileInfo(exists=False)
+            path = Path(safe_path)
 
             if not path.exists():
                 return FileInfo(exists=False)

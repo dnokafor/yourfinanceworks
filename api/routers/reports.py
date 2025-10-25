@@ -1203,8 +1203,12 @@ async def download_report(
             user_agent=user_agent
         )
         
+        # Validate file path before serving
+        from utils.file_validation import validate_file_path
+        validated_path = validate_file_path(file_path)
+
         return FileResponse(
-            path=file_path,
+            path=validated_path,
             filename=filename,
             media_type=content_type
         )

@@ -110,7 +110,7 @@ async def process_statement_pdf(
     # Validate file
     if not file.filename:
         raise HTTPException(status_code=400, detail="Filename is required")
-    
+
     # Check file size (20MB limit)
     file_content = await file.read()
     if len(file_content) > 20 * 1024 * 1024:
@@ -145,7 +145,9 @@ async def process_statement_pdf(
         )
     
     # Save file temporarily for processing
-    file_extension = Path(file.filename).suffix.lower()
+    # Sanitize filename to prevent path traversal
+    safe_filename = os.path.basename(file.filename)
+    file_extension = Path(safe_filename).suffix.lower()
     if file_extension not in ['.pdf', '.csv']:
         file_extension = '.pdf'  # Default to PDF
     
@@ -158,6 +160,10 @@ async def process_statement_pdf(
             temp_file.write(file_content)
             temp_file_path = temp_file.name
         
+        # Validate temporary file path
+        from utils.file_validation import validate_file_path
+        temp_file_path = validate_file_path(temp_file_path)
+
         logger.info(f"Processing statement file for API client {api_client.client_name}: {file.filename}")
         
         # Check if AI service is reachable before processing
@@ -218,7 +224,9 @@ async def process_statement_pdf(
         # Clean up temporary file
         try:
             if 'temp_file_path' in locals():
-                os.unlink(temp_file_path)
+                from utils.file_validation import validate_file_path
+                validated_temp_path = validate_file_path(temp_file_path)
+                os.unlink(validated_temp_path)
         except Exception:
             pass
 
@@ -258,8 +266,11 @@ def _create_csv_response(transactions: List[Dict[str, Any]], original_filename: 
         output.seek(0)
         yield output.getvalue()
     
-    # Generate filename for download
-    base_name = Path(original_filename).stem
+    # Generate filename for download - sanitize to prevent path traversal
+    import re
+    safe_filename = os.path.basename(original_filename)  # Remove any path components
+    safe_filename = re.sub(r'[^A-Za-z0-9._-]', '_', safe_filename)  # Remove unsafe characters
+    base_name = Path(safe_filename).stem
     csv_filename = f"{base_name}_transactions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
     
     return StreamingResponse(

@@ -175,8 +175,8 @@ def main() -> int:
                 logger.error("No tenant_id in OCR message; committing and skipping invalid message")
                 try:
                     consumer.commit(message=msg, asynchronous=False)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Failed to commit invalid message: {e}")
                 continue
             try:
                 SessionLocalTenant = tenant_db_manager.get_tenant_session(int(tenant_id))
@@ -184,8 +184,8 @@ def main() -> int:
                 logger.warning(f"Skipping message for tenant {tenant_id}: {e}")
                 try:
                     consumer.commit(message=msg, asynchronous=False)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Failed to commit message for invalid tenant: {e}")
                 continue
             db = SessionLocalTenant()
             try:
@@ -203,15 +203,15 @@ def main() -> int:
                         logger.warning(f"Expense {expense_id} not found; committing and skipping")
                         try:
                             consumer.commit(message=msg, asynchronous=False)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.error(f"Failed to commit for missing expense: {e}")
                     elif exp.manual_override:
                         # Commit because we should not retry if user manually overrided it
                         logger.info(f"Expense {expense_id} manually overridden; committing and skipping OCR application")
                         try:
                             consumer.commit(message=msg, asynchronous=False)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.error(f"Failed to commit for overridden expense: {e}")
                     else:
                         # Mark as processing and process
                         try:
@@ -230,8 +230,8 @@ def main() -> int:
                         # Refresh status and commit offset only if parsed as done
                         try:
                             db.refresh(exp)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.warning(f"Failed to refresh expense {expense_id}: {e}")
                         if getattr(exp, "analysis_status", None) == "done":
                             try:
                                 consumer.commit(message=msg, asynchronous=False)
@@ -241,9 +241,8 @@ def main() -> int:
                             try:
                                 from services.ocr_service import publish_ocr_result
                                 publish_ocr_result(expense_id, tenant_id, status="done")
-                            except Exception:
-                                logger.error(f"Failed to publish OCR result for expense_id={expense_id}")
-                                pass
+                            except Exception as e:
+                                logger.error(f"Failed to publish OCR result for expense_id={expense_id}: {e}")
                         elif getattr(exp, "analysis_status", None) == "failed":
                             # Retry with backoff and DLQ after max attempts
                             MAX_ATTEMPTS = int(os.getenv("KAFKA_OCR_MAX_ATTEMPTS", "5"))

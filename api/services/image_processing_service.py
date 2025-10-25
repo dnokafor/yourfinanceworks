@@ -13,6 +13,7 @@ import io
 import os
 
 from config import config
+from utils.file_validation import validate_file_path
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +69,16 @@ class ImageProcessingService:
             ImageProcessingResult with processing details
         """
         try:
+            # Validate file path
+            try:
+                safe_path = validate_file_path(str(file_path))
+            except ValueError as e:
+                return ImageProcessingResult(
+                    success=False,
+                    error_message=f"Invalid file path: {e}"
+                )
             # Open and validate image
-            with Image.open(file_path) as img:
+            with Image.open(safe_path) as img:
                 # Get original dimensions
                 original_dimensions = img.size
 
@@ -120,7 +129,13 @@ class ImageProcessingService:
         thumbnails = []
 
         try:
-            with Image.open(source_path) as img:
+            # Validate file path
+            try:
+                safe_path = validate_file_path(str(source_path))
+            except ValueError as e:
+                logger.error(f"Invalid source path: {e}")
+                return thumbnails
+            with Image.open(safe_path) as img:
                 # Convert to RGB if necessary (for PNG with transparency)
                 if img.mode in ('RGBA', 'LA', 'P'):
                     img = img.convert('RGB')
@@ -207,7 +222,14 @@ class ImageProcessingService:
         try:
             max_size = max_size or self.max_image_size
 
-            with Image.open(file_path) as img:
+            # Validate file path
+            try:
+                safe_path = validate_file_path(str(file_path))
+            except ValueError as e:
+                logger.error(f"Invalid file path: {e}")
+                return None
+
+            with Image.open(safe_path) as img:
                 # Check if resizing is needed
                 if img.size[0] > max_size[0] or img.size[1] > max_size[1]:
                     # Calculate new size maintaining aspect ratio
@@ -261,7 +283,13 @@ class ImageProcessingService:
             Tuple of (width, height) or None if failed
         """
         try:
-            with Image.open(file_path) as img:
+            # Validate file path
+            try:
+                safe_path = validate_file_path(str(file_path))
+            except ValueError as e:
+                logger.error(f"Invalid file path: {e}")
+                return None
+            with Image.open(safe_path) as img:
                 return img.size
         except Exception as e:
             logger.error(f"Failed to get dimensions for {file_path}: {e}")
@@ -278,7 +306,12 @@ class ImageProcessingService:
             True if valid image, False otherwise
         """
         try:
-            with Image.open(file_path) as img:
+            # Validate file path
+            try:
+                safe_path = validate_file_path(str(file_path))
+            except ValueError:
+                return False
+            with Image.open(safe_path) as img:
                 # Try to load the image data
                 img.verify()
                 return True
@@ -322,7 +355,13 @@ class ImageProcessingService:
         }
 
         try:
-            with Image.open(file_path) as img:
+            # Validate file path
+            try:
+                safe_path = validate_file_path(str(file_path))
+            except ValueError as e:
+                logger.error(f"Invalid file path: {e}")
+                return metadata
+            with Image.open(safe_path) as img:
                 metadata.update({
                     'dimensions': img.size,
                     'format': img.format,

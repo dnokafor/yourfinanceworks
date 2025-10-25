@@ -2661,8 +2661,12 @@ class InvoiceTools:
     async def import_inventory_csv(self, file_path: str) -> Dict[str, Any]:
         """Import inventory items from CSV file"""
         try:
+            # Validate file path before reading
+            from utils.file_validation import validate_file_path
+            validated_path = validate_file_path(file_path)
+
             # Read the file content
-            with open(file_path, 'rb') as f:
+            with open(validated_path, 'rb') as f:
                 file_content = f.read()
 
             # Create multipart form data
@@ -3123,13 +3127,17 @@ class InvoiceTools:
     async def upload_attachment(self, item_id: int, file_path: str, attachment_type: Optional[str] = None, document_type: Optional[str] = None, description: Optional[str] = None) -> Dict[str, Any]:
         """Upload an attachment for an inventory item"""
         try:
+            # Validate file path before reading
+            from utils.file_validation import validate_file_path
+            validated_path = validate_file_path(file_path)
+
             # Read file content
-            with open(file_path, 'rb') as f:
+            with open(validated_path, 'rb') as f:
                 file_content = f.read()
 
             if not file_content:
                 return {"success": False, "error": "Empty file provided"}
-
+ 
             # Prepare request data
             data = {"item_id": item_id}
             if attachment_type:

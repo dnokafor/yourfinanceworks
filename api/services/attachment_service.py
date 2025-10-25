@@ -15,6 +15,7 @@ from models.models_per_tenant import ItemAttachment, InventoryItem, User
 from services.file_storage_service import file_storage_service, FileStorageResult
 from services.image_processing_service import image_processing_service, ImageProcessingResult
 from services.file_security_service import file_security_service, ValidationResult
+from utils.file_validation import validate_file_path
 from config import config
 
 logger = logging.getLogger(__name__)
@@ -125,8 +126,14 @@ class AttachmentService:
             # Process image if it's an image attachment
             processing_result = None
             if attachment_type == 'image':
+                # Validate stored path (defense in depth)
+                try:
+                    safe_stored_path = validate_file_path(storage_result.stored_path)
+                except ValueError as e:
+                    logger.error(f"Invalid stored path: {e}")
+                    return None
                 processing_result = await self.image_service.process_image(
-                    file_path=Path(storage_result.stored_path),
+                    file_path=Path(safe_stored_path),
                     attachment_id=0,  # Will be set after creation
                     tenant_id=tenant_id_raw  # Use the integer tenant_id for image processing
                 )

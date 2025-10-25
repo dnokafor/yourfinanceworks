@@ -10,6 +10,10 @@ import sys
 import importlib.util
 from pathlib import Path
 
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from utils.file_validation import validate_file_path
+
 def check_file_exists(file_path, description):
     """Check if a file exists and report the result"""
     if os.path.exists(file_path):
@@ -22,7 +26,13 @@ def check_file_exists(file_path, description):
 def check_content_in_file(file_path, content, description):
     """Check if content exists in a file"""
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        # Validate file path
+        try:
+            safe_path = validate_file_path(file_path)
+        except ValueError as e:
+            print(f"❌ {description} - Invalid path: {e}")
+            return False
+        with open(safe_path, 'r', encoding='utf-8') as f:
             file_content = f.read()
             if content in file_content:
                 print(f"✅ {description}")
