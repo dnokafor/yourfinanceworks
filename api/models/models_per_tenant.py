@@ -4,14 +4,17 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import declarative_base
 from enum import Enum as PyEnum
 
+# Import encrypted column types for transparent encryption
+from api.utils.column_encryptor import EncryptedColumn, EncryptedJSON
+
 Base = declarative_base()
 
 class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
+    email = EncryptedColumn(String, unique=True, index=True, nullable=False)  # Encrypted for privacy
+    hashed_password = Column(String, nullable=False)  # Keep hashed password unencrypted for auth
     is_active = Column(Boolean, default=True, nullable=False)
     is_superuser = Column(Boolean, default=False, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
@@ -20,12 +23,12 @@ class User(Base):
     # User role within tenant (no tenant_id needed since each tenant has its own database)
     role = Column(String, default="user")  # admin, user, viewer
 
-    # Additional user fields
-    first_name = Column(String, nullable=True)
-    last_name = Column(String, nullable=True)
-    google_id = Column(String, unique=True, nullable=True)  # For Google SSO
-    azure_ad_id = Column(String, unique=True, nullable=True)  # For Azure AD SSO (Object ID)
-    azure_tenant_id = Column(String, nullable=True)  # Azure AD Tenant ID
+    # Additional user fields - encrypt personal information
+    first_name = EncryptedColumn(String, nullable=True)  # Encrypted for privacy
+    last_name = EncryptedColumn(String, nullable=True)   # Encrypted for privacy
+    google_id = EncryptedColumn(String, unique=True, nullable=True)  # Encrypted for privacy
+    azure_ad_id = EncryptedColumn(String, unique=True, nullable=True)  # Encrypted for privacy
+    azure_tenant_id = Column(String, nullable=True)  # Azure AD Tenant ID - keep unencrypted for system use
     theme = Column(String, default="system")
     show_analytics = Column(Boolean, default=False)  # Show/hide analytics menu
 
@@ -44,13 +47,13 @@ class Client(Base):
     id = Column(Integer, primary_key=True, index=True)
     # No tenant_id needed since each tenant has its own database
     
-    name = Column(String, index=True)
-    email = Column(String, unique=True, nullable=False, index=True)
-    phone = Column(String, nullable=True)
-    address = Column(String, nullable=True)
-    company = Column(String, nullable=True)
-    balance = Column(Float, default=0.0)
-    paid_amount = Column(Float, default=0)
+    name = EncryptedColumn(String, index=True)  # Encrypted for privacy
+    email = EncryptedColumn(String, unique=True, nullable=False, index=True)  # Encrypted for privacy
+    phone = EncryptedColumn(String, nullable=True)  # Encrypted for privacy
+    address = EncryptedColumn(String, nullable=True)  # Encrypted for privacy
+    company = EncryptedColumn(String, nullable=True)  # Encrypted for privacy
+    balance = Column(Float, default=0.0)  # Keep unencrypted for calculations
+    paid_amount = Column(Float, default=0)  # Keep unencrypted for calculations
     preferred_currency = Column(String, nullable=True)  # Optional, fallback to tenant default
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
@@ -63,7 +66,7 @@ class ClientNote(Base):
     __tablename__ = "client_notes"
 
     id = Column(Integer, primary_key=True, index=True)
-    note = Column(Text, nullable=False)
+    note = EncryptedColumn(Text, nullable=False)  # Encrypted for privacy
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -84,7 +87,7 @@ class Invoice(Base):
     currency = Column(String, default="USD", nullable=False)
     due_date = Column(DateTime, nullable=False)
     status = Column(String, nullable=False, default="draft")
-    notes = Column(String, nullable=True)
+    notes = EncryptedColumn(String, nullable=True)  # Encrypted for privacy
     # No tenant_id needed since each tenant has its own database
     client_id = Column(Integer, ForeignKey("clients.id", ondelete="CASCADE"), nullable=False)
     is_recurring = Column(Boolean, default=False)
@@ -92,10 +95,10 @@ class Invoice(Base):
     discount_type = Column(String, default="percentage", nullable=False)  # percentage or fixed
     discount_value = Column(Float, default=0.0, nullable=False)  # percentage or fixed amount
     subtotal = Column(Float, nullable=False)  # Amount before discount
-    custom_fields = Column(JSON, nullable=True)
+    custom_fields = EncryptedJSON(nullable=True)  # Encrypted JSON for sensitive custom data
     show_discount_in_pdf = Column(Boolean, default=True, nullable=False)
     attachment_path = Column(String, nullable=True)  # Path to uploaded attachment file
-    attachment_filename = Column(String, nullable=True)  # Original filename
+    attachment_filename = EncryptedColumn(String, nullable=True)  # Encrypted for privacy
     
     # Soft delete fields for recycle bin functionality
     is_deleted = Column(Boolean, default=False, nullable=False)
@@ -124,8 +127,8 @@ class Payment(Base):
     currency = Column(String, default="USD", nullable=False)
     payment_date = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     payment_method = Column(String, nullable=False, default="system")
-    reference_number = Column(String, nullable=True)
-    notes = Column(String, nullable=True)
+    reference_number = EncryptedColumn(String, nullable=True)  # Encrypted for privacy
+    notes = EncryptedColumn(String, nullable=True)  # Encrypted for privacy
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # NEW: Track who created/updated the payment
@@ -144,36 +147,36 @@ class Expense(Base):
     currency = Column(String, default="USD", nullable=False)
     expense_date = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     category = Column(String, nullable=False)
-    vendor = Column(String, nullable=True)
+    vendor = EncryptedColumn(String, nullable=True)  # Encrypted for privacy
     # Optional label to categorize or tag expenses (legacy single label)
-    label = Column(String, nullable=True, index=True)
+    label = Column(String, nullable=True, index=True)  # Keep unencrypted for indexing/filtering
     # Optional multiple labels (tags) stored as JSON array of strings
-    labels = Column(JSON, nullable=True)
+    labels = Column(JSON, nullable=True)  # Keep unencrypted for querying
     tax_rate = Column(Float, nullable=True)
     tax_amount = Column(Float, nullable=True)
     total_amount = Column(Float, nullable=True)
     payment_method = Column(String, nullable=True)
     reference_number = Column(String, nullable=True)
     status = Column(String, nullable=False, default="recorded")
-    notes = Column(String, nullable=True)
-    receipt_path = Column(String, nullable=True)
-    receipt_filename = Column(String, nullable=True)
+    notes = EncryptedColumn(String, nullable=True)  # Encrypted for privacy
+    receipt_path = Column(String, nullable=True)  # Keep unencrypted for file system access
+    receipt_filename = EncryptedColumn(String, nullable=True)  # Encrypted for privacy
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=True)
 
     # Inventory purchase fields
     is_inventory_purchase = Column(Boolean, default=False, nullable=False)
-    inventory_items = Column(JSON, nullable=True)  # Store purchased items and quantities as JSON array
+    inventory_items = EncryptedJSON(nullable=True)  # Encrypted sensitive inventory data
 
     # Inventory consumption fields
     is_inventory_consumption = Column(Boolean, default=False, nullable=False)
-    consumption_items = Column(JSON, nullable=True)  # Store consumed items and quantities as JSON array
+    consumption_items = EncryptedJSON(nullable=True)  # Encrypted sensitive consumption data
 
     # OCR/AI analysis fields
     imported_from_attachment = Column(Boolean, default=False, nullable=False)
     analysis_status = Column(String, default="not_started", nullable=False)  # not_started|queued|processing|done|failed|cancelled
-    analysis_result = Column(JSON, nullable=True)
-    analysis_error = Column(Text, nullable=True)
+    analysis_result = EncryptedJSON(nullable=True)  # Encrypted sensitive analysis data
+    analysis_error = Column(Text, nullable=True)  # Keep unencrypted for debugging
     manual_override = Column(Boolean, default=False, nullable=False)
     analysis_updated_at = Column(DateTime(timezone=True), nullable=True)
 
@@ -300,8 +303,8 @@ class AIConfig(Base):
     id = Column(Integer, primary_key=True, index=True)
     # No tenant_id needed since each tenant has its own database
     provider_name = Column(String, nullable=False)  # e.g., "openai", "ollama"
-    provider_url = Column(String, nullable=True)  # For custom endpoints
-    api_key = Column(Text, nullable=True)  # API key/token - changed to Text for longer keys
+    provider_url = EncryptedColumn(String, nullable=True)  # Encrypted for security
+    api_key = EncryptedColumn(Text, nullable=True)  # Encrypted for security - API keys are sensitive
     model_name = Column(String, nullable=False)  # e.g., "gpt-4", "llama2"
     is_active = Column(Boolean, default=True)
     is_default = Column(Boolean, default=False)  # Only one default per tenant
@@ -325,16 +328,16 @@ class AuditLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, nullable=False)  # ID of the user who performed the action
-    user_email = Column(String, nullable=False)  # Email for easier querying
+    user_email = EncryptedColumn(String, nullable=False)  # Encrypted for privacy
     action = Column(String, nullable=False)  # CREATE, READ, UPDATE, DELETE, LOGIN, LOGOUT, etc.
     resource_type = Column(String, nullable=False)  # user, client, invoice, payment, settings, etc.
     resource_id = Column(String, nullable=True)  # ID of the affected resource
     resource_name = Column(String, nullable=True)  # Human-readable name of the resource
-    details = Column(JSON, nullable=True)  # Additional details about the action
-    ip_address = Column(String, nullable=True)  # IP address of the user
-    user_agent = Column(String, nullable=True)  # User agent string
+    details = EncryptedJSON(nullable=True)  # Encrypted sensitive audit details
+    ip_address = EncryptedColumn(String, nullable=True)  # Encrypted for privacy
+    user_agent = EncryptedColumn(String, nullable=True)  # Encrypted for privacy
     status = Column(String, default="success", nullable=False)  # success, error, warning
-    error_message = Column(String, nullable=True)  # Error message if status is error
+    error_message = Column(String, nullable=True)  # Keep unencrypted for debugging
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 # --- Statements ---

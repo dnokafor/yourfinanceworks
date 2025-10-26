@@ -1,0 +1,436 @@
+# Log aggregation configuration for encryption system monitoring
+# This configuration is for Fluentd/Fluent Bit or similar log aggregation systems
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: encryption-log-config
+data:
+  fluent.conf: |
+    # Input sources
+    <source>
+      @type tail
+      path /var/log/encryption*.log
+      pos_file /var/log/fluentd-encryption.log.pos
+      tag encryption.logs
+      format json
+      time_key timestamp
+      time_format %Y-%m-%dT%H:%M:%S.%L%z
+    </source>
+
+    <source>
+      @type tail
+      path /var/log/key_rotation*.log
+      pos_file /var/log/fluentd-key-rotation.log.pos
+      tag key_rotation.logs
+      format json
+      time_key timestamp
+      time_format %Y-%m-%dT%H:%M:%S.%L%z
+    </source>
+
+    <source>
+      @type tail
+      path /var/log/key_vault*.log
+      pos_file /var/log/fluentd-key-vault.log.pos
+      tag key_vault.logs
+      format json
+      time_key timestamp
+      time_format %Y-%m-%dT%H:%M:%S.%L%z
+    </source>
+
+    # Filters for encryption logs
+    <filter encryption.logs>
+      @type parser
+      key_name message
+      reserve_data true
+      <parse>
+        @type json
+      </parse>
+    </filter>
+
+    # Add metadata
+    <filter encryption.**>
+      @type record_transformer
+      <record>
+        hostname "#{Socket.gethostname}"
+        service_name encryption
+        environment "#{ENV['ENVIRONMENT'] || 'development'}"
+      </record>
+    </filter>
+
+    # Security event detection
+    <filter encryption.**>
+      @type grep
+      <regexp>
+        key level
+        pattern (ERROR|WARN|SECURITY|ALERT)
+      </regexp>
+    </filter>
+
+    # Performance metrics extraction
+    <filter encryption.logs>
+      @type parser
+      key_name message
+      reserve_data true
+      <parse>
+        @type regexp
+        expression /encryption_duration:(?<encryption_duration>\d+\.?\d*)/
+      </parse>
+    </filter>
+
+    # Error categorization
+    <filter encryption.**>
+      @type record_transformer
+      enable_ruby true
+      <record>
+        error_category ${
+          if record['message'].include?('key_vault')
+            'key_vault_error'
+          elsif record['message'].include?('encryption_failed')
+            'encryption_error'
+          elsif record['message'].include?('key_rotation')
+            'key_rotation_error'
+          elsif record['message'].include?('unauthorized')
+            'security_error'
+          else
+            'general_error'
+          end
+        }
+      </record>
+    </filter>
+
+    # Output to Elasticsearch
+    <match encryption.**>
+      @type elasticsearch
+      host elasticsearch
+      port 9200
+      index_name encryption-logs
+      type_name _doc
+      include_tag_key true
+      tag_key @log_name
+      flush_interval 10s
+      <buffer>
+        @type file
+        path /var/log/fluentd-buffers/encryption.buffer
+        flush_mode interval
+        retry_type exponential_backlog
+        flush_thread_count 2
+        flush_interval 5s
+        retry_forever
+        retry_max_interval 30
+        chunk_limit_size 2M
+        queue_limit_length 8
+        overflow_action block
+      </buffer>
+    </match>
+
+    # Output to monitoring system (Prometheus)
+    <match encryption.metrics>
+      @type prometheus
+      <metric>
+        name encryption_log_entries_total
+        type counter
+        desc Total number of encryption log entries
+        <labels>
+          level ${level}
+          error_category ${error_category}
+        </labels>
+      </metric>
+      <metric>
+        name encryption_duration_seconds
+        type histogram
+        desc Encryption operation duration
+        buckets 0.001,0.01,0.1,1.0,10.0
+        key encryption_duration
+      </metric>
+    </match>
+
+    # Alert on critical events
+    <match encryption.logs>
+      @type copy
+      <store>
+        @type elasticsearch
+        host elasticsearch
+        port 9200
+        index_name encryption-logs
+      </store>
+      <store>
+        @type grep
+        <regexp>
+          key level
+          pattern (ERROR|CRITICAL|SECURITY)
+        </regexp>
+        @type webhook
+        endpoint http://alertmanager:9093/api/v1/alerts
+        http_method post
+        format json
+        <format>
+          @type json
+        </format>
+      </store>
+    </match>
+
+  # Logrotate configuration
+  logrotate.conf: |
+    /var/log/encryption*.log {
+        daily
+        missingok
+        rotate 30
+        compress
+        delaycompress
+        notifempty
+        create 644 app app
+        postrotate
+            /usr/bin/killall -USR1 fluentd
+        endscript
+    }
+
+    /var/log/key_rotation*.log {
+        daily
+        missingok
+        rotate 90
+        compress
+        delaycompress
+        notifempty
+        create 644 app app
+        postrotate
+            /usr/bin/killall -USR1 fluentd
+        endscript
+    }
+
+    /var/log/encryption_audit.log {
+        daily
+        missingok
+        rotate 365
+        compress
+        delaycompress
+        notifempty
+        create 600 app app
+        postrotate
+            /usr/bin/killall -USR1 fluentd
+        endscript
+    }
+
+---
+# Elasticsearch index template for encryption logs
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: encryption-index-template
+data:
+  template.json: |
+    {
+      "index_patterns": ["encryption-logs-*"],
+      "settings": {
+        "number_of_shards": 2,
+        "number_of_replicas": 1,
+        "index.refresh_interval": "5s",
+        "index.max_result_window": 50000
+      },
+      "mappings": {
+        "properties": {
+          "@timestamp": {
+            "type": "date"
+          },
+          "level": {
+            "type": "keyword"
+          },
+          "message": {
+            "type": "text",
+            "analyzer": "standard"
+          },
+          "service_name": {
+            "type": "keyword"
+          },
+          "hostname": {
+            "type": "keyword"
+          },
+          "environment": {
+            "type": "keyword"
+          },
+          "tenant_id": {
+            "type": "long"
+          },
+          "operation_type": {
+            "type": "keyword"
+          },
+          "encryption_duration": {
+            "type": "float"
+          },
+          "error_category": {
+            "type": "keyword"
+          },
+          "key_vault_provider": {
+            "type": "keyword"
+          },
+          "security_event": {
+            "type": "boolean"
+          },
+          "compliance_event": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+
+---
+# Kibana dashboard configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: encryption-kibana-dashboard
+data:
+  dashboard.json: |
+    {
+      "version": "7.10.0",
+      "objects": [
+        {
+          "id": "encryption-overview",
+          "type": "dashboard",
+          "attributes": {
+            "title": "Encryption System Overview",
+            "hits": 0,
+            "description": "Overview of encryption system logs and metrics",
+            "panelsJSON": "[{\"version\":\"7.10.0\",\"gridData\":{\"x\":0,\"y\":0,\"w\":24,\"h\":15,\"i\":\"1\"},\"panelIndex\":\"1\",\"embeddableConfig\":{},\"panelRefName\":\"panel_1\"}]",
+            "timeRestore": false,
+            "timeTo": "now",
+            "timeFrom": "now-24h",
+            "refreshInterval": {
+              "pause": false,
+              "value": 30000
+            },
+            "kibanaSavedObjectMeta": {
+              "searchSourceJSON": "{\"query\":{\"match_all\":{}},\"filter\":[]}"
+            }
+          }
+        },
+        {
+          "id": "encryption-errors",
+          "type": "search",
+          "attributes": {
+            "title": "Encryption Errors",
+            "description": "Search for encryption-related errors",
+            "hits": 0,
+            "columns": ["@timestamp", "level", "message", "error_category"],
+            "sort": ["@timestamp", "desc"],
+            "kibanaSavedObjectMeta": {
+              "searchSourceJSON": "{\"index\":\"encryption-logs-*\",\"query\":{\"match\":{\"level\":\"ERROR\"}},\"filter\":[]}"
+            }
+          }
+        },
+        {
+          "id": "security-events",
+          "type": "search",
+          "attributes": {
+            "title": "Security Events",
+            "description": "Search for security-related events",
+            "hits": 0,
+            "columns": ["@timestamp", "level", "message", "tenant_id"],
+            "sort": ["@timestamp", "desc"],
+            "kibanaSavedObjectMeta": {
+              "searchSourceJSON": "{\"index\":\"encryption-logs-*\",\"query\":{\"bool\":{\"should\":[{\"match\":{\"level\":\"SECURITY\"}},{\"match\":{\"security_event\":true}}]}},\"filter\":[]}"
+            }
+          }
+        }
+      ]
+    }
+
+---
+# Log analysis queries
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: encryption-log-queries
+data:
+  queries.json: |
+    {
+      "common_queries": {
+        "encryption_errors_last_hour": {
+          "query": {
+            "bool": {
+              "must": [
+                {"match": {"level": "ERROR"}},
+                {"match": {"service_name": "encryption"}},
+                {"range": {"@timestamp": {"gte": "now-1h"}}}
+              ]
+            }
+          }
+        },
+        "key_rotation_failures": {
+          "query": {
+            "bool": {
+              "must": [
+                {"match": {"error_category": "key_rotation_error"}},
+                {"range": {"@timestamp": {"gte": "now-24h"}}}
+              ]
+            }
+          }
+        },
+        "security_events": {
+          "query": {
+            "bool": {
+              "should": [
+                {"match": {"level": "SECURITY"}},
+                {"match": {"security_event": true}},
+                {"match": {"message": "unauthorized"}},
+                {"match": {"message": "suspicious"}}
+              ]
+            }
+          }
+        },
+        "performance_issues": {
+          "query": {
+            "bool": {
+              "must": [
+                {"range": {"encryption_duration": {"gte": 0.1}}},
+                {"range": {"@timestamp": {"gte": "now-1h"}}}
+              ]
+            }
+          }
+        },
+        "key_vault_connectivity_issues": {
+          "query": {
+            "bool": {
+              "must": [
+                {"match": {"error_category": "key_vault_error"}},
+                {"range": {"@timestamp": {"gte": "now-6h"}}}
+              ]
+            }
+          }
+        }
+      },
+      "aggregations": {
+        "error_trends": {
+          "date_histogram": {
+            "field": "@timestamp",
+            "interval": "1h"
+          },
+          "aggs": {
+            "error_types": {
+              "terms": {
+                "field": "error_category"
+              }
+            }
+          }
+        },
+        "performance_percentiles": {
+          "percentiles": {
+            "field": "encryption_duration",
+            "percents": [50, 95, 99]
+          }
+        },
+        "tenant_activity": {
+          "terms": {
+            "field": "tenant_id",
+            "size": 20
+          },
+          "aggs": {
+            "operations": {
+              "value_count": {
+                "field": "operation_type"
+              }
+            }
+          }
+        }
+      }
+    }

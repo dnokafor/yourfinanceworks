@@ -1,0 +1,361 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Database Encryption Monitoring",
+    "tags": ["encryption", "security", "database"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Encryption Operations Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(encryption_operations_total[5m])",
+            "legendFormat": "Encryption Ops/sec"
+          },
+          {
+            "expr": "rate(decryption_operations_total[5m])",
+            "legendFormat": "Decryption Ops/sec"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Operations per second",
+            "min": 0
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "Encryption Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(encryption_duration_seconds_bucket[5m]))",
+            "legendFormat": "95th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(encryption_duration_seconds_bucket[5m]))",
+            "legendFormat": "50th percentile"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Duration (seconds)",
+            "min": 0
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "Error Rates",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(encryption_errors_total[5m])",
+            "legendFormat": "Encryption Errors/sec"
+          },
+          {
+            "expr": "rate(key_retrieval_errors_total[5m])",
+            "legendFormat": "Key Retrieval Errors/sec"
+          },
+          {
+            "expr": "rate(key_rotation_failures_total[5m])",
+            "legendFormat": "Key Rotation Failures/sec"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Errors per second",
+            "min": 0
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "id": 4,
+        "title": "Key Vault Connectivity",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "key_vault_connectivity_status",
+            "legendFormat": "Key Vault Status"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {
+                "options": {
+                  "0": {
+                    "text": "DOWN",
+                    "color": "red"
+                  },
+                  "1": {
+                    "text": "UP",
+                    "color": "green"
+                  }
+                },
+                "type": "value"
+              }
+            ],
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": 0
+                },
+                {
+                  "color": "green",
+                  "value": 1
+                }
+              ]
+            }
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        }
+      },
+      {
+        "id": 5,
+        "title": "Active Encryption Keys",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "active_encryption_keys_count",
+            "legendFormat": "Active Keys"
+          }
+        ],
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 0,
+          "y": 16
+        }
+      },
+      {
+        "id": 6,
+        "title": "Key Cache Hit Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "key_cache_hit_rate",
+            "legendFormat": "Cache Hit Rate"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": 0
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "green",
+                  "value": 90
+                }
+              ]
+            }
+          }
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 6,
+          "y": 16
+        }
+      },
+      {
+        "id": 7,
+        "title": "Tenants Due for Key Rotation",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "tenants_due_for_rotation_count",
+            "legendFormat": "Due for Rotation"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": 0
+                },
+                {
+                  "color": "yellow",
+                  "value": 1
+                },
+                {
+                  "color": "red",
+                  "value": 10
+                }
+              ]
+            }
+          }
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 12,
+          "y": 16
+        }
+      },
+      {
+        "id": 8,
+        "title": "Overdue Key Rotations",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "tenants_overdue_rotation_count",
+            "legendFormat": "Overdue Rotations"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": 0
+                },
+                {
+                  "color": "red",
+                  "value": 1
+                }
+              ]
+            }
+          }
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 18,
+          "y": 16
+        }
+      },
+      {
+        "id": 9,
+        "title": "Encryption Operations by Tenant",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "sum by (tenant_id) (rate(encryption_operations_total[5m]))",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {
+                "Time": true
+              },
+              "renameByName": {
+                "tenant_id": "Tenant ID",
+                "Value": "Ops/sec"
+              }
+            }
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 20
+        }
+      },
+      {
+        "id": 10,
+        "title": "Key Rotation History",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "increase(key_rotation_success_total[1d])",
+            "legendFormat": "Successful Rotations"
+          },
+          {
+            "expr": "increase(key_rotation_failures_total[1d])",
+            "legendFormat": "Failed Rotations"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Rotations per day",
+            "min": 0
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 20
+        }
+      },
+      {
+        "id": 11,
+        "title": "Data Volume Encrypted",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(encrypted_data_bytes_total[5m])",
+            "legendFormat": "Bytes Encrypted/sec"
+          },
+          {
+            "expr": "rate(decrypted_data_bytes_total[5m])",
+            "legendFormat": "Bytes Decrypted/sec"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Bytes per second",
+            "min": 0
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 28
+        }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "schemaVersion": 27,
+    "version": 1
+  }
+}

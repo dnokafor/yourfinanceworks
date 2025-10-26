@@ -94,6 +94,43 @@ services:
       - OPENSEARCH_PORT=9200
       - OPENSEARCH_ENABLED=${OPENSEARCH_ENABLED:-true}
       # ============================================================================
+      # Database Encryption Configuration
+      # ============================================================================
+      # Enable/disable database encryption
+      - ENCRYPTION_ENABLED=${ENCRYPTION_ENABLED:-true}
+      # Encryption algorithm (AES-256-GCM)
+      - ENCRYPTION_ALGORITHM=${ENCRYPTION_ALGORITHM:-AES-256-GCM}
+      # Key derivation iterations
+      - KEY_DERIVATION_ITERATIONS=${KEY_DERIVATION_ITERATIONS:-100000}
+      # Key vault provider (local, aws_kms, azure_kv, hashicorp_vault)
+      - KEY_VAULT_PROVIDER=${KEY_VAULT_PROVIDER:-local}
+      # Master key configuration
+      - MASTER_KEY_ID=${MASTER_KEY_ID:-default-master-key}
+      - MASTER_KEY_PATH=${MASTER_KEY_PATH:-/app/keys/master.key}
+      # Key rotation settings
+      - KEY_ROTATION_INTERVAL_DAYS=${KEY_ROTATION_INTERVAL_DAYS:-90}
+      - KEY_ROTATION_ENABLED=${KEY_ROTATION_ENABLED:-true}
+      # AWS KMS configuration (if using aws_kms provider)
+      - AWS_KMS_KEY_ID=${AWS_KMS_KEY_ID:-}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      # Azure Key Vault configuration (if using azure_kv provider)
+      - AZURE_KEY_VAULT_URL=${AZURE_KEY_VAULT_URL:-}
+      - AZURE_KEY_VAULT_KEY_NAME=${AZURE_KEY_VAULT_KEY_NAME:-}
+      - AZURE_CLIENT_ID_KV=${AZURE_CLIENT_ID_KV:-}
+      - AZURE_CLIENT_SECRET_KV=${AZURE_CLIENT_SECRET_KV:-}
+      - AZURE_TENANT_ID_KV=${AZURE_TENANT_ID_KV:-}
+      # HashiCorp Vault configuration (if using hashicorp_vault provider)
+      - VAULT_URL=${VAULT_URL:-}
+      - VAULT_TOKEN=${VAULT_TOKEN:-}
+      - VAULT_MOUNT_PATH=${VAULT_MOUNT_PATH:-secret}
+      - VAULT_KEY_PATH=${VAULT_KEY_PATH:-encryption-keys}
+      # Encryption monitoring and alerting
+      - ENCRYPTION_MONITORING_ENABLED=${ENCRYPTION_MONITORING_ENABLED:-true}
+      - ENCRYPTION_ALERT_WEBHOOK_URL=${ENCRYPTION_ALERT_WEBHOOK_URL:-}
+      - ENCRYPTION_METRICS_ENDPOINT=${ENCRYPTION_METRICS_ENDPOINT:-/metrics}
+      # ============================================================================
     ports:
       - "8000:8000"
     depends_on:
@@ -111,6 +148,7 @@ services:
       - /app/__pycache__
       - /app/venv
       - ./infra/docker/wait-for-it.sh:/wait-for-it.sh
+      - encryption_keys:/app/keys
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 5s
@@ -244,6 +282,12 @@ services:
       # OCR Configuration
       - OLLAMA_OCR_ENDPOINT=http://192.168.86.32:11434/api/generate
       - OLLAMA_OCR_MODEL=llama3.2-vision:11b
+      # Database Encryption Configuration
+      - ENCRYPTION_ENABLED=${ENCRYPTION_ENABLED:-true}
+      - ENCRYPTION_ALGORITHM=${ENCRYPTION_ALGORITHM:-AES-256-GCM}
+      - KEY_VAULT_PROVIDER=${KEY_VAULT_PROVIDER:-local}
+      - MASTER_KEY_ID=${MASTER_KEY_ID:-default-master-key}
+      - MASTER_KEY_PATH=${MASTER_KEY_PATH:-/app/keys/master.key}
     depends_on:
       kafka:
         condition: service_healthy
@@ -254,6 +298,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./api:/app
+      - encryption_keys:/app/keys
     command: ["python", "-m", "workers.ocr_consumer"]
 
   # # Ollama AI service
@@ -343,6 +388,7 @@ volumes:
   ollama_data:
   kafka_data:
   opensearch_data:
+  encryption_keys:
 
 networks:
   invoice_app_network:

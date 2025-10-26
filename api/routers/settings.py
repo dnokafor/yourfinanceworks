@@ -956,7 +956,7 @@ async def get_company_logo(
         tenant_record = master_db.query(Tenant).filter(Tenant.id == tenant_id).first()
         if not tenant_record or not tenant_record.company_logo_url:
             raise HTTPException(status_code=404, detail="Logo not found for this tenant.")
-        
+
         # Construct the absolute path to the logo file
         # Assuming company_logo_url is like /static/logos/<tenant_id>/logo.png
         # We need to convert this to an absolute file system path

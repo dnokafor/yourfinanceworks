@@ -1,0 +1,245 @@
+groups:
+  - name: encryption_alerts
+    rules:
+      # High-severity alerts
+      - alert: EncryptionServiceDown
+        expr: up{job="encryption-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: encryption
+        annotations:
+          summary: "Encryption service is down"
+          description: "The encryption service has been down for more than 1 minute"
+          runbook_url: "https://docs.company.com/runbooks/encryption-service-down"
+
+      - alert: KeyVaultConnectivityLost
+        expr: key_vault_connectivity_status == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: key_vault
+        annotations:
+          summary: "Key vault connectivity lost"
+          description: "Cannot connect to key vault for more than 2 minutes"
+          runbook_url: "https://docs.company.com/runbooks/key-vault-connectivity"
+
+      - alert: HighEncryptionErrorRate
+        expr: rate(encryption_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          component: encryption
+        annotations:
+          summary: "High encryption error rate detected"
+          description: "Encryption error rate is {{ $value }} errors/sec for more than 5 minutes"
+          runbook_url: "https://docs.company.com/runbooks/encryption-errors"
+
+      - alert: MasterKeyMissing
+        expr: master_key_available == 0
+        for: 0m
+        labels:
+          severity: critical
+          component: key_management
+        annotations:
+          summary: "Master encryption key is missing"
+          description: "The master encryption key is not available"
+          runbook_url: "https://docs.company.com/runbooks/master-key-missing"
+
+      - alert: KeyRotationOverdue
+        expr: tenants_overdue_rotation_count > 0
+        for: 1h
+        labels:
+          severity: critical
+          component: key_rotation
+        annotations:
+          summary: "Key rotation overdue for {{ $value }} tenants"
+          description: "{{ $value }} tenants have overdue key rotations"
+          runbook_url: "https://docs.company.com/runbooks/key-rotation-overdue"
+
+      # Medium-severity alerts
+      - alert: HighEncryptionLatency
+        expr: histogram_quantile(0.95, rate(encryption_duration_seconds_bucket[5m])) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          component: encryption
+        annotations:
+          summary: "High encryption latency detected"
+          description: "95th percentile encryption latency is {{ $value }}s for more than 10 minutes"
+          runbook_url: "https://docs.company.com/runbooks/encryption-performance"
+
+      - alert: LowKeyCacheHitRate
+        expr: key_cache_hit_rate < 0.8
+        for: 15m
+        labels:
+          severity: warning
+          component: key_cache
+        annotations:
+          summary: "Low key cache hit rate"
+          description: "Key cache hit rate is {{ $value }}% for more than 15 minutes"
+          runbook_url: "https://docs.company.com/runbooks/key-cache-performance"
+
+      - alert: KeyRotationDue
+        expr: tenants_due_for_rotation_count > 10
+        for: 30m
+        labels:
+          severity: warning
+          component: key_rotation
+        annotations:
+          summary: "Many tenants due for key rotation"
+          description: "{{ $value }} tenants are due for key rotation"
+          runbook_url: "https://docs.company.com/runbooks/key-rotation-due"
+
+      - alert: KeyRetrievalErrors
+        expr: rate(key_retrieval_errors_total[5m]) > 0.01
+        for: 10m
+        labels:
+          severity: warning
+          component: key_vault
+        annotations:
+          summary: "Key retrieval errors detected"
+          description: "Key retrieval error rate is {{ $value }} errors/sec"
+          runbook_url: "https://docs.company.com/runbooks/key-retrieval-errors"
+
+      - alert: EncryptionThroughputDrop
+        expr: rate(encryption_operations_total[5m]) < 0.5 * rate(encryption_operations_total[1h] offset 1h)
+        for: 15m
+        labels:
+          severity: warning
+          component: encryption
+        annotations:
+          summary: "Encryption throughput dropped significantly"
+          description: "Current encryption throughput is less than 50% of the previous hour average"
+          runbook_url: "https://docs.company.com/runbooks/encryption-throughput"
+
+      # Low-severity alerts
+      - alert: KeyRotationFailures
+        expr: rate(key_rotation_failures_total[1h]) > 0
+        for: 1h
+        labels:
+          severity: info
+          component: key_rotation
+        annotations:
+          summary: "Key rotation failures detected"
+          description: "{{ $value }} key rotation failures in the last hour"
+          runbook_url: "https://docs.company.com/runbooks/key-rotation-failures"
+
+      - alert: EncryptionMetricsStale
+        expr: time() - encryption_metrics_last_update > 300
+        for: 5m
+        labels:
+          severity: info
+          component: monitoring
+        annotations:
+          summary: "Encryption metrics are stale"
+          description: "Encryption metrics haven't been updated for more than 5 minutes"
+          runbook_url: "https://docs.company.com/runbooks/metrics-stale"
+
+      - alert: UnusualEncryptionPattern
+        expr: |
+          (
+            rate(encryption_operations_total[5m]) > 2 * rate(encryption_operations_total[1h] offset 1h)
+          ) or (
+            rate(encryption_operations_total[5m]) < 0.1 * rate(encryption_operations_total[1h] offset 1h)
+          )
+        for: 20m
+        labels:
+          severity: info
+          component: encryption
+        annotations:
+          summary: "Unusual encryption operation pattern detected"
+          description: "Encryption operations are significantly different from historical patterns"
+          runbook_url: "https://docs.company.com/runbooks/unusual-patterns"
+
+  - name: encryption_security_alerts
+    rules:
+      - alert: SuspiciousKeyAccess
+        expr: increase(key_access_denied_total[5m]) > 5
+        for: 0m
+        labels:
+          severity: critical
+          component: security
+        annotations:
+          summary: "Suspicious key access attempts detected"
+          description: "{{ $value }} key access attempts were denied in the last 5 minutes"
+          runbook_url: "https://docs.company.com/runbooks/suspicious-key-access"
+
+      - alert: UnauthorizedEncryptionAttempt
+        expr: increase(unauthorized_encryption_attempts_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          component: security
+        annotations:
+          summary: "Unauthorized encryption attempts detected"
+          description: "{{ $value }} unauthorized encryption attempts in the last 5 minutes"
+          runbook_url: "https://docs.company.com/runbooks/unauthorized-encryption"
+
+      - alert: KeyVaultAuditFailure
+        expr: key_vault_audit_status == 0
+        for: 5m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "Key vault audit logging failure"
+          description: "Key vault audit logging has failed"
+          runbook_url: "https://docs.company.com/runbooks/audit-failure"
+
+      - alert: EncryptionComplianceViolation
+        expr: encryption_compliance_score < 0.95
+        for: 10m
+        labels:
+          severity: warning
+          component: compliance
+        annotations:
+          summary: "Encryption compliance score below threshold"
+          description: "Encryption compliance score is {{ $value }}, below the required 0.95"
+          runbook_url: "https://docs.company.com/runbooks/compliance-violation"
+
+  - name: encryption_capacity_alerts
+    rules:
+      - alert: HighEncryptionCPUUsage
+        expr: encryption_cpu_usage_percent > 80
+        for: 10m
+        labels:
+          severity: warning
+          component: capacity
+        annotations:
+          summary: "High CPU usage in encryption service"
+          description: "Encryption service CPU usage is {{ $value }}% for more than 10 minutes"
+          runbook_url: "https://docs.company.com/runbooks/high-cpu-usage"
+
+      - alert: HighEncryptionMemoryUsage
+        expr: encryption_memory_usage_percent > 85
+        for: 10m
+        labels:
+          severity: warning
+          component: capacity
+        annotations:
+          summary: "High memory usage in encryption service"
+          description: "Encryption service memory usage is {{ $value }}% for more than 10 minutes"
+          runbook_url: "https://docs.company.com/runbooks/high-memory-usage"
+
+      - alert: KeyCacheMemoryPressure
+        expr: key_cache_memory_usage_bytes / key_cache_max_memory_bytes > 0.9
+        for: 15m
+        labels:
+          severity: warning
+          component: capacity
+        annotations:
+          summary: "Key cache memory pressure"
+          description: "Key cache is using {{ $value | humanizePercentage }} of available memory"
+          runbook_url: "https://docs.company.com/runbooks/key-cache-memory"
+
+      - alert: EncryptionQueueBacklog
+        expr: encryption_queue_size > 1000
+        for: 5m
+        labels:
+          severity: warning
+          component: capacity
+        annotations:
+          summary: "Large encryption queue backlog"
+          description: "Encryption queue has {{ $value }} pending operations"
+          runbook_url: "https://docs.company.com/runbooks/queue-backlog"

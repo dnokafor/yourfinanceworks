@@ -67,3 +67,11 @@ opensearch-py==2.4.2
 pymupdf>=1.26.0 # not directly required, pinned by Snyk to avoid a vulnerability
 transformers>=4.53.0 # not directly required, pinned by Snyk to avoid a vulnerability
 urllib3>=2.5.0 # not directly required, pinned by Snyk to avoid a vulnerability
+# Key vault provider dependencies
+boto3==1.40.1  # AWS KMS (already included above)
+azure-keyvault-keys==4.9.0  # Azure Key Vault keys
+azure-keyvault-secrets==4.8.0  # Azure Key Vault secrets
+azure-identity==1.19.0  # Azure authentication
+hvac==2.3.0  # HashiCorp Vault client
+tenacity==9.0.0  # Retry logic for key vault operations
+cryptography==44.0.0  # Cryptographic operations
