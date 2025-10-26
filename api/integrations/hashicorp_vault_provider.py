@@ -16,7 +16,7 @@ import hvac
 from hvac.exceptions import VaultError, InvalidPath, Forbidden
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from config.encryption_config import EncryptionConfig
+from encryption_config import EncryptionConfig
 from exceptions.encryption_exceptions import (
     KeyNotFoundError,
     EncryptionError,

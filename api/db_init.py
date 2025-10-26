@@ -238,6 +238,9 @@ def sync_users_to_tenant_db(tenant_id: int):
 def init_db(skip_migrations=True):
     """Initialize database with essential setup, optionally skipping migrations."""
     logger.info("Starting essential database initialization...")
+    
+    # Set environment variable to indicate we're in database initialization phase
+    os.environ['DB_INIT_PHASE'] = 'true'
 
     # Step 1: Wait for database to be available
     if not wait_for_database(SQLALCHEMY_DATABASE_URL):
@@ -362,6 +365,9 @@ def init_db(skip_migrations=True):
     reset_all_users_id_sequences()
     
     logger.info("Database initialized successfully with sample data.")
+    
+    # Clear the database initialization phase flag
+    os.environ['DB_INIT_PHASE'] = 'false'
 
 if __name__ == "__main__":
     init_db() 

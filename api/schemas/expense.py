@@ -42,6 +42,14 @@ class ExpenseBase(BaseModel):
         if v not in ExpenseStatus.get_all_values():
             raise ValueError(f'Invalid status. Must be one of: {", ".join(ExpenseStatus.get_all_values())}')
         return v
+    
+    @field_validator('expense_date', mode='before')
+    @classmethod
+    def convert_datetime_to_date(cls, v):
+        """Convert datetime to date if needed for API response validation."""
+        if isinstance(v, datetime):
+            return v.date()
+        return v
 
 
 class ExpenseCreate(ExpenseBase):
@@ -85,6 +93,14 @@ class ExpenseUpdate(BaseModel):
         if v is not None and v not in ExpenseStatus.get_all_values():
             raise ValueError(f'Invalid status. Must be one of: {", ".join(ExpenseStatus.get_all_values())}')
         return v
+    
+    @field_validator('expense_date', mode='before')
+    @classmethod
+    def convert_datetime_to_date(cls, v):
+        """Convert datetime to date if needed for API response validation."""
+        if v is not None and isinstance(v, datetime):
+            return v.date()
+        return v
 
 
 class Expense(ExpenseBase):
@@ -97,6 +113,14 @@ class Expense(ExpenseBase):
     analysis_updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+    
+    @field_validator('expense_date', mode='before')
+    @classmethod
+    def convert_datetime_to_date(cls, v):
+        """Convert datetime to date if needed for API response validation."""
+        if isinstance(v, datetime):
+            return v.date()
+        return v
 
 
 # === Inventory Purchase Schemas ===

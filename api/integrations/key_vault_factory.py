@@ -5,17 +5,14 @@ This module provides a factory pattern for creating different key vault provider
 based on configuration settings.
 """
 
+from __future__ import annotations
+
 import logging
 from typing import Union, Dict, Any
 from enum import Enum
 
-from config.encryption_config import EncryptionConfig
+from encryption_config import EncryptionConfig
 from exceptions.encryption_exceptions import EncryptionError
-
-# Import key vault providers
-from .aws_kms_provider import AWSKMSProvider
-from .azure_keyvault_provider import AzureKeyVaultProvider
-from .hashicorp_vault_provider import HashiCorpVaultProvider
 
 logger = logging.getLogger(__name__)
 
@@ -31,14 +28,34 @@ class KeyVaultProvider(Enum):
 class KeyVaultFactory:
     """Factory class for creating key vault provider instances."""
     
-    _providers = {
-        KeyVaultProvider.AWS_KMS: AWSKMSProvider,
-        KeyVaultProvider.AZURE_KEYVAULT: AzureKeyVaultProvider,
-        KeyVaultProvider.HASHICORP_VAULT: HashiCorpVaultProvider,
-    }
+    _providers = {}
     
     @classmethod
-    def create_provider(cls, config: EncryptionConfig) -> Union[AWSKMSProvider, AzureKeyVaultProvider, HashiCorpVaultProvider]:
+    def _get_provider_class(cls, provider_type: KeyVaultProvider):
+        """Lazy load provider classes to avoid import errors."""
+        if provider_type == KeyVaultProvider.AWS_KMS:
+            try:
+                from .aws_kms_provider import AWSKMSProvider
+                return AWSKMSProvider
+            except ImportError as e:
+                raise EncryptionError(f"AWS KMS provider dependencies not installed: {str(e)}")
+        elif provider_type == KeyVaultProvider.AZURE_KEYVAULT:
+            try:
+                from .azure_keyvault_provider import AzureKeyVaultProvider
+                return AzureKeyVaultProvider
+            except ImportError as e:
+                raise EncryptionError(f"Azure Key Vault provider dependencies not installed: {str(e)}")
+        elif provider_type == KeyVaultProvider.HASHICORP_VAULT:
+            try:
+                from .hashicorp_vault_provider import HashiCorpVaultProvider
+                return HashiCorpVaultProvider
+            except ImportError as e:
+                raise EncryptionError(f"HashiCorp Vault provider dependencies not installed: {str(e)}")
+        else:
+            raise EncryptionError(f"Unknown provider type: {provider_type}")
+    
+    @classmethod
+    def create_provider(cls, config: EncryptionConfig):
         """
         Create a key vault provider instance based on configuration.
         
@@ -60,11 +77,8 @@ class KeyVaultFactory:
             # Local provider is handled by the key management service directly
             raise EncryptionError("Local provider should be handled by KeyManagementService")
         
-        if provider_type not in cls._providers:
-            raise EncryptionError(f"Provider {provider_type.value} not implemented")
-        
         try:
-            provider_class = cls._providers[provider_type]
+            provider_class = cls._get_provider_class(provider_type)
             provider_instance = provider_class(config)
             
             logger.info(f"Created key vault provider: {provider_type.value}")
@@ -218,20 +232,3 @@ class KeyVaultInterface:
         raise NotImplementedError
 
 
-# Ensure all providers implement the interface
-def _validate_provider_interface():
-    """Validate that all providers implement the required interface methods."""
-    interface_methods = [method for method in dir(KeyVaultInterface) 
-                        if not method.startswith('_') and callable(getattr(KeyVaultInterface, method))]
-    
-    for provider_enum, provider_class in KeyVaultFactory._providers.items():
-        provider_methods = [method for method in dir(provider_class) 
-                           if not method.startswith('_') and callable(getattr(provider_class, method))]
-        
-        missing_methods = set(interface_methods) - set(provider_methods)
-        if missing_methods:
-            logger.warning(f"Provider {provider_enum.value} missing interface methods: {missing_methods}")
-
-
-# Validate interfaces on module import
-_validate_provider_interface()

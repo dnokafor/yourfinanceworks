@@ -15,8 +15,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from api.services.encryption_service import get_encryption_service
-from api.exceptions.encryption_exceptions import DecryptionError
+from services.encryption_service import get_encryption_service
+from exceptions.encryption_exceptions import DecryptionError
 
 logger = logging.getLogger(__name__)
 

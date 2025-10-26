@@ -134,6 +134,7 @@ def main() -> int:
                         logger.warning(f"Failed to requeue expense {exp.id} in tenant {tid}: {e}")
             finally:
                 db.close()
+                logger.debug(f"Closed database session for tenant {tid}")
     except Exception as e:
         logger.warning(f"Startup requeue scan failed: {e}")
     consumer.subscribe([expense_topic, bank_topic, invoice_topic])
@@ -165,6 +166,7 @@ def main() -> int:
             if tenant_id is not None:
                 try:
                     set_tenant_context(int(tenant_id))
+                    logger.info(f"Successfully set tenant context to {tenant_id} for OCR processing")
                 except Exception as e:
                     # Don't commit; without tenant context we cannot process. Let retry handle it.
                     logger.warning(f"Failed to set tenant context {tenant_id}: {e}")
@@ -188,6 +190,7 @@ def main() -> int:
                     logger.error(f"Failed to commit message for invalid tenant: {e}")
                 continue
             db = SessionLocalTenant()
+            logger.info(f"Successfully opened database session for tenant {tenant_id}")
             try:
                 topic_name = msg.topic()
                 logger.info(f"Kafka message received on topic={topic_name}: keys={list(payload.keys())}")
@@ -221,12 +224,12 @@ def main() -> int:
                         except Exception:
                             db.rollback()
                         # Process with OCR (uses updated process_attachment_inline that fetches AI config)
-                        print(f"🟡 DEBUG: OCR consumer about to call process_attachment_inline for expense {expense_id}")
+                        logger.info(f"Processing OCR for expense {expense_id}, attachment {attachment_id}")
                         import asyncio
                         asyncio.get_event_loop().run_until_complete(
                             process_attachment_inline(db, expense_id, attachment_id, file_path)
                         )
-                        print(f"🟢 DEBUG: OCR consumer finished calling process_attachment_inline for expense {expense_id}")
+                        logger.info(f"Completed OCR processing for expense {expense_id}")
                         # Refresh status and commit offset only if parsed as done
                         try:
                             db.refresh(exp)

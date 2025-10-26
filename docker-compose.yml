@@ -109,7 +109,7 @@ services:
       - MASTER_KEY_PATH=${MASTER_KEY_PATH:-/app/keys/master.key}
       # Key rotation settings
       - KEY_ROTATION_INTERVAL_DAYS=${KEY_ROTATION_INTERVAL_DAYS:-90}
-      - KEY_ROTATION_ENABLED=${KEY_ROTATION_ENABLED:-true}
+      - KEY_ROTATION_ENABLED=${KEY_ROTATION_ENABLED:-false}
       # AWS KMS configuration (if using aws_kms provider)
       - AWS_KMS_KEY_ID=${AWS_KMS_KEY_ID:-}
       - AWS_REGION=${AWS_REGION:-us-east-1}
@@ -221,7 +221,13 @@ services:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       # Pre-create topics at startup (Confluent image doesn't have built-in create topics, we ensure from worker)
     healthcheck:
-      test: ["CMD", "bash", "-lc", "kafka-topics --bootstrap-server kafka:9092 --list | cat"]
+      test:
+        [
+          "CMD",
+          "bash",
+          "-lc",
+          "kafka-topics --bootstrap-server kafka:9092 --list | cat",
+        ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -246,8 +252,6 @@ services:
     networks:
       - invoice_app_network
     restart: unless-stopped
-
-
 
   # OCR Worker running as a separate container
   ocr-worker:
@@ -285,6 +289,7 @@ services:
       # Database Encryption Configuration
       - ENCRYPTION_ENABLED=${ENCRYPTION_ENABLED:-true}
       - ENCRYPTION_ALGORITHM=${ENCRYPTION_ALGORITHM:-AES-256-GCM}
+      - KEY_DERIVATION_ITERATIONS=${KEY_DERIVATION_ITERATIONS:-100000}
       - KEY_VAULT_PROVIDER=${KEY_VAULT_PROVIDER:-local}
       - MASTER_KEY_ID=${MASTER_KEY_ID:-default-master-key}
       - MASTER_KEY_PATH=${MASTER_KEY_PATH:-/app/keys/master.key}
@@ -341,7 +346,8 @@ services:
       - invoice_app_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      test:
+        ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -392,4 +398,4 @@ volumes:
 
 networks:
   invoice_app_network:
-    driver: bridge 
+    driver: bridge

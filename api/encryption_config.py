@@ -55,7 +55,7 @@ class EncryptionConfig:
     
     # Key derivation settings
     KEY_DERIVATION_ITERATIONS: int = field(default_factory=lambda: 
-        int(os.getenv("KEY_DERIVATION_ITERATIONS", "100000")))
+        int(os.getenv("KEY_DERIVATION_ITERATIONS", "10000")))
     
     KEY_DERIVATION_SALT: str = field(default_factory=lambda: 
         os.getenv("KEY_DERIVATION_SALT", "tenant_encryption_salt_2024"))
@@ -232,7 +232,7 @@ class EncryptionConfig:
             logger.error(error_message)
             raise ValueError(error_message)
         
-        logger.info("Encryption configuration validated successfully")
+        # logger.info("Encryption configuration validated successfully")
     
     def get_key_vault_config(self) -> Dict[str, Any]:
         """

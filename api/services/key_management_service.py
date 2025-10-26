@@ -5,6 +5,8 @@ This service handles secure generation, storage, and management of encryption ke
 with master key encryption and audit logging capabilities.
 """
 
+from __future__ import annotations
+
 import logging
 import secrets
 import base64
@@ -12,20 +14,38 @@ import json
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import os
+import time
 from threading import Lock
+# Removed threading.Lock to avoid deadlock issues
 
-from api.config.encryption_config import EncryptionConfig
-from api.exceptions.encryption_exceptions import (
+from encryption_config import EncryptionConfig
+from exceptions.encryption_exceptions import (
     KeyNotFoundError,
     KeyRotationError,
     EncryptionError
 )
-from api.integrations.key_vault_factory import KeyVaultFactory
+from integrations.key_vault_factory import KeyVaultFactory
+from models.models import TenantKey
+from models.database import SessionLocal as get_db_session
 
 logger = logging.getLogger(__name__)
+
+# Global key management service instance
+_key_management_service: Optional['KeyManagementService'] = None
+
+
+def get_key_management_service() -> 'KeyManagementService':
+    """
+    Get global key management service instance.
+
+    Returns:
+        KeyManagementService instance
+    """
+    global _key_management_service
+    if _key_management_service is None:
+        _key_management_service = KeyManagementService()
+    return _key_management_service
 
 
 class KeyManagementService:
@@ -43,10 +63,9 @@ class KeyManagementService:
     def __init__(self):
         self.config = EncryptionConfig()
         self._master_key: Optional[bytes] = None
-        self._key_storage: Dict[int, str] = {}  # In-memory storage for demo
-        self._key_metadata: Dict[int, Dict[str, Any]] = {}
-        self._storage_lock = Lock()
-        
+        self._key_cache: Dict[int, str] = {}  # Cache for decrypted key material
+        self._cache_timestamps: Dict[int, float] = {}
+
         # Initialize key vault provider if not using local storage
         self._key_vault_provider = None
         if self.config.KEY_VAULT_PROVIDER != "local":
@@ -57,53 +76,103 @@ class KeyManagementService:
                 logger.error(f"Failed to initialize key vault provider: {str(e)}")
                 # Fall back to local storage
                 logger.warning("Falling back to local key storage")
-        
+
         # Initialize master key (only for local storage)
         if self.config.KEY_VAULT_PROVIDER == "local":
-            self._initialize_master_key()
-        
+            try:
+                self._initialize_master_key()
+            except Exception as e:
+                logger.error(f"Failed to initialize master key during startup: {str(e)}")
+                # Don't fail the entire service, just log the error
+                # The key will be initialized on first use
+                self._master_key = None
+
         logger.info("KeyManagementService initialized")
     
+    def export_master_key_for_env(self) -> str:
+        """
+        Export the current master key as a base64 string for environment variable use.
+        
+        Returns:
+            Base64 encoded master key string
+        """
+        if self._master_key is None:
+            raise EncryptionError("Master key not initialized")
+        
+        return base64.b64encode(self._master_key).decode('utf-8')
+
     def _initialize_master_key(self):
         """Initialize or load the master key."""
         try:
-            # In production, this would load from secure storage (HSM, Key Vault, etc.)
+            # Check for environment variable first (most secure)
+            env_master_key = os.getenv("MASTER_KEY")
+            if env_master_key:
+                logger.info("Loading master key from environment variable")
+                try:
+                    # Decode base64 encoded key from environment
+                    self._master_key = base64.b64decode(env_master_key.encode('utf-8'))
+                    logger.info("Successfully loaded master key from environment variable")
+                    return
+                except Exception as e:
+                    logger.error(f"Failed to decode master key from environment variable: {str(e)}")
+                    # Fall through to file-based loading
+            
+            # Fall back to file-based storage
             master_key_path = self.config.MASTER_KEY_PATH
+            logger.info(f"Initializing master key at: {master_key_path}")
             
             if os.path.exists(master_key_path):
                 # Load existing master key
+                logger.info("Loading existing master key")
                 with open(master_key_path, 'rb') as f:
                     encoded_key = f.read()
                     self._master_key = base64.b64decode(encoded_key)
-                logger.info("Loaded existing master key")
+                logger.info("Loaded existing master key successfully")
             else:
                 # Generate new master key
+                logger.info("Generating new master key")
                 self._master_key = secrets.token_bytes(32)  # 256-bit key
                 
                 # Save master key (in production, use secure storage)
-                os.makedirs(os.path.dirname(master_key_path), exist_ok=True)
+                key_dir = os.path.dirname(master_key_path)
+                logger.info(f"Creating key directory: {key_dir}")
+                
+                try:
+                    os.makedirs(key_dir, exist_ok=True)
+                    logger.info(f"Key directory created successfully: {key_dir}")
+                except Exception as dir_error:
+                    logger.error(f"Failed to create key directory {key_dir}: {str(dir_error)}")
+                    raise
+                
+                logger.info(f"Writing master key to: {master_key_path}")
                 with open(master_key_path, 'wb') as f:
                     f.write(base64.b64encode(self._master_key))
-                
+
                 # Set restrictive permissions
-                os.chmod(master_key_path, 0o600)
-                
-                logger.info("Generated new master key")
-                
+                try:
+                    os.chmod(master_key_path, 0o600)
+                    logger.info("Set restrictive permissions on master key file")
+                except Exception as perm_error:
+                    logger.warning(f"Failed to set permissions on master key file: {str(perm_error)}")
+
+                logger.info("Generated new master key successfully")
+
         except Exception as e:
             logger.error(f"Failed to initialize master key: {str(e)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             raise EncryptionError(f"Master key initialization failed: {str(e)}")
-    
+
     def generate_tenant_key(self, tenant_id: int) -> str:
         """
         Generate a new encryption key for a tenant.
-        
+
         Args:
             tenant_id: Tenant identifier
-            
+
         Returns:
             Generated key identifier/reference
-            
+
         Raises:
             EncryptionError: If key generation fails
         """
@@ -111,18 +180,17 @@ class KeyManagementService:
             if self._key_vault_provider:
                 # Use external key vault provider
                 key_data = self._key_vault_provider.generate_data_key(tenant_id)
-                
+
                 # Store metadata locally for quick access
-                with self._storage_lock:
-                    self._key_metadata[tenant_id] = {
-                        'created_at': datetime.now(timezone.utc).isoformat(),
-                        'version': 1,
-                        'algorithm': 'AES-256-GCM',
-                        'key_id': key_data['key_id'],
-                        'encrypted_key': key_data['encrypted_key'],
-                        'provider': self.config.KEY_VAULT_PROVIDER
-                    }
-                
+                self._key_metadata[tenant_id] = {
+                    'created_at': datetime.now(timezone.utc).isoformat(),
+                    'version': 1,
+                    'algorithm': 'AES-256-GCM',
+                    'key_id': key_data['key_id'],
+                    'encrypted_key': key_data['encrypted_key'],
+                    'provider': self.config.KEY_VAULT_PROVIDER
+                }
+
                 # Audit log
                 self._key_vault_provider.audit_key_access(tenant_id, "KEY_GENERATED", key_data['key_id'], True)
                 
@@ -139,32 +207,73 @@ class KeyManagementService:
             raise EncryptionError(f"Failed to generate tenant key: {str(e)}")
     
     def _generate_local_tenant_key(self, tenant_id: int) -> str:
-        """Generate a tenant key using local storage."""
-        # Generate cryptographically secure random key
-        tenant_key = secrets.token_bytes(32)  # 256-bit key
-        
-        # Encrypt tenant key with master key
-        encrypted_key = self._encrypt_with_master_key(tenant_key)
-        
-        # Store encrypted key
-        with self._storage_lock:
-            self._key_storage[tenant_id] = encrypted_key
-            self._key_metadata[tenant_id] = {
-                'created_at': datetime.now(timezone.utc).isoformat(),
-                'version': 1,
-                'algorithm': 'AES-256-GCM',
+        """Generate a tenant key using database-backed storage."""
+        logger.info(f"Starting database-backed key generation for tenant {tenant_id}")
+
+        try:
+            # Generate cryptographically secure random key
+            logger.info(f"Generating random key material for tenant {tenant_id}")
+            tenant_key = secrets.token_bytes(32)  # 256-bit key
+            logger.info(f"Generated random key material for tenant {tenant_id}")
+
+            # Encrypt tenant key with master key
+            logger.info(f"Encrypting tenant key with master key for tenant {tenant_id}")
+            encrypted_key = self._encrypt_with_master_key(tenant_key)
+            logger.info(f"Encrypted tenant key for tenant {tenant_id}")
+
+            # Store encrypted key in database
+            logger.info(f"Storing encrypted key in database for tenant {tenant_id}")
+            db = get_db_session()
+            try:
+                # Check if key already exists
+                existing_key = db.query(TenantKey).filter(TenantKey.tenant_id == tenant_id).first()
+                if existing_key:
+                    logger.warning(f"Tenant key already exists for tenant {tenant_id}, updating...")
+                    existing_key.encrypted_key_material = encrypted_key
+                    existing_key.version += 1
+                    existing_key.updated_at = datetime.now(timezone.utc)
+                else:
+                    # Create new key record
+                    tenant_key_record = TenantKey(
+                        tenant_id=tenant_id,
+                        key_id=f"tenant_{tenant_id}_v1",
+                        encrypted_key_material=encrypted_key,
+                        algorithm='AES-256-GCM',
+                        version=1,
+                        is_active=True
+                    )
+                    db.add(tenant_key_record)
+
+                db.commit()
+                logger.info(f"Successfully stored key in database for tenant {tenant_id}")
+
+            except Exception as db_error:
+                db.rollback()
+                logger.error(f"Failed to store key in database for tenant {tenant_id}: {str(db_error)}")
+                raise
+            finally:
+                db.close()
+
+            # Cache the decrypted key material for performance
+            import base64
+            self._key_cache[tenant_id] = base64.b64encode(tenant_key).decode('ascii')
+            self._cache_timestamps[tenant_id] = time.time()
+
+            # Audit log
+            logger.info(f"Creating audit log for tenant {tenant_id}")
+            self.audit_key_access(tenant_id, "KEY_GENERATED", {
                 'key_id': f"tenant_{tenant_id}_v1",
-                'provider': 'local'
-            }
-        
-        # Audit log
-        self.audit_key_access(tenant_id, "KEY_GENERATED", {
-            'key_id': f"tenant_{tenant_id}_v1",
-            'algorithm': 'AES-256-GCM'
-        })
-        
-        logger.info(f"Generated new local key for tenant {tenant_id}")
-        return f"tenant_{tenant_id}_v1"
+                'algorithm': 'AES-256-GCM'
+            })
+
+            logger.info(f"Generated new database-backed key for tenant {tenant_id} successfully")
+            return f"tenant_{tenant_id}_v1"
+
+        except Exception as e:
+            logger.error(f"Failed to generate database-backed key for tenant {tenant_id}: {str(e)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
     
     def store_tenant_key(self, tenant_id: int, key: str) -> bool:
         """
@@ -252,68 +361,133 @@ class KeyManagementService:
             raise KeyNotFoundError(f"Tenant key not found for tenant {tenant_id}")
     
     def _retrieve_local_tenant_key(self, tenant_id: int) -> str:
-        """Retrieve a tenant key using local storage."""
-        with self._storage_lock:
-            if tenant_id not in self._key_storage:
-                # Auto-generate key if not exists
-                logger.info(f"Auto-generating local key for tenant {tenant_id}")
+        """Retrieve a tenant key using database-backed storage."""
+        # Check cache first
+        current_time = time.time()
+        if (tenant_id in self._key_cache and
+            tenant_id in self._cache_timestamps and
+            current_time - self._cache_timestamps[tenant_id] < self.config.KEY_CACHE_TTL_SECONDS):
+            logger.debug(f"Returning cached key for tenant {tenant_id}")
+            return self._key_cache[tenant_id]
+
+        # Check database for key
+        db = get_db_session()
+        try:
+            tenant_key_record = db.query(TenantKey).filter(
+                TenantKey.tenant_id == tenant_id,
+                TenantKey.is_active == True
+            ).first()
+
+            if not tenant_key_record:
+                # Check if we're in database initialization phase
+                import os
+                import threading
+                current_thread = threading.current_thread()
+
+                # Only block during actual database initialization, not during runtime operations
+                is_db_init = os.environ.get('DB_INIT_PHASE', 'false').lower() == 'true'
+
+                if is_db_init and hasattr(current_thread, 'name') and 'MainThread' in current_thread.name:
+                    logger.warning(f"Skipping key auto-generation for tenant {tenant_id} during database initialization")
+                    raise KeyNotFoundError(f"Tenant key not found for tenant {tenant_id} and auto-generation disabled during startup")
+
+                # Auto-generate key if not exists (during runtime or non-init operations)
+                logger.info(f"Auto-generating database-backed key for tenant {tenant_id}")
                 self.generate_tenant_key(tenant_id)
-            
-            encrypted_key = self._key_storage[tenant_id]
-        
-        # Decrypt with master key
-        decrypted_key = self._decrypt_with_master_key(encrypted_key)
-        
-        # Audit log
-        self.audit_key_access(tenant_id, "KEY_RETRIEVED", {
-            'key_id': self._key_metadata.get(tenant_id, {}).get('key_id', 'unknown')
-        })
-        
-        return decrypted_key.decode('utf-8')
+
+                # Re-query after generation
+                tenant_key_record = db.query(TenantKey).filter(
+                    TenantKey.tenant_id == tenant_id,
+                    TenantKey.is_active == True
+                ).first()
+
+                if not tenant_key_record:
+                    raise KeyNotFoundError(f"Tenant key not found for tenant {tenant_id} after generation attempt")
+
+            # Decrypt with master key
+            decrypted_key = self._decrypt_with_master_key(tenant_key_record.encrypted_key_material)
+
+            # Cache the result
+            import base64
+            cached_key = base64.b64encode(decrypted_key).decode('ascii')
+            self._key_cache[tenant_id] = cached_key
+            self._cache_timestamps[tenant_id] = current_time
+
+            # Audit log
+            self.audit_key_access(tenant_id, "KEY_RETRIEVED", {
+                'key_id': tenant_key_record.key_id
+            })
+
+            logger.debug(f"Retrieved and cached key for tenant {tenant_id}")
+            return cached_key
+
+        finally:
+            db.close()
     
     def rotate_key(self, tenant_id: int) -> bool:
         """
         Rotate encryption key for a tenant.
-        
+
         Args:
             tenant_id: Tenant identifier
-            
+
         Returns:
             True if rotation successful
-            
+
         Raises:
             KeyRotationError: If key rotation fails
         """
         try:
-            # Store old key metadata for rollback
-            old_metadata = self._key_metadata.get(tenant_id, {}).copy()
-            old_key = self._key_storage.get(tenant_id)
-            
-            # Generate new key
-            new_key_id = self.generate_tenant_key(tenant_id)
-            
-            # Audit log
-            self.audit_key_access(tenant_id, "KEY_ROTATED", {
-                'old_key_id': old_metadata.get('key_id', 'unknown'),
-                'new_key_id': new_key_id
-            })
-            
-            logger.info(f"Successfully rotated key for tenant {tenant_id}")
-            return True
-            
+            # Store old key for rollback
+            db = get_db_session()
+            try:
+                old_key_record = db.query(TenantKey).filter(
+                    TenantKey.tenant_id == tenant_id,
+                    TenantKey.is_active == True
+                ).first()
+
+                # Generate new key
+                new_key_id = self.generate_tenant_key(tenant_id)
+
+                # Deactivate old key
+                if old_key_record:
+                    old_key_record.is_active = False
+                    old_key_record.updated_at = datetime.now(timezone.utc)
+                    db.commit()
+
+                # Audit log
+                self.audit_key_access(tenant_id, "KEY_ROTATED", {
+                    'old_key_id': old_key_record.key_id if old_key_record else 'unknown',
+                    'new_key_id': new_key_id
+                })
+
+                logger.info(f"Successfully rotated key for tenant {tenant_id}")
+                return True
+
+            finally:
+                db.close()
+
         except Exception as e:
             logger.error(f"Key rotation failed for tenant {tenant_id}: {str(e)}")
-            
-            # Attempt rollback
-            if old_key and old_metadata:
-                try:
-                    with self._storage_lock:
-                        self._key_storage[tenant_id] = old_key
-                        self._key_metadata[tenant_id] = old_metadata
+
+            # Attempt rollback - reactivate old key
+            try:
+                db = get_db_session()
+                old_key_record = db.query(TenantKey).filter(
+                    TenantKey.tenant_id == tenant_id,
+                    TenantKey.is_active == False
+                ).order_by(TenantKey.version.desc()).first()
+
+                if old_key_record:
+                    old_key_record.is_active = True
+                    old_key_record.updated_at = datetime.now(timezone.utc)
+                    db.commit()
                     logger.info(f"Rolled back key rotation for tenant {tenant_id}")
-                except Exception as rollback_error:
-                    logger.error(f"Rollback failed for tenant {tenant_id}: {str(rollback_error)}")
-            
+            except Exception as rollback_error:
+                logger.error(f"Rollback failed for tenant {tenant_id}: {str(rollback_error)}")
+            finally:
+                db.close()
+
             raise KeyRotationError(f"Failed to rotate key for tenant {tenant_id}: {str(e)}")
     
     def backup_keys(self) -> bool:
@@ -399,7 +573,10 @@ class KeyManagementService:
             Base64 encoded encrypted data
         """
         if not self._master_key:
-            raise EncryptionError("Master key not initialized")
+            logger.info("Master key not initialized, initializing now...")
+            self._initialize_master_key()
+            if not self._master_key:
+                raise EncryptionError("Master key initialization failed")
         
         # Create cipher
         cipher = AESGCM(self._master_key)
@@ -426,7 +603,10 @@ class KeyManagementService:
             Decrypted data
         """
         if not self._master_key:
-            raise EncryptionError("Master key not initialized")
+            logger.info("Master key not initialized, initializing now...")
+            self._initialize_master_key()
+            if not self._master_key:
+                raise EncryptionError("Master key initialization failed")
         
         # Create cipher
         cipher = AESGCM(self._master_key)
@@ -457,57 +637,65 @@ class KeyManagementService:
     def list_tenant_keys(self) -> Dict[int, Dict[str, Any]]:
         """
         List all tenant keys with metadata.
-        
+
         Returns:
             Dictionary mapping tenant IDs to key metadata
         """
-        with self._storage_lock:
-            return self._key_metadata.copy()
+        db = get_db_session()
+        try:
+            keys = {}
+            tenant_key_records = db.query(TenantKey).filter(TenantKey.is_active == True).all()
+            for record in tenant_key_records:
+                keys[record.tenant_id] = {
+                    'key_id': record.key_id,
+                    'algorithm': record.algorithm,
+                    'version': record.version,
+                    'created_at': record.created_at.isoformat() if record.created_at else None,
+                    'updated_at': record.updated_at.isoformat() if record.updated_at else None
+                }
+            return keys
+        finally:
+            db.close()
     
     def delete_tenant_key(self, tenant_id: int) -> bool:
         """
         Delete a tenant's encryption key.
-        
+
         Args:
             tenant_id: Tenant identifier
-            
+
         Returns:
             True if deletion successful
         """
         try:
-            with self._storage_lock:
-                if tenant_id in self._key_storage:
-                    del self._key_storage[tenant_id]
-                if tenant_id in self._key_metadata:
-                    del self._key_metadata[tenant_id]
-            
-            # Audit log
-            self.audit_key_access(tenant_id, "KEY_DELETED", {})
-            
-            logger.info(f"Deleted key for tenant {tenant_id}")
-            return True
-            
+            db = get_db_session()
+            try:
+                # Soft delete by marking as inactive
+                tenant_key_records = db.query(TenantKey).filter(TenantKey.tenant_id == tenant_id).all()
+                for record in tenant_key_records:
+                    record.is_active = False
+                    record.updated_at = datetime.now(timezone.utc)
+
+                # Clear cache
+                self._key_cache.pop(tenant_id, None)
+                self._cache_timestamps.pop(tenant_id, None)
+
+                db.commit()
+
+                # Audit log
+                self.audit_key_access(tenant_id, "KEY_DELETED", {})
+
+                logger.info(f"Deleted key for tenant {tenant_id}")
+                return True
+
+            finally:
+                db.close()
+
         except Exception as e:
             logger.error(f"Key deletion failed for tenant {tenant_id}: {str(e)}")
             return False
 
-
-# Global key management service instance
-_key_management_service: Optional[KeyManagementService] = None
-
-
-def get_key_management_service() -> KeyManagementService:
-    """
-    Get global key management service instance.
-    
-    Returns:
-        KeyManagementService instance
-    """
-    global _key_management_service
-    if _key_management_service is None:
-        _key_management_service = KeyManagementService()
-    return _key_management_service    
-def rotate_tenant_key_external(self, tenant_id: int) -> bool:
+    def rotate_tenant_key_external(self, tenant_id: int) -> bool:
         """
         Rotate encryption key for a tenant using external key vault provider.
         

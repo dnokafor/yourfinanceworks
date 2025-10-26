@@ -12,9 +12,9 @@ from sqlalchemy import text, MetaData, Table, Column, select, update
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from api.services.encryption_service import get_encryption_service
-from api.services.key_management_service import get_key_management_service
-from api.exceptions.encryption_exceptions import EncryptionError, DecryptionError
+from services.encryption_service import get_encryption_service
+from services.key_management_service import get_key_management_service
+from exceptions.encryption_exceptions import EncryptionError, DecryptionError
 
 logger = logging.getLogger(__name__)
 

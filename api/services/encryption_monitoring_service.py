@@ -14,7 +14,7 @@ from collections import defaultdict, deque
 import threading
 from contextlib import contextmanager
 
-from config.encryption_config import EncryptionConfig
+from encryption_config import EncryptionConfig
 from exceptions.encryption_exceptions import EncryptionMonitoringError
 
 

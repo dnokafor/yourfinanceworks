@@ -17,9 +17,9 @@ from functools import lru_cache
 import time
 from threading import Lock
 
-from api.config.encryption_config import EncryptionConfig
-from api.services.key_management_service import KeyManagementService
-from api.exceptions.encryption_exceptions import (
+from encryption_config import EncryptionConfig
+from services.key_management_service import KeyManagementService
+from exceptions.encryption_exceptions import (
     EncryptionError,
     DecryptionError,
     KeyNotFoundError
@@ -109,6 +109,9 @@ class EncryptionService:
         """
         if not encrypted_data:
             return ""
+        
+        if tenant_id is None:
+            raise DecryptionError("Tenant ID cannot be None for decryption", tenant_id=tenant_id)
             
         try:
             # Get tenant-specific encryption key
@@ -117,21 +120,65 @@ class EncryptionService:
             # Create cipher instance
             cipher = self.cipher_class(key)
             
-            # Decode base64 data
-            combined = base64.b64decode(encrypted_data.encode('ascii'))
+            # Decode base64 data with proper encoding handling and padding fix
+            try:
+                # Fix base64 padding if needed
+                data_to_decode = encrypted_data
+                if isinstance(encrypted_data, str):
+                    # Add missing padding if needed
+                    missing_padding = len(encrypted_data) % 4
+                    if missing_padding:
+                        data_to_decode = encrypted_data + '=' * (4 - missing_padding)
+                    combined = base64.b64decode(data_to_decode.encode('ascii'))
+                else:
+                    combined = base64.b64decode(encrypted_data)
+            except Exception as base64_error:
+                logger.warning(f"Invalid base64 data for tenant {tenant_id}: {str(base64_error)}")
+                # Return the original data as-is for invalid base64
+                return encrypted_data if isinstance(encrypted_data, str) else str(encrypted_data)
             
+            # Validate minimum length (nonce + at least 1 byte of data)
+            if len(combined) < 13:
+                logger.warning(f"Encrypted data too short for tenant {tenant_id}: {len(combined)} bytes")
+                return encrypted_data
+
             # Extract nonce (first 12 bytes) and encrypted data
             nonce = combined[:12]
             ciphertext = combined[12:]
-            
+
             # Decrypt data
             decrypted_data = cipher.decrypt(nonce, ciphertext, None)
-            
+
             return decrypted_data.decode('utf-8')
-            
+
         except Exception as e:
-            logger.error(f"Decryption failed for tenant {tenant_id}: {str(e)}")
-            raise DecryptionError(f"Failed to decrypt data: {str(e)}")
+            # Import InvalidTag here to avoid circular imports
+            from cryptography.exceptions import InvalidTag
+            
+            # Handle specific cryptography exceptions
+            if isinstance(e, InvalidTag):
+                logger.debug(f"Authentication tag verification failed for tenant {tenant_id} - wrong key or corrupted data")
+                raise DecryptionError(f"Failed to decrypt data: Authentication tag verification failed (wrong key or corrupted data)", tenant_id=tenant_id)
+            
+            # Check for specific decryption errors that indicate corrupted data
+            if "InvalidTag" in str(e) or "cryptography" in str(e):
+                logger.debug(f"Corrupted encrypted data detected for tenant {tenant_id}, likely plain text")
+                return encrypted_data
+            
+            # Log error but provide more context
+            error_msg = str(e)
+            if error_msg.strip():  # Only log if there's actual error content
+                logger.error(f"Decryption failed for tenant {tenant_id}: {error_msg}")
+                # Provide more specific error message
+                if "base64" in error_msg.lower():
+                    raise DecryptionError(f"Failed to decrypt data: Invalid base64 encoding", tenant_id=tenant_id)
+                elif "nonce" in error_msg.lower() or len(encrypted_data) < 13:
+                    raise DecryptionError(f"Failed to decrypt data: Corrupted encrypted data (too short)", tenant_id=tenant_id)
+                else:
+                    raise DecryptionError(f"Failed to decrypt data: {error_msg}", tenant_id=tenant_id)
+            else:
+                logger.debug(f"Decryption failed for tenant {tenant_id}: empty error message from {type(e).__name__}")
+                raise DecryptionError(f"Failed to decrypt data: {type(e).__name__} with empty message (likely corrupted data)", tenant_id=tenant_id)
     
     def encrypt_json(self, data: Dict[str, Any], tenant_id: int) -> str:
         """
@@ -177,6 +224,9 @@ class EncryptionService:
         """
         if not encrypted_data:
             return {}
+        
+        if tenant_id is None:
+            raise DecryptionError("Tenant ID cannot be None for JSON decryption", tenant_id=tenant_id)
             
         try:
             # Decrypt the JSON string
@@ -186,8 +236,20 @@ class EncryptionService:
             return json.loads(json_string)
             
         except Exception as e:
-            logger.error(f"JSON decryption failed for tenant {tenant_id}: {str(e)}")
-            raise DecryptionError(f"Failed to decrypt JSON data: {str(e)}")
+            # Handle the underlying decryption error more specifically
+            error_msg = str(e)
+            if "Failed to decrypt data:" in error_msg:
+                # This is already a DecryptionError from decrypt_data
+                if "Authentication tag verification failed" in error_msg:
+                    # Log corrupted data at debug level to reduce noise
+                    logger.debug(f"JSON decryption failed for tenant {tenant_id}: {error_msg}")
+                else:
+                    # Log other decryption errors at error level
+                    logger.error(f"JSON decryption failed for tenant {tenant_id}: {error_msg}")
+                raise DecryptionError(f"Failed to decrypt JSON data: {error_msg.replace('Failed to decrypt data:', '').strip()}", tenant_id=tenant_id)
+            else:
+                logger.error(f"JSON decryption failed for tenant {tenant_id}: {error_msg}")
+                raise DecryptionError(f"Failed to decrypt JSON data: {error_msg}", tenant_id=tenant_id)
     
     def get_tenant_key(self, tenant_id: int) -> bytes:
         """
@@ -236,12 +298,16 @@ class EncryptionService:
         Derive encryption key from key material using PBKDF2.
         
         Args:
-            key_material: Base key material
+            key_material: Base64 encoded key material
             tenant_id: Tenant ID used as salt component
             
         Returns:
             32-byte derived key
         """
+        # Decode base64 key material
+        import base64
+        key_bytes = base64.b64decode(key_material.encode('ascii'))
+        
         # Create salt from tenant ID and config salt
         salt = f"{self.config.KEY_DERIVATION_SALT}:{tenant_id}".encode('utf-8')
         
@@ -253,7 +319,7 @@ class EncryptionService:
             iterations=self.config.KEY_DERIVATION_ITERATIONS,
         )
         
-        return kdf.derive(key_material.encode('utf-8'))
+        return kdf.derive(key_bytes)
     
     def _cleanup_cache(self):
         """Clean up expired cache entries."""
@@ -345,7 +411,16 @@ def get_encryption_service() -> EncryptionService:
     
     Returns:
         EncryptionService instance
+    
+    Raises:
+        RuntimeError: If encryption is disabled
     """
+    from encryption_config import EncryptionConfig
+    config = EncryptionConfig()
+    
+    if not config.ENCRYPTION_ENABLED:
+        raise RuntimeError("Encryption service is disabled")
+    
     global _encryption_service
     if _encryption_service is None:
         _encryption_service = EncryptionService()

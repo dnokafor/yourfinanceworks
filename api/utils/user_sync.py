@@ -15,35 +15,57 @@ def sync_user_to_tenant_database(master_user: MasterUser, tenant_id: int, role: 
     """
     Sync a master user to a tenant database.
     Creates the user in the tenant database if they don't exist.
-    
+
     Args:
         master_user: The master user to sync
         tenant_id: The tenant database to sync to
         role: Optional role override for this tenant
-    
+
     Returns:
         bool: True if sync was successful, False otherwise
     """
     try:
         tenant_session = tenant_db_manager.get_tenant_session(tenant_id)
         tenant_db = tenant_session()
-        
+
         try:
             # Check if user already exists in tenant database
             existing_tenant_user = tenant_db.query(TenantUser).filter(
                 TenantUser.id == master_user.id
             ).first()
-            
+
             if existing_tenant_user:
-                # Update role if provided
+                # Update fields that might have changed
+                updated = False
                 if role and existing_tenant_user.role != role:
                     existing_tenant_user.role = role
+                    updated = True
+                if existing_tenant_user.is_active != master_user.is_active:
+                    existing_tenant_user.is_active = master_user.is_active
+                    updated = True
+                if existing_tenant_user.is_superuser != master_user.is_superuser:
+                    existing_tenant_user.is_superuser = master_user.is_superuser
+                    updated = True
+                if existing_tenant_user.is_verified != master_user.is_verified:
+                    existing_tenant_user.is_verified = master_user.is_verified
+                    updated = True
+                if existing_tenant_user.theme != master_user.theme:
+                    existing_tenant_user.theme = master_user.theme
+                    updated = True
+
+                # Always update timestamps to keep in sync
+                existing_tenant_user.updated_at = master_user.updated_at
+
+                if updated:
                     tenant_db.commit()
-                    logger.info(f"Updated role for user {master_user.email} in tenant {tenant_id} to {role}")
+                    logger.info(f"Updated user {master_user.email} in tenant {tenant_id}")
+                else:
+                    logger.debug(f"User {master_user.email} already exists in tenant {tenant_id}, no changes needed")
                 return True
-            
-            # Create user in tenant database
-            tenant_user = TenantUser(
+
+            # Create user in tenant database with explicit ID
+            # Use merge() to handle potential conflicts gracefully
+            tenant_user = tenant_db.merge(TenantUser(
                 id=master_user.id,  # Use same ID as master user
                 email=master_user.email,
                 hashed_password=master_user.hashed_password,
@@ -57,22 +79,27 @@ def sync_user_to_tenant_database(master_user: MasterUser, tenant_id: int, role: 
                 google_id=master_user.google_id,
                 created_at=master_user.created_at,
                 updated_at=master_user.updated_at
-            )
-            
-            tenant_db.add(tenant_user)
+            ))
             tenant_db.commit()
-            
+
             # Seed currencies if they don't exist
             _seed_currencies_if_needed(tenant_db)
-            
+
             logger.info(f"Successfully synced user {master_user.email} to tenant {tenant_id}")
             return True
-            
+
         finally:
             tenant_db.close()
-            
+
     except Exception as e:
         logger.error(f"Failed to sync user {master_user.email} to tenant {tenant_id}: {e}")
+        # Log more details for debugging
+        import traceback
+        logger.debug(f"User sync error details: {traceback.format_exc()}")
+        # Check if it's a duplicate key error and handle gracefully
+        if "duplicate key value" in str(e).lower() or "unique constraint" in str(e).lower():
+            logger.warning(f"User {master_user.email} already exists in tenant {tenant_id}, treating as successful sync")
+            return True
         return False
 
 def remove_user_from_tenant_database(user_id: int, tenant_id: int) -> bool:

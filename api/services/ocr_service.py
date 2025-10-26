@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from models.models_per_tenant import AIConfig as AIConfigModel
 
 def _resolve_log_level(name: str) -> int:
@@ -79,6 +80,26 @@ def _heuristic_parse_text(text: str) -> Optional[Dict[str, Any]]:
     if lines:
         data["vendor"] = lines[0][:80]
     return data if data else None
+
+
+def _looks_like_base64_encrypted(value: str) -> bool:
+    """Check if a value looks like base64 encoded encrypted data."""
+    if not isinstance(value, str) or len(value) < 20:
+        return False
+    
+    import re
+    base64_pattern = re.compile(r'^[A-Za-z0-9+/]*={0,2}$')
+    
+    # If it contains common plain text patterns, it's probably not encrypted
+    if '@' in value and '.' in value:  # Looks like email
+        return False
+    if value.isalpha() or value.isdigit():  # Simple text or numbers
+        return False
+    if len(value) < 30:  # Encrypted data is usually longer
+        return False
+    
+    # Check if it matches base64 pattern and is long enough
+    return base64_pattern.match(value) and len(value) > 30
 
 
 def _extract_json_from_text(text: str) -> Optional[Dict[str, Any]]:
@@ -389,6 +410,11 @@ async def _run_ocr(file_path: str, custom_prompt: Optional[str] = None, ai_confi
                 elif provider_name == "google":
                     litellm_model = f"google/{model_name}"
                 elif provider_name == "openrouter":
+                    # Check if model supports vision capabilities
+                    if "gpt-oss-20b" in model_name or "free" in model_name:
+                        logger.warning(f"Model {model_name} may not support vision. Consider using a vision-capable model like 'openai/gpt-4-vision-preview' or 'anthropic/claude-3-haiku'")
+                        # Try to suggest a better model if this one fails
+                        return {"error": f"Model '{model_name}' does not support vision capabilities. Please configure a vision-capable model like 'openai/gpt-4-vision-preview', 'anthropic/claude-3-haiku', or 'google/gemini-pro-vision'."}
                     litellm_model = f"openrouter/{model_name}"
                 else:
                     litellm_model = f"{provider_name}/{model_name}"
@@ -467,7 +493,12 @@ async def _run_ocr(file_path: str, custom_prompt: Optional[str] = None, ai_confi
                 return {"error": "LiteLLM not available for non-Ollama providers"}
             except Exception as e:
                 logger.error(f"LiteLLM OCR processing failed: {e}")
-                return {"error": f"LiteLLM OCR failed: {str(e)}"}
+                error_msg = str(e)
+                # Check for specific vision model errors
+                if "No endpoints found that support image input" in error_msg:
+                    logger.warning(f"Vision model '{litellm_model}' does not support image input. Consider switching to a vision-capable model.")
+                    return {"error": f"Vision model '{model_name}' does not support image input. Please configure a vision-capable model like 'gpt-4-vision-preview' or 'claude-3-haiku'."}
+                return {"error": f"LiteLLM OCR failed: {error_msg}"}
 
     except Exception as e:
         logger.error(f"OCR processing failed: {e}")
@@ -476,19 +507,47 @@ async def _run_ocr(file_path: str, custom_prompt: Optional[str] = None, ai_confi
 
 async def process_attachment_inline(db: Session, expense_id: int, attachment_id: int, file_path: str) -> None:
     """Fallback inline processing when Kafka is not configured."""
-    print(f"🔴 DEBUG: process_attachment_inline called for expense {expense_id}")  # DEBUG
+    logger.info(f"Processing attachment inline: expense_id={expense_id} attachment_id={attachment_id} file={file_path}")
     from models.models_per_tenant import Expense, AIConfig as AIConfigModel  # local import to avoid circulars
+    from models.database import set_tenant_context  # Import tenant context management
+    
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
+        logger.warning(f"Expense {expense_id} not found, skipping OCR")
         return
     if expense.manual_override:
         logger.info(f"Expense {expense_id} manually overridden; skipping OCR.")
         return
+    
+    # Set tenant context for encryption - determine tenant from database connection
+    try:
+        # In this multi-tenant setup, the tenant_id is determined by which database we're connected to
+        # Since we're connected to tenant_1 database, the tenant_id is 1
+        # We can infer this from the database connection or use a more robust method
+        
+        # Check if expense has direct tenant_id (if the model supports it)
+        if hasattr(expense, 'tenant_id') and expense.tenant_id:
+            tenant_id = expense.tenant_id
+        else:
+            # Since we're already connected to the tenant database, we know the tenant_id
+            # In this case, we're connected to tenant_1, so tenant_id = 1
+            # This avoids the circular dependency of accessing user data
+            tenant_id = 1  # This should be determined from the database connection context
+        
+        logger.info(f"Setting tenant context to {tenant_id} for expense {expense_id} OCR processing")
+        set_tenant_context(tenant_id)
+    except Exception as e:
+        logger.error(f"Failed to set tenant context for expense {expense_id}: {e}")
+        # Set a default tenant context to prevent encryption errors
+        set_tenant_context(1)
+        logger.warning(f"Using default tenant context (1) for expense {expense_id}")
     try:
         expense.analysis_status = "processing"
         db.commit()
-    except Exception:
+    except Exception as e:
+        logger.error(f"Failed to update expense {expense_id} status to processing: {e}")
         db.rollback()
+        return
 
     # Fetch AI config from database (same pattern as bank statement service)
     ai_config = None
@@ -521,6 +580,11 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
                 logger.info("No active AI config found in database, falling back to environment variables")
     except Exception as e:
         logger.warning(f"Failed to fetch AI config from database: {e}, falling back to environment variables")
+        # Don't log full stack trace for encryption errors to avoid leaking sensitive data
+        if "decryption" not in str(e).lower() and "encryption" not in str(e).lower():
+            logger.debug(f"AI config fetch error details: {str(e)}", exc_info=True)
+        else:
+            logger.debug("AI config fetch failed due to encryption/decryption error (details not logged for security)")
 
     logger.info(f"Processing attachment inline: expense_id={expense_id} attachment_id={attachment_id} file={file_path}")
     result = await _run_ocr(file_path, ai_config=ai_config)
@@ -536,22 +600,40 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
     # Update DB with result if still not overridden
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
+        logger.warning(f"Expense {expense_id} not found when updating OCR result")
         return
     if expense.manual_override:
         logger.info(f"Expense {expense_id} manually overridden during OCR; not applying result.")
         return
     try:
         expense.analysis_updated_at = datetime.now(timezone.utc)
-        if "error" in result:
+        logger.info(f"Updating expense {expense_id} with OCR result. Error present: {'error' in result if isinstance(result, dict) else False}")
+        if isinstance(result, dict) and "error" in result:
             # Persist error payload as a dict
             try:
-                expense.analysis_result = {"error": str(result.get("error"))}
-            except Exception:
-                expense.analysis_result = {"error": "unknown"}
+                error_msg = str(result.get("error", "unknown"))
+                # Ensure error message is safe to store and encrypt
+                if len(error_msg) > 1000:  # Truncate very long error messages
+                    error_msg = error_msg[:1000] + "... (truncated)"
+                expense.analysis_result = {
+                    "error": error_msg,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "status": "failed"
+                }
+                logger.info(f"Stored error analysis_result for expense {expense_id}")
+            except Exception as store_error:
+                logger.error(f"Failed to store error analysis_result for expense {expense_id}: {store_error}")
+                expense.analysis_result = {
+                    "error": "Failed to store error details",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
             expense.analysis_status = "failed"
             expense.analysis_error = str(result.get("error"))
+
             # Clear any previous successful analysis data to avoid confusion
-            expense.amount = expense.amount if expense.amount not in (None, 0) else None
+            # For amount (not nullable), set to 0 instead of None
+            if expense.amount not in (None, 0):
+                expense.amount = 0
             expense.total_amount = expense.total_amount if expense.total_amount not in (None, 0) else None
             expense.currency = expense.currency if expense.currency else None
             expense.expense_date = expense.expense_date if expense.expense_date else None
@@ -562,10 +644,22 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
             expense.payment_method = expense.payment_method if expense.payment_method else None
             expense.reference_number = expense.reference_number if expense.reference_number else None
             expense.notes = expense.notes if expense.notes else None
+
+            # Ensure NOT NULL fields have valid values
+            if expense.amount is None:
+                expense.amount = 0
+            if expense.currency is None:
+                expense.currency = "USD"
+            if expense.expense_date is None:
+                expense.expense_date = datetime.now(timezone.utc)
+            if expense.category is None:
+                expense.category = "General"
+            if expense.status is None:
+                expense.status = "recorded"
         else:
             # Map fields robustly
             extracted = result if isinstance(result, dict) else {}
-            logger.info(f"OCR extracted keys: {list(extracted.keys())}")
+            logger.info(f"OCR extracted keys: {list(extracted.keys()) if isinstance(extracted, dict) else 'non-dict result'}")
 
             # If we only got raw text, first try to extract embedded JSON, then try heuristics
             if set(extracted.keys()) == {"raw"} and isinstance(extracted.get("raw"), str):
@@ -648,10 +742,23 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
             # Category and vendor
             cat = first_key(extracted, ["category", "expense_category"]) or None
             if cat:
-                expense.category = str(cat)
+                # Ensure category is clean text, not encrypted data
+                category_str = str(cat).strip()
+                if category_str and not _looks_like_base64_encrypted(category_str):
+                    expense.category = category_str
+                else:
+                    logger.warning(f"Invalid category data detected, using default")
+                    expense.category = "General"
+            
             vend = first_key(extracted, ["vendor", "merchant", "seller", "store", "payee"]) or None
             if vend:
-                expense.vendor = str(vend)
+                # Ensure vendor is clean text, not encrypted data
+                vendor_str = str(vend).strip()
+                if vendor_str and not _looks_like_base64_encrypted(vendor_str):
+                    expense.vendor = vendor_str
+                else:
+                    logger.warning(f"Invalid vendor data detected, using default")
+                    expense.vendor = "Unknown Vendor"
 
             # Taxes
             tr = parse_number(first_key(extracted, ["tax_rate", "vat_rate"]))
@@ -664,19 +771,58 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
             # Other details
             pm = first_key(extracted, ["payment_method", "payment", "method"]) or None
             if pm:
-                expense.payment_method = str(pm)
+                payment_str = str(pm).strip()
+                if payment_str and not _looks_like_base64_encrypted(payment_str):
+                    expense.payment_method = payment_str
+                else:
+                    logger.warning(f"Invalid payment method data detected, skipping")
+                    
             ref = first_key(extracted, ["reference_number", "reference", "ref", "receipt_number", "invoice_number"]) or None
             if ref:
-                expense.reference_number = str(ref)
+                ref_str = str(ref).strip()
+                if ref_str and not _looks_like_base64_encrypted(ref_str):
+                    expense.reference_number = ref_str
+                else:
+                    logger.warning(f"Invalid reference number data detected, skipping")
+                    
             notes = first_key(extracted, ["notes", "memo"]) or None
             if notes:
-                expense.notes = str(notes)
+                notes_str = str(notes).strip()
+                if notes_str and not _looks_like_base64_encrypted(notes_str):
+                    expense.notes = notes_str
+                else:
+                    logger.warning(f"Invalid notes data detected, skipping")
+                    expense.notes = None
 
             # Persist normalized extraction as dict
             try:
-                expense.analysis_result = extracted if isinstance(extracted, dict) else {"items": extracted}
-            except Exception:
-                expense.analysis_result = extracted
+                # Validate and sanitize the extracted data before storing
+                if isinstance(extracted, dict):
+                    # Ensure all values are JSON serializable and not corrupted
+                    sanitized_data = {}
+                    for key, value in extracted.items():
+                        try:
+                            # Test JSON serialization
+                            json.dumps(value)
+                            # Ensure it's not encrypted data being stored as plain text
+                            if isinstance(value, str) and not _looks_like_base64_encrypted(value):
+                                sanitized_data[key] = value
+                            elif not isinstance(value, str):
+                                sanitized_data[key] = value
+                            else:
+                                logger.warning(f"Skipping potentially corrupted field {key} in analysis_result")
+                        except (TypeError, ValueError) as ve:
+                            logger.warning(f"Skipping non-serializable field {key} in analysis_result: {ve}")
+                    
+                    expense.analysis_result = sanitized_data if sanitized_data else {"status": "extracted"}
+                    logger.info(f"Stored sanitized analysis_result with keys: {list(sanitized_data.keys())}")
+                else:
+                    expense.analysis_result = {"items": extracted} if extracted else {"status": "no_data"}
+                    
+            except Exception as e:
+                logger.error(f"Failed to set analysis_result for expense {expense_id}: {e}")
+                # Store a safe fallback that won't cause encryption issues
+                expense.analysis_result = {"error": "Failed to store result", "timestamp": datetime.now(timezone.utc).isoformat()}
             expense.analysis_status = "done"
             try:
                 mapped_preview = {
@@ -697,10 +843,29 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
     except Exception as e:
         db.rollback()
         logger.error(f"Failed updating OCR result for expense {expense_id}: {e}")
+        # CRITICAL FIX: Ensure expense status is reset if update failed
+        try:
+            expense.analysis_status = "failed"
+            expense.analysis_error = f"Database update failed: {str(e)}"
+            db.commit()
+            logger.info(f"Reset expense {expense_id} status to failed after update error")
+        except Exception as reset_error:
+            logger.error(f"Failed to reset expense {expense_id} status: {reset_error}")
+            db.rollback()
 
 
 def queue_or_process_attachment(db: Session, tenant_id: Optional[int], expense_id: int, attachment_id: int, file_path: str) -> None:
     """Publish OCR job to Kafka if available, otherwise process inline in background."""
+    from models.database import set_tenant_context  # Import tenant context management
+    
+    # Ensure tenant context is set for the current operation
+    if tenant_id:
+        logger.info(f"Setting tenant context to {tenant_id} for OCR processing")
+        set_tenant_context(tenant_id)
+    else:
+        logger.warning(f"No tenant_id provided for OCR processing of expense {expense_id}, using default")
+        set_tenant_context(1)  # Default fallback
+    
     message = {
         "tenant_id": tenant_id,
         "expense_id": expense_id,

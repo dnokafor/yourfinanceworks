@@ -64,6 +64,10 @@ async def list_expenses(
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user),
 ):
+    # Set tenant context for encryption operations
+    from models.database import set_tenant_context
+    set_tenant_context(current_user.tenant_id)
+    
     try:
         # Count total expenses for this user
         total_count = db.query(Expense).filter(Expense.user_id == current_user.id).count()
@@ -108,6 +112,10 @@ async def get_expense(
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user),
 ):
+    # Set tenant context for encryption operations
+    from models.database import set_tenant_context
+    set_tenant_context(current_user.tenant_id)
+    
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
@@ -126,6 +134,11 @@ async def create_expense(
     current_user: MasterUser = Depends(get_current_user),
 ):
     require_non_viewer(current_user, "create expenses")
+    
+    # Set tenant context for encryption operations
+    from models.database import set_tenant_context
+    set_tenant_context(current_user.tenant_id)
+    
     try:
         currency_service = CurrencyService(db)
         currency_code = expense.currency or "USD"
@@ -520,6 +533,11 @@ async def update_expense(
     current_user: MasterUser = Depends(get_current_user),
 ):
     require_non_viewer(current_user, "update expenses")
+    
+    # Set tenant context for encryption operations
+    from models.database import set_tenant_context
+    set_tenant_context(current_user.tenant_id)
+    
     try:
         db_expense = db.query(Expense).filter(Expense.id == expense_id).first()
         if not db_expense:
@@ -756,6 +774,11 @@ async def delete_expense(
     current_user: MasterUser = Depends(get_current_user),
 ):
     require_non_viewer(current_user, "delete expenses")
+    
+    # Set tenant context for encryption operations
+    from models.database import set_tenant_context
+    set_tenant_context(current_user.tenant_id)
+    
     try:
         db_expense = db.query(Expense).filter(Expense.id == expense_id).first()
         if not db_expense:
@@ -1100,6 +1123,11 @@ async def get_expense_summary(
     current_user: MasterUser = Depends(get_current_user),
 ):
     """Get expense summary statistics with period comparisons"""
+    
+    # Set tenant context for encryption operations
+    from models.database import set_tenant_context
+    set_tenant_context(current_user.tenant_id)
+    
     try:
         # Base query for expenses owned by current user and not pending approval
         base_query = db.query(Expense).filter(
@@ -1220,6 +1248,10 @@ async def get_expense_trends(
     current_user: MasterUser = Depends(get_current_user),
 ):
     """Get expense trends over a time period"""
+    
+    # Set tenant context for encryption operations
+    from models.database import set_tenant_context
+    set_tenant_context(current_user.tenant_id)
     try:
 
         # Calculate date range
@@ -1324,6 +1356,10 @@ async def get_expense_categories_analytics(
     current_user: MasterUser = Depends(get_current_user),
 ):
     """Get expense analytics by category"""
+    
+    # Set tenant context for encryption operations
+    from models.database import set_tenant_context
+    set_tenant_context(current_user.tenant_id)
     try:
         # Base query for expenses owned by current user and not pending approval
         base_query = db.query(Expense).filter(

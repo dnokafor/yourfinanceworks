@@ -19,7 +19,7 @@ import threading
 import time
 from collections import defaultdict, deque
 
-from config.encryption_config import EncryptionConfig
+from encryption_config import EncryptionConfig
 from exceptions.encryption_exceptions import AlertingError
 from services.encryption_monitoring_service import EncryptionMonitoringService
 

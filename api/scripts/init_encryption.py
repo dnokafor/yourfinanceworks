@@ -12,7 +12,7 @@ from pathlib import Path
 # Add the parent directory to the path so we can import our modules
 sys.path.append(str(Path(__file__).parent.parent))
 
-from config.encryption_config import EncryptionConfig
+from encryption_config import EncryptionConfig
 from services.key_management_service import KeyManagementService
 from services.encryption_service import EncryptionService
 from integrations.key_vault_factory import KeyVaultFactory
@@ -21,9 +21,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def ensure_key_directory():
+def ensure_key_directory(config):
     """Ensure the encryption key directory exists."""
-    key_dir = Path(EncryptionConfig.MASTER_KEY_PATH).parent
+    key_dir = Path(config.MASTER_KEY_PATH).parent
     key_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     logger.info(f"Ensured key directory exists: {key_dir}")
 
@@ -31,20 +31,23 @@ def ensure_key_directory():
 def initialize_master_key():
     """Initialize the master key if it doesn't exist."""
     try:
-        key_vault = KeyVaultFactory.create_key_vault()
-        key_management = KeyManagementService(key_vault)
+        # For local provider, KeyManagementService handles master key initialization
+        key_management = KeyManagementService()
+        logger.info("Key management service initialized successfully")
         
-        # Check if master key exists
-        if not key_management.master_key_exists():
-            logger.info("Master key not found, generating new master key...")
-            key_management.generate_master_key()
-            logger.info("Master key generated successfully")
-        else:
-            logger.info("Master key already exists")
-            
-        # Verify master key is accessible
-        key_management.verify_master_key()
-        logger.info("Master key verification successful")
+        # Test key generation for tenant 1 to ensure everything works
+        try:
+            # Check if tenant 1 already has a key
+            existing_key = key_management.get_tenant_key(1)
+            if existing_key:
+                logger.info("Tenant 1 already has an encryption key")
+            else:
+                logger.info("Generating key for tenant 1...")
+                key_id = key_management.generate_tenant_key(1)
+                logger.info(f"Generated key for tenant 1: {key_id}")
+        except Exception as key_error:
+            logger.warning(f"Could not test key generation: {key_error}")
+            # This is not critical for initialization
         
     except Exception as e:
         logger.error(f"Failed to initialize master key: {e}")
@@ -76,12 +79,12 @@ def initialize_encryption_service():
 def verify_configuration():
     """Verify encryption configuration is valid."""
     try:
-        config = EncryptionConfig()
+        config = EncryptionConfig.from_env()
         
         # Check required configuration
         if not config.ENCRYPTION_ENABLED:
             logger.warning("Encryption is disabled")
-            return
+            return config
             
         if not config.KEY_VAULT_PROVIDER:
             raise ValueError("KEY_VAULT_PROVIDER must be specified")
@@ -91,22 +94,21 @@ def verify_configuration():
             
         # Validate key vault provider specific configuration
         if config.KEY_VAULT_PROVIDER == "aws_kms":
-            if not os.getenv("AWS_KMS_KEY_ID"):
-                raise ValueError("AWS_KMS_KEY_ID required for AWS KMS provider")
+            if not config.AWS_KMS_MASTER_KEY_ID:
+                raise ValueError("AWS_KMS_MASTER_KEY_ID required for AWS KMS provider")
                 
-        elif config.KEY_VAULT_PROVIDER == "azure_kv":
-            required_vars = ["AZURE_KEY_VAULT_URL", "AZURE_KEY_VAULT_KEY_NAME"]
-            for var in required_vars:
-                if not os.getenv(var):
-                    raise ValueError(f"{var} required for Azure Key Vault provider")
+        elif config.KEY_VAULT_PROVIDER == "azure_keyvault":
+            if not config.AZURE_KEYVAULT_URL:
+                raise ValueError("AZURE_KEYVAULT_URL required for Azure Key Vault provider")
                     
         elif config.KEY_VAULT_PROVIDER == "hashicorp_vault":
-            required_vars = ["VAULT_URL", "VAULT_TOKEN"]
-            for var in required_vars:
-                if not os.getenv(var):
-                    raise ValueError(f"{var} required for HashiCorp Vault provider")
+            if not config.HASHICORP_VAULT_URL:
+                raise ValueError("HASHICORP_VAULT_URL required for HashiCorp Vault provider")
+            if not config.HASHICORP_VAULT_TOKEN:
+                raise ValueError("HASHICORP_VAULT_TOKEN required for HashiCorp Vault provider")
         
         logger.info(f"Configuration verified for provider: {config.KEY_VAULT_PROVIDER}")
+        return config
         
     except Exception as e:
         logger.error(f"Configuration verification failed: {e}")
@@ -119,15 +121,15 @@ def main():
         logger.info("Starting encryption system initialization...")
         
         # Verify configuration
-        verify_configuration()
+        config = verify_configuration()
         
         # Skip initialization if encryption is disabled
-        if not EncryptionConfig.ENCRYPTION_ENABLED:
+        if not config.ENCRYPTION_ENABLED:
             logger.info("Encryption is disabled, skipping initialization")
             return
         
         # Ensure key directory exists
-        ensure_key_directory()
+        ensure_key_directory(config)
         
         # Initialize master key
         initialize_master_key()

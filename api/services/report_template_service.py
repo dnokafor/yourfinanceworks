@@ -567,7 +567,7 @@ class ReportTemplateService:
         self.get_template(template_id, user_id)
         
         # Get usage stats from report history
-        from api.models.models_per_tenant import ReportHistory
+        from models.models_per_tenant import ReportHistory
         
         stats = self.db.query(ReportHistory).filter(
             ReportHistory.template_id == template_id

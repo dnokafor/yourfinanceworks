@@ -257,39 +257,32 @@ async def tenant_context_middleware(request: Request, call_next):
                                 )
 
                         logger.info(f"Using Tenant ID: {tenant_id} for user {email_hash}")
-                        
+
                         # Check if tenant database exists before setting context
+                        # CRITICAL FIX: Do NOT recreate databases during live requests
+                        # Database recreation should only happen during startup or admin operations
                         try:
                             tenant_session = tenant_db_manager.get_tenant_session(tenant_id)()
                             from sqlalchemy import text
                             tenant_session.execute(text("SELECT 1"))
                             tenant_session.close()
 
+                            set_tenant_context(tenant_id)
+                            logger.info(f"✅ Successfully set tenant context to {tenant_id} for user {email_hash}")
+
                             # Only sync user if they still have access to this tenant
                             if tenant_id in user_tenant_ids:
                                 from utils.user_sync import sync_user_to_tenant_database
                                 sync_user_to_tenant_database(user, tenant_id)
-
-                            set_tenant_context(tenant_id)
-                            logger.info(f"✅ Successfully set tenant context to {tenant_id} for user {email_hash}")
                         except Exception as e:
                             logger.warning(f"Tenant database for tenant {tenant_id} does not exist or is inaccessible: {e}")
-                            # Try to create the tenant database
-                            from models.models import Tenant
-                            tenant = master_db.query(Tenant).filter(Tenant.id == tenant_id).first()
-                            if tenant:
-                                success = tenant_db_manager.create_tenant_database(tenant_id, tenant.name)
-                                if success:
-                                    logger.info(f"Successfully created tenant database for tenant {tenant_id}")
-                                    # Only sync if user has access to this tenant
-                                    if tenant_id in user_tenant_ids:
-                                        from utils.user_sync import sync_user_to_tenant_database
-                                        sync_user_to_tenant_database(user, tenant_id)
-                                    set_tenant_context(tenant_id)
-                                else:
-                                    logger.error(f"Failed to create tenant database for tenant {tenant_id}")
-                            else:
-                                logger.error(f"Tenant {tenant_id} not found in master database")
+                            # DO NOT recreate database during live request - this causes data loss
+                            # Database creation should be handled by startup scripts or admin endpoints
+                            logger.error(f"Tenant database {tenant_id} is missing. Please run database initialization.")
+                            return JSONResponse(
+                                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                                content={"detail": "Database temporarily unavailable. Please try again later."}
+                            )
                     else:
                         logger.warning(f"User not found or tenant_id missing for user hash: {email_hash}")
                         record_failed_auth(client_ip)

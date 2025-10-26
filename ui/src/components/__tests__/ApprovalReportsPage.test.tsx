@@ -297,7 +297,7 @@ describe('ApprovalReportsPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
     // Setup default successful fetch responses
     mockFetch.mockImplementation((url: string) => {
       if (url.includes('/api/approval-reports/metrics')) {
@@ -420,7 +420,7 @@ describe('ApprovalReportsPage', () => {
 
     const dateRangePicker = screen.getByTestId('date-range-picker');
     const selectButton = dateRangePicker.querySelector('button');
-    
+
     if (selectButton) {
       fireEvent.click(selectButton);
     }

@@ -20,7 +20,7 @@ from services.encryption_service import EncryptionService
 from services.key_management_service import KeyManagementService
 from services.key_rotation_service import KeyRotationService
 from integrations.key_vault_factory import KeyVaultFactory
-from config.encryption_config import EncryptionConfig
+from encryption_config import EncryptionConfig
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

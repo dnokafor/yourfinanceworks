@@ -20,10 +20,10 @@ from sqlalchemy import text, select, update, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import sessionmaker
 
-from api.config.encryption_config import EncryptionConfig
-from api.services.encryption_service import EncryptionService
-from api.services.key_management_service import KeyManagementService
-from api.exceptions.encryption_exceptions import (
+from encryption_config import EncryptionConfig
+from services.encryption_service import EncryptionService
+from services.key_management_service import KeyManagementService
+from exceptions.encryption_exceptions import (
     EncryptionError,
     DecryptionError,
     KeyNotFoundError

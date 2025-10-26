@@ -17,7 +17,7 @@ import uuid
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from config.encryption_config import EncryptionConfig
+from encryption_config import EncryptionConfig
 from exceptions.encryption_exceptions import ComplianceError
 from services.encryption_service import EncryptionService
 from services.key_management_service import KeyManagementService

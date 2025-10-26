@@ -15,10 +15,10 @@ from enum import Enum
 from threading import Lock, Event
 import json
 
-from api.config.encryption_config import EncryptionConfig
-from api.services.key_management_service import KeyManagementService
-from api.services.encryption_service import EncryptionService
-from api.exceptions.encryption_exceptions import (
+from encryption_config import EncryptionConfig
+from services.key_management_service import KeyManagementService
+from services.encryption_service import EncryptionService
+from exceptions.encryption_exceptions import (
     KeyRotationError,
     EncryptionError,
     KeyNotFoundError

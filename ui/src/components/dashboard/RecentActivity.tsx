@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import { formatDate } from "@/lib/utils";
 import { activityApi, ActivityItem } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatCurrencySync } from "@/utils/dashboard";
 
 interface RecentActivityProps {
   refreshKey?: number;
@@ -96,13 +97,7 @@ export function RecentActivity({ refreshKey }: RecentActivityProps) {
     fetchActivities();
   }, [refreshKey]);
 
-  const formatAmount = (amount?: number, currency?: string) => {
-    if (!amount || !currency) return null;
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency
-    }).format(amount);
-  };
+
 
   return (
     <Card className="border-l-4 border-l-secondary bg-gradient-to-br from-secondary/5 to-transparent hover:shadow-lg transition-all duration-300">
@@ -148,7 +143,7 @@ export function RecentActivity({ refreshKey }: RecentActivityProps) {
                       </span>
                       {activity.amount && (
                         <span className="text-xs font-medium">
-                          {formatAmount(activity.amount, activity.currency)}
+                          {formatCurrencySync(activity.amount, activity.currency)}
                         </span>
                       )}
                     </div>
