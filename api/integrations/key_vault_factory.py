@@ -27,9 +27,9 @@ class KeyVaultProvider(Enum):
 
 class KeyVaultFactory:
     """Factory class for creating key vault provider instances."""
-    
+
     _providers = {}
-    
+
     @classmethod
     def _get_provider_class(cls, provider_type: KeyVaultProvider):
         """Lazy load provider classes to avoid import errors."""
@@ -53,18 +53,18 @@ class KeyVaultFactory:
                 raise EncryptionError(f"HashiCorp Vault provider dependencies not installed: {str(e)}")
         else:
             raise EncryptionError(f"Unknown provider type: {provider_type}")
-    
+
     @classmethod
     def create_provider(cls, config: EncryptionConfig):
         """
         Create a key vault provider instance based on configuration.
-        
+
         Args:
             config: Encryption configuration object
-            
+
         Returns:
             Key vault provider instance
-            
+
         Raises:
             EncryptionError: If provider type is unsupported or initialization fails
         """
@@ -72,27 +72,27 @@ class KeyVaultFactory:
             provider_type = KeyVaultProvider(config.KEY_VAULT_PROVIDER.lower())
         except ValueError:
             raise EncryptionError(f"Unsupported key vault provider: {config.KEY_VAULT_PROVIDER}")
-        
+
         if provider_type == KeyVaultProvider.LOCAL:
             # Local provider is handled by the key management service directly
             raise EncryptionError("Local provider should be handled by KeyManagementService")
-        
+
         try:
             provider_class = cls._get_provider_class(provider_type)
             provider_instance = provider_class(config)
-            
+
             logger.info(f"Created key vault provider: {provider_type.value}")
             return provider_instance
-            
+
         except Exception as e:
             logger.error(f"Failed to create provider {provider_type.value}: {str(e)}")
             raise EncryptionError(f"Provider initialization failed: {str(e)}")
-    
+
     @classmethod
     def get_supported_providers(cls) -> Dict[str, str]:
         """
         Get a dictionary of supported providers and their descriptions.
-        
+
         Returns:
             Dictionary mapping provider names to descriptions
         """
@@ -102,15 +102,15 @@ class KeyVaultFactory:
             KeyVaultProvider.AZURE_KEYVAULT.value: "Microsoft Azure Key Vault",
             KeyVaultProvider.HASHICORP_VAULT.value: "HashiCorp Vault"
         }
-    
+
     @classmethod
     def validate_provider_config(cls, config: EncryptionConfig) -> Dict[str, Any]:
         """
         Validate the configuration for the specified provider.
-        
+
         Args:
             config: Encryption configuration object
-            
+
         Returns:
             Dictionary containing validation results
         """
@@ -122,10 +122,10 @@ class KeyVaultFactory:
                 'provider': config.KEY_VAULT_PROVIDER,
                 'errors': [f"Unsupported provider: {config.KEY_VAULT_PROVIDER}"]
             }
-        
+
         errors = []
         warnings = []
-        
+
         # Validate provider-specific configuration
         if provider_type == KeyVaultProvider.AWS_KMS:
             if not config.AWS_REGION:
@@ -134,7 +134,7 @@ class KeyVaultFactory:
                 errors.append("AWS_KMS_MASTER_KEY_ID is required for AWS KMS")
             if not config.AWS_ACCESS_KEY_ID and not config.AWS_SECRET_ACCESS_KEY:
                 warnings.append("AWS credentials not configured, will use IAM role or default credential chain")
-        
+
         elif provider_type == KeyVaultProvider.AZURE_KEYVAULT:
             if not config.AZURE_KEYVAULT_URL:
                 errors.append("AZURE_KEYVAULT_URL is required for Azure Key Vault")
@@ -142,28 +142,28 @@ class KeyVaultFactory:
                 warnings.append("AZURE_TENANT_ID not configured, will use default credential")
             if not config.AZURE_CLIENT_ID or not config.AZURE_CLIENT_SECRET:
                 warnings.append("Azure service principal not configured, will use default credential")
-        
+
         elif provider_type == KeyVaultProvider.HASHICORP_VAULT:
             if not config.HASHICORP_VAULT_URL:
                 errors.append("HASHICORP_VAULT_URL is required for HashiCorp Vault")
             if not config.HASHICORP_VAULT_TOKEN:
                 errors.append("HASHICORP_VAULT_TOKEN is required for HashiCorp Vault")
-        
+
         return {
             'valid': len(errors) == 0,
             'provider': provider_type.value,
             'errors': errors,
             'warnings': warnings
         }
-    
+
     @classmethod
     def test_provider_connection(cls, config: EncryptionConfig) -> Dict[str, Any]:
         """
         Test the connection to the configured key vault provider.
-        
+
         Args:
             config: Encryption configuration object
-            
+
         Returns:
             Dictionary containing connection test results
         """
@@ -177,20 +177,20 @@ class KeyVaultFactory:
                     'error': 'Configuration validation failed',
                     'details': validation['errors']
                 }
-            
+
             # Create provider instance
             provider = cls.create_provider(config)
-            
+
             # Perform health check
             health_status = provider.health_check()
-            
+
             return {
                 'success': health_status['status'] == 'healthy',
                 'provider': health_status['provider'],
                 'health_status': health_status,
                 'warnings': validation.get('warnings', [])
             }
-            
+
         except Exception as e:
             logger.error(f"Provider connection test failed: {str(e)}")
             return {
@@ -203,32 +203,30 @@ class KeyVaultFactory:
 class KeyVaultInterface:
     """
     Abstract interface for key vault operations.
-    
+
     This class defines the common interface that all key vault providers should implement.
     """
-    
+
     def generate_data_key(self, tenant_id: int, **kwargs) -> Dict[str, str]:
         """Generate a new data encryption key for a tenant."""
         raise NotImplementedError
-    
+
     def decrypt_data_key(self, encrypted_key: str, tenant_id: int) -> str:
         """Decrypt an encrypted data key."""
         raise NotImplementedError
-    
+
     def rotate_tenant_key(self, tenant_id: int) -> Dict[str, str]:
         """Rotate a tenant's encryption key."""
         raise NotImplementedError
-    
+
     def get_key_info(self, key_identifier: str) -> Dict[str, Any]:
         """Get information about a key."""
         raise NotImplementedError
-    
+
     def audit_key_access(self, tenant_id: int, operation: str, key_id: str, success: bool) -> None:
         """Log key access for audit purposes."""
         raise NotImplementedError
-    
+
     def health_check(self) -> Dict[str, Any]:
         """Perform a health check on the provider."""
         raise NotImplementedError
-
-

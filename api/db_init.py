@@ -238,7 +238,7 @@ def sync_users_to_tenant_db(tenant_id: int):
 def init_db(skip_migrations=True):
     """Initialize database with essential setup, optionally skipping migrations."""
     logger.info("Starting essential database initialization...")
-    
+
     # Set environment variable to indicate we're in database initialization phase
     os.environ['DB_INIT_PHASE'] = 'true'
 
@@ -263,7 +263,7 @@ def init_db(skip_migrations=True):
         if not run_database_migrations():
             logger.error("Failed to run migrations")
             # Continue anyway to allow basic table creation
-    
+
     # Create database engine
     if make_url(SQLALCHEMY_DATABASE_URL).get_backend_name() == "sqlite":
         engine = create_engine(
@@ -272,7 +272,7 @@ def init_db(skip_migrations=True):
         )
     else:
         engine = create_engine(SQLALCHEMY_DATABASE_URL)
-    
+
     # Create all tables in the main (master) DB
     # Note: Schema creation is now handled by Alembic migrations
     # The following ALTER TABLE operations have been moved to proper migrations:
@@ -319,7 +319,7 @@ def init_db(skip_migrations=True):
         except Exception as e:
             logger.error(f"Failed to sync users for tenant {tenant.id}: {str(e)}")
             # Continue with other tenants even if one fails
-    
+
     # Create session
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     db = SessionLocal()
@@ -365,7 +365,7 @@ def init_db(skip_migrations=True):
     reset_all_users_id_sequences()
     
     logger.info("Database initialized successfully with sample data.")
-    
+
     # Clear the database initialization phase flag
     os.environ['DB_INIT_PHASE'] = 'false'
 
