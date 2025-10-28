@@ -127,14 +127,36 @@ const ExpensesWithTaxIntegration = () => {
     setLoading(true);
     try {
       const skip = (page - 1) * pageSize;
-      const data = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip, limit: pageSize });
+      const data = await expenseApi.getExpensesFiltered({ 
+        category: categoryFilter, 
+        label: labelFilter || undefined, 
+        unlinkedOnly, 
+        skip, 
+        limit: pageSize,
+        excludeStatus: 'pending_approval' // Exclude pending approval expenses from the API
+      });
       setExpenses(data);
-      // Probe next page existence precisely
-      try {
-        const probe = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip: skip + pageSize, limit: 1 });
-        setHasNextPage(Array.isArray(probe) && probe.length > 0);
-      } catch {
-        setHasNextPage(data.length === pageSize);
+      
+      // Determine if there's a next page based on the current page and total results
+      // If we got exactly pageSize results, there might be more, so probe the next page
+      if (data.length === pageSize) {
+        // Probe next page existence precisely
+        try {
+          const probe = await expenseApi.getExpensesFiltered({ 
+            category: categoryFilter, 
+            label: labelFilter || undefined, 
+            unlinkedOnly, 
+            skip: skip + pageSize, 
+            limit: 1,
+            excludeStatus: 'pending_approval'
+          });
+          setHasNextPage(Array.isArray(probe) && probe.length > 0);
+        } catch {
+          setHasNextPage(false);
+        }
+      } else {
+        // If we got fewer results than pageSize, there's definitely no next page
+        setHasNextPage(false);
       }
     } catch (e) {
       toast.error('Failed to load expenses');

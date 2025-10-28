@@ -1716,7 +1716,7 @@ export const expenseApi = {
       category: validCategories.includes(e.category) ? e.category : 'General'
     }));
   },
-  getExpensesFiltered: async (opts: { category?: string; label?: string; invoiceId?: number; unlinkedOnly?: boolean; skip?: number; limit?: number } = {}) => {
+  getExpensesFiltered: async (opts: { category?: string; label?: string; invoiceId?: number; unlinkedOnly?: boolean; skip?: number; limit?: number; excludeStatus?: string } = {}) => {
     const params = new URLSearchParams();
     if (opts.category && opts.category !== 'all') params.set('category', opts.category);
     if (opts.label) params.set('label', opts.label);
@@ -1724,6 +1724,7 @@ export const expenseApi = {
     if (opts.unlinkedOnly) params.set('unlinked_only', 'true');
     if (typeof opts.skip === 'number') params.set('skip', String(opts.skip));
     if (typeof opts.limit === 'number') params.set('limit', String(opts.limit));
+    if (opts.excludeStatus) params.set('exclude_status', opts.excludeStatus);
     const qs = params.toString();
     const url = `/expenses/${qs ? `?${qs}` : ''}`;
     return apiRequest<Expense[]>(url);

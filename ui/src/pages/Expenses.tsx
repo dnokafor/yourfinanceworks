@@ -193,49 +193,50 @@ const Expenses = () => {
     setLoading(true);
     try {
       const skip = (page - 1) * pageSize;
-      const data = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip, limit: pageSize });
-
-      // Get current user to filter expenses by ownership
-      const currentUser = getCurrentUser();
-      const currentUserId = currentUser?.id;
-
-      // Filter expenses: only show expenses created by current user AND exclude pending approval expenses
-      console.log('Raw expense data:', data);
-      console.log('Current user ID:', currentUserId, 'Type:', typeof currentUserId);
-      const filteredData = data.filter(expense => {
-        // Convert both to numbers for comparison to handle type mismatches
-        const matchesUser = Number(expense.user_id) === Number(currentUserId);
-        const notPendingApproval = expense.status !== 'pending_approval';
-        console.log(`Expense ${expense.id}: user_id=${expense.user_id} (${typeof expense.user_id}), status=${expense.status}, matchesUser=${matchesUser}, notPendingApproval=${notPendingApproval}`);
-        return matchesUser && notPendingApproval;
+      const data = await expenseApi.getExpensesFiltered({ 
+        category: categoryFilter, 
+        label: labelFilter || undefined, 
+        unlinkedOnly, 
+        skip, 
+        limit: pageSize,
+        excludeStatus: 'pending_approval' // Exclude pending approval expenses from the API
       });
-      console.log('Filtered expenses:', filteredData);
       
       // Reset to page 1 if current page has no results but we're not on page 1
-      if (filteredData.length === 0 && page > 1) {
+      if (data.length === 0 && page > 1) {
         setPage(1);
         return;
       }
       
-      setExpenses(filteredData);
+      setExpenses(data);
       
-      // If we got fewer results than pageSize, there's no next page
-      if (filteredData.length < pageSize) {
-        setHasNextPage(false);
-      } else {
+      // Determine if there's a next page based on the current page and total results
+      // If we got exactly pageSize results, there might be more, so probe the next page
+      if (data.length === pageSize) {
         // Probe next page existence precisely
         try {
-          const probe = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip: skip + pageSize, limit: 1 });
-          // Apply the same filtering to probe results (ownership + status filtering)
-          const filteredProbe = probe.filter(expense => {
-            const matchesUser = Number(expense.user_id) === Number(currentUserId);
-            const notPendingApproval = expense.status !== 'pending_approval';
-            return matchesUser && notPendingApproval;
+          const probe = await expenseApi.getExpensesFiltered({ 
+            category: categoryFilter, 
+            label: labelFilter || undefined, 
+            unlinkedOnly, 
+            skip: skip + pageSize, 
+            limit: 1,
+            excludeStatus: 'pending_approval'
           });
-          setHasNextPage(Array.isArray(filteredProbe) && filteredProbe.length > 0);
-        } catch {
+          const hasMore = Array.isArray(probe) && probe.length > 0;
+          setHasNextPage(hasMore);
+          console.log(`Pagination check: page=${page}, pageSize=${pageSize}, currentResults=${data.length}, probeResults=${probe.length}, hasMore=${hasMore}`);
+          if (hasMore) {
+            console.log('Probe found additional expenses:', probe);
+          }
+        } catch (error) {
+          console.error('Error probing next page:', error);
           setHasNextPage(false);
         }
+      } else {
+        // If we got fewer results than pageSize, there's definitely no next page
+        setHasNextPage(false);
+        console.log(`Pagination: page=${page}, pageSize=${pageSize}, currentResults=${data.length}, hasNextPage=false (fewer than pageSize)`);
       }
     } catch (e) {
       toast.error('Failed to load expenses');
@@ -261,7 +262,8 @@ const Expenses = () => {
       if (lab) setLabelFilter(lab);
       if (q) setSearchQuery(q);
       if (ul === '1') setUnlinkedOnly(true);
-      if (pg && !Number.isNaN(Number(pg))) setPage(Math.max(1, Number(pg)));
+      // Limit page to reasonable bounds - will be validated again after API call
+      if (pg && !Number.isNaN(Number(pg))) setPage(Math.max(1, Math.min(1000, Number(pg))));
       if (ps && !Number.isNaN(Number(ps))) setPageSize(Math.min(200, Math.max(5, Number(ps))));
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -644,7 +646,7 @@ const Expenses = () => {
                     try {
                       const skip = (page - 1) * pageSize;
                       await expenseApi.bulkLabels(selectedIds, 'add', bulkLabel.trim());
-                      const data = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip, limit: pageSize });
+                      const data = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip, limit: pageSize, excludeStatus: 'pending_approval' });
                       setExpenses(data);
                       setSelectedIds([]);
                       setBulkLabel('');
@@ -663,7 +665,7 @@ const Expenses = () => {
                     try {
                       const skip = (page - 1) * pageSize;
                       await expenseApi.bulkLabels(selectedIds, 'remove', bulkLabel.trim());
-                      const data = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip, limit: pageSize });
+                      const data = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip, limit: pageSize, excludeStatus: 'pending_approval' });
                       setExpenses(data);
                       setSelectedIds([]);
                       setBulkLabel('');

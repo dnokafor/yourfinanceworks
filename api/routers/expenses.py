@@ -61,6 +61,7 @@ async def list_expenses(
     label: Optional[str] = None,
     invoice_id: Optional[int] = None,
     unlinked_only: bool = False,
+    exclude_status: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user),
 ):
@@ -69,14 +70,7 @@ async def list_expenses(
     set_tenant_context(current_user.tenant_id)
     
     try:
-        # Count total expenses for this user
-        total_count = db.query(Expense).filter(Expense.user_id == current_user.id).count()
-        
-        # Validate pagination parameters - reset if skip is beyond available data
-        if skip >= total_count and total_count > 0:
-            logger.warning(f"Invalid pagination: skip={skip} >= total={total_count}, resetting to 0")
-            skip = 0
-        
+        # Build the base query with all filters
         query = db.query(Expense).filter(Expense.user_id == current_user.id)
         if category and category != "all":
             query = query.filter(Expense.category == category)
@@ -93,7 +87,22 @@ async def list_expenses(
             query = query.filter(Expense.invoice_id == invoice_id)
         if unlinked_only:
             query = query.filter(Expense.invoice_id.is_(None))
+        if exclude_status:
+            query = query.filter(Expense.status != exclude_status)
+        
+        # Count total expenses with all filters applied
+        total_count = query.count()
+        
+        # If skip is beyond available data, return empty results
+        if skip >= total_count and total_count > 0:
+            logger.info(f"Pagination beyond available data: skip={skip} >= total={total_count}, returning empty results")
+            return []
+
         expenses = query.order_by(Expense.id.desc()).offset(skip).limit(limit).all()
+
+        # Log pagination info for debugging
+        logger.info(f"Expenses query: total_count={total_count}, skip={skip}, limit={limit}, returned={len(expenses)}, exclude_status={exclude_status}")
+
         # Add attachment count for preview
         try:
             for ex in expenses:
@@ -115,7 +124,7 @@ async def get_expense(
     # Set tenant context for encryption operations
     from models.database import set_tenant_context
     set_tenant_context(current_user.tenant_id)
-    
+
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
@@ -134,11 +143,11 @@ async def create_expense(
     current_user: MasterUser = Depends(get_current_user),
 ):
     require_non_viewer(current_user, "create expenses")
-    
+
     # Set tenant context for encryption operations
     from models.database import set_tenant_context
     set_tenant_context(current_user.tenant_id)
-    
+
     try:
         currency_service = CurrencyService(db)
         currency_code = expense.currency or "USD"
