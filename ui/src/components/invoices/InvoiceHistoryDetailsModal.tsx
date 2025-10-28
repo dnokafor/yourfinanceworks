@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowRight, Calendar, DollarSign, FileText, Percent, User, CreditCard } from "lucide-react";
 import { formatDate } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 interface InvoiceHistoryDetailsModalProps {
   open: boolean;
@@ -100,7 +101,23 @@ const getFieldLabel = (key: string): string => {
 };
 
 export function InvoiceHistoryDetailsModal({ open, onClose, historyEntry, clients }: InvoiceHistoryDetailsModalProps) {
+  const { t } = useTranslation();
   const { previous_values, current_values, action, details, created_at, user_name } = historyEntry;
+  
+  const getTranslatedAction = (action: string) => {
+    switch (action) {
+      case 'update':
+        return t('invoices.update', { defaultValue: 'Update' });
+      case 'creation':
+        return t('invoices.invoice_created', { defaultValue: 'Invoice Created' });
+      case 'attachment_uploaded':
+        return t('invoices.attachment_uploaded', { defaultValue: 'Attachment Uploaded' });
+      case 'attachment_deleted':
+        return t('invoices.attachment_deleted_history', { defaultValue: 'Attachment Deleted' });
+      default:
+        return action;
+    }
+  };
   
   // Get all changed fields
   const changedFields = new Set([
@@ -123,7 +140,7 @@ export function InvoiceHistoryDetailsModal({ open, onClose, historyEntry, client
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-lg flex items-center gap-2">
-                <Badge variant="outline">{action}</Badge>
+                <Badge variant="outline">{getTranslatedAction(action)}</Badge>
                 <span className="text-sm text-muted-foreground">
                   {formatDate(created_at)}
                 </span>

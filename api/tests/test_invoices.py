@@ -71,3 +71,4 @@ def test_get_invoices(client: TestClient, auth_headers, test_client_id):
     assert response.status_code == 200
     data = response.json()
     assert len(data) >= 1
+

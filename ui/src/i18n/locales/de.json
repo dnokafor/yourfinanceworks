@@ -300,6 +300,7 @@
     "confirm_delete_attachment_title": "Anhang löschen",
     "confirm_delete_attachment_description": "Sind Sie sicher, dass Sie '{{filename}}' löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
     "attachment_deleted": "Anhang erfolgreich gelöscht",
+    "attachment_deleted_history": "Anhang gelöscht",
     "delete_attachment_failed": "Anhang konnte nicht gelöscht werden",
     "delete_failed_no_id": "Anhang konnte nicht gelöscht werden: Rechnungs-ID nicht gefunden",
     "size": "Größe",

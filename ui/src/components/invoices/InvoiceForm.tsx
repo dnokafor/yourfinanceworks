@@ -52,7 +52,7 @@ const isValidInvoiceStatus = (status: string): status is InvoiceStatus => {
 };
 
 const formatStatus = (status: string) => {
-  return status.split('_').map(word => 
+  return status.split('_').map(word =>
     word.charAt(0).toUpperCase() + word.slice(1)
   ).join(' ');
 };
@@ -108,21 +108,21 @@ interface InvoiceFormProps {
 
 export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialData, attachment, prefillNewClient, openNewClientOnInit }: InvoiceFormProps) {
   const navigate = useNavigate();
-  
+
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  
+
   // Form mode state - only for new invoices
   const [formMode, setFormMode] = useState<'quick' | 'guided'>('quick');
-  
+
   // Multi-step form state
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
-  
+
   // Inline validation
   const { validationMessages, addValidation, clearValidations, setValidationMessages } = useInlineValidation();
-  
+
   // Auto-save for drafts (only for new invoices)
   const autoSaveDraft = useCallback(async (data: any) => {
     if (!isEdit) {
@@ -176,13 +176,13 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
   const [selectedHistoryEntry, setSelectedHistoryEntry] = useState<any>(null);
   const [showHistoryDetailsModal, setShowHistoryDetailsModal] = useState(false);
   const hasAppliedInitialDataRef = React.useRef(false);
-  
+
   // Attachment states
   const [invoiceAttachment, setInvoiceAttachment] = useState<File | null>(null);
-  const [attachmentInfo, setAttachmentInfo] = useState<{has_attachment: boolean, filename?: string} | null>(null);
+  const [attachmentInfo, setAttachmentInfo] = useState<{ has_attachment: boolean, filename?: string } | null>(null);
   const [attachmentPreview, setAttachmentPreview] = useState<{ open: boolean; url: string | null; contentType: string | null; filename: string | null }>({ open: false, url: null, contentType: null, filename: null });
-  
-  
+
+
   // Custom fields state for UI
   const [customFields, setCustomFields] = useState<{ key: string; value: string }[]>(() => {
     if (invoice?.custom_fields && typeof invoice.custom_fields === 'object') {
@@ -196,9 +196,9 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
   // Update customFields when invoice changes
   useEffect(() => {
     if (invoice?.custom_fields && typeof invoice.custom_fields === 'object') {
-      const newCustomFields = Object.entries(invoice.custom_fields).map(([key, value]) => ({ 
-        key: key || '', 
-        value: value !== undefined && value !== null ? String(value) : '' 
+      const newCustomFields = Object.entries(invoice.custom_fields).map(([key, value]) => ({
+        key: key || '',
+        value: value !== undefined && value !== null ? String(value) : ''
       }));
       setCustomFields(newCustomFields);
     } else {
@@ -271,7 +271,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
     try {
       // Get history from API
       const history = await invoiceApi.getInvoiceHistory(invoiceId);
-      
+
       // Get all payments for this invoice
       const allPayments = await paymentApi.getPayments();
       const invoicePayments = (allPayments || [])
@@ -297,7 +297,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
             action = 'Payment Reduced';
             details = `Payment amount reduced via invoice form`;
           }
-          
+
           return {
             id: `payment-${payment.id}`,
             type: 'payment',
@@ -334,7 +334,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
       try {
         // Get current user role using utility function
         const isAdminUser = isAdmin();
-        
+
         // Fetch clients, discount rules, and tenant info (always)
         const [clientsData, discountRulesData, tenantData] = await Promise.all([
           clientApi.getClients(),
@@ -344,7 +344,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
         setClients(clientsData);
         setAvailableDiscountRules(discountRulesData);
         setTenantInfo(tenantData);
-        
+
         // Only fetch settings for admin users
         if (isAdminUser) {
           try {
@@ -401,7 +401,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
           // Extra safety: filter out any already-linked expenses in case backend returns stale data
           const onlyUnlinked = (list || []).filter(e => e.invoice_id == null);
           setUnlinkedExpenses(onlyUnlinked);
-        } catch {}
+        } catch { }
       } catch (error) {
         console.error("Failed to fetch data:", error);
         toast.error("Failed to load data");
@@ -459,16 +459,27 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
         paid_amount: 0,
       };
       console.log("Creating client with data:", clientData);
-      
+
       const newClient = await clientApi.createClient(clientData);
       console.log("✅ Created client:", newClient);
       console.log("✅ Client preferred currency:", newClient.preferred_currency);
-      setClients([...clients, newClient]);
-      
+      // Update clients list first
+      const updatedClients = [...clients, newClient];
+      setClients(updatedClients);
+
       // Set the client in the form
       console.log("✅ Setting form client to:", newClient.id.toString());
       form.setValue("client", newClient.id.toString());
-      
+
+      // Clear any existing validation messages
+      clearValidations();
+
+      // Trigger validation to clear any "Client is required" error
+      // Use requestAnimationFrame to ensure DOM updates have completed
+      requestAnimationFrame(() => {
+        form.trigger("client");
+      });
+
       // Set currency to client's preferred currency
       if (newClient.preferred_currency && !isEdit) {
         console.log("✅ Setting invoice currency to:", newClient.preferred_currency);
@@ -478,7 +489,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
       } else {
         console.log("❌ Not setting currency - preferred_currency:", newClient.preferred_currency, "isEdit:", isEdit);
       }
-      
+
       setShowNewClientDialog(false);
       resetNewClientForm();
       toast.success("Client created successfully!");
@@ -515,7 +526,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
   // Helper function to safely parse dates
   const safeParseDateString = (dateString?: string): Date => {
     if (!dateString) return new Date();
-    
+
     try {
       const parsedDate = parseISO(dateString);
       return isValid(parsedDate) ? parsedDate : new Date();
@@ -546,7 +557,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
     },
     mode: "onSubmit"
   });
-  
+
   // Load draft on component mount for new invoices
   useEffect(() => {
     if (!isEdit) {
@@ -560,7 +571,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
             Object.keys(parsedDraft).forEach(key => {
               if (key !== 'timestamp' && parsedDraft[key] !== undefined) {
                 let value = parsedDraft[key];
-                
+
                 // Parse date strings back to Date objects
                 if ((key === 'date' || key === 'dueDate') && typeof value === 'string') {
                   try {
@@ -575,7 +586,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                     return; // Skip unparseable dates
                   }
                 }
-                
+
                 form.setValue(key as any, value);
               }
             });
@@ -636,7 +647,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
           appliedSomething = true;
         }
       }
-      
+
       // Handle dueDate - support both Date objects and strings
       if (initialData.dueDate) {
         let dueDateValue: Date;
@@ -663,7 +674,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
             dueDateValue.setDate(dueDateValue.getDate() + 30);
             form.setValue('dueDate', dueDateValue);
           }
-        } catch {}
+        } catch { }
       }
       if (typeof initialData.status === 'string') {
         form.setValue('status', initialData.status as any);
@@ -704,13 +715,13 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
       currentDiscountType: form.getValues("discountType"),
       currentDiscountValue: form.getValues("discountValue")
     });
-    
+
     if (invoice && isEdit && !isRefreshingForm) {
       // Check if form is already correctly set to avoid unnecessary resets
       const currentDiscountType = form.getValues("discountType");
       const currentDiscountValue = form.getValues("discountValue");
       const currentCurrency = form.getValues("currency");
-      
+
       console.log("Form reset check - current values:", {
         currentDiscountType,
         currentDiscountValue,
@@ -719,13 +730,13 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
         invoiceDiscountType: invoice.discount_type,
         invoiceCurrency: invoice.currency
       });
-      
+
       // Always reset form when editing to ensure all values are properly set
       // This includes currency, discount values, and other invoice data
       const shouldReset = currentCurrency !== (invoice.currency || "USD") ||
-        currentDiscountValue !== (invoice.discount_value || 0) || 
+        currentDiscountValue !== (invoice.discount_value || 0) ||
         (invoice.discount_value && invoice.discount_value > 0 && currentDiscountType !== "rule");
-      
+
       if (shouldReset) {
         console.log("Resetting form with invoice data...");
         console.log("Invoice discount data:", {
@@ -736,12 +747,12 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
           currency: invoice.currency
         });
         console.log("Available discount rules:", availableDiscountRules);
-        
+
         // Check if the existing discount matches any available discount rule
         const discountValue = invoice.discount_value || 0;
         let discountType: "percentage" | "fixed" | "rule" = "percentage";
         let matchingRule = null;
-        
+
         if (discountValue > 0 && availableDiscountRules.length > 0) {
           const invoiceSubtotal = invoice.subtotal || calculateSubtotal();
           matchingRule = availableDiscountRules.find(rule => {
@@ -750,12 +761,12 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
             const typeMatches = rule.discount_type === invoice.discount_type;
             const valueMatches = rule.discount_value === discountValue;
             const isActive = rule.is_active;
-            
+
             const matches = isActive && typeMatches && valueMatches;
-            
+
             return matches;
           });
-          
+
           if (matchingRule) {
             discountType = "rule";
             setAppliedDiscountRule({
@@ -773,7 +784,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
           discountType = (invoice.discount_type === "percentage" || invoice.discount_type === "fixed") ? (invoice.discount_type as "percentage" | "fixed") : "percentage";
           setAppliedDiscountRule(null);
         }
-        
+
         const formData = {
           client: invoice.client_id.toString(),
           invoiceNumber: invoice.number,
@@ -789,9 +800,9 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
           discountType: discountType,
           discountValue: discountValue,
         };
-        
+
         form.reset(formData);
-        
+
         // Also set the values individually to ensure they're set
         setTimeout(() => {
           form.setValue("discountType", formData.discountType);
@@ -817,11 +828,11 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
       const subtotal = itemsWithAmount.reduce((sum, item) => sum + item.amount, 0);
       const discountType = invoice.discount_type || "percentage";
       const discountValue = invoice.discount_value || 0;
-      const discount = discountType === "percentage" 
+      const discount = discountType === "percentage"
         ? (subtotal * discountValue) / 100
         : Math.min(discountValue, subtotal);
       const totalAmount = Math.max(0, subtotal - discount);
-      
+
       setPreviewInvoice({
         ...invoice,
         items: itemsWithAmount,
@@ -840,46 +851,46 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
       // Debounce validation to prevent excessive updates
       const timeoutId = setTimeout(() => {
         clearValidations();
-        
+
         // Client validation
         if (!value.client) {
           addValidation({ type: "error", message: "Please select a client" });
         }
-        
+
         // Items validation
         if (!value.items || value.items.length === 0) {
           addValidation({ type: "error", message: "At least one item is required" });
         } else {
-          const invalidItems = value.items.filter(item => 
+          const invalidItems = value.items.filter(item =>
             !item.description || item.quantity <= 0 || item.price <= 0
           );
           if (invalidItems.length > 0) {
             addValidation({ type: "warning", message: `${invalidItems.length} item(s) need attention` });
           }
         }
-        
+
         // Amount validation
         const total = calculateTotal(value.items);
         if (total <= 0) {
           addValidation({ type: "error", message: "Invoice total must be greater than 0" });
         }
-        
+
         // Due date validation
         if (value.dueDate && value.date && value.dueDate < value.date) {
           addValidation({ type: "warning", message: "Due date is before invoice date" });
         }
-        
+
         // Success validation
         if (value.client && value.items?.length > 0 && total > 0) {
           addValidation({ type: "success", message: isEdit ? t('invoices.invoice_ready_to_be_updated') : t('invoices.invoice_ready_to_be_created') });
         }
       }, 300);
-      
+
       return () => clearTimeout(timeoutId);
     });
     return () => subscription.unsubscribe();
   }, [form, addValidation, clearValidations]);
-  
+
   // Update preview when form values change with debouncing
   useEffect(() => {
     const subscription = form.watch((value) => {
@@ -912,7 +923,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
             const subtotal = itemsWithAmount.reduce((sum, item) => sum + item.amount, 0);
             const discountType = value.discountType || previewInvoice?.discount_type || "percentage";
             const discountValue = Number(value.discountValue) || previewInvoice?.discount_value || 0;
-            const discount = discountType === "percentage" 
+            const discount = discountType === "percentage"
               ? (subtotal * discountValue) / 100
               : Math.min(discountValue, subtotal);
             return Math.max(0, subtotal - discount);
@@ -923,7 +934,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
         };
         setPreviewInvoice(updatedPreview);
       }, 200);
-      
+
       return () => clearTimeout(timeoutId);
     });
     return () => subscription.unsubscribe();
@@ -937,7 +948,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
       const timeoutId = setTimeout(async () => {
         try {
           const discountCalculation = await discountRulesApi.calculateDiscount(subtotal);
-          
+
           if (discountCalculation.discount_type !== 'none' && discountCalculation.discount_amount > 0) {
             // Show suggestion for both new and editing invoices
             if (discountCalculation.applied_rule) {
@@ -964,7 +975,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
           console.error("Failed to apply discount rules:", error);
         }
       }, 1000);
-      
+
       return () => clearTimeout(timeoutId);
     }
   }, [form.watch("items"), isEdit]);
@@ -1012,12 +1023,12 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
 
   // For new invoices, isInvoicePaid should always be false
   const isInvoicePaid = isEdit && currentStatus === "paid";
-  
+
 
   // Calculation functions - moved here to avoid lexical declaration errors
   const calculateSubtotal = (itemsToUse?: any[]) => {
     const currentItems = itemsToUse || items;
-    
+
     // When editing, use the actual invoice data if form values are not yet loaded
     if (isEdit && invoice && (!currentItems || currentItems.length === 0 || currentItems[0]?.quantity === 0)) {
       const subtotal = invoice.items.reduce((sum, item) => {
@@ -1027,7 +1038,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
       }, 0);
       return subtotal;
     }
-    
+
     const subtotal = currentItems.reduce((sum, item) => {
       const quantity = Number(item.quantity) || 0;
       const price = Number(item.price) || 0;
@@ -1041,12 +1052,12 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
     const subtotal = calculateSubtotal();
     const discountType = form.watch("discountType");
     const discountValue = form.watch("discountValue") || 0;
-    
+
     // When editing, use the actual invoice discount data if form values are not yet loaded
     if (isEdit && invoice && discountValue === 0 && invoice.discount_value) {
       const actualDiscountType = invoice.discount_type || "percentage";
       const actualDiscountValue = invoice.discount_value || 0;
-      
+
       if (actualDiscountType === "percentage") {
         const discount = (subtotal * actualDiscountValue) / 100;
         return discount;
@@ -1055,14 +1066,14 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
         return discount;
       }
     }
-    
+
     // Handle discount rule type
     if (discountType === "rule" && appliedDiscountRule) {
       // Check if subtotal meets minimum amount requirement
       if (subtotal < appliedDiscountRule.min_amount) {
         return 0;
       }
-      
+
       if (appliedDiscountRule.discount_type === "percentage") {
         const discount = (subtotal * appliedDiscountRule.discount_value) / 100;
         return discount;
@@ -1071,7 +1082,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
         return discount;
       }
     }
-    
+
     if (discountType === "percentage") {
       const discount = (subtotal * discountValue) / 100;
       return discount;
@@ -1087,7 +1098,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
     const total = Math.max(0, subtotal - discount);
     return total;
   };
-  
+
   // Multi-step form configuration
   const steps = [
     {
@@ -1115,7 +1126,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
       icon: <SettingsIcon className="h-4 w-4" />
     }
   ];
-  
+
   // Step validation
   const validateStep = (step: number): boolean => {
     switch (step) {
@@ -1123,7 +1134,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
         return !!form.getValues("client");
       case 2:
         const items = form.getValues("items");
-        return items.length > 0 && items.every(item => 
+        return items.length > 0 && items.every(item =>
           item.description && item.quantity > 0 && item.price > 0
         );
       case 3:
@@ -1134,12 +1145,12 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
         return false;
     }
   };
-  
+
   // Update completed steps
   useEffect(() => {
     const subscription = form.watch((value) => {
       const newCompletedSteps: number[] = [];
-      
+
       // Step validation logic inline to avoid dependency issues
       for (let i = 1; i <= 4; i++) {
         let isValid = false;
@@ -1149,17 +1160,17 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
             break;
           case 2:
             const items = value.items || [];
-            isValid = items.length > 0 && items.every(item => 
+            isValid = items.length > 0 && items.every(item =>
               item.description && item.quantity > 0 && item.price > 0
             );
             break;
           case 3:
             // Calculate total inline to avoid dependency issues
-            const itemsSubtotal = (value.items || []).reduce((sum, item) => 
+            const itemsSubtotal = (value.items || []).reduce((sum, item) =>
               sum + (Number(item.quantity) || 0) * (Number(item.price) || 0), 0);
             const discountType = value.discountType || "percentage";
             const discountValue = Number(value.discountValue) || 0;
-            const discount = discountType === "percentage" 
+            const discount = discountType === "percentage"
               ? (itemsSubtotal * discountValue) / 100
               : discountValue;
             const total = Math.max(0, itemsSubtotal - discount);
@@ -1170,25 +1181,25 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
             isValid = false;
             break;
         }
-        
+
         if (isValid) {
           newCompletedSteps.push(i);
         }
       }
       setCompletedSteps(newCompletedSteps);
     });
-    
+
     return () => subscription.unsubscribe();
   }, []);
-  
+
   const canProceedToNextStep = validateStep(currentStep);
-  
+
   const handleStepChange = (step: number) => {
     if (step <= currentStep || completedSteps.includes(step - 1)) {
       setCurrentStep(step);
     }
   };
-  
+
   const handleNext = () => {
     if (currentStep < 4 && canProceedToNextStep) {
       setCurrentStep(currentStep + 1);
@@ -1196,7 +1207,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
       form.handleSubmit(onSubmit)();
     }
   };
-  
+
   const handlePrevious = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
@@ -1232,17 +1243,17 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
   const applyDiscountRules = async (subtotal: number) => {
     try {
       const discountCalculation = await discountRulesApi.calculateDiscount(subtotal);
-      
+
       if (discountCalculation.discount_type !== 'none' && discountCalculation.discount_amount > 0) {
         // Auto-apply the discount rule
         form.setValue("discountType", discountCalculation.discount_type);
         form.setValue("discountValue", discountCalculation.discount_value);
-        
+
         // Show a toast notification about the applied rule
         if (discountCalculation.applied_rule) {
           toast.success(`Applied ${discountCalculation.applied_rule.name}: ${discountCalculation.discount_value}${discountCalculation.discount_type === 'percentage' ? '%' : '$'} discount`);
         }
-        
+
         return discountCalculation.discount_amount;
       }
     } catch (error) {
@@ -1270,7 +1281,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
           show_discount_in_pdf: form.getValues("showDiscountInPdf"), // Pass the new field value
         }),
       });
-      
+
       if (result.success) {
         toast.success("Invoice sent successfully!");
       } else {
@@ -1364,16 +1375,16 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
       // Format dates for API with time
       const formattedDate = format(data.date, "yyyy-MM-dd'T'HH:mm:ss");
       const formattedDueDate = format(data.dueDate, "yyyy-MM-dd'T'HH:mm:ss");
-      
+
       if (isEdit && invoice) {
         console.log("Updating invoice with data:", data);
-       
+
         try {
           // Calculate amounts with discount
-          const subtotal = data.items.reduce((sum, item) => 
+          const subtotal = data.items.reduce((sum, item) =>
             sum + (Number(item.quantity) || 0) * (Number(item.price) || 0), 0
           );
-          
+
           let discount = 0;
           if (data.discountType === "rule" && appliedDiscountRule) {
             if (appliedDiscountRule.discount_type === "percentage") {
@@ -1386,7 +1397,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
           } else {
             discount = Math.min(data.discountValue || 0, subtotal);
           }
-          
+
           const totalAmount = Math.max(0, subtotal - discount);
 
           // Update the invoice with calculated total amount
@@ -1417,10 +1428,10 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
             }, {}),
             show_discount_in_pdf: data.showDiscountInPdf,
           };
-          
+
           console.log("Custom fields from form data:", data.customFields);
           console.log("Custom fields being sent in updateData:", updateData.custom_fields);
-          
+
           console.log("Saving invoice with discount data:", {
             formDiscountType: data.discountType,
             formDiscountValue: data.discountValue,
@@ -1428,12 +1439,12 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
             finalDiscountType: updateData.discount_type,
             finalDiscountValue: updateData.discount_value
           });
-          
+
           // Capture current values before update for change tracking
           const currentDiscountValue = data.discountValue || 0;
           const currentDiscountType = data.discountType || 'percentage';
           const currentCurrency = data.currency || 'USD';
-          
+
           console.log("Captured values before update:", {
             currentDiscountValue,
             currentDiscountType,
@@ -1442,28 +1453,28 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
             formDiscountType: form.getValues("discountType"),
             formCurrency: form.getValues("currency")
           });
-          
+
           console.log("Updating invoice with data:", updateData);
           const updateResult = await invoiceApi.updateInvoice(invoice.id, updateData);
           console.log("Update result:", updateResult);
-          
+
           // Handle payment amount separately
           const paidAmount = Number(data.paidAmount) || 0;
           const currentPaidAmount = invoice.paid_amount || 0;
           const invoiceTotalAmount = totalAmount; // Use the discounted total amount
-          
+
           console.log("Payment comparison:");
           console.log("- New paid amount:", paidAmount);
           console.log("- Current paid amount:", currentPaidAmount);
           console.log("- Invoice total amount:", invoiceTotalAmount);
           console.log("- Difference:", paidAmount - currentPaidAmount);
-          
+
           // Validate paid amount doesn't exceed total
           if (paidAmount > invoiceTotalAmount) {
             toast.error(`Paid amount ($${paidAmount.toFixed(2)}) cannot exceed invoice total ($${invoiceTotalAmount.toFixed(2)})`);
             return;
           }
-          
+
           if (paidAmount !== currentPaidAmount) {
             console.log("Payment amount changed, processing...");
             try {
@@ -1478,12 +1489,12 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                   reference_number: `PAY-${invoice.number}-${Date.now()}`,
                   notes: "Payment entered via invoice form"
                 };
-                
+
                 console.log("Creating additional payment:", paymentData);
                 const paymentResult = await paymentApi.createPayment(paymentData);
                 console.log("Payment created successfully:", paymentResult);
                 toast.success(`Payment of $${paymentDifference.toFixed(2)} recorded successfully!`);
-                
+
                 // Refresh the invoice data to show updated paid amount
                 if (isEdit && invoice) {
                   try {
@@ -1501,24 +1512,24 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                 // Handle reduction in payment amount
                 const reductionAmount = currentPaidAmount - paidAmount;
                 console.log(`Payment amount reduced by $${reductionAmount.toFixed(2)}. From $${currentPaidAmount} to $${paidAmount}`);
-                
+
                 try {
                   // Get all payments for this invoice to determine how to reduce
                   const allPayments = await paymentApi.getPayments();
                   const invoicePayments = (allPayments || [])
                     .filter(payment => payment.invoice_id === invoice.id)
                     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()); // Most recent first
-                  
+
                   console.log("Existing payments for invoice:", invoicePayments);
-                  
+
                   let remainingReduction = reductionAmount;
                   const paymentsToDelete: number[] = [];
                   let lastPaymentToModify: any = null;
-                  
+
                   // Find which payments to delete/modify to achieve the target amount
                   for (const payment of invoicePayments) {
                     if (remainingReduction <= 0) break;
-                    
+
                     if (payment.amount <= remainingReduction) {
                       // Delete this entire payment
                       paymentsToDelete.push(payment.id);
@@ -1534,19 +1545,19 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                       console.log(`Will reduce payment ${payment.id} from $${payment.amount} to $${lastPaymentToModify.newAmount}`);
                     }
                   }
-                  
+
                   if (remainingReduction > 0) {
                     toast.error(`Cannot reduce payment by $${reductionAmount.toFixed(2)}. Only $${(reductionAmount - remainingReduction).toFixed(2)} can be reduced based on existing payments.`);
                     form.setValue("paidAmount", currentPaidAmount);
                     return;
                   }
-                  
+
                   // Execute the payment modifications
                   for (const paymentId of paymentsToDelete) {
                     console.log(`Deleting payment ${paymentId}`);
                     await paymentApi.deletePayment(paymentId);
                   }
-                  
+
                   if (lastPaymentToModify) {
                     console.log(`Updating payment ${lastPaymentToModify.id} to amount ${lastPaymentToModify.newAmount}`);
                     await paymentApi.updatePayment(lastPaymentToModify.id, {
@@ -1554,10 +1565,10 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                       notes: "Payment reduced via invoice form"
                     });
                   }
-                  
+
                   console.log("Payment reduction completed successfully");
                   toast.success(`Payment reduced by $${reductionAmount.toFixed(2)} successfully!`);
-                  
+
                   // Refresh the invoice data to show updated paid amount
                   if (isEdit && invoice) {
                     try {
@@ -1571,7 +1582,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                       console.error("Failed to refresh invoice data:", refreshError);
                     }
                   }
-                  
+
                 } catch (reductionError) {
                   console.error("Failed to reduce payment:", reductionError);
                   toast.error(getErrorMessage(reductionError, t));
@@ -1586,7 +1597,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
           } else {
             console.log("No change in payment amount, skipping payment processing");
           }
-          
+
           // Handle attachment upload if there's an attachment
           if (invoiceAttachment && invoice.id) {
             console.log("🔍 HANDLING ATTACHMENT UPLOAD for updated invoice");
@@ -1631,7 +1642,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
         }
       } else {
         // Calculate amounts with discount
-        const subtotal = data.items.reduce((sum, item) => 
+        const subtotal = data.items.reduce((sum, item) =>
           sum + (Number(item.quantity) || 0) * (Number(item.price) || 0), 0
         );
 
@@ -1691,7 +1702,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
           show_discount_in_pdf: data.showDiscountInPdf,
         };
         console.log("Invoice data being sent:", invoiceData);
-        
+
         // Create new invoice
         const newInvoice = await invoiceApi.createInvoice(invoiceData);
         console.log("Created invoice with dates:", {
@@ -1700,7 +1711,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
           received_date: newInvoice.date,
           received_due_date: newInvoice.due_date
         });
-        
+
         // Optionally link a chosen unlinked expense to this new invoice
         if (linkExpenseId) {
           try {
@@ -1709,7 +1720,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
             console.error('Failed to link expense on create:', e);
           }
         }
-        
+
         // Handle attachment upload if there's an attachment
         if (invoiceAttachment && newInvoice.id) {
           console.log("🔍 HANDLING ATTACHMENT UPLOAD for new invoice");
@@ -1729,15 +1740,15 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
               has_attachment: true,
               attachment_filename: uploadResult.filename
             }));
-            
+
             console.log("🔍 attachmentInfo updated for new invoice:", {
               has_attachment: true,
               filename: uploadResult.filename
             });
-            
+
             setInvoiceAttachment(null);
             toast.success("Invoice created with attachment successfully!");
-            
+
           } catch (attachmentError) {
             console.error("❌ ATTACHMENT UPLOAD FAILED for new invoice:", attachmentError);
             toast.success("Invoice created successfully, but attachment upload failed");
@@ -1770,7 +1781,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
     const currentFormFields = form.getValues("customFields") || [];
     const currentFieldsStr = JSON.stringify(currentFormFields);
     const newFieldsStr = JSON.stringify(customFields);
-    
+
     if (currentFieldsStr !== newFieldsStr) {
       form.setValue("customFields", customFields);
     }
@@ -1880,11 +1891,11 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
               <h3 className="text-lg font-semibold">Client Information</h3>
               {!isEdit && <AutoSaveIndicator status={autoSaveStatus} lastSaved={lastSaved} />}
             </div>
-            
-            <InlineValidation messages={validationMessages.filter(msg => 
+
+            <InlineValidation messages={validationMessages.filter(msg =>
               msg.message.includes('client') || msg.message.includes('Client')
             )} />
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
@@ -1906,7 +1917,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="invoiceNumber"
@@ -1914,10 +1925,10 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                   <FormItem>
                     <FormLabel>{t('invoices.invoice_number')} (Optional)</FormLabel>
                     <FormControl>
-                      <Input 
-                        {...field} 
+                      <Input
+                        {...field}
                         placeholder="Leave empty to auto-generate"
-                        disabled={isInvoicePaid} 
+                        disabled={isInvoicePaid}
                       />
                     </FormControl>
                     <FormDescription>
@@ -1927,7 +1938,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="currency"
@@ -1946,7 +1957,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="date"
@@ -1987,7 +1998,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="dueDate"
@@ -2031,16 +2042,16 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
             </div>
           </div>
         );
-        
+
       case 2:
         return (
           <div className="space-y-6">
             <h3 className="text-lg font-semibold">Invoice Items</h3>
-            
-            <InlineValidation messages={validationMessages.filter(msg => 
+
+            <InlineValidation messages={validationMessages.filter(msg =>
               msg.message.includes('item') || msg.message.includes('Item')
             )} />
-            
+
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h4 className="font-medium">{t('invoices.items')}</h4>
@@ -2166,131 +2177,131 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                 return items.map((item, index) => {
                   console.log(`🔍 InvoiceForm: Rendering item ${index} with inventory_item_id:`, item.inventory_item_id);
                   return (
-                <div key={item.id ? `existing-${item.id}` : `new-${itemKeyCounter}-${index}`} className="grid grid-cols-12 gap-4 items-start">
-                  <div className="col-span-6">
-                    <FormField
-                      control={form.control}
-                      name={`items.${index}.description`}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormControl>
-                            <div className="relative">
-                              <Input
-                                placeholder={t('invoices.item_description')}
-                                {...field}
-                                value={field.value || ''}
-                                disabled={isInvoicePaid}
-                              />
-                              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
-                                {!isInvoicePaid && (
-                                  <InventoryItemSelector
-                                    onItemSelect={(inventoryItem) => {
-                                      // Update the current item with inventory data
-                                      const currentItems = form.getValues("items");
-                                      const updatedItems = [...currentItems];
-                                      updatedItems[index] = {
-                                        ...updatedItems[index],
-                                        description: inventoryItem.description,
-                                        price: inventoryItem.price,
-                                        unit_of_measure: inventoryItem.unit_of_measure,
-                                        inventory_item_id: inventoryItem.inventory_item_id,
-                                      };
-                                      form.setValue("items", updatedItems);
-                                    }}
-                                    selectedItemId={item.inventory_item_id}
-                                    compact={true}
+                    <div key={item.id ? `existing-${item.id}` : `new-${itemKeyCounter}-${index}`} className="grid grid-cols-12 gap-4 items-start">
+                      <div className="col-span-6">
+                        <FormField
+                          control={form.control}
+                          name={`items.${index}.description`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormControl>
+                                <div className="relative">
+                                  <Input
+                                    placeholder={t('invoices.item_description')}
+                                    {...field}
+                                    value={field.value || ''}
+                                    disabled={isInvoicePaid}
                                   />
-                                )}
-                              </div>
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <FormField
-                      control={form.control}
-                      name={`items.${index}.quantity`}
-                      render={({ field }) => {
-                        console.log(`🔍 InvoiceForm: FORM FIELD RENDER - item ${index}, field name: items.${index}.quantity`);
-                        console.log(`🔍 InvoiceForm: FORM FIELD RENDER - field value:`, field.value);
-                        return (
-                        <FormItem>
-                          <FormControl>
-                            <div className="relative">
-                              <Input
-                                type="number"
-                                min="0.01"
-                                step="any"
-                                placeholder={t('invoices.qty')}
-                                {...field}
-                                disabled={isInvoicePaid}
-                                onChange={(e) => {
-                                  const value = e.target.value === '' ? '' : e.target.value;
-                                  field.onChange(value);
-                                }}
-                              />
-                              {/* Temporarily disabled inventory display in items to fix rendering error */}
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                        );
-                      }}
-                    />
-                  </div>
-                  <div className="col-span-3">
-                    <FormField
-                      control={form.control}
-                      name={`items.${index}.price`}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              placeholder={t('invoices.price')}
-                              {...field}
-                              disabled={isInvoicePaid}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <div className="col-span-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeItem(index)}
-                      disabled={items.length === 1 || isInvoicePaid}
-                    >
-                      <Trash className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-                );
-              });
+                                  <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
+                                    {!isInvoicePaid && (
+                                      <InventoryItemSelector
+                                        onItemSelect={(inventoryItem) => {
+                                          // Update the current item with inventory data
+                                          const currentItems = form.getValues("items");
+                                          const updatedItems = [...currentItems];
+                                          updatedItems[index] = {
+                                            ...updatedItems[index],
+                                            description: inventoryItem.description,
+                                            price: inventoryItem.price,
+                                            unit_of_measure: inventoryItem.unit_of_measure,
+                                            inventory_item_id: inventoryItem.inventory_item_id,
+                                          };
+                                          form.setValue("items", updatedItems);
+                                        }}
+                                        selectedItemId={item.inventory_item_id}
+                                        compact={true}
+                                      />
+                                    )}
+                                  </div>
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <FormField
+                          control={form.control}
+                          name={`items.${index}.quantity`}
+                          render={({ field }) => {
+                            console.log(`🔍 InvoiceForm: FORM FIELD RENDER - item ${index}, field name: items.${index}.quantity`);
+                            console.log(`🔍 InvoiceForm: FORM FIELD RENDER - field value:`, field.value);
+                            return (
+                              <FormItem>
+                                <FormControl>
+                                  <div className="relative">
+                                    <Input
+                                      type="number"
+                                      min="0.01"
+                                      step="any"
+                                      placeholder={t('invoices.qty')}
+                                      {...field}
+                                      disabled={isInvoicePaid}
+                                      onChange={(e) => {
+                                        const value = e.target.value === '' ? '' : e.target.value;
+                                        field.onChange(value);
+                                      }}
+                                    />
+                                    {/* Temporarily disabled inventory display in items to fix rendering error */}
+                                  </div>
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            );
+                          }}
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <FormField
+                          control={form.control}
+                          name={`items.${index}.price`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  placeholder={t('invoices.price')}
+                                  {...field}
+                                  disabled={isInvoicePaid}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeItem(index)}
+                          disabled={items.length === 1 || isInvoicePaid}
+                        >
+                          <Trash className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                });
               })()}
 
             </div>
           </div>
         );
-        
+
       case 3:
         return (
           <div className="space-y-6">
             <h3 className="text-lg font-semibold">Calculations & Discounts</h3>
-            
-            <InlineValidation messages={validationMessages.filter(msg => 
+
+            <InlineValidation messages={validationMessages.filter(msg =>
               msg.message.includes('total') || msg.message.includes('amount')
             )} />
-            
+
             {/* Discount Section - simplified for step 3 */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
@@ -2360,7 +2371,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="discountValue"
@@ -2382,7 +2393,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                 )}
               />
             </div>
-            
+
             {/* Summary Section */}
             <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg space-y-2">
               <div className="flex justify-between">
@@ -2400,12 +2411,12 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
             </div>
           </div>
         );
-        
+
       case 4:
         return (
           <div className="space-y-6">
             <h3 className="text-lg font-semibold">Final Settings</h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
@@ -2430,7 +2441,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="paidAmount"
@@ -2452,7 +2463,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                 )}
               />
             </div>
-            
+
             <FormField
               control={form.control}
               name="notes"
@@ -2466,7 +2477,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                 </FormItem>
               )}
             />
-            
+
             {/* Attachment Section */}
             <div className="space-y-4">
               <div>
@@ -2496,7 +2507,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
             </div>
           </div>
         );
-        
+
       default:
         return null;
     }
@@ -2536,7 +2547,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
           </div>
         </div>
       )}
-      
+
       {/* Use guided form for new invoices when selected, quick form otherwise */}
       {!isEdit && formMode === 'guided' ? (
         <Form {...form}>
@@ -2566,7 +2577,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                 <InlineValidation messages={validationMessages} className="mb-4" />
                 {!isEdit && <AutoSaveIndicator status={autoSaveStatus} lastSaved={lastSaved} />}
-                
+
                 {/* Client and Basic Info */}
                 <div className="grid grid-cols-1 gap-6">
                   <FormField
@@ -2614,8 +2625,8 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                         <FormItem>
                           <FormLabel>{t('invoices.invoice_number')} (Optional)</FormLabel>
                           <FormControl>
-                            <Input 
-                              {...field} 
+                            <Input
+                              {...field}
                               placeholder="Leave empty to auto-generate"
                             />
                           </FormControl>
@@ -2783,8 +2794,8 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                           render={({ field }) => (
                             <FormItem>
                               <FormControl>
-                                <Input 
-                                  placeholder={t('invoices.item_description')} 
+                                <Input
+                                  placeholder={t('invoices.item_description')}
                                   {...field}
                                   value={field.value || ''}
                                 />
@@ -2801,7 +2812,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                           render={({ field }) => (
                             <FormItem>
                               <FormControl>
-                                  <Input
+                                <Input
                                   type="number"
                                   min="0.01"
                                   step="any"
@@ -2866,50 +2877,50 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                           <FormItem>
                             <FormLabel>{t('invoices.discount_type')}</FormLabel>
                             <Select
-                      onValueChange={(value) => {
-                        field.onChange(value);
-                        // Clear applied rule when switching away from rule type
-                        if (value !== "rule") {
-                          setAppliedDiscountRule(null);
-                        } else {
-                          // When switching TO rule type, automatically select the first available rule
-                          if (availableDiscountRules.length > 0) {
-                            const currentCurrency = form.watch("currency") || "USD";
-                            const subtotal = calculateSubtotal();
+                              onValueChange={(value) => {
+                                field.onChange(value);
+                                // Clear applied rule when switching away from rule type
+                                if (value !== "rule") {
+                                  setAppliedDiscountRule(null);
+                                } else {
+                                  // When switching TO rule type, automatically select the first available rule
+                                  if (availableDiscountRules.length > 0) {
+                                    const currentCurrency = form.watch("currency") || "USD";
+                                    const subtotal = calculateSubtotal();
 
-                            // Find the first available rule that matches currency and minimum amount
-                            const availableRule = availableDiscountRules
-                              .filter(rule =>
-                                rule.is_active &&
-                                (rule.currency || '').trim().toUpperCase() === currentCurrency.trim().toUpperCase() &&
-                                subtotal >= rule.min_amount
-                              )
-                              .sort((a, b) => b.priority - a.priority || b.min_amount - a.min_amount)[0];
+                                    // Find the first available rule that matches currency and minimum amount
+                                    const availableRule = availableDiscountRules
+                                      .filter(rule =>
+                                        rule.is_active &&
+                                        (rule.currency || '').trim().toUpperCase() === currentCurrency.trim().toUpperCase() &&
+                                        subtotal >= rule.min_amount
+                                      )
+                                      .sort((a, b) => b.priority - a.priority || b.min_amount - a.min_amount)[0];
 
-                            if (availableRule) {
-                              setAppliedDiscountRule({
-                                id: availableRule.id,
-                                name: availableRule.name,
-                                min_amount: availableRule.min_amount,
-                                discount_type: availableRule.discount_type,
-                                discount_value: availableRule.discount_value
-                              });
-                              // Set the discount value to the rule's value
-                              form.setValue("discountValue", availableRule.discount_value);
-                            } else {
-                              // No suitable rule found, clear the applied rule
-                              setAppliedDiscountRule(null);
-                              form.setValue("discountValue", 0);
-                            }
-                          } else {
-                            // No discount rules available yet
-                            setAppliedDiscountRule(null);
-                            form.setValue("discountValue", 0);
-                          }
-                        }
-                      }}
-                      value={field.value}
-                    >
+                                    if (availableRule) {
+                                      setAppliedDiscountRule({
+                                        id: availableRule.id,
+                                        name: availableRule.name,
+                                        min_amount: availableRule.min_amount,
+                                        discount_type: availableRule.discount_type,
+                                        discount_value: availableRule.discount_value
+                                      });
+                                      // Set the discount value to the rule's value
+                                      form.setValue("discountValue", availableRule.discount_value);
+                                    } else {
+                                      // No suitable rule found, clear the applied rule
+                                      setAppliedDiscountRule(null);
+                                      form.setValue("discountValue", 0);
+                                    }
+                                  } else {
+                                    // No discount rules available yet
+                                    setAppliedDiscountRule(null);
+                                    form.setValue("discountValue", 0);
+                                  }
+                                }
+                              }}
+                              value={field.value}
+                            >
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder={t('invoices.select_discount_type')} />
@@ -2925,7 +2936,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                           </FormItem>
                         )}
                       />
-                      
+
                       <FormField
                         control={form.control}
                         name="discountValue"
@@ -3013,11 +3024,10 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
 
                     {/* Discount Rule Indicator */}
                     {form.watch("discountType") === "rule" && appliedDiscountRule && (
-                      <div className={`text-sm p-4 rounded-md border ${
-                        calculateSubtotal() >= appliedDiscountRule.min_amount
+                      <div className={`text-sm p-4 rounded-md border ${calculateSubtotal() >= appliedDiscountRule.min_amount
                           ? "text-blue-600 bg-blue-50 border-blue-200"
                           : "text-orange-600 bg-orange-50 border-orange-200"
-                      }`}>
+                        }`}>
                         <div className="flex items-center justify-between">
                           <div>
                             <span className="font-medium">{t('invoices.applied_rule')}:</span> {appliedDiscountRule.name}
@@ -3076,7 +3086,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                       </FormItem>
                     )}
                   />
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="attachment">{t('invoices.attachment')}</Label>
                     <Input
@@ -3141,12 +3151,14 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                                 <Edit className="w-4 h-4 text-orange-600" />
                               )}
                               <span className="font-medium text-sm">
-                                {entry.action === 'update' ? t('invoices.update') : 
-                                 entry.action === 'creation' ? t('invoices.invoice_created') : 
-                                 entry.action === 'Payment Added' ? t('invoices.payment_added') :
-                                 entry.action === 'Paid Amount Updated' ? t('invoices.paid_amount_updated') :
-                                 entry.action === 'Payment Reduced' ? t('invoices.payment_reduced') :
-                                 entry.action}
+                                {entry.action === 'update' ? t('invoices.update') :
+                                  entry.action === 'creation' ? t('invoices.invoice_created') :
+                                    entry.action === 'Payment Added' ? t('invoices.payment_added') :
+                                      entry.action === 'Paid Amount Updated' ? t('invoices.paid_amount_updated') :
+                                        entry.action === 'Payment Reduced' ? t('invoices.payment_reduced') :
+                                          entry.action === 'attachment_uploaded' ? t('invoices.attachment_uploaded', { defaultValue: 'Attachment Uploaded' }) :
+                                            entry.action === 'attachment_deleted' ? t('invoices.attachment_deleted_history', { defaultValue: 'Attachment Deleted' }) :
+                                              entry.action}
                                 {entry.user_name && (
                                   <span className="ml-2 text-xs text-muted-foreground">{t('invoices.by', { user: entry.user_name })}</span>
                                 )}
@@ -3193,13 +3205,13 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                   </div>
                 </div>
               </div>
-              
+
               {/* Main Form Section - Edit Mode */}
               <div className="flex-1 order-1 lg:order-2">
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                     <InlineValidation messages={validationMessages} className="mb-4" />
-                    
+
                     <div className="grid grid-cols-1 gap-6">
                       <FormField
                         control={form.control}
@@ -3254,10 +3266,10 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                             <FormItem>
                               <FormLabel>{t('invoices.invoice_number')} (Optional)</FormLabel>
                               <FormControl>
-                                <Input 
-                                  {...field} 
+                                <Input
+                                  {...field}
                                   placeholder="Leave empty to auto-generate"
-                                  disabled={isInvoicePaid} 
+                                  disabled={isInvoicePaid}
                                 />
                               </FormControl>
                               <FormDescription>
@@ -3287,971 +3299,969 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                         />
                       </div>
 
-                    <FormField
-                      control={form.control}
-                      name="date"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-col">
-                          <FormLabel>{t('invoices.date')}</FormLabel>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <FormControl>
-                                <Button
-                                  variant={"outline"}
-                                  className={cn(
-                                    "w-full pl-3 text-left font-normal",
-                                    !field.value && "text-muted-foreground"
-                                  )}
-                                  disabled={isInvoicePaid}
-                                >
-                                  {field.value ? (
-                                    format(field.value, "PPP")
-                                  ) : (
-                                    <span>{t('invoices.pick_a_date')}</span>
-                                  )}
-                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                </Button>
-                              </FormControl>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                              <Calendar
-                                mode="single"
-                                selected={field.value}
-                                onSelect={isInvoicePaid ? undefined : field.onChange}
-                                disabled={(date) =>
-                                  isInvoicePaid || date < new Date("1900-01-01")
-                                }
-                                initialFocus
-                              />
-                            </PopoverContent>
-                          </Popover>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="dueDate"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-col">
-                          <FormLabel>{t('invoices.due_date')}</FormLabel>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <FormControl>
-                                <Button
-                                  variant={"outline"}
-                                  className={cn(
-                                    "w-full pl-3 text-left font-normal",
-                                    !field.value && "text-muted-foreground"
-                                  )}
-                                  disabled={isInvoicePaid}
-                                >
-                                  {field.value ? (
-                                    format(field.value, "PPP")
-                                  ) : (
-                                    <span>{t('invoices.pick_a_date')}</span>
-                                  )}
-                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                </Button>
-                              </FormControl>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                              <Calendar
-                                mode="single"
-                                selected={field.value}
-                                onSelect={isInvoicePaid ? undefined : field.onChange}
-                                disabled={(date) =>
-                                  isInvoicePaid || date < new Date("1900-01-01")
-                                }
-                                initialFocus
-                              />
-                            </PopoverContent>
-                          </Popover>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="status"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-col">
-                          <FormLabel>{t('invoices.status_label')}</FormLabel>
-                          <Select
-                            onValueChange={(value) => {
-                              field.onChange(value);
-                              // Set paid amount based on status
-                              if (value === "paid") {
-                                form.setValue("paidAmount", form.getValues("items").reduce((sum, item) => 
-                                  sum + (item.quantity || 0) * (item.price || 0), 0));
-                              } else if (value === "pending" || value === "overdue") {
-                                form.setValue("paidAmount", 0);
-                              }
-                            }}
-                            defaultValue={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder={t('invoices.select_status')}>
-                                  {field.value && formatStatus(field.value)}
-                                </SelectValue>
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="draft">{t('invoices.draft')}</SelectItem>
-                              <SelectItem value="pending">{t('invoices.pending')}</SelectItem>
-                              {(isEdit || (initialData && (initialData as any).bank_transaction_id)) && <SelectItem value="paid">{t('invoices.paid')}</SelectItem>}
-                              <SelectItem value="partially_paid">{t('invoices.partially_paid')}</SelectItem>
-                              <SelectItem value="overdue">{t('invoices.overdue')}</SelectItem>
-                              <SelectItem value="cancelled">{t('invoices.cancelled')}</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="paidAmount"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('invoices.paid_amount')}</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              placeholder={t('invoices.enter_paid_amount')}
-                              {...field}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                                const value = parseFloat(e.target.value) || 0;
-                                const totalAmount = form.watch("items").reduce((sum, item) => 
-                                  sum + (item.quantity || 0) * (item.price || 0), 0);
-                                
-                                if (value > totalAmount) {
-                                  setShowExcessAmountDialog(true);
-                                  field.onChange(totalAmount);
-                                } else {
-                                  field.onChange(value);
-                                }
-                                
-                                // Update status based on paid amount
-                                if (value === 0) {
-                                  form.setValue("status", "pending");
-                                } else if (value >= totalAmount) {
-                                  form.setValue("status", "paid");
-                                } else if (value > 0) {
-                                  form.setValue("status", "partially_paid");
-                                }
-                              }}
-                              onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
-                                const blurValue = parseFloat(e.target.value) || 0;
-                                const blurTotalAmount = form.watch("items").reduce((sum, item) => 
-                                  sum + (item.quantity || 0) * (item.price || 0), 0);
-                                
-                                if (blurValue === 0) {
-                                  form.setValue("status", "pending");
-                                } else if (blurValue >= blurTotalAmount) {
-                                  form.setValue("status", "paid");
-                                } else if (blurValue > 0) {
-                                  form.setValue("status", "partially_paid");
-                                }
-                              }}
-                              disabled={isInvoicePaid}
-                            />
-                          </FormControl>
-                          <div className="mt-2 space-y-1">
-                            <div className="text-sm text-muted-foreground">
-                              {t('invoices.paid_amount')}: <CurrencyDisplay amount={field.value || 0} currency={form.watch("currency") || invoice?.currency || 'USD'} />
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              {t('invoices.remaining_balance')}: <CurrencyDisplay amount={Math.max(0, calculateTotal() - (field.value || 0))} currency={form.watch("currency") || invoice?.currency || 'USD'} />
-                            </div>
-                            {isEdit && (
-                              <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded border border-blue-200">
-                                <strong>{t('invoices.note')}:</strong> {t('invoices.you_can_increase_or_decrease_paid_amount_here')} {t('invoices.for_decreases_the_system_will_automatically_remove_modify_the_most_recent_payments')} {t('invoices.for_complex_payment_management_use_the_Payments_section')}.
-                              </div>
-                            )}
-                          </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    <FormField
-                      control={form.control}
-                      name="isRecurring"
-                      render={({ field }) => (
-                        <FormItem className="space-y-3">
-                          <FormLabel>{t('invoices.invoice_type')}</FormLabel>
-                          <FormControl>
-                            <RadioGroup
-                              onValueChange={(value) => {
-                                const recurring = value === "true";
-                                field.onChange(recurring);
-                                setIsRecurring(recurring);
-                              }}
-                              defaultValue={field.value?.toString() || "false"}
-                              className="flex space-x-4"
-                              disabled={isInvoicePaid}
-                            >
-                              <FormItem className="flex items-center space-x-2">
-                                <FormControl>
-                                  <RadioGroupItem value="false" />
-                                </FormControl>
-                                <FormLabel className="font-normal">{t('invoices.one_time')}</FormLabel>
-                              </FormItem>
-                              <FormItem className="flex items-center space-x-2">
-                                <FormControl>
-                                  <RadioGroupItem value="true" />
-                                </FormControl>
-                                <FormLabel className="font-normal">{t('invoices.recurring')}</FormLabel>
-                              </FormItem>
-                            </RadioGroup>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    {isRecurring && (
                       <FormField
                         control={form.control}
-                        name="recurringFrequency"
+                        name="date"
                         render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{t('invoices.recurring_frequency')}</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isInvoicePaid}>
+                          <FormItem className="flex flex-col">
+                            <FormLabel>{t('invoices.date')}</FormLabel>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <FormControl>
+                                  <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                      "w-full pl-3 text-left font-normal",
+                                      !field.value && "text-muted-foreground"
+                                    )}
+                                    disabled={isInvoicePaid}
+                                  >
+                                    {field.value ? (
+                                      format(field.value, "PPP")
+                                    ) : (
+                                      <span>{t('invoices.pick_a_date')}</span>
+                                    )}
+                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                  </Button>
+                                </FormControl>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                  mode="single"
+                                  selected={field.value}
+                                  onSelect={isInvoicePaid ? undefined : field.onChange}
+                                  disabled={(date) =>
+                                    isInvoicePaid || date < new Date("1900-01-01")
+                                  }
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="dueDate"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-col">
+                            <FormLabel>{t('invoices.due_date')}</FormLabel>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <FormControl>
+                                  <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                      "w-full pl-3 text-left font-normal",
+                                      !field.value && "text-muted-foreground"
+                                    )}
+                                    disabled={isInvoicePaid}
+                                  >
+                                    {field.value ? (
+                                      format(field.value, "PPP")
+                                    ) : (
+                                      <span>{t('invoices.pick_a_date')}</span>
+                                    )}
+                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                  </Button>
+                                </FormControl>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                  mode="single"
+                                  selected={field.value}
+                                  onSelect={isInvoicePaid ? undefined : field.onChange}
+                                  disabled={(date) =>
+                                    isInvoicePaid || date < new Date("1900-01-01")
+                                  }
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="status"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-col">
+                            <FormLabel>{t('invoices.status_label')}</FormLabel>
+                            <Select
+                              onValueChange={(value) => {
+                                field.onChange(value);
+                                // Set paid amount based on status
+                                if (value === "paid") {
+                                  form.setValue("paidAmount", form.getValues("items").reduce((sum, item) =>
+                                    sum + (item.quantity || 0) * (item.price || 0), 0));
+                                } else if (value === "pending" || value === "overdue") {
+                                  form.setValue("paidAmount", 0);
+                                }
+                              }}
+                              defaultValue={field.value}
+                            >
                               <FormControl>
                                 <SelectTrigger>
-                                  <SelectValue placeholder={t('invoices.select_frequency')} />
+                                  <SelectValue placeholder={t('invoices.select_status')}>
+                                    {field.value && formatStatus(field.value)}
+                                  </SelectValue>
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="daily">{t('invoices.daily')}</SelectItem>
-                                <SelectItem value="weekly">{t('invoices.weekly')}</SelectItem>
-                                <SelectItem value="monthly">{t('invoices.monthly')}</SelectItem>
-                                <SelectItem value="yearly">{t('invoices.yearly')}</SelectItem>
+                                <SelectItem value="draft">{t('invoices.draft')}</SelectItem>
+                                <SelectItem value="pending">{t('invoices.pending')}</SelectItem>
+                                {(isEdit || (initialData && (initialData as any).bank_transaction_id)) && <SelectItem value="paid">{t('invoices.paid')}</SelectItem>}
+                                <SelectItem value="partially_paid">{t('invoices.partially_paid')}</SelectItem>
+                                <SelectItem value="overdue">{t('invoices.overdue')}</SelectItem>
+                                <SelectItem value="cancelled">{t('invoices.cancelled')}</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                    )}
-                  </div>
 
-                  <div className="space-y-4" data-tour="invoice-items">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-lg font-medium">{t('invoices.items')}</h3>
-                        <HelpTooltip 
-                          content="Add products or services to your invoice. Include detailed descriptions, quantities, and prices for accurate billing."
-                          title="Invoice Items"
+                      <FormField
+                        control={form.control}
+                        name="paidAmount"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('invoices.paid_amount')}</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder={t('invoices.enter_paid_amount')}
+                                {...field}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                  const value = parseFloat(e.target.value) || 0;
+                                  const totalAmount = form.watch("items").reduce((sum, item) =>
+                                    sum + (item.quantity || 0) * (item.price || 0), 0);
+
+                                  if (value > totalAmount) {
+                                    setShowExcessAmountDialog(true);
+                                    field.onChange(totalAmount);
+                                  } else {
+                                    field.onChange(value);
+                                  }
+
+                                  // Update status based on paid amount
+                                  if (value === 0) {
+                                    form.setValue("status", "pending");
+                                  } else if (value >= totalAmount) {
+                                    form.setValue("status", "paid");
+                                  } else if (value > 0) {
+                                    form.setValue("status", "partially_paid");
+                                  }
+                                }}
+                                onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
+                                  const blurValue = parseFloat(e.target.value) || 0;
+                                  const blurTotalAmount = form.watch("items").reduce((sum, item) =>
+                                    sum + (item.quantity || 0) * (item.price || 0), 0);
+
+                                  if (blurValue === 0) {
+                                    form.setValue("status", "pending");
+                                  } else if (blurValue >= blurTotalAmount) {
+                                    form.setValue("status", "paid");
+                                  } else if (blurValue > 0) {
+                                    form.setValue("status", "partially_paid");
+                                  }
+                                }}
+                                disabled={isInvoicePaid}
+                              />
+                            </FormControl>
+                            <div className="mt-2 space-y-1">
+                              <div className="text-sm text-muted-foreground">
+                                {t('invoices.paid_amount')}: <CurrencyDisplay amount={field.value || 0} currency={form.watch("currency") || invoice?.currency || 'USD'} />
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                {t('invoices.remaining_balance')}: <CurrencyDisplay amount={Math.max(0, calculateTotal() - (field.value || 0))} currency={form.watch("currency") || invoice?.currency || 'USD'} />
+                              </div>
+                              {isEdit && (
+                                <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded border border-blue-200">
+                                  <strong>{t('invoices.note')}:</strong> {t('invoices.you_can_increase_or_decrease_paid_amount_here')} {t('invoices.for_decreases_the_system_will_automatically_remove_modify_the_most_recent_payments')} {t('invoices.for_complex_payment_management_use_the_Payments_section')}.
+                                </div>
+                              )}
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                      <FormField
+                        control={form.control}
+                        name="isRecurring"
+                        render={({ field }) => (
+                          <FormItem className="space-y-3">
+                            <FormLabel>{t('invoices.invoice_type')}</FormLabel>
+                            <FormControl>
+                              <RadioGroup
+                                onValueChange={(value) => {
+                                  const recurring = value === "true";
+                                  field.onChange(recurring);
+                                  setIsRecurring(recurring);
+                                }}
+                                defaultValue={field.value?.toString() || "false"}
+                                className="flex space-x-4"
+                                disabled={isInvoicePaid}
+                              >
+                                <FormItem className="flex items-center space-x-2">
+                                  <FormControl>
+                                    <RadioGroupItem value="false" />
+                                  </FormControl>
+                                  <FormLabel className="font-normal">{t('invoices.one_time')}</FormLabel>
+                                </FormItem>
+                                <FormItem className="flex items-center space-x-2">
+                                  <FormControl>
+                                    <RadioGroupItem value="true" />
+                                  </FormControl>
+                                  <FormLabel className="font-normal">{t('invoices.recurring')}</FormLabel>
+                                </FormItem>
+                              </RadioGroup>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      {isRecurring && (
+                        <FormField
+                          control={form.control}
+                          name="recurringFrequency"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{t('invoices.recurring_frequency')}</FormLabel>
+                              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isInvoicePaid}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder={t('invoices.select_frequency')} />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="daily">{t('invoices.daily')}</SelectItem>
+                                  <SelectItem value="weekly">{t('invoices.weekly')}</SelectItem>
+                                  <SelectItem value="monthly">{t('invoices.monthly')}</SelectItem>
+                                  <SelectItem value="yearly">{t('invoices.yearly')}</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
                         />
+                      )}
+                    </div>
+
+                    <div className="space-y-4" data-tour="invoice-items">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg font-medium">{t('invoices.items')}</h3>
+                          <HelpTooltip
+                            content="Add products or services to your invoice. Include detailed descriptions, quantities, and prices for accurate billing."
+                            title="Invoice Items"
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={addItem}
+                          disabled={isInvoicePaid}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          {t('invoices.add_item')}
+                        </Button>
                       </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={addItem}
-                        disabled={isInvoicePaid}
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        {t('invoices.add_item')}
-                      </Button>
+
+                      {/* Column headers for items */}
+                      <div className="grid grid-cols-12 gap-4 font-semibold text-sm text-gray-600 mb-2">
+                        <div className="col-span-6">{t('invoices.item_description')}</div>
+                        <div className="col-span-2">{t('invoices.quantity')}</div>
+                        <div className="col-span-3">{t('invoices.price')}</div>
+                        <div className="col-span-1">{t('invoices.actions')}</div>
+                      </div>
+
+                      {items.map((item, index) => (
+                        <div key={item.id ? `existing-${item.id}` : `new-${itemKeyCounter}-${index}`} className="grid grid-cols-12 gap-4 items-start">
+                          <div className="col-span-6">
+                            <FormField
+                              control={form.control}
+                              name={`items.${index}.description`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Input
+                                      placeholder={t('invoices.item_description')}
+                                      {...field}
+                                      key={`desc-${index}`}
+                                      value={field.value || ''}
+                                      onChange={(e) => {
+                                        console.log(`Item ${index} description changed to:`, e.target.value);
+                                        field.onChange(e);
+                                      }}
+                                      disabled={isInvoicePaid}
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <FormField
+                              control={form.control}
+                              name={`items.${index}.quantity`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Input
+                                      type="number"
+                                      min="0.01"
+                                      step="any"
+                                      placeholder={t('invoices.qty')}
+                                      {...field}
+                                      disabled={isInvoicePaid}
+                                      onChange={(e) => {
+                                        const value = e.target.value === '' ? '' : e.target.value;
+                                        field.onChange(value);
+                                      }}
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                          <div className="col-span-3">
+                            <FormField
+                              control={form.control}
+                              name={`items.${index}.price`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      placeholder={t('invoices.price')}
+                                      {...field}
+                                      disabled={isInvoicePaid}
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                          <div className="col-span-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeItem(index)}
+                              disabled={items.length === 1 || isInvoicePaid}
+                            >
+                              <Trash className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
 
-                    {/* Column headers for items */}
-                    <div className="grid grid-cols-12 gap-4 font-semibold text-sm text-gray-600 mb-2">
-                      <div className="col-span-6">{t('invoices.item_description')}</div>
-                      <div className="col-span-2">{t('invoices.quantity')}</div>
-                      <div className="col-span-3">{t('invoices.price')}</div>
-                      <div className="col-span-1">{t('invoices.actions')}</div>
-                    </div>
+                    {/* Discount Section */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-medium">{t('invoices.discount')}</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <FormField
+                          control={form.control}
+                          name="discountType"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{t('invoices.discount_type')}</FormLabel>
+                              <Select
+                                onValueChange={(value) => {
+                                  field.onChange(value);
+                                  // Clear applied rule when switching away from rule type
+                                  if (value !== "rule") {
+                                    setAppliedDiscountRule(null);
+                                  } else {
+                                    // When switching TO rule type, automatically select the first available rule
+                                    const currentCurrency = form.watch("currency") || "USD";
+                                    const subtotal = calculateSubtotal();
 
-                    {items.map((item, index) => (
-                      <div key={item.id ? `existing-${item.id}` : `new-${itemKeyCounter}-${index}`} className="grid grid-cols-12 gap-4 items-start">
-                        <div className="col-span-6">
-                          <FormField
-                            control={form.control}
-                            name={`items.${index}.description`}
-                            render={({ field }) => (
-                              <FormItem>
+                                    // Find the first available rule that matches currency and minimum amount
+                                    const availableRule = availableDiscountRules
+                                      .filter(rule =>
+                                        rule.is_active &&
+                                        (rule.currency || '').trim().toUpperCase() === currentCurrency.trim().toUpperCase() &&
+                                        subtotal >= rule.min_amount
+                                      )
+                                      .sort((a, b) => b.priority - a.priority || b.min_amount - a.min_amount)[0];
+
+                                    if (availableRule) {
+                                      setAppliedDiscountRule({
+                                        id: availableRule.id,
+                                        name: availableRule.name,
+                                        min_amount: availableRule.min_amount,
+                                        discount_type: availableRule.discount_type,
+                                        discount_value: availableRule.discount_value
+                                      });
+                                      // Set the discount value to the rule's value
+                                      form.setValue("discountValue", availableRule.discount_value);
+                                    } else {
+                                      // No suitable rule found, clear the applied rule
+                                      setAppliedDiscountRule(null);
+                                      form.setValue("discountValue", 0);
+                                    }
+                                  }
+                                }}
+                                value={field.value}
+                                disabled={isInvoicePaid}
+                              >
                                 <FormControl>
-                                  <Input 
-                                    placeholder={t('invoices.item_description')} 
-                                    {...field}
-                                    key={`desc-${index}`}
-                                    value={field.value || ''}
-                                    onChange={(e) => {
-                                      console.log(`Item ${index} description changed to:`, e.target.value);
-                                      field.onChange(e);
+                                  <SelectTrigger>
+                                    <SelectValue placeholder={t('invoices.select_discount_type')} />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="percentage">{t('invoices.percentage')}</SelectItem>
+                                  <SelectItem value="fixed">{t('invoices.fixed_amount')}</SelectItem>
+                                  <SelectItem value="rule">{t('invoices.discount_rule')}</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="discountValue"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{t('invoices.discount_value')}</FormLabel>
+                              <FormControl>
+                                {form.watch("discountType") === "rule" ? (
+                                  <Select
+                                    value={appliedDiscountRule?.id?.toString() || ""}
+                                    onValueChange={(value) => {
+                                      const selectedRule = availableDiscountRules.find(
+                                        rule => rule.id.toString() === value
+                                      );
+                                      if (
+                                        selectedRule &&
+                                        (selectedRule.currency || '').trim().toUpperCase() === (form.watch("currency") || '').trim().toUpperCase()
+                                      ) {
+                                        field.onChange(selectedRule.discount_value);
+                                        setAppliedDiscountRule({
+                                          id: selectedRule.id,
+                                          name: selectedRule.name,
+                                          min_amount: selectedRule.min_amount,
+                                          discount_type: selectedRule.discount_type,
+                                          discount_value: selectedRule.discount_value
+                                        });
+                                      } else {
+                                        field.onChange(0);
+                                        setAppliedDiscountRule(null);
+                                        toast.error("Selected discount rule does not match the invoice currency.");
+                                      }
                                     }}
                                     disabled={isInvoicePaid}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <FormField
-                            control={form.control}
-                            name={`items.${index}.quantity`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormControl>
-                                  <Input
-                                    type="number"
-                                    min="0.01"
-                                    step="any"
-                                    placeholder={t('invoices.qty')}
-                                    {...field}
-                                    disabled={isInvoicePaid}
-                                    onChange={(e) => {
-                                      const value = e.target.value === '' ? '' : e.target.value;
-                                      field.onChange(value);
-                                    }}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                        <div className="col-span-3">
-                          <FormField
-                            control={form.control}
-                            name={`items.${index}.price`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormControl>
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue placeholder={t('invoices.select_a_discount_rule')} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {availableDiscountRules
+                                        .sort((a, b) => b.priority - a.priority || b.min_amount - a.min_amount)
+                                        .map((rule) => {
+                                          const dropdownCurrency = form.watch("currency");
+                                          console.log("DiscountRule currency:", rule.currency, "Dropdown value:", dropdownCurrency);
+                                          return (
+                                            <SelectItem
+                                              key={rule.id}
+                                              value={rule.id.toString()}
+                                              disabled={(rule.currency || '').trim().toUpperCase() !== (dropdownCurrency || '').trim().toUpperCase()}
+                                            >
+                                              {rule.name} - {rule.discount_value}{rule.discount_type === 'percentage' ? '%' : '$'} ({t('invoices.min', { amount: rule.min_amount })})
+                                              {(rule.currency || '').trim().toUpperCase() !== (dropdownCurrency || '').trim().toUpperCase() && (
+                                                <span style={{ color: '#888', fontSize: '0.85em', marginLeft: 8 }}>
+                                                  ({t('invoices.not_available_for', { currency: dropdownCurrency })}
+                                                </span>
+                                              )}
+                                            </SelectItem>
+                                          );
+                                        })}
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
                                   <Input
                                     type="number"
                                     min="0"
                                     step="0.01"
-                                    placeholder={t('invoices.price')}
+                                    placeholder={form.watch("discountType") === "percentage" ? "0.00" : "0.00"}
                                     {...field}
+                                    onChange={(e) => {
+                                      const value = parseFloat(e.target.value) || 0;
+                                      const discountType = form.watch("discountType");
+
+                                      if (discountType === "percentage" && value > 100) {
+                                        field.onChange(100);
+                                      } else {
+                                        field.onChange(value);
+                                      }
+                                    }}
                                     disabled={isInvoicePaid}
                                   />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                        <div className="col-span-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeItem(index)}
-                            disabled={items.length === 1 || isInvoicePaid}
-                          >
-                            <Trash className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Discount Section */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium">{t('invoices.discount')}</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormField
-                        control={form.control}
-                        name="discountType"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{t('invoices.discount_type')}</FormLabel>
-                            <Select
-                              onValueChange={(value) => {
-                                field.onChange(value);
-                                // Clear applied rule when switching away from rule type
-                                if (value !== "rule") {
-                                  setAppliedDiscountRule(null);
-                                } else {
-                                  // When switching TO rule type, automatically select the first available rule
-                                  const currentCurrency = form.watch("currency") || "USD";
-                                  const subtotal = calculateSubtotal();
-
-                                  // Find the first available rule that matches currency and minimum amount
-                                  const availableRule = availableDiscountRules
-                                    .filter(rule =>
-                                      rule.is_active &&
-                                      (rule.currency || '').trim().toUpperCase() === currentCurrency.trim().toUpperCase() &&
-                                      subtotal >= rule.min_amount
-                                    )
-                                    .sort((a, b) => b.priority - a.priority || b.min_amount - a.min_amount)[0];
-
-                                  if (availableRule) {
-                                    setAppliedDiscountRule({
-                                      id: availableRule.id,
-                                      name: availableRule.name,
-                                      min_amount: availableRule.min_amount,
-                                      discount_type: availableRule.discount_type,
-                                      discount_value: availableRule.discount_value
-                                    });
-                                    // Set the discount value to the rule's value
-                                    form.setValue("discountValue", availableRule.discount_value);
-                                  } else {
-                                    // No suitable rule found, clear the applied rule
-                                    setAppliedDiscountRule(null);
-                                    form.setValue("discountValue", 0);
-                                  }
-                                }
-                              }}
-                              value={field.value}
-                              disabled={isInvoicePaid}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder={t('invoices.select_discount_type')} />
-                                </SelectTrigger>
+                                )}
                               </FormControl>
-                              <SelectContent>
-                                <SelectItem value="percentage">{t('invoices.percentage')}</SelectItem>
-                                <SelectItem value="fixed">{t('invoices.fixed_amount')}</SelectItem>
-                                <SelectItem value="rule">{t('invoices.discount_rule')}</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      {/* Discount Rule Indicator */}
+                      {form.watch("discountType") === "rule" && appliedDiscountRule && (
+                        <div className={`text-sm p-4 rounded-md border ${calculateSubtotal() >= appliedDiscountRule.min_amount
+                            ? "text-blue-600 bg-blue-50 border-blue-200"
+                            : "text-orange-600 bg-orange-50 border-orange-200"
+                          }`}>
+                          <div className="font-medium mb-2">
+                            {calculateSubtotal() >= appliedDiscountRule.min_amount ? t('invoices.applied_discount_rule') : t('invoices.discount_rule_not_applied')}
+                          </div>
+                          <div className="space-y-1">
+                            <div><span className="font-medium">{t('invoices.rule')}:</span> {appliedDiscountRule.name}</div>
+                            <div><span className="font-medium">{t('invoices.minimum_amount')}:</span> ${appliedDiscountRule.min_amount.toFixed(2)}</div>
+                            <div><span className="font-medium">{t('invoices.current_subtotal')}:</span> ${calculateSubtotal().toFixed(2)}</div>
+                            <div><span className="font-medium">{t('invoices.discount')}:</span> {appliedDiscountRule.discount_value}{appliedDiscountRule.discount_type === 'percentage' ? '%' : '$'}</div>
+                            <div><span className="font-medium">{t('invoices.discount_amount')}:</span> -${calculateDiscount().toFixed(2)}</div>
+                          </div>
+                          <div className={`text-xs mt-2 pt-2 border-t ${calculateSubtotal() >= appliedDiscountRule.min_amount
+                              ? "text-blue-500 border-blue-200"
+                              : "text-orange-500 border-orange-200"
+                            }`}>
+                            {calculateSubtotal() >= appliedDiscountRule.min_amount ? t('invoices.this_discount_rule_was_automatically_applied_based_on_your_invoice_subtotal') : t('invoices.this_discount_rule_requires_a_minimum_subtotal_of', { amount: appliedDiscountRule.min_amount.toFixed(2) })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Legacy discount indicator for non-rule discounts */}
+                      {form.watch("discountValue") > 0 && form.watch("discountType") !== "rule" && (
+                        <div className="text-sm text-blue-600 bg-blue-50 p-2 rounded-md border border-blue-200">
+                          <span className="font-medium">{t('invoices.discount_applied')}:</span> {form.watch("discountValue")}{form.watch("discountType") === "percentage" ? "%" : "$"} {t('invoices.discount')}
+                        </div>
+                      )}
+
+                      {/* Summary Section */}
+                      <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">{t('invoices.subtotal')}:</span>
+                          <span className="font-medium">${calculateSubtotal().toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">
+                            {t('invoices.discount')}: {t('invoices.discount_type')} {t('invoices.discount_value')}
+                          </span>
+                          <span className="font-medium text-red-600">${(() => {
+                            const discountType = form.watch("discountType");
+                            const discountValue = form.watch("discountValue") || 0;
+                            const subtotal = calculateSubtotal();
+                            if (discountType === "rule" && appliedDiscountRule) {
+                              if (subtotal < appliedDiscountRule.min_amount) return (0).toFixed(2);
+                              if (appliedDiscountRule.discount_type === "percentage") {
+                                return ((subtotal * appliedDiscountRule.discount_value) / 100).toFixed(2);
+                              } else {
+                                return (Math.min(appliedDiscountRule.discount_value, subtotal)).toFixed(2);
+                              }
+                            }
+                            if (discountType === "percentage") {
+                              return ((subtotal * discountValue) / 100).toFixed(2);
+                            } else {
+                              return (Math.min(discountValue, subtotal)).toFixed(2);
+                            }
+                          })()}</span>
+                        </div>
+                        <div className="border-t pt-2 flex justify-between">
+                          <span className="font-semibold">{t('invoices.total')}:</span>
+                          <span className="font-bold text-lg">${calculateTotal().toFixed(2)}</span>
+                        </div>
+                      </div>
 
                       <FormField
                         control={form.control}
-                        name="discountValue"
+                        name="showDiscountInPdf"
                         render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{t('invoices.discount_value')}</FormLabel>
+                          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 shadow">
                             <FormControl>
-                              {form.watch("discountType") === "rule" ? (
-                                <Select 
-                                  value={appliedDiscountRule?.id?.toString() || ""}
-                                  onValueChange={(value) => {
-                                    const selectedRule = availableDiscountRules.find(
-                                      rule => rule.id.toString() === value
-                                    );
-                                    if (
-                                      selectedRule &&
-                                      (selectedRule.currency || '').trim().toUpperCase() === (form.watch("currency") || '').trim().toUpperCase()
-                                    ) {
-                                      field.onChange(selectedRule.discount_value);
-                                      setAppliedDiscountRule({
-                                        id: selectedRule.id,
-                                        name: selectedRule.name,
-                                        min_amount: selectedRule.min_amount,
-                                        discount_type: selectedRule.discount_type,
-                                        discount_value: selectedRule.discount_value
-                                      });
-                                    } else {
-                                      field.onChange(0);
-                                      setAppliedDiscountRule(null);
-                                      toast.error("Selected discount rule does not match the invoice currency.");
-                                    }
-                                  }}
-                                  disabled={isInvoicePaid}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder={t('invoices.select_a_discount_rule')} />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {availableDiscountRules
-                                      .sort((a, b) => b.priority - a.priority || b.min_amount - a.min_amount)
-                                      .map((rule) => {
-                                        const dropdownCurrency = form.watch("currency");
-                                        console.log("DiscountRule currency:", rule.currency, "Dropdown value:", dropdownCurrency);
-                                        return (
-                                          <SelectItem
-                                            key={rule.id}
-                                            value={rule.id.toString()}
-                                            disabled={(rule.currency || '').trim().toUpperCase() !== (dropdownCurrency || '').trim().toUpperCase()}
-                                          >
-                                            {rule.name} - {rule.discount_value}{rule.discount_type === 'percentage' ? '%' : '$'} ({t('invoices.min', { amount: rule.min_amount })})
-                                            {(rule.currency || '').trim().toUpperCase() !== (dropdownCurrency || '').trim().toUpperCase() && (
-                                              <span style={{ color: '#888', fontSize: '0.85em', marginLeft: 8 }}>
-                                                ({t('invoices.not_available_for', { currency: dropdownCurrency })}
-                                              </span>
-                                            )}
-                                          </SelectItem>
-                                        );
-                                      })}
-                                  </SelectContent>
-                                </Select>
-                              ) : (
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  placeholder={form.watch("discountType") === "percentage" ? "0.00" : "0.00"}
-                                  {...field}
-                                  onChange={(e) => {
-                                    const value = parseFloat(e.target.value) || 0;
-                                    const discountType = form.watch("discountType");
-                                    
-                                    if (discountType === "percentage" && value > 100) {
-                                      field.onChange(100);
-                                    } else {
-                                      field.onChange(value);
-                                    }
-                                  }}
-                                  disabled={isInvoicePaid}
-                                />
-                              )}
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
                             </FormControl>
-                            <FormMessage />
+                            <div className="space-y-1 leading-none">
+                              <FormLabel>
+                                {t('invoices.show_discount_in_pdf')}
+                              </FormLabel>
+                              <FormDescription>
+                                {t('invoices.if_checked_discount_details_will_be_visible_in_the_pdf_preview_and_download')}
+                              </FormDescription>
+                            </div>
                           </FormItem>
                         )}
                       />
-                    </div>
-
-                    {/* Discount Rule Indicator */}
-                    {form.watch("discountType") === "rule" && appliedDiscountRule && (
-                      <div className={`text-sm p-4 rounded-md border ${
-                        calculateSubtotal() >= appliedDiscountRule.min_amount 
-                          ? "text-blue-600 bg-blue-50 border-blue-200" 
-                          : "text-orange-600 bg-orange-50 border-orange-200"
-                      }`}>
-                        <div className="font-medium mb-2">
-                          {calculateSubtotal() >= appliedDiscountRule.min_amount ? t('invoices.applied_discount_rule') : t('invoices.discount_rule_not_applied')}
-                        </div>
-                        <div className="space-y-1">
-                          <div><span className="font-medium">{t('invoices.rule')}:</span> {appliedDiscountRule.name}</div>
-                          <div><span className="font-medium">{t('invoices.minimum_amount')}:</span> ${appliedDiscountRule.min_amount.toFixed(2)}</div>
-                          <div><span className="font-medium">{t('invoices.current_subtotal')}:</span> ${calculateSubtotal().toFixed(2)}</div>
-                          <div><span className="font-medium">{t('invoices.discount')}:</span> {appliedDiscountRule.discount_value}{appliedDiscountRule.discount_type === 'percentage' ? '%' : '$'}</div>
-                          <div><span className="font-medium">{t('invoices.discount_amount')}:</span> -${calculateDiscount().toFixed(2)}</div>
-                        </div>
-                        <div className={`text-xs mt-2 pt-2 border-t ${
-                          calculateSubtotal() >= appliedDiscountRule.min_amount 
-                            ? "text-blue-500 border-blue-200" 
-                            : "text-orange-500 border-orange-200"
-                        }`}>
-                          {calculateSubtotal() >= appliedDiscountRule.min_amount ? t('invoices.this_discount_rule_was_automatically_applied_based_on_your_invoice_subtotal') : t('invoices.this_discount_rule_requires_a_minimum_subtotal_of', { amount: appliedDiscountRule.min_amount.toFixed(2) })}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Legacy discount indicator for non-rule discounts */}
-                    {form.watch("discountValue") > 0 && form.watch("discountType") !== "rule" && (
-                      <div className="text-sm text-blue-600 bg-blue-50 p-2 rounded-md border border-blue-200">
-                        <span className="font-medium">{t('invoices.discount_applied')}:</span> {form.watch("discountValue")}{form.watch("discountType") === "percentage" ? "%" : "$"} {t('invoices.discount')}
-                      </div>
-                    )}
-
-                    {/* Summary Section */}
-                    <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">{t('invoices.subtotal')}:</span>
-                        <span className="font-medium">${calculateSubtotal().toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">
-                          {t('invoices.discount')}: {t('invoices.discount_type')} {t('invoices.discount_value')}
-                        </span>
-                        <span className="font-medium text-red-600">${(() => {
-                          const discountType = form.watch("discountType");
-                          const discountValue = form.watch("discountValue") || 0;
-                          const subtotal = calculateSubtotal();
-                          if (discountType === "rule" && appliedDiscountRule) {
-                            if (subtotal < appliedDiscountRule.min_amount) return (0).toFixed(2);
-                            if (appliedDiscountRule.discount_type === "percentage") {
-                              return ((subtotal * appliedDiscountRule.discount_value) / 100).toFixed(2);
-                            } else {
-                              return (Math.min(appliedDiscountRule.discount_value, subtotal)).toFixed(2);
-                            }
-                          }
-                          if (discountType === "percentage") {
-                            return ((subtotal * discountValue) / 100).toFixed(2);
-                          } else {
-                            return (Math.min(discountValue, subtotal)).toFixed(2);
-                          }
-                        })()}</span>
-                      </div>
-                      <div className="border-t pt-2 flex justify-between">
-                        <span className="font-semibold">{t('invoices.total')}:</span>
-                        <span className="font-bold text-lg">${calculateTotal().toFixed(2)}</span>
-                      </div>
                     </div>
 
                     <FormField
                       control={form.control}
-                      name="showDiscountInPdf"
+                      name="notes"
                       render={({ field }) => (
-                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 shadow">
+                        <FormItem>
+                          <FormLabel>{t('invoices.notes')}</FormLabel>
                           <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                            />
+                            <Input {...field} disabled={isInvoicePaid} />
                           </FormControl>
-                          <div className="space-y-1 leading-none">
-                            <FormLabel>
-                              {t('invoices.show_discount_in_pdf')}
-                            </FormLabel>
-                            <FormDescription>
-                              {t('invoices.if_checked_discount_details_will_be_visible_in_the_pdf_preview_and_download')}
-                            </FormDescription>
-                          </div>
+                          <FormMessage />
                         </FormItem>
                       )}
                     />
-                  </div>
 
-                  <FormField
-                    control={form.control}
-                    name="notes"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('invoices.notes')}</FormLabel>
-                        <FormControl>
-                          <Input {...field} disabled={isInvoicePaid} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {!isEdit && (
-                    <div>
-                      <FormItem>
-                        <FormLabel>{t('invoices.link_an_expense')}</FormLabel>
-                        <Select value={linkExpenseId} onValueChange={setLinkExpenseId}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select unlinked expense" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {unlinkedExpenses.map((e) => (
-                              <SelectItem key={e.id} value={String(e.id)}>
-                                #{e.id} · {e.category} · {e.amount} {e.currency}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </FormItem>
-                    </div>
-                  )}
-
-                  <div className="space-y-4">
-                    <div className="font-semibold">{t('invoices.custom_fields')}</div>
-                    {(form.watch("customFields") || []).map((field, idx) => (
-                      <div key={idx} className="flex gap-2 items-center">
-                        <Input
-                          placeholder={t('invoices.field_name')}
-                          value={field?.key ?? ''}
-                          onChange={e => {
-                            const base = form.getValues("customFields") || [];
-                            const updated = base.map((f, i) => i === idx ? { key: e.target.value, value: f?.value ?? '' } : { key: f?.key ?? '', value: f?.value ?? '' });
-                            setCustomFields(updated);
-                          }}
-                          className="w-1/3"
-                        />
-                        <Input
-                          placeholder={t('invoices.field_value')}
-                          value={field?.value ?? ''}
-                          onChange={e => {
-                            const base = form.getValues("customFields") || [];
-                            const updated = base.map((f, i) => i === idx ? { key: f?.key ?? '', value: e.target.value } : { key: f?.key ?? '', value: f?.value ?? '' });
-                            setCustomFields(updated);
-                          }}
-                          className="w-1/2"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() => {
-                            const base = form.getValues("customFields") || [];
-                            setCustomFields(
-                              base
-                                .filter((_, i) => i !== idx)
-                                .map(f => ({ key: typeof f?.key === 'string' ? f.key : '', value: typeof f?.value === 'string' ? f.value : '' }))
-                            );
-                          }}
-                        >
-                          <Trash className="w-4 h-4" />
-                        </Button>
+                    {!isEdit && (
+                      <div>
+                        <FormItem>
+                          <FormLabel>{t('invoices.link_an_expense')}</FormLabel>
+                          <Select value={linkExpenseId} onValueChange={setLinkExpenseId}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select unlinked expense" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {unlinkedExpenses.map((e) => (
+                                <SelectItem key={e.id} value={String(e.id)}>
+                                  #{e.id} · {e.category} · {e.amount} {e.currency}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </FormItem>
                       </div>
-                    ))}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setCustomFields([
-                        ...((form.getValues("customFields") || []).map(f => ({ key: typeof f?.key === 'string' ? f.key : '', value: typeof f?.value === 'string' ? f.value : '' }))),
-                        { key: '', value: '' }
-                      ])}
-                      className="mt-2"
-                    >
-                      <Plus className="w-4 h-4 mr-2" /> {t('invoices.add_field')}
-                    </Button>
-                    {form.formState.errors.customFields && (
-                      <div className="text-red-500 text-sm mt-1">{form.formState.errors.customFields.message as string}</div>
                     )}
-                  </div>
 
-                  {/* Attachment Section */}
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="attachment" className="text-base font-medium">
-                        {t('invoices.attachment')}
-                      </Label>
-                      <div className="mt-2">
-                        <Input
-                          id="attachment"
-                          type="file"
-                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              console.log("🔍 FILE SELECTED:", {
-                                name: file.name,
-                                size: file.size,
-                                type: file.type
-                              });
-                              setInvoiceAttachment(file);
-                              console.log("🔍 invoiceAttachment state set to:", file);
-                            } else {
-                              console.log("🔍 NO FILE SELECTED");
-                              setInvoiceAttachment(null);
-                            }
-                          }}
-                          className="cursor-pointer"
-                        />
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {t('invoices.supported_formats')}: PDF, DOC, DOCX, JPG, PNG
-                        </p>
-                      </div>
+                    <div className="space-y-4">
+                      <div className="font-semibold">{t('invoices.custom_fields')}</div>
+                      {(form.watch("customFields") || []).map((field, idx) => (
+                        <div key={idx} className="flex gap-2 items-center">
+                          <Input
+                            placeholder={t('invoices.field_name')}
+                            value={field?.key ?? ''}
+                            onChange={e => {
+                              const base = form.getValues("customFields") || [];
+                              const updated = base.map((f, i) => i === idx ? { key: e.target.value, value: f?.value ?? '' } : { key: f?.key ?? '', value: f?.value ?? '' });
+                              setCustomFields(updated);
+                            }}
+                            className="w-1/3"
+                          />
+                          <Input
+                            placeholder={t('invoices.field_value')}
+                            value={field?.value ?? ''}
+                            onChange={e => {
+                              const base = form.getValues("customFields") || [];
+                              const updated = base.map((f, i) => i === idx ? { key: f?.key ?? '', value: e.target.value } : { key: f?.key ?? '', value: f?.value ?? '' });
+                              setCustomFields(updated);
+                            }}
+                            className="w-1/2"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => {
+                              const base = form.getValues("customFields") || [];
+                              setCustomFields(
+                                base
+                                  .filter((_, i) => i !== idx)
+                                  .map(f => ({ key: typeof f?.key === 'string' ? f.key : '', value: typeof f?.value === 'string' ? f.value : '' }))
+                              );
+                            }}
+                          >
+                            <Trash className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setCustomFields([
+                          ...((form.getValues("customFields") || []).map(f => ({ key: typeof f?.key === 'string' ? f.key : '', value: typeof f?.value === 'string' ? f.value : '' }))),
+                          { key: '', value: '' }
+                        ])}
+                        className="mt-2"
+                      >
+                        <Plus className="w-4 h-4 mr-2" /> {t('invoices.add_field')}
+                      </Button>
+                      {form.formState.errors.customFields && (
+                        <div className="text-red-500 text-sm mt-1">{form.formState.errors.customFields.message as string}</div>
+                      )}
                     </div>
 
-                    {isEdit && (
-                      attachmentInfo?.has_attachment || 
-                      attachmentInfo?.filename || 
-                      invoice?.has_attachment || 
-                      invoice?.attachment_filename || 
-                      previewInvoice?.has_attachment || 
-                      previewInvoice?.attachment_filename
-                    ) && (
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-3 p-4 bg-white rounded-lg border border-green-200 shadow-sm">
-                          <FileText className="h-5 w-5 text-green-600" />
-                          <div className="flex-1">
-                            <div className="text-sm text-gray-700 font-medium mb-1">
-                              {(() => {
-                                const filename = attachmentInfo?.filename || invoice?.attachment_filename || previewInvoice?.attachment_filename;
-                                console.log("🔍 DISPLAYING FILENAME:", {
-                                  attachmentInfo_filename: attachmentInfo?.filename,
-                                  invoice_filename: invoice?.attachment_filename,
-                                  preview_filename: previewInvoice?.attachment_filename,
-                                  final_filename: filename
+                    {/* Attachment Section */}
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="attachment" className="text-base font-medium">
+                          {t('invoices.attachment')}
+                        </Label>
+                        <div className="mt-2">
+                          <Input
+                            id="attachment"
+                            type="file"
+                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                console.log("🔍 FILE SELECTED:", {
+                                  name: file.name,
+                                  size: file.size,
+                                  type: file.type
                                 });
-                                return filename;
-                              })()} 
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {t('invoices.attachment_uploaded')}
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="secondary"
-                              onClick={async () => {
-                                try {
-                                  const id = invoice?.id || previewInvoice?.id;
-                                  if (!id) return;
-                                  const blob = await invoiceApi.previewAttachmentBlob(id);
-                                  const url = window.URL.createObjectURL(blob);
-                                  const filename = attachmentInfo?.filename || invoice?.attachment_filename || previewInvoice?.attachment_filename || 'attachment';
-                                  setAttachmentPreview({ open: true, url, contentType: blob.type || null, filename });
-                                } catch (e) {
-                                  console.error('Preview failed:', e);
-                                  toast.error(t('invoices.preview_failed', { defaultValue: 'Preview failed' }));
-                                }
-                              }}
-                            >
-                              <Eye className="w-4 h-4 mr-2" />
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="default"
-                              onClick={() => {
-                                const token = localStorage.getItem('token');
-                                const tenantId = localStorage.getItem('selected_tenant_id') || 
-                                  (() => {
-                                    try {
-                                      const user = JSON.parse(localStorage.getItem('user') || '{}');
-                                      return user.tenant_id?.toString();
-                                    } catch { return undefined; }
-                                  })();
-                                
-                                fetch(`${API_BASE_URL}/invoices/${invoice.id}/download-attachment`, {
-                                  method: 'GET',
-                                  headers: {
-                                    'Authorization': `Bearer ${token}`,
-                                    'X-Tenant-ID': tenantId || '1'
-                                  }
-                                })
-                                .then(response => {
-                                  if (!response.ok) {
-                                    throw new Error(`Download failed: ${response.status}`);
-                                  }
-                                  return response.blob();
-                                })
-                                .then(blob => {
-                                  const url = window.URL.createObjectURL(blob);
-                                  const a = document.createElement('a');
-                                  a.href = url;
-                                  const downloadFilename = attachmentInfo?.filename || invoice?.attachment_filename || previewInvoice?.attachment_filename || 'attachment';
-                                  console.log("🔍 DOWNLOAD FILENAME:", downloadFilename);
-                                  a.download = downloadFilename;
-                                  document.body.appendChild(a);
-                                  a.click();
-                                  window.URL.revokeObjectURL(url);
-                                  document.body.removeChild(a);
-                                })
-                                .catch(error => {
-                                  console.error('Download failed:', error);
-                                  toast.error(t('invoices.download_failed'));
-                                });
-                              }}
-                              className="bg-blue-600 hover:bg-blue-700 text-white"
-                            >
-                              {t('invoices.download')}
-                            </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
+                                setInvoiceAttachment(file);
+                                console.log("🔍 invoiceAttachment state set to:", file);
+                              } else {
+                                console.log("🔍 NO FILE SELECTED");
+                                setInvoiceAttachment(null);
+                              }
+                            }}
+                            className="cursor-pointer"
+                          />
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {t('invoices.supported_formats')}: PDF, DOC, DOCX, JPG, PNG
+                          </p>
+                        </div>
+                      </div>
+
+                      {isEdit && (
+                        attachmentInfo?.has_attachment ||
+                        attachmentInfo?.filename ||
+                        invoice?.has_attachment ||
+                        invoice?.attachment_filename ||
+                        previewInvoice?.has_attachment ||
+                        previewInvoice?.attachment_filename
+                      ) && (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-3 p-4 bg-white rounded-lg border border-green-200 shadow-sm">
+                              <FileText className="h-5 w-5 text-green-600" />
+                              <div className="flex-1">
+                                <div className="text-sm text-gray-700 font-medium mb-1">
+                                  {(() => {
+                                    const filename = attachmentInfo?.filename || invoice?.attachment_filename || previewInvoice?.attachment_filename;
+                                    console.log("🔍 DISPLAYING FILENAME:", {
+                                      attachmentInfo_filename: attachmentInfo?.filename,
+                                      invoice_filename: invoice?.attachment_filename,
+                                      preview_filename: previewInvoice?.attachment_filename,
+                                      final_filename: filename
+                                    });
+                                    return filename;
+                                  })()}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {t('invoices.attachment_uploaded')}
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
                                 <Button
                                   type="button"
                                   size="sm"
-                                  variant="destructive"
-                                  className="bg-red-600 hover:bg-red-700 text-white"
+                                  variant="secondary"
+                                  onClick={async () => {
+                                    try {
+                                      const id = invoice?.id || previewInvoice?.id;
+                                      if (!id) return;
+                                      const blob = await invoiceApi.previewAttachmentBlob(id);
+                                      const url = window.URL.createObjectURL(blob);
+                                      const filename = attachmentInfo?.filename || invoice?.attachment_filename || previewInvoice?.attachment_filename || 'attachment';
+                                      setAttachmentPreview({ open: true, url, contentType: blob.type || null, filename });
+                                    } catch (e) {
+                                      console.error('Preview failed:', e);
+                                      toast.error(t('invoices.preview_failed', { defaultValue: 'Preview failed' }));
+                                    }
+                                  }}
                                 >
-                                  <Trash className="h-4 w-4 mr-1" />
-                                  {t('invoices.delete_attachment', { defaultValue: 'Delete' })}
+                                  <Eye className="w-4 h-4 mr-2" />
                                 </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>
-                                    {t('invoices.confirm_delete_attachment_title', { defaultValue: 'Delete Attachment' })}
-                                  </AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    {t('invoices.confirm_delete_attachment_description', {
-                                      defaultValue: 'Are you sure you want to delete this attachment? This action cannot be undone.',
-                                      filename: attachmentInfo?.filename || invoice?.attachment_filename || previewInvoice?.attachment_filename || 'this attachment'
-                                    })}
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>
-                                    {t('common.cancel', { defaultValue: 'Cancel' })}
-                                  </AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={async () => {
-                                      try {
-                                        const id = invoice?.id || previewInvoice?.id;
-                                        if (!id) {
-                                          toast.error(t('invoices.delete_failed_no_id', { defaultValue: 'Failed to delete attachment: Invoice ID not found' }));
-                                          return;
-                                        }
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="default"
+                                  onClick={() => {
+                                    const token = localStorage.getItem('token');
+                                    const tenantId = localStorage.getItem('selected_tenant_id') ||
+                                      (() => {
+                                        try {
+                                          const user = JSON.parse(localStorage.getItem('user') || '{}');
+                                          return user.tenant_id?.toString();
+                                        } catch { return undefined; }
+                                      })();
 
-                                        // Call the API to delete the attachment
-                                        await invoiceApi.updateInvoice(id, { attachment_filename: null });
-
-                                        // Update local state to reflect the deletion
-                                        setAttachmentInfo(null);
-                                        setInvoiceAttachment(null);
-
-                                        // Update preview invoice if it exists
-                                        if (previewInvoice) {
-                                          setPreviewInvoice(prev => ({
-                                            ...prev,
-                                            has_attachment: false,
-                                            attachment_filename: null
-                                          }));
-                                        }
-
-                                        // Notify parent component about the update
-                                        if (onInvoiceUpdate && invoice) {
-                                          const updatedInvoice = await invoiceApi.getInvoice(invoice.id);
-                                          onInvoiceUpdate(updatedInvoice);
-                                        }
-
-                                        toast.success(t('invoices.attachment_deleted', { defaultValue: 'Attachment deleted successfully' }));
-
-                                      } catch (error) {
-                                        console.error('Failed to delete attachment:', error);
-                                        toast.error(t('invoices.delete_attachment_failed', { defaultValue: 'Failed to delete attachment' }));
+                                    fetch(`${API_BASE_URL}/invoices/${invoice.id}/download-attachment`, {
+                                      method: 'GET',
+                                      headers: {
+                                        'Authorization': `Bearer ${token}`,
+                                        'X-Tenant-ID': tenantId || '1'
                                       }
-                                    }}
-                                    className="bg-red-600 hover:bg-red-700"
-                                  >
-                                    {t('common.delete', { defaultValue: 'Delete' })}
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                                    })
+                                      .then(response => {
+                                        if (!response.ok) {
+                                          throw new Error(`Download failed: ${response.status}`);
+                                        }
+                                        return response.blob();
+                                      })
+                                      .then(blob => {
+                                        const url = window.URL.createObjectURL(blob);
+                                        const a = document.createElement('a');
+                                        a.href = url;
+                                        const downloadFilename = attachmentInfo?.filename || invoice?.attachment_filename || previewInvoice?.attachment_filename || 'attachment';
+                                        console.log("🔍 DOWNLOAD FILENAME:", downloadFilename);
+                                        a.download = downloadFilename;
+                                        document.body.appendChild(a);
+                                        a.click();
+                                        window.URL.revokeObjectURL(url);
+                                        document.body.removeChild(a);
+                                      })
+                                      .catch(error => {
+                                        console.error('Download failed:', error);
+                                        toast.error(t('invoices.download_failed'));
+                                      });
+                                  }}
+                                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                                >
+                                  {t('invoices.download')}
+                                </Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="destructive"
+                                      className="bg-red-600 hover:bg-red-700 text-white"
+                                    >
+                                      <Trash className="h-4 w-4 mr-1" />
+                                      {t('invoices.delete_attachment', { defaultValue: 'Delete' })}
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>
+                                        {t('invoices.confirm_delete_attachment_title', { defaultValue: 'Delete Attachment' })}
+                                      </AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        {t('invoices.confirm_delete_attachment_description', {
+                                          defaultValue: 'Are you sure you want to delete this attachment? This action cannot be undone.',
+                                          filename: attachmentInfo?.filename || invoice?.attachment_filename || previewInvoice?.attachment_filename || 'this attachment'
+                                        })}
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>
+                                        {t('common.cancel', { defaultValue: 'Cancel' })}
+                                      </AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={async () => {
+                                          try {
+                                            const id = invoice?.id || previewInvoice?.id;
+                                            if (!id) {
+                                              toast.error(t('invoices.delete_failed_no_id', { defaultValue: 'Failed to delete attachment: Invoice ID not found' }));
+                                              return;
+                                            }
 
-                    {/* Show uploaded attachment for new invoices */}
-                    {invoiceAttachment && (
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-3 p-4 bg-white rounded-lg border border-blue-200 shadow-sm">
-                          <FileText className="h-5 w-5 text-blue-600" />
-                          <div className="flex-1">
-                            <div className="text-sm text-gray-700 font-medium mb-1">
-                              {invoiceAttachment.name}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {t('invoices.size')}: {(invoiceAttachment.size / 1024 / 1024).toFixed(2)} MB • {t('invoices.attachment_ready_to_save')}
+                                            // Call the API to delete the attachment
+                                            await invoiceApi.updateInvoice(id, { attachment_filename: null });
+
+                                            // Update local state to reflect the deletion
+                                            setAttachmentInfo(null);
+                                            setInvoiceAttachment(null);
+
+                                            // Update preview invoice if it exists
+                                            if (previewInvoice) {
+                                              setPreviewInvoice(prev => ({
+                                                ...prev,
+                                                has_attachment: false,
+                                                attachment_filename: null
+                                              }));
+                                            }
+
+                                            // Notify parent component about the update
+                                            if (onInvoiceUpdate && invoice) {
+                                              const updatedInvoice = await invoiceApi.getInvoice(invoice.id);
+                                              onInvoiceUpdate(updatedInvoice);
+                                            }
+
+                                            toast.success(t('invoices.attachment_deleted', { defaultValue: 'Attachment deleted successfully' }));
+
+                                          } catch (error) {
+                                            console.error('Failed to delete attachment:', error);
+                                            toast.error(t('invoices.delete_attachment_failed', { defaultValue: 'Failed to delete attachment' }));
+                                          }
+                                        }}
+                                        className="bg-red-600 hover:bg-red-700"
+                                      >
+                                        {t('common.delete', { defaultValue: 'Delete' })}
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
                             </div>
                           </div>
-                          <div className="flex gap-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="secondary"
-                              onClick={async () => {
-                                try {
-                                  const id = invoice?.id || previewInvoice?.id;
-                                  if (id) {
-                                    const blob = await invoiceApi.previewAttachmentBlob(id);
-                                    const url = window.URL.createObjectURL(blob);
-                                    const filename = invoice?.attachment_filename || previewInvoice?.attachment_filename || (invoiceAttachment?.name || 'attachment');
-                                    setAttachmentPreview({ open: true, url, contentType: blob.type || null, filename });
-                                  } else if (invoiceAttachment) {
-                                    const url = window.URL.createObjectURL(invoiceAttachment);
-                                    setAttachmentPreview({ open: true, url, contentType: invoiceAttachment.type || null, filename: invoiceAttachment.name });
+                        )}
+
+                      {/* Show uploaded attachment for new invoices */}
+                      {invoiceAttachment && (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-3 p-4 bg-white rounded-lg border border-blue-200 shadow-sm">
+                            <FileText className="h-5 w-5 text-blue-600" />
+                            <div className="flex-1">
+                              <div className="text-sm text-gray-700 font-medium mb-1">
+                                {invoiceAttachment.name}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {t('invoices.size')}: {(invoiceAttachment.size / 1024 / 1024).toFixed(2)} MB • {t('invoices.attachment_ready_to_save')}
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                onClick={async () => {
+                                  try {
+                                    const id = invoice?.id || previewInvoice?.id;
+                                    if (id) {
+                                      const blob = await invoiceApi.previewAttachmentBlob(id);
+                                      const url = window.URL.createObjectURL(blob);
+                                      const filename = invoice?.attachment_filename || previewInvoice?.attachment_filename || (invoiceAttachment?.name || 'attachment');
+                                      setAttachmentPreview({ open: true, url, contentType: blob.type || null, filename });
+                                    } else if (invoiceAttachment) {
+                                      const url = window.URL.createObjectURL(invoiceAttachment);
+                                      setAttachmentPreview({ open: true, url, contentType: invoiceAttachment.type || null, filename: invoiceAttachment.name });
+                                    }
+                                  } catch (e) {
+                                    console.error('Preview failed:', e);
+                                    toast.error(t('invoices.preview_failed', { defaultValue: 'Preview failed' }));
                                   }
-                                } catch (e) {
-                                  console.error('Preview failed:', e);
-                                  toast.error(t('invoices.preview_failed', { defaultValue: 'Preview failed' }));
-                                }
-                              }}
-                            >
-                              <Eye className="w-4 h-4 mr-2" />
-                            </Button>
+                                }}
+                              >
+                                <Eye className="w-4 h-4 mr-2" />
+                              </Button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
+                      )}
+                    </div>
 
                     <div className="flex justify-end gap-4">
-                      <Button 
+                      <Button
                         type="submit"
                         disabled={submitting || isInvoicePaid}
                       >
@@ -4262,18 +4272,18 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                   </form>
                 </Form>
               </div>
-              
+
               {/* Preview Section - Right Side */}
               <div className="w-full lg:w-96 order-3">
                 <div className="mb-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="font-semibold text-lg">{t('invoices.preview')}</div>
-                    <TemplateSelector 
-                      value={selectedTemplate} 
+                    <TemplateSelector
+                      value={selectedTemplate}
                       onChange={(template) => {
                         setSelectedTemplate(template);
                         setPreviewKey(prev => prev + 1);
-                      }} 
+                      }}
                     />
                   </div>
                 </div>
@@ -4284,30 +4294,30 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                         const selectedClient = clients.find(c => c.id.toString() === form.watch("client"));
                         return (
                           <PDFDownloadLink
-                          document={
-                            <InvoicePDF
-                              invoice={previewInvoice}
-                              companyName={settings.company_info?.name || "Your Company"}
-                              clientCompany={previewInvoice.client_company || selectedClient?.company}
-                              showDiscount={form.watch("showDiscountInPdf")}
-                              template={selectedTemplate}
-                            />
-                          } 
-                          fileName={`invoice-${previewInvoice.number}.pdf`}
-                          key={`${previewKey}-${selectedTemplate}`}
-                        >
-                          {({ url, loading }) =>
-                            loading ? (
-                              <div className="p-4">{t('invoices.loading_preview')}</div>
-                            ) : (
-                              <iframe
-                                src={url || ''}
-                                title="Invoice PDF Preview"
-                                className="w-full h-[480px] border-none"
+                            document={
+                              <InvoicePDF
+                                invoice={previewInvoice}
+                                companyName={settings.company_info?.name || "Your Company"}
+                                clientCompany={previewInvoice.client_company || selectedClient?.company}
+                                showDiscount={form.watch("showDiscountInPdf")}
+                                template={selectedTemplate}
                               />
-                            )
-                          }
-                        </PDFDownloadLink>
+                            }
+                            fileName={`invoice-${previewInvoice.number}.pdf`}
+                            key={`${previewKey}-${selectedTemplate}`}
+                          >
+                            {({ url, loading }) =>
+                              loading ? (
+                                <div className="p-4">{t('invoices.loading_preview')}</div>
+                              ) : (
+                                <iframe
+                                  src={url || ''}
+                                  title="Invoice PDF Preview"
+                                  className="w-full h-[480px] border-none"
+                                />
+                              )
+                            }
+                          </PDFDownloadLink>
                         );
                       })()}
                     </React.Suspense>
@@ -4318,28 +4328,28 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                       return (
                         <div className="flex items-center gap-2">
                           <PDFDownloadLink
-                          document={
-                            <InvoicePDF
-                              invoice={previewInvoice}
-                              companyName={settings.company_info?.name || "Your Company"}
-                              clientCompany={previewInvoice.client_company || selectedClient?.company}
-                              showDiscount={form.watch("showDiscountInPdf")}
-                              template={selectedTemplate}
-                            />
-                          } 
-                          fileName={`invoice-${previewInvoice.number}.pdf`}
-                        >
-                          {({ loading }) =>
-                            loading ? t('invoices.preparing_pdf') : <span className="text-blue-600 hover:underline cursor-pointer">{t('invoices.download_pdf')}</span>
-                          }
-                        </PDFDownloadLink>
-                        <span className="text-xs text-gray-500">({selectedTemplate})</span>
+                            document={
+                              <InvoicePDF
+                                invoice={previewInvoice}
+                                companyName={settings.company_info?.name || "Your Company"}
+                                clientCompany={previewInvoice.client_company || selectedClient?.company}
+                                showDiscount={form.watch("showDiscountInPdf")}
+                                template={selectedTemplate}
+                              />
+                            }
+                            fileName={`invoice-${previewInvoice.number}.pdf`}
+                          >
+                            {({ loading }) =>
+                              loading ? t('invoices.preparing_pdf') : <span className="text-blue-600 hover:underline cursor-pointer">{t('invoices.download_pdf')}</span>
+                            }
+                          </PDFDownloadLink>
+                          <span className="text-xs text-gray-500">({selectedTemplate})</span>
                         </div>
                       );
                     })() : (
                       <span className="text-gray-500 text-sm">{t('invoices.save_invoice_first')}</span>
                     )}
-                    
+
                     <Button
                       type="button"
                       size="sm"
@@ -4377,7 +4387,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
           `}
         </script>
       )}
-      
+
       {/* Attachment Preview Modal */}
       <Dialog open={attachmentPreview.open} onOpenChange={(o) => {
         if (!o && attachmentPreview.url) URL.revokeObjectURL(attachmentPreview.url);

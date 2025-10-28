@@ -14,7 +14,7 @@ from pathlib import Path
 import re
 
 from models.database import get_db
-from models.models_per_tenant import Invoice, Client, User, InvoiceItem, DiscountRule, InventoryItem
+from models.models_per_tenant import Invoice, Client, User, InvoiceItem, DiscountRule
 from models.models import MasterUser
 from routers.payments import Payment
 from schemas.invoice import InvoiceCreate, InvoiceUpdate, Invoice as InvoiceSchema, InvoiceWithClient, InvoiceHistory, InvoiceHistoryCreate, RecycleBinResponse, DeletedInvoice, RestoreInvoiceRequest
@@ -29,6 +29,12 @@ from constants.error_codes import FAILED_TO_CREATE_INVOICE, FAILED_TO_FETCH_INVO
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def get_attachment_info(invoice, new_attachments):
+    """Helper function to get attachment info considering both old and new style attachments"""
+    has_attachment = len(new_attachments) > 0 or bool(invoice.attachment_filename)
+    attachment_filename = new_attachments[0].filename if new_attachments else invoice.attachment_filename
+    return has_attachment, attachment_filename
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
@@ -384,8 +390,8 @@ async def create_invoice(
             "items": items_data,
             "custom_fields": invoice.custom_fields if invoice.custom_fields is not None else {},
             "show_discount_in_pdf": invoice.show_discount_in_pdf,
-            "has_attachment": bool(invoice.attachment_filename) if hasattr(invoice, 'attachment_filename') else False,
-            "attachment_filename": getattr(invoice, 'attachment_filename', None),
+            "has_attachment": get_attachment_info(invoice, new_attachments)[0],
+            "attachment_filename": get_attachment_info(invoice, new_attachments)[1],
             "attachments": [{
                 "id": att.id,
                 "filename": att.filename,
@@ -619,6 +625,13 @@ async def read_invoices(
         # Convert to response format
         result = []
         for invoice, client_name, total_paid in invoices:
+            # Check for new-style attachments
+            from models.models_per_tenant import InvoiceAttachment
+            new_attachments = db.query(InvoiceAttachment).filter(
+                InvoiceAttachment.invoice_id == invoice.id,
+                InvoiceAttachment.is_active == True
+            ).all()
+
             invoice_dict = {
                 "id": invoice.id,
                 "number": invoice.number,
@@ -639,8 +652,8 @@ async def read_invoices(
                 "subtotal": float(invoice.subtotal) if invoice.subtotal else float(invoice.amount),
                 "custom_fields": invoice.custom_fields if invoice.custom_fields is not None else {},
                 "show_discount_in_pdf": invoice.show_discount_in_pdf,
-                "has_attachment": bool(invoice.attachment_filename) if invoice.attachment_filename is not None else False,
-                "attachment_filename": invoice.attachment_filename if invoice.attachment_filename is not None else None
+                "has_attachment": get_attachment_info(invoice, new_attachments)[0],
+                "attachment_filename": get_attachment_info(invoice, new_attachments)[1]
             }
             result.append(invoice_dict)
 
@@ -1052,7 +1065,7 @@ async def read_invoice(
             InvoiceAttachment.invoice_id == invoice_id,
             InvoiceAttachment.is_active == True
         ).all()
-        
+
         invoice_dict = {
             "date": invoice.created_at.isoformat() if invoice.created_at else None,
             "id": invoice.id,
@@ -1076,8 +1089,8 @@ async def read_invoice(
             "custom_fields": invoice.custom_fields if invoice.custom_fields is not None else {},
             "items": items_data,
             "show_discount_in_pdf": invoice.show_discount_in_pdf,
-            "has_attachment": len(new_attachments) > 0 or bool(invoice.attachment_filename),
-            "attachment_filename": new_attachments[0].filename if new_attachments else invoice.attachment_filename,
+            "has_attachment": get_attachment_info(invoice, new_attachments)[0],
+            "attachment_filename": get_attachment_info(invoice, new_attachments)[1],
             "attachments": [{
                 "id": att.id,
                 "filename": att.filename,
@@ -1199,7 +1212,9 @@ async def update_invoice(
                     db_invoice.updated_at = db_invoice.created_at
                     continue  # don't setattr a non-existent column 'date'
                 elif key == 'attachment_filename' and value is None:
-                    # Handle attachment deletion
+                    # Handle attachment deletion - both old and new style
+                    old_filename = db_invoice.attachment_filename
+
                     if db_invoice.attachment_path and os.path.exists(db_invoice.attachment_path):
                         try:
                             os.remove(db_invoice.attachment_path)
@@ -1208,6 +1223,49 @@ async def update_invoice(
                             logger.warning(f"Failed to delete attachment file: {e}")
                     db_invoice.attachment_path = None
                     db_invoice.attachment_filename = None
+
+                    # Also soft delete any new-style attachments
+                    from models.models_per_tenant import InvoiceAttachment
+                    existing_new_attachments = db.query(InvoiceAttachment).filter(
+                        InvoiceAttachment.invoice_id == invoice_id,
+                        InvoiceAttachment.is_active == True
+                    ).all()
+                    
+                    deleted_attachments = []
+                    for attachment in existing_new_attachments:
+                        deleted_attachments.append({
+                            'id': attachment.id,
+                            'filename': attachment.filename,
+                            'file_size': attachment.file_size
+                        })
+                        attachment.is_active = False
+                        attachment.updated_at = datetime.now(timezone.utc)
+                        logger.info(f"Soft deleted new-style attachment: {attachment.filename}")
+
+                    # Create history entry for attachment deletion
+                    if old_filename or deleted_attachments:
+                        from models.models_per_tenant import InvoiceHistory as InvoiceHistoryModel
+
+                        if old_filename and deleted_attachments:
+                            details = f'Attachments deleted: {old_filename} and {len(deleted_attachments)} new-style attachment(s)'
+                        elif old_filename:
+                            details = f'Attachment deleted: {old_filename}'
+                        else:
+                            filenames = [att['filename'] for att in deleted_attachments]
+                            details = f'Attachment(s) deleted: {", ".join(filenames)}'
+
+                        history_entry = InvoiceHistoryModel(
+                            invoice_id=invoice_id,
+                            user_id=current_user.id,
+                            action='attachment_deleted',
+                            details=details,
+                            current_values={
+                                'old_filename': old_filename,
+                                'deleted_attachments': deleted_attachments
+                            }
+                        )
+                        db.add(history_entry)
+
                     continue
                 elif key == 'paid_amount' and value is not None:
                     # Create a payment adjustment if allowed
@@ -1525,8 +1583,8 @@ async def update_invoice(
                 "subtotal": float(db_invoice.subtotal) if db_invoice.subtotal else float(db_invoice.amount),
                 "items": items_data,
                 "show_discount_in_pdf": db_invoice.show_discount_in_pdf,
-                "has_attachment": bool(db_invoice.attachment_filename),
-                "attachment_filename": db_invoice.attachment_filename,
+                "has_attachment": get_attachment_info(db_invoice, new_attachments)[0],
+                "attachment_filename": get_attachment_info(db_invoice, new_attachments)[1],
                 "attachments": [{
                     "id": att.id,
                     "filename": att.filename,
@@ -1611,8 +1669,8 @@ async def update_invoice(
                 "subtotal": float(db_invoice.subtotal) if db_invoice.subtotal else float(db_invoice.amount),
                 "items": items_data,
                 "show_discount_in_pdf": db_invoice.show_discount_in_pdf,
-                "has_attachment": bool(db_invoice.attachment_filename),
-                "attachment_filename": db_invoice.attachment_filename,
+                "has_attachment": get_attachment_info(db_invoice, new_attachments)[0],
+                "attachment_filename": get_attachment_info(db_invoice, new_attachments)[1],
                 "attachments": [{
                     "id": att.id,
                     "filename": att.filename,
@@ -2070,14 +2128,47 @@ async def upload_invoice_attachment(
             except Exception as e:
                 logger.warning(f"Failed to remove old attachment: {e}")
 
+        # Deactivate any existing new-style attachments
+        from models.models_per_tenant import InvoiceAttachment
+        existing_attachments = db.query(InvoiceAttachment).filter(
+            InvoiceAttachment.invoice_id == invoice_id,
+            InvoiceAttachment.is_active == True
+        ).all()
+
+        for existing_attachment in existing_attachments:
+            existing_attachment.is_active = False
+            existing_attachment.updated_at = datetime.now(timezone.utc)
+
         # Save file safely (we already validated size via in-memory read cap)
         with open(validated_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # Update invoice with attachment info
+        # Update invoice with attachment info (old system for backward compatibility)
         invoice.attachment_path = str(file_path)
         invoice.attachment_filename = file.filename
         invoice.updated_at = datetime.now(timezone.utc)
+
+        # Also create new-style attachment record for consistency
+        from models.models_per_tenant import InvoiceAttachment
+        import hashlib
+
+        # Calculate file hash
+        file_hash = hashlib.sha256(contents).hexdigest()
+
+        # Create new-style attachment record
+        new_attachment = InvoiceAttachment(
+            invoice_id=invoice_id,
+            filename=file.filename or "attachment",
+            stored_filename=filename,
+            file_path=str(file_path),
+            file_size=len(contents),
+            content_type=file.content_type,
+            file_hash=file_hash,
+            attachment_type="document",  # Default type for old endpoint
+            uploaded_by=current_user.id,
+            is_active=True
+        )
+        db.add(new_attachment)
 
         # Create history entry for attachment upload
         from models.models_per_tenant import InvoiceHistory as InvoiceHistoryModel
@@ -2114,9 +2205,16 @@ async def upload_invoice_attachment(
         logger.info(f"🔍 VERIFICATION QUERY - invoice {invoice_id}: attachment_path={verification_invoice.attachment_path}, attachment_filename={verification_invoice.attachment_filename}")
         logger.info(f"🔍 VERIFICATION QUERY - has_attachment would be: {bool(verification_invoice.attachment_filename)}")
 
-        # Also check what the API response would return
-        api_has_attachment = bool(verification_invoice.attachment_filename)
-        logger.info(f"🔍 API RESPONSE CHECK - has_attachment: {api_has_attachment}, attachment_filename: '{verification_invoice.attachment_filename}'")
+        # Check new-style attachments for consistent response
+        from models.models_per_tenant import InvoiceAttachment
+        new_attachments = db.query(InvoiceAttachment).filter(
+            InvoiceAttachment.invoice_id == invoice_id,
+            InvoiceAttachment.is_active == True
+        ).all()
+
+        api_has_attachment, api_attachment_filename = get_attachment_info(invoice, new_attachments)
+
+        logger.info(f"🔍 API RESPONSE CHECK - has_attachment: {api_has_attachment}, attachment_filename: '{api_attachment_filename}'")
 
         logger.info(f"✅ UPLOAD ENDPOINT SUCCESS - Returning response for invoice {invoice_id}")
         return {
@@ -2124,7 +2222,7 @@ async def upload_invoice_attachment(
             "filename": file.filename,
             "size": os.path.getsize(file_path),
             "attachment_path": str(file_path),
-            "attachment_filename": verification_invoice.attachment_filename,
+            "attachment_filename": api_attachment_filename,
             "has_attachment": api_has_attachment
         }
 
@@ -2143,9 +2241,9 @@ async def download_invoice_attachment(
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
-    """Download an invoice attachment"""
+    """Download an invoice attachment (supports both old and new attachment systems)"""
     try:
-        # Verify invoice exists and has attachment
+        # Verify invoice exists
         invoice = db.query(Invoice).filter(
             Invoice.id == invoice_id,
             Invoice.is_deleted == False
@@ -2154,18 +2252,35 @@ async def download_invoice_attachment(
         if not invoice:
             raise HTTPException(status_code=404, detail="Invoice not found")
 
-        if not invoice.attachment_path or not invoice.attachment_filename:
-            raise HTTPException(status_code=404, detail="No attachment found for this invoice")
+        # Try new-style attachments first
+        from models.models_per_tenant import InvoiceAttachment
+        new_attachment = db.query(InvoiceAttachment).filter(
+            InvoiceAttachment.invoice_id == invoice_id,
+            InvoiceAttachment.is_active == True
+        ).first()
 
-        # Validate file path
-        from utils.file_validation import validate_file_path
-        validated_path = validate_file_path(invoice.attachment_path)
+        if new_attachment:
+            # Use new-style attachment
+            from utils.file_validation import validate_file_path
+            validated_path = validate_file_path(new_attachment.file_path)
+            return FileResponse(
+                path=validated_path,
+                filename=new_attachment.filename,
+                media_type=new_attachment.content_type or 'application/octet-stream'
+            )
 
-        return FileResponse(
-            path=validated_path,
-            filename=invoice.attachment_filename,
-            media_type='application/octet-stream'
-        )
+        # Fall back to old-style attachment
+        if invoice.attachment_path and invoice.attachment_filename:
+            from utils.file_validation import validate_file_path
+            validated_path = validate_file_path(invoice.attachment_path)
+            return FileResponse(
+                path=validated_path,
+                filename=invoice.attachment_filename,
+                media_type='application/octet-stream'
+            )
+
+        # No attachment found
+        raise HTTPException(status_code=404, detail="No attachment found for this invoice")
 
     except HTTPException:
         raise
@@ -2390,6 +2505,100 @@ async def upload_invoice_attachment_new(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to process file upload"
+        )
+
+
+@router.delete("/{invoice_id}/attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_invoice_attachment(
+    invoice_id: int,
+    attachment_id: int,
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """
+    Delete an invoice attachment (soft delete by marking as inactive)
+    """
+    try:
+        # Check if user has permission
+        require_non_viewer(current_user, "delete attachments")
+
+        # Verify invoice exists
+        invoice = db.query(Invoice).filter(
+            Invoice.id == invoice_id,
+            Invoice.is_deleted == False
+        ).first()
+
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+
+        # Import the InvoiceAttachment model
+        from models.models_per_tenant import InvoiceAttachment
+
+        # Find the attachment
+        attachment = db.query(InvoiceAttachment).filter(
+            InvoiceAttachment.id == attachment_id,
+            InvoiceAttachment.invoice_id == invoice_id,
+            InvoiceAttachment.is_active == True
+        ).first()
+
+        if not attachment:
+            raise HTTPException(status_code=404, detail="Attachment not found")
+
+        # Allow deletion regardless of whether the file can be previewed
+        # This handles cases where files are missing or corrupted
+
+        # Soft delete the attachment (mark as inactive)
+        attachment.is_active = False
+        attachment.updated_at = datetime.now(timezone.utc)
+
+        # Clear old-style attachment fields on the invoice if no active attachments remain
+        remaining_attachments = db.query(InvoiceAttachment).filter(
+            InvoiceAttachment.invoice_id == invoice_id,
+            InvoiceAttachment.is_active == True,
+            InvoiceAttachment.id != attachment_id  # Exclude the one we're deleting
+        ).count()
+
+        if remaining_attachments == 0:
+            # No active attachments left, clear old fields
+            invoice.attachment_filename = None
+            invoice.attachment_path = None
+
+        # Create history entry for attachment deletion
+        from models.models_per_tenant import InvoiceHistory as InvoiceHistoryModel
+        history_entry = InvoiceHistoryModel(
+            invoice_id=invoice_id,
+            user_id=current_user.id,
+            action='attachment_deleted',
+            details=f'Attachment deleted: {attachment.filename}',
+            current_values={
+                'attachment_id': attachment.id,
+                'filename': attachment.filename,
+                'file_size': attachment.file_size
+            }
+        )
+        db.add(history_entry)
+        db.commit()
+
+        # Optionally remove the physical file after successful database update
+        try:
+            if attachment.file_path and os.path.exists(attachment.file_path):
+                from utils.file_validation import validate_file_path
+                validated_path = validate_file_path(attachment.file_path)
+                os.remove(validated_path)
+                logger.info(f"Removed attachment file: {attachment.file_path}")
+        except Exception as e:
+            logger.warning(f"Failed to remove attachment file {attachment.file_path}: {e}")
+            # Don't fail the deletion if file removal fails
+
+        return
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete invoice attachment: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete attachment"
         )
 
 

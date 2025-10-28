@@ -389,6 +389,7 @@
     "confirm_delete_attachment_title": "Delete Attachment",
     "confirm_delete_attachment_description": "Are you sure you want to delete '{{filename}}'? This action cannot be undone.",
     "attachment_deleted": "Attachment deleted successfully",
+    "attachment_deleted_history": "Attachment Deleted",
     "delete_attachment_failed": "Failed to delete attachment",
     "delete_failed_no_id": "Failed to delete attachment: Invoice ID not found",
     "size": "Size",
