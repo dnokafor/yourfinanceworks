@@ -1407,7 +1407,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
             discount_type: data.discountType === "rule" && appliedDiscountRule ? appliedDiscountRule.discount_type : data.discountType,
             discount_value: data.discountType === "rule" && appliedDiscountRule ? appliedDiscountRule.discount_value : (data.discountValue || 0),
             currency: data.currency,
-            due_date: data.dueDate,
+            due_date: data.dueDate ? format(data.dueDate, 'yyyy-MM-dd') : '',
             notes: data.notes || "",
             status: data.status,
             client_id: Number(data.client),

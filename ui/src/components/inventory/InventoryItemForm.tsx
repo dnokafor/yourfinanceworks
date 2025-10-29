@@ -201,14 +201,14 @@ const InventoryItemForm = ({ isEdit = false }: InventoryItemFormProps) => {
       let current_stock: number;
       let minimum_stock: number;
 
-      if (formData.track_stock) {
+      if (formData.unlimited_stock) {
+        // Unlimited stock - set very high number and disable tracking
+        current_stock = 999999;
+        minimum_stock = 0;
+      } else if (formData.track_stock) {
         // Normal stock tracking
         current_stock = parseFloat(formData.current_stock || '0');
         minimum_stock = parseFloat(formData.minimum_stock || '0');
-      } else if (formData.unlimited_stock && formData.item_type === 'service') {
-        // Unlimited stock for services
-        current_stock = 999999;
-        minimum_stock = 0;
       } else {
         // No stock tracking
         current_stock = 0;
@@ -223,7 +223,7 @@ const InventoryItemForm = ({ isEdit = false }: InventoryItemFormProps) => {
         unit_price: parseFloat(formData.unit_price),
         cost_price: formData.cost_price ? parseFloat(formData.cost_price) : undefined,
         currency: formData.currency,
-        track_stock: formData.track_stock,
+        track_stock: formData.unlimited_stock ? false : formData.track_stock,
         current_stock: current_stock,
         minimum_stock: minimum_stock,
         unit_of_measure: formData.unit_of_measure,

@@ -282,7 +282,19 @@ async def create_invoice(
         
         # Log audit event (sanitize sensitive data)
         from utils.audit_sanitizer import sanitize_for_context
-        audit_details = sanitize_for_context(invoice.model_dump(), 'invoice_creation')
+        try:
+            # Use model_dump with exclude_unset to avoid serialization issues
+            invoice_data = invoice.model_dump(exclude_unset=True, exclude_none=True)
+            audit_details = sanitize_for_context(invoice_data, 'invoice_creation')
+        except Exception as e:
+            logger.warning(f"Failed to serialize invoice data for audit: {e}")
+            # Fallback to basic audit details
+            audit_details = {
+                'client_id': invoice.client_id,
+                'amount': invoice.amount,
+                'currency': invoice.currency,
+                'status': invoice.status
+            }
 
         log_audit_event(
             db=db,
@@ -347,6 +359,23 @@ async def create_invoice(
 
         items_data = []
         for item in items_query:
+            # Properly serialize inventory item data without SQLAlchemy InstanceState
+            inventory_item_data = None
+            if item.inventory_item:
+                inventory_item_data = {
+                    "id": item.inventory_item.id,
+                    "name": item.inventory_item.name,
+                    "sku": item.inventory_item.sku,
+                    "description": item.inventory_item.description,
+                    "category_id": item.inventory_item.category_id,
+                    "current_stock": float(item.inventory_item.current_stock) if item.inventory_item.current_stock else 0,
+                    "unit_price": float(item.inventory_item.unit_price) if item.inventory_item.unit_price else 0,
+                    "currency": item.inventory_item.currency,
+                    "unit_of_measure": item.inventory_item.unit_of_measure,
+                    "track_stock": item.inventory_item.track_stock,
+                    "is_active": item.inventory_item.is_active
+                }
+            
             item_data = {
                 "id": item.id,
                 "invoice_id": item.invoice_id,
@@ -356,7 +385,7 @@ async def create_invoice(
                 "price": item.price,
                 "amount": item.amount,
                 "unit_of_measure": item.unit_of_measure,
-                "inventory_item": item.inventory_item.__dict__ if item.inventory_item else None
+                "inventory_item": inventory_item_data
             }
             items_data.append(item_data)
 
@@ -402,10 +431,8 @@ async def create_invoice(
             "attachment_count": len(new_attachments)
         }
     except HTTPException:
-        db.rollback()
         raise
     except Exception as e:
-        db.rollback()
         logger.error(f"Error in create_invoice: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(
@@ -584,10 +611,8 @@ async def clone_invoice(
             "attachment_count": 0
         }
     except HTTPException:
-        db.rollback()
         raise
     except Exception as e:
-        db.rollback()
         logger.error(f"Error cloning invoice {invoice_id}: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Failed to clone invoice")
@@ -772,7 +797,6 @@ async def empty_recycle_bin(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
         logger.error(f"Error emptying recycle bin: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(
@@ -847,7 +871,6 @@ async def restore_invoice(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
         logger.error(f"Error restoring invoice: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(
@@ -940,7 +963,6 @@ async def permanently_delete_invoice(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
         logger.error(f"Error permanently deleting invoice: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(
@@ -1683,7 +1705,6 @@ async def update_invoice(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
         logger.error(f"Error in update_invoice: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(
@@ -1769,7 +1790,6 @@ async def delete_invoice(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
         logger.error(f"Error in delete_invoice: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(
@@ -2193,7 +2213,6 @@ async def upload_invoice_attachment(
             logger.info(f"✅ DATABASE COMMIT SUCCESSFUL for invoice {invoice_id}")
         except Exception as commit_error:
             logger.error(f"❌ DATABASE COMMIT FAILED for invoice {invoice_id}: {commit_error}")
-            db.rollback()
             raise
 
         db.refresh(invoice)

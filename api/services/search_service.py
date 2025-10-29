@@ -100,7 +100,7 @@ class SearchService:
                     'client_name': {'type': 'text'},
                     'client_id': {'type': 'keyword'},
                     'status': {'type': 'keyword'},
-                    'total_amount': {'type': 'float'},
+                    'amount': {'type': 'float'},
                     'currency': {'type': 'keyword'},
                     'description': {'type': 'text'},
                     'attachment_filename': {'type': 'text'},
@@ -192,6 +192,16 @@ class SearchService:
         if not self.enabled:
             return
             
+        # Skip indexing if no tenant context
+        try:
+            tenant_id = get_tenant_context()
+            if tenant_id is None:
+                logger.debug("Skipping search indexing: no tenant context")
+                return
+        except Exception:
+            logger.debug("Skipping search indexing: failed to get tenant context")
+            return
+            
         try:
             doc = {
                 'id': str(invoice.id),
@@ -200,13 +210,13 @@ class SearchService:
                 'client_id': str(invoice.client_id),
                 'client_name': client.name if client else '',
                 'status': invoice.status,
-                'total_amount': float(invoice.total_amount or 0),
+                'amount': float(invoice.amount or 0),
                 'currency': invoice.currency or 'USD',
-                'description': invoice.description or '',
+                'description': invoice.notes or '',
                 'attachment_filename': invoice.attachment_filename or '',
                 'created_at': invoice.created_at.isoformat() if invoice.created_at else None,
                 'updated_at': invoice.updated_at.isoformat() if invoice.updated_at else None,
-                'searchable_text': f"{invoice.number} {client.name if client else ''} {invoice.description or ''} {invoice.attachment_filename or ''}"
+                'searchable_text': f"{invoice.number} {client.name if client else ''} {invoice.notes or ''} {invoice.attachment_filename or ''}"
             }
             
             index_name = self._get_tenant_index('invoices')
@@ -222,6 +232,16 @@ class SearchService:
     def index_client(self, client: Client):
         """Index a client document"""
         if not self.enabled:
+            return
+            
+        # Skip indexing if no tenant context
+        try:
+            tenant_id = get_tenant_context()
+            if tenant_id is None:
+                logger.debug("Skipping search indexing: no tenant context")
+                return
+        except Exception:
+            logger.debug("Skipping search indexing: failed to get tenant context")
             return
             
         try:
@@ -251,6 +271,16 @@ class SearchService:
     def index_payment(self, payment: Payment, invoice: Invoice = None, client: Client = None):
         """Index a payment document"""
         if not self.enabled:
+            return
+            
+        # Skip indexing if no tenant context
+        try:
+            tenant_id = get_tenant_context()
+            if tenant_id is None:
+                logger.debug("Skipping search indexing: no tenant context")
+                return
+        except Exception:
+            logger.debug("Skipping search indexing: failed to get tenant context")
             return
             
         try:
@@ -449,7 +479,7 @@ class SearchService:
                             'id': str(inv.id),
                             'number': inv.number,
                             'client_name': inv.client.name if inv.client else '',
-                            'total_amount': float(inv.amount or 0),
+                            'amount': float(inv.amount or 0),
                             'status': inv.status,
                             'created_at': inv.created_at.isoformat() if inv.created_at else None
                         },

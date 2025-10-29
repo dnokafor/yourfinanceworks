@@ -30,7 +30,7 @@ export function RecentInvoices({ refreshKey }: RecentInvoicesProps) {
       setInvoices(sortedInvoices);
     } catch (error) {
       console.error("Failed to fetch recent invoices:", error);
-      toast.error("Failed to load recent invoices");
+      toast.error(t('recent_invoices.failed_to_load'));
     } finally {
       setLoading(false);
     }
@@ -48,11 +48,11 @@ export function RecentInvoices({ refreshKey }: RecentInvoicesProps) {
             <div className="p-2 rounded-lg bg-secondary/10">
               <FileText className="h-5 w-5 text-secondary" />
             </div>
-            Recent Invoices
+            {t('recent_invoices.title')}
           </CardTitle>
           <Button asChild variant="ghost" size="sm">
             <Link to="/invoices" className="flex items-center gap-1">
-              View All
+              {t('recent_invoices.view_all')}
               <ArrowRight className="h-3 w-3" />
             </Link>
           </Button>

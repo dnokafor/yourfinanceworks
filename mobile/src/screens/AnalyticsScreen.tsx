@@ -267,7 +267,7 @@ const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
 
         {/* Invoice Summary */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Invoice Summary</Text>
+          <Text style={styles.sectionTitle}>t('inventory.invoice_summary')</Text>
           <View style={styles.summaryCard}>
             <SummaryRow 
               label="Paid Invoices" 

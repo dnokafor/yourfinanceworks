@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Link } from "react-router-dom";
 import { invoiceApi, Invoice, api } from "@/lib/api";
@@ -50,8 +51,8 @@ const Invoices = () => {
   const [deletedInvoices, setDeletedInvoices] = useState<DeletedInvoice[]>([]);
   const [recycleBinLoading, setRecycleBinLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
-
-
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [invoiceToDelete, setInvoiceToDelete] = useState<number | null>(null);
 
   // Check if user can perform actions (not a viewer)
   const canPerformAction = canPerformActions();
@@ -125,19 +126,22 @@ const Invoices = () => {
       setDeletedInvoices(data);
     } catch (error) {
       console.error('Failed to fetch deleted invoices:', error);
-      toast.error('Failed to load deleted invoices');
+      toast.error(t('recycleBin.failed_to_load_deleted_invoices'));
     } finally {
       setRecycleBinLoading(false);
     }
   };
 
-  const handleDeleteInvoice = async (invoiceId: number) => {
-    if (!confirm(t('invoices.confirm_delete'))) {
-      return;
-    }
+  const handleDeleteInvoice = (invoiceId: number) => {
+    setInvoiceToDelete(invoiceId);
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDeleteInvoice = async () => {
+    if (!invoiceToDelete) return;
     
     try {
-      await invoiceApi.deleteInvoice(invoiceId);
+      await invoiceApi.deleteInvoice(invoiceToDelete);
       toast.success(t('invoices.delete_success'));
       // Refresh the invoices list
       const status = statusFilter !== "all" ? statusFilter : undefined;
@@ -158,6 +162,9 @@ const Invoices = () => {
       }
 
       toast.error(errorMessage);
+    } finally {
+      setDeleteModalOpen(false);
+      setInvoiceToDelete(null);
     }
   };
 
@@ -238,7 +245,7 @@ const Invoices = () => {
                 className="whitespace-nowrap"
               >
                 <Trash2 className="mr-2 h-4 w-4" /> 
-                Recycle Bin
+                {t('recycleBin.title')}
                 {showRecycleBin ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />}
               </Button>
               <div className="flex">
@@ -281,7 +288,7 @@ const Invoices = () => {
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2">
                   <Trash2 className="h-5 w-5" />
-                  Recycle Bin
+                  {t('recycleBin.title')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -289,12 +296,12 @@ const Invoices = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Invoice</TableHead>
-                        <TableHead>Amount</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Deleted At</TableHead>
-                        <TableHead>Deleted By</TableHead>
-                        <TableHead className="w-[100px]">Actions</TableHead>
+                        <TableHead>{t('recycleBin.invoice')}</TableHead>
+                        <TableHead>{t('recycleBin.amount')}</TableHead>
+                        <TableHead>{t('recycleBin.status')}</TableHead>
+                        <TableHead>{t('recycleBin.deleted_at')}</TableHead>
+                        <TableHead>{t('recycleBin.deleted_by')}</TableHead>
+                        <TableHead className="w-[100px]">{t('recycleBin.actions')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -303,7 +310,7 @@ const Invoices = () => {
                           <TableCell colSpan={6} className="h-24 text-center">
                             <div className="flex justify-center items-center">
                               <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                              Loading deleted invoices...
+                              {t('recycleBin.loading_deleted_invoices')}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -322,7 +329,7 @@ const Invoices = () => {
                               </Badge>
                             </TableCell>
                             <TableCell>{formatDate(invoice.deleted_at)}</TableCell>
-                            <TableCell>{invoice.deleted_by_username || 'Unknown'}</TableCell>
+                            <TableCell>{invoice.deleted_by_username || t('recycleBin.unknown')}</TableCell>
                             <TableCell>
                               <div className="flex gap-1">
                                 <Button 
@@ -352,7 +359,7 @@ const Invoices = () => {
                           <TableCell colSpan={6} className="h-24 text-center">
                             <div className="flex flex-col items-center gap-2">
                               <Trash2 className="h-8 w-8 text-muted-foreground" />
-                              <p>Recycle bin is empty</p>
+                              <p>{t('recycleBin.recycle_bin_empty')}</p>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -525,6 +532,24 @@ const Invoices = () => {
 
 
       </div>
+
+      {/* Delete Invoice Modal */}
+      <AlertDialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('invoices.delete_confirm_title', 'Delete Invoice')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('invoices.delete_confirm_description', 'Are you sure you want to delete this invoice? This action cannot be undone.')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel', 'Cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteInvoice} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {t('invoices.delete', 'Delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 };

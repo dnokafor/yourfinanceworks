@@ -113,7 +113,7 @@ export function HelpCenter() {
       <DialogTrigger asChild>
         <Button variant="ghost" size="sm">
           <HelpCircle className="h-4 w-4 mr-2" />
-          Help
+          {t('helpCenter.help')}
         </Button>
       </DialogTrigger>
       
@@ -140,7 +140,7 @@ export function HelpCenter() {
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-lg">{tour.name}</CardTitle>
                       <Badge variant="secondary">
-                        {tour.steps.length} steps
+                        {tour.steps.length} {t('helpCenter.steps')}
                       </Badge>
                     </div>
                   </CardHeader>
@@ -149,10 +149,10 @@ export function HelpCenter() {
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
                         <p className="text-sm text-muted-foreground">
-                          Interactive walkthrough of key features
+                          {t('helpCenter.interactive_walkthrough')}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Duration: ~{Math.ceil(tour.steps.length * 0.5)} minutes
+                          {t('helpCenter.duration', { minutes: Math.ceil(tour.steps.length * 0.5) })}
                         </p>
                       </div>
                       
@@ -217,23 +217,23 @@ export function HelpCenter() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <MessageCircle className="h-5 w-5" />
-                    Contact Support
+                    {t('helpCenter.contact_support')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <p className="text-sm text-muted-foreground">
-                    Need additional help? Our support team is here to assist you.
+                    {t('helpCenter.need_help')}
                   </p>
                   
                   <div className="space-y-2">
                     <Button variant="outline" className="w-full justify-start">
                       <Mail className="h-4 w-4 mr-2" />
-                      Email Support
+                      {t('helpCenter.email_support')}
                     </Button>
                     
                     <Button variant="outline" className="w-full justify-start">
                       <Video className="h-4 w-4 mr-2" />
-                      Schedule a Demo
+                      {t('helpCenter.schedule_demo')}
                     </Button>
                   </div>
                 </CardContent>
@@ -241,14 +241,14 @@ export function HelpCenter() {
               
               <Card>
                 <CardHeader>
-                  <CardTitle>Quick Tips</CardTitle>
+                  <CardTitle>{t('helpCenter.quick_tips')}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <div className="text-sm space-y-2">
-                    <p>• Use keyboard shortcuts: Ctrl+N for new invoice</p>
-                    <p>• Save time with invoice templates</p>
-                    <p>• Set up automatic payment reminders</p>
-                    <p>• Export data regularly for backups</p>
+                    <p>• {t('helpCenter.tip_shortcuts')}</p>
+                    <p>• {t('helpCenter.tip_templates')}</p>
+                    <p>• {t('helpCenter.tip_reminders')}</p>
+                    <p>• {t('helpCenter.tip_backups')}</p>
                   </div>
                 </CardContent>
               </Card>

@@ -327,7 +327,7 @@ export const InventoryInvoiceForm: React.FC<InventoryInvoiceFormProps> = ({
       const inventoryItems = data.items.filter(item => item.inventory_item_id);
       if (inventoryItems.length > 0) {
         try {
-          const stockValidation = await apiRequest('/api/inventory/invoice-items/validate-stock', {
+          const stockValidation = await apiRequest('/inventory/invoice-items/validate-stock', {
             method: 'POST',
             body: JSON.stringify({
               invoice_items: inventoryItems.map(item => ({
@@ -649,11 +649,11 @@ export const InventoryInvoiceForm: React.FC<InventoryInvoiceFormProps> = ({
           {/* Invoice Summary */}
           <Card>
             <CardHeader>
-              <CardTitle>{t('invoices.invoice_summary', 'Invoice Summary')}</CardTitle>
+              <CardTitle>{t('inventory.invoice_summary')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex justify-between items-center">
-                <span>{t('invoices.subtotal', 'Subtotal')}:</span>
+                <span>{t('inventory.subtotal')}:</span>
                 <CurrencyDisplay amount={subtotal} currency={watchedCurrency} />
               </div>
 

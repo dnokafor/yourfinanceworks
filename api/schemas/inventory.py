@@ -78,6 +78,11 @@ class InventoryItemBase(BaseModel):
         if self.item_type == 'service':
             return self
 
+        # Allow unlimited stock (high numbers) even when track_stock is False
+        # This represents "unlimited stock" functionality
+        if not self.track_stock and self.current_stock >= 999999:
+            return self
+
         # For products and materials, apply normal stock validation
         if not self.track_stock and self.current_stock > 0:
             raise ValueError('Cannot have current_stock > 0 when track_stock is False')

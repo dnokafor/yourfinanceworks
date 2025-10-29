@@ -76,13 +76,13 @@ export function InvoiceCard({ invoice, onClone, onDelete, canPerformActions = tr
               </div>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-2">
             <Badge className={`${statusConfig.className} font-medium`}>
               <span className="mr-1">{statusConfig.icon}</span>
               {t(`invoices.status.${invoice.status}`)}
             </Badge>
-            
+
             {canPerformActions && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -197,6 +197,7 @@ export function InvoiceCard({ invoice, onClone, onDelete, canPerformActions = tr
           )}
         </div>
       </CardContent>
+
     </Card>
   );
 }

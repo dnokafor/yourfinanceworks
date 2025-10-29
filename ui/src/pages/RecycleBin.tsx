@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trash2, RotateCcw } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { formatDate } from '@/lib/utils';
@@ -26,6 +27,8 @@ const RecycleBin = () => {
   const { t } = useTranslation();
   const [deletedInvoices, setDeletedInvoices] = useState<DeletedInvoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [permanentDeleteModalOpen, setPermanentDeleteModalOpen] = useState(false);
+  const [invoiceToDelete, setInvoiceToDelete] = useState<number | null>(null);
 
   useEffect(() => {
     fetchDeletedInvoices();
@@ -38,7 +41,7 @@ const RecycleBin = () => {
       setDeletedInvoices(data);
     } catch (error) {
       console.error('Failed to fetch deleted invoices:', error);
-      toast.error('Failed to load deleted invoices');
+      toast.error(t('recycleBin.failed_to_load_deleted_invoices'));
     } finally {
       setLoading(false);
     }
@@ -47,27 +50,30 @@ const RecycleBin = () => {
   const handleRestore = async (invoiceId: number) => {
     try {
       await api.post(`/invoices/${invoiceId}/restore`, { new_status: 'draft' });
-      toast.success('Invoice restored successfully');
+      toast.success(t('recycleBin.invoice_restored_successfully'));
       fetchDeletedInvoices();
     } catch (error) {
       console.error('Failed to restore invoice:', error);
-      toast.error('Failed to restore invoice');
+      toast.error(t('recycleBin.failed_to_restore_invoice'));
     }
   };
 
-  const handlePermanentDelete = async (invoiceId: number) => {
-    if (!confirm('Are you sure you want to permanently delete this invoice? This action cannot be undone.')) {
-      return;
-    }
+  const handlePermanentDelete = (invoiceId: number) => {
+    setInvoiceToDelete(invoiceId);
+    setPermanentDeleteModalOpen(true);
+  };
+
+  const confirmPermanentDelete = async () => {
+    if (!invoiceToDelete) return;
 
     try {
-      await api.delete(`/invoices/${invoiceId}/permanent`);
-      toast.success('Invoice permanently deleted');
+      await api.delete(`/invoices/${invoiceToDelete}/permanent`);
+      toast.success(t('recycleBin.invoice_permanently_deleted'));
       fetchDeletedInvoices();
     } catch (error) {
       console.error('Failed to permanently delete invoice:', error);
       // Extract specific error message from API response
-      let errorMessage = error instanceof Error ? error.message : 'Failed to permanently delete invoice';
+      let errorMessage = error instanceof Error ? error.message : t('recycleBin.failed_to_permanently_delete_invoice');
 
       // Check if it's the linked expenses error and use translated version
       if (errorMessage.includes('linked expenses')) {
@@ -75,21 +81,24 @@ const RecycleBin = () => {
       }
 
       toast.error(errorMessage);
+    } finally {
+      setPermanentDeleteModalOpen(false);
+      setInvoiceToDelete(null);
     }
   };
 
   const handleEmptyRecycleBin = async () => {
-    if (!confirm('Are you sure you want to permanently delete ALL invoices in the recycle bin? This action cannot be undone.')) {
+    if (!confirm(t('recycleBin.confirm_empty_recycle_bin'))) {
       return;
     }
 
     try {
       await api.post('/invoices/recycle-bin/empty');
-      toast.success('Recycle bin emptied successfully');
+      toast.success(t('recycleBin.recycle_bin_emptied_successfully'));
       fetchDeletedInvoices();
     } catch (error) {
       console.error('Failed to empty recycle bin:', error);
-      toast.error('Failed to empty recycle bin');
+      toast.error(t('recycleBin.failed_to_empty_recycle_bin'));
     }
   };
 
@@ -100,9 +109,9 @@ const RecycleBin = () => {
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2">
               <Trash2 className="h-8 w-8" />
-              Recycle Bin
+              {t('recycleBin.title')}
             </h1>
-            <p className="text-muted-foreground">Manage deleted invoices</p>
+            <p className="text-muted-foreground">{t('recycleBin.description')}</p>
           </div>
           {deletedInvoices.length > 0 && (
             <Button 
@@ -111,33 +120,33 @@ const RecycleBin = () => {
               className="sm:self-end whitespace-nowrap"
             >
               <Trash2 className="mr-2 h-4 w-4" />
-              Empty Recycle Bin
+              {t('recycleBin.empty_recycle_bin')}
             </Button>
           )}
         </div>
         
         <Card className="slide-in">
           <CardHeader className="pb-3">
-            <CardTitle>Deleted Invoices</CardTitle>
+            <CardTitle>{t('recycleBin.deleted_invoices')}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Invoice</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Deleted At</TableHead>
-                    <TableHead>Deleted By</TableHead>
-                    <TableHead className="w-[150px]">Actions</TableHead>
+                    <TableHead>{t('recycleBin.invoice')}</TableHead>
+                    <TableHead>{t('recycleBin.amount')}</TableHead>
+                    <TableHead>{t('recycleBin.status')}</TableHead>
+                    <TableHead>{t('recycleBin.deleted_at')}</TableHead>
+                    <TableHead>{t('recycleBin.deleted_by')}</TableHead>
+                    <TableHead className="w-[150px]">{t('recycleBin.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
                     <TableRow>
                       <TableCell colSpan={6} className="h-24 text-center">
-                        Loading deleted invoices...
+                        {t('recycleBin.loading_deleted_invoices')}
                       </TableCell>
                     </TableRow>
                   ) : deletedInvoices.length > 0 ? (
@@ -155,7 +164,7 @@ const RecycleBin = () => {
                           </Badge>
                         </TableCell>
                         <TableCell>{formatDate(invoice.deleted_at)}</TableCell>
-                        <TableCell>{invoice.deleted_by_username || 'Unknown'}</TableCell>
+                        <TableCell>{invoice.deleted_by_username || t('recycleBin.unknown')}</TableCell>
                         <TableCell>
                           <div className="flex gap-1">
                             <Button 
@@ -163,7 +172,7 @@ const RecycleBin = () => {
                               size="icon"
                               onClick={() => handleRestore(invoice.id)}
                               className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                              title="Restore invoice"
+                              title={t('recycleBin.restore_invoice')}
                             >
                               <RotateCcw className="h-4 w-4" />
                             </Button>
@@ -172,7 +181,7 @@ const RecycleBin = () => {
                               size="icon"
                               onClick={() => handlePermanentDelete(invoice.id)}
                               className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                              title="Permanently delete"
+                              title={t('recycleBin.permanently_delete')}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -185,7 +194,7 @@ const RecycleBin = () => {
                       <TableCell colSpan={6} className="h-24 text-center">
                         <div className="flex flex-col items-center gap-2">
                           <Trash2 className="h-8 w-8 text-muted-foreground" />
-                          <p>Recycle bin is empty</p>
+                          <p>{t('recycleBin.recycle_bin_empty')}</p>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -196,6 +205,24 @@ const RecycleBin = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Permanent Delete Modal */}
+      <AlertDialog open={permanentDeleteModalOpen} onOpenChange={setPermanentDeleteModalOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('invoices.permanent_delete_confirm_title', 'Permanently Delete Invoice')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('invoices.permanent_delete_confirm_description', 'Are you sure you want to permanently delete this invoice? This action cannot be undone and the invoice will be completely removed from the system.')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel', 'Cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmPermanentDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {t('invoices.permanent_delete', 'Permanently Delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 };

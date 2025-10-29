@@ -43,7 +43,7 @@ const NewInvoice = () => {
       const parsedDate = parseDateOnly(date);
       const parsedDueDate = parseDateOnly(dueDate);
       console.log('Bank statement dates:', { date, dueDate, parsedDate, parsedDueDate });
-      
+
       setInitialData({
         date: parsedDate,
         dueDate: parsedDueDate,
@@ -58,7 +58,7 @@ const NewInvoice = () => {
         client: '' // Initialize client field
       });
       setShowForm(true);
-      toast.success('Invoice pre-populated from bank statement');
+      toast.success(t('invoices.invoice_prepopulated_from_bank_statement'));
     }
   }, [searchParams]);
 
@@ -74,12 +74,12 @@ const NewInvoice = () => {
   const handlePdfImport = async (pdfData: any, pdfFile: File) => {
     try {
       let clientId = null;
-      
+
       // Check if client exists or create new one
       if (pdfData.client_exists && pdfData.existing_client) {
         // Use existing client
         clientId = pdfData.existing_client.id;
-        toast.success(`Using existing client: ${pdfData.existing_client.name}`);
+        toast.success(t('invoices.using_existing_client', { clientName: pdfData.existing_client.name }));
       } else if (!pdfData.client_exists && pdfData.suggested_client) {
         // Prefill and open create client modal in the form
         const suggested = pdfData.suggested_client || {};
@@ -90,7 +90,7 @@ const NewInvoice = () => {
           phone: ''
         });
         setOpenNewClientOnInit(true);
-        toast.success('Suggested client detected. Opening create client dialog...');
+        toast.success(t('invoices.suggested_client_detected'));
       }
 
       // Prepare initial data from PDF extraction
@@ -104,16 +104,16 @@ const NewInvoice = () => {
       setInitialData({
         client: clientId?.toString() || '',
         items: formattedItems,
-        notes: `Imported from PDF: ${pdfFile.name}`,
+        notes: t('invoices.imported_from_pdf', { fileName: pdfFile.name }),
         date: invoiceData?.date ? new Date(invoiceData.date) : new Date(),
       });
-      
+
       setAttachment(pdfFile);
       setShowForm(true);
-      
+
     } catch (error) {
       console.error('Error processing PDF import:', error);
-      toast.error('Failed to process PDF import');
+      toast.error(t('invoices.failed_to_process_pdf_import'));
     }
   };
 
@@ -125,12 +125,12 @@ const NewInvoice = () => {
           <div>
             <h1 className="text-3xl font-bold">{t("invoices.new_invoice")}</h1>
             <p className="text-muted-foreground">
-              {fromBankStatement ? 'Create invoice from bank statement transaction' : 'Choose between Quick Create for fast entry or Guided Create for step-by-step assistance'}
+              {fromBankStatement ? t('invoices.create_invoice_from_bank_statement') : t('invoices.quick_create_guided_create_description')}
             </p>
           </div>
-          
+
           <div className="slide-in">
-            <InvoiceForm 
+            <InvoiceForm
               initialData={initialData}
               attachment={attachment}
               prefillNewClient={prefillNewClient}
@@ -147,9 +147,9 @@ const NewInvoice = () => {
       <div className="h-full space-y-6 fade-in">
         <div>
           <h1 className="text-3xl font-bold">{t("invoices.new_invoice")}</h1>
-          <p className="text-muted-foreground">Import invoice from PDF file</p>
+          <p className="text-muted-foreground">{t('invoices.create_invoice_different_ways')}</p>
         </div>
-        
+
         <div className="slide-in">
           <InvoiceCreationChoice
             onManualCreate={handleManualCreate}

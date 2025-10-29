@@ -67,75 +67,103 @@ def get_db():
             status_code=401,
             detail=TENANT_CONTEXT_REQUIRED
         )
-    else:
-        # Import here to avoid circular imports
-        from services.tenant_database_manager import tenant_db_manager
+    
+    # Import here to avoid circular imports
+    from services.tenant_database_manager import tenant_db_manager
+    
+    db = None
+    try:
+        # Try to get tenant session
+        SessionLocal_tenant = tenant_db_manager.get_tenant_session(tenant_id)
+        db = SessionLocal_tenant()
+        yield db
         
-        try:
-            SessionLocal_tenant = tenant_db_manager.get_tenant_session(tenant_id)
-            db = SessionLocal_tenant()
+    except Exception as e:
+        import re
+        from sqlalchemy.exc import StatementError, DataError, IntegrityError, OperationalError
+        
+        # Close any existing session before handling the error
+        if db is not None:
             try:
-                yield db
-            finally:
                 db.close()
-        except Exception as e:
-            import re
-            from sqlalchemy.exc import StatementError, DataError, IntegrityError, OperationalError
+            except Exception:
+                pass
+            db = None
+        
+        # If it's an HTTPException, it's an application-level error, not a database connection issue
+        if isinstance(e, HTTPException):
+            logger.debug(f"HTTPException raised in tenant database context: {e.status_code} - {e.detail}")
+            raise
+        
+        logger.error(f"Failed to connect to tenant database for tenant {tenant_id}: {e}")
+        # Robust safeguard: Only attempt to create tenant DB for connection/operational errors, not validation errors
+        if isinstance(e, (ValidationError, RequestValidationError, StatementError, DataError, IntegrityError)):
+            logger.error(f"Validation or schema error encountered, not attempting to recreate tenant DB: {e}")
+            raise
+        
+        # Don't recreate database for HTTP errors (like 404, 400, etc.)
+        if isinstance(e, HTTPException):
+            logger.error(f"HTTP exception encountered, not attempting to recreate tenant DB: {e.status_code} - {e.detail}")
+            raise
+        
+        # Regex to catch any error message that hints at validation/schema issues
+        error_str = str(e).lower()
+        if re.search(r"(validation|pydantic|schema|statement|integrity|data) error|field required|missing|unprocessable entity|404|not found|bad request", error_str):
+            logger.error(f"Validation-related or HTTP error (regex caught), not attempting to recreate tenant DB: {e}")
+            raise
             
-            # If it's an HTTPException, it's an application-level error, not a database connection issue
-            if isinstance(e, HTTPException):
-                logger.debug(f"HTTPException raised in tenant database context: {e.status_code} - {e.detail}")
-                raise
+        # Only recreate database for actual database connection errors
+        from sqlalchemy.exc import OperationalError, DatabaseError
+        if not isinstance(e, (OperationalError, DatabaseError)):
+            logger.error(f"Non-database error encountered, not attempting to recreate tenant DB: {type(e).__name__}: {e}")
+            raise
             
-            logger.error(f"Failed to connect to tenant database for tenant {tenant_id}: {e}")
-            # Robust safeguard: Only attempt to create tenant DB for connection/operational errors, not validation errors
-            if isinstance(e, (ValidationError, RequestValidationError, StatementError, DataError, IntegrityError)):
-                logger.error(f"Validation or schema error encountered, not attempting to recreate tenant DB: {e}")
-                raise
+        # Try to create the tenant database if it doesn't exist (for connection errors only)
+        master_db = None
+        try:
+            logger.info(f"Attempting to create missing tenant database for tenant {tenant_id}")
             
-            # Regex to catch any error message that hints at validation/schema issues
-            error_str = str(e).lower()
-            if re.search(r"(validation|pydantic|schema|statement|integrity|data) error|field required|missing|unprocessable entity", error_str):
-                logger.error(f"Validation-related error (regex caught), not attempting to recreate tenant DB: {e}")
-                raise
-            # Try to create the tenant database if it doesn't exist (for connection errors only)
-            try:
-                logger.info(f"Attempting to create missing tenant database for tenant {tenant_id}")
+            # Get tenant info from master database
+            master_db = SessionLocal()
+            from models.models import Tenant
+            tenant = master_db.query(Tenant).filter(Tenant.id == tenant_id).first()
+            
+            if tenant:
+                success = tenant_db_manager.create_tenant_database(tenant_id, tenant.name)
+                if success:
+                    logger.info(f"Successfully created tenant database for tenant {tenant_id}")
+                    # Try to get the session again after creation
+                    SessionLocal_tenant = tenant_db_manager.get_tenant_session(tenant_id)
+                    db = SessionLocal_tenant()
+                    yield db
+                    return
+                else:
+                    logger.error(f"Failed to create tenant database for tenant {tenant_id}")
+            else:
+                logger.error(f"Tenant {tenant_id} not found in master database")
                 
-                # Get tenant info from master database
-                master_db = SessionLocal()
+        except Exception as create_error:
+            logger.error(f"Error creating tenant database for tenant {tenant_id}: {create_error}")
+        finally:
+            if master_db is not None:
                 try:
-                    from models.models import Tenant
-                    tenant = master_db.query(Tenant).filter(Tenant.id == tenant_id).first()
-                    
-                    if tenant:
-                        success = tenant_db_manager.create_tenant_database(tenant_id, tenant.name)
-                        if success:
-                            logger.info(f"Successfully created tenant database for tenant {tenant_id}")
-                            # Try to get the session again after creation
-                            SessionLocal_tenant = tenant_db_manager.get_tenant_session(tenant_id)
-                            db = SessionLocal_tenant()
-                            try:
-                                yield db
-                            finally:
-                                db.close()
-                            return
-                        else:
-                            logger.error(f"Failed to create tenant database for tenant {tenant_id}")
-                    else:
-                        logger.error(f"Tenant {tenant_id} not found in master database")
-                        
-                finally:
                     master_db.close()
-                    
-            except Exception as create_error:
-                logger.error(f"Error creating tenant database for tenant {tenant_id}: {create_error}")
-            
-            # If all fails, raise the original error
-            raise HTTPException(
-                status_code=500,
-                detail=f"Unable to connect to tenant database. Please contact support."
-            )
+                except Exception:
+                    pass
+        
+        # If all fails, raise the original error
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to connect to tenant database. Please contact support."
+        )
+        
+    finally:
+        # Ensure database session is always closed
+        if db is not None:
+            try:
+                db.close()
+            except Exception:
+                pass
 
 def set_tenant_context(tenant_id: int):
     """Set the current tenant context"""

@@ -45,13 +45,13 @@ export function RecentActivity({ refreshKey }: RecentActivityProps) {
         case 'paid':
         case 'approved':
         case 'completed':
-          return <Badge className="text-xs bg-green-100 text-green-800">Completed</Badge>;
+          return <Badge className="text-xs bg-green-100 text-green-800">{t('activity.badges.completed')}</Badge>;
         case 'pending':
         case 'draft':
-          return <Badge className="text-xs bg-yellow-100 text-yellow-800">Pending</Badge>;
+          return <Badge className="text-xs bg-yellow-100 text-yellow-800">{t('activity.badges.pending')}</Badge>;
         case 'overdue':
         case 'rejected':
-          return <Badge className="text-xs bg-red-100 text-red-800">Attention</Badge>;
+          return <Badge className="text-xs bg-red-100 text-red-800">{t('activity.badges.attention')}</Badge>;
         default:
           return <Badge className="text-xs bg-gray-100 text-gray-800">{status}</Badge>;
       }
@@ -59,21 +59,21 @@ export function RecentActivity({ refreshKey }: RecentActivityProps) {
 
     switch (type) {
       case 'invoice':
-        return <Badge className="text-xs bg-blue-100 text-blue-800">Invoice</Badge>;
+        return <Badge className="text-xs bg-blue-100 text-blue-800">{t('activity.badges.invoice')}</Badge>;
       case 'client':
-        return <Badge className="text-xs bg-green-100 text-green-800">Client</Badge>;
+        return <Badge className="text-xs bg-green-100 text-green-800">{t('activity.badges.client')}</Badge>;
       case 'inventory':
-        return <Badge className="text-xs bg-purple-100 text-purple-800">Inventory</Badge>;
+        return <Badge className="text-xs bg-purple-100 text-purple-800">{t('activity.badges.inventory')}</Badge>;
       case 'approval':
-        return <Badge className="text-xs bg-orange-100 text-orange-800">Approval</Badge>;
+        return <Badge className="text-xs bg-orange-100 text-orange-800">{t('activity.badges.approval')}</Badge>;
       case 'reminder':
-        return <Badge className="text-xs bg-red-100 text-red-800">Reminder</Badge>;
+        return <Badge className="text-xs bg-red-100 text-red-800">{t('activity.badges.reminder')}</Badge>;
       case 'expense':
-        return <Badge className="text-xs bg-indigo-100 text-indigo-800">Expense</Badge>;
+        return <Badge className="text-xs bg-indigo-100 text-indigo-800">{t('activity.badges.expense')}</Badge>;
       case 'report':
-        return <Badge className="text-xs bg-teal-100 text-teal-800">Report</Badge>;
+        return <Badge className="text-xs bg-teal-100 text-teal-800">{t('activity.badges.report')}</Badge>;
       default:
-        return <Badge className="text-xs bg-gray-100 text-gray-800">Activity</Badge>;
+        return <Badge className="text-xs bg-gray-100 text-gray-800">{t('activity.badges.activity')}</Badge>;
     }
   };
 
@@ -84,7 +84,7 @@ export function RecentActivity({ refreshKey }: RecentActivityProps) {
       setActivities(recentActivities);
     } catch (error) {
       console.error("Failed to fetch recent activities:", error);
-      toast.error("Failed to load recent activities");
+      toast.error(t('activity.failed_to_load'));
       
       // Fallback to empty array on error
       setActivities([]);
@@ -106,7 +106,7 @@ export function RecentActivity({ refreshKey }: RecentActivityProps) {
           <div className="p-2 rounded-lg bg-secondary/10">
             <Calendar className="h-5 w-5 text-secondary" />
           </div>
-          Activity Overview
+          {t('dashboard.activity.title')}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -159,9 +159,9 @@ export function RecentActivity({ refreshKey }: RecentActivityProps) {
       ) : (
             <div className="flex flex-col items-center justify-center h-full text-center">
               <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">No recent activity</p>
+              <p className="text-muted-foreground">{t('activity.no_recent_activity')}</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Activity will appear here as you use the system
+                {t('activity.activity_will_appear')}
               </p>
             </div>
           )}

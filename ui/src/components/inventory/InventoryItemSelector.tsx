@@ -150,7 +150,7 @@ export const InventoryItemSelector: React.FC<InventoryItemSelectorProps> = ({
               ? `h-6 w-6 p-0 ${className}`
               : `w-full justify-start gap-2 ${className}`
             }
-            title={compact ? (currentlySelectedItem ? `Selected: ${currentlySelectedItem.name}` : "Select inventory item") : undefined}
+            title={compact ? (currentlySelectedItem ? `${t('common.selected', 'Selected')}: ${currentlySelectedItem.name}` : t('inventory.select_item', 'Select inventory item')) : undefined}
           >
             <Package className="h-4 w-4" />
             {!compact && currentlySelectedItem ? (
@@ -241,14 +241,14 @@ export const InventoryItemSelector: React.FC<InventoryItemSelectorProps> = ({
 
                             <div className="flex items-center gap-4 text-sm text-muted-foreground">
                               {item.sku && (
-                                <span>SKU: {item.sku}</span>
+                                <span>{t('inventory.sku_label', 'SKU')}: {item.sku}</span>
                               )}
-                              <span>Price: ${item.unit_price.toFixed(2)}</span>
+                              <span>{t('inventory.price_label', 'Price')}: ${item.unit_price.toFixed(2)}</span>
                               {item.category && (
-                                <span>Category: {item.category.name}</span>
+                                <span>{t('inventory.category_label', 'Category')}: {item.category.name}</span>
                               )}
                               {item.track_stock && (
-                                <span>Stock: {item.current_stock} {item.unit_of_measure}</span>
+                                <span>{t('inventory.stock_colon', 'Stock')}: {item.current_stock} {item.unit_of_measure}</span>
                               )}
                             </div>
 
@@ -262,7 +262,7 @@ export const InventoryItemSelector: React.FC<InventoryItemSelectorProps> = ({
                             {item.track_stock && item.current_stock <= item.minimum_stock && (
                               <div className="flex items-center gap-2 mt-2 text-sm text-orange-600">
                                 <AlertTriangle className="h-4 w-4" />
-                                <span>Low stock alert: Only {item.current_stock} remaining</span>
+                                <span>{t('inventory.low_stock_alert', 'Low stock alert: Only {{count}} remaining', { count: item.current_stock })}</span>
                               </div>
                             )}
                           </div>
@@ -282,13 +282,13 @@ export const InventoryItemSelector: React.FC<InventoryItemSelectorProps> = ({
                   <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                   <p className="text-muted-foreground">
                     {searchQuery || selectedCategory !== "all"
-                      ? "No items match your search criteria"
-                      : "No inventory items found"}
+                      ? t('inventory.no_items_match', 'No items match your search criteria')
+                      : t('inventory.no_items_found', 'No inventory items found')}
                   </p>
                   <p className="text-sm text-muted-foreground mt-2">
                     {searchQuery || selectedCategory !== "all"
-                      ? "Try adjusting your search or filter criteria"
-                      : "Add some items to your inventory first"}
+                      ? t('inventory.try_adjusting_search', 'Try adjusting your search or filter criteria')
+                      : t('inventory.add_items_first', 'Add some items to your inventory first')}
                   </p>
                 </div>
               )}
@@ -297,17 +297,17 @@ export const InventoryItemSelector: React.FC<InventoryItemSelectorProps> = ({
             {/* Selected Item Summary */}
             {selectedItem && (
               <div className="bg-muted/50 p-4 rounded-lg">
-                <h4 className="font-medium mb-2">Selected Item:</h4>
+                <h4 className="font-medium mb-2">{t('inventory.selected_item', 'Selected Item:')}</h4>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium">{selectedItem.name}</p>
                     <p className="text-sm text-muted-foreground">
-                      Price: ${selectedItem.unit_price.toFixed(2)}
-                      {selectedItem.track_stock && ` | Stock: ${selectedItem.current_stock}`}
+                      {t('inventory.price_label', 'Price')}: ${selectedItem.unit_price.toFixed(2)}
+                      {selectedItem.track_stock && ` | ${t('inventory.stock_label', 'Stock')}: ${selectedItem.current_stock}`}
                     </p>
                   </div>
                   <Button onClick={handleConfirmSelection}>
-                    Use This Item
+                    {t('inventory.use_this_item', 'Use This Item')}
                   </Button>
                 </div>
               </div>
@@ -316,11 +316,11 @@ export const InventoryItemSelector: React.FC<InventoryItemSelectorProps> = ({
 
           <div className="flex justify-end gap-2 pt-4 border-t">
             <Button variant="outline" onClick={() => setIsOpen(false)}>
-              Cancel
+              {t('common.cancel', 'Cancel')}
             </Button>
             {selectedItem && (
               <Button onClick={handleConfirmSelection}>
-                Select Item
+                {t('inventory.select_item_button', 'Select Item')}
               </Button>
             )}
           </div>

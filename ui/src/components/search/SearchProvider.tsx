@@ -1,4 +1,5 @@
 import { createContext, useContext, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 interface SearchContextType {
   isOpen: boolean;
@@ -18,9 +19,10 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useSearch() {
+  const { t } = useTranslation();
   const context = useContext(SearchContext);
   if (!context) {
-    throw new Error("useSearch must be used within a SearchProvider");
+    throw new Error(t('search.provider_error'));
   }
   return context;
 }

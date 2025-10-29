@@ -5,8 +5,10 @@ import { Loader2, BarChart as BarChartIcon } from "lucide-react";
 import { invoiceApi, Invoice } from "@/lib/api";
 import { toast } from "sonner";
 import { CurrencyDisplay } from "@/components/ui/currency-display";
+import { useTranslation } from "react-i18next";
 
 export function InvoiceChart() {
+  const { t } = useTranslation();
   const [chartData, setChartData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -100,10 +102,10 @@ export function InvoiceChart() {
     <Card className="col-span-2 border-l-4 border-l-primary bg-gradient-to-br from-primary/5 to-transparent hover:shadow-lg transition-all duration-300">
       <CardHeader className="pb-4">
         <CardTitle className="text-xl font-semibold flex items-center gap-2">
-          <div className="p-2 rounded-lg bg-primary/10">
+          <div className="p-2 rounded-lg bg-primary/10" >
             <BarChartIcon className="h-5 w-5 text-primary" />
           </div>
-          Invoice Overview
+          {t('dashboard.revenueTrends.invoice_overview')}
         </CardTitle>
       </CardHeader>
       <CardContent>

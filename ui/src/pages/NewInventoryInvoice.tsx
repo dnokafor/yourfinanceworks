@@ -12,7 +12,7 @@ const NewInventoryInvoice = () => {
         <div>
           <h1 className="text-3xl font-bold">{t("invoices.new_invoice")}</h1>
           <p className="text-muted-foreground">
-            Create a new invoice with inventory integration - select items from your inventory catalog
+            {t("invoices.inventory_invoice_description")}
           </p>
         </div>
 

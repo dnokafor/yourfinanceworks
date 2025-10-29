@@ -246,8 +246,8 @@ const Dashboard = () => {
               {userName ? t('dashboard.welcome', { name: userName }) : t('dashboard.title')}
             </DisplayMD>
             <HelpTooltip
-              content="This dashboard provides an overview of your business finances, including income, pending invoices, and client metrics."
-              title="Dashboard Overview"
+              content={t('dashboard.help.overview_content')}
+              title={t('dashboard.help.overview_title')}
             />
           </div>
         </div>
@@ -336,8 +336,8 @@ const Dashboard = () => {
           features={[
             {
               id: 'ai-assistant',
-              title: 'AI Business Assistant',
-              description: 'Get intelligent insights about your business data and automate routine tasks. Configure in Settings > AI Configuration (Admin only).',
+              title: t('dashboard.progressive_features.ai_assistant_title'),
+              description: t('dashboard.progressive_features.ai_assistant_desc'),
               category: 'automation',
               difficulty: 'beginner',
               action: () => {
@@ -349,24 +349,24 @@ const Dashboard = () => {
             },
             {
               id: 'email-automation',
-              title: 'Automated Email Reminders',
-              description: 'Set up automatic payment reminders for overdue invoices.',
+              title: t('dashboard.progressive_features.email_automation_title'),
+              description: t('dashboard.progressive_features.email_automation_desc'),
               category: 'automation',
               difficulty: 'intermediate',
               action: () => window.location.href = '/settings'
             },
             {
               id: 'advanced-analytics',
-              title: 'Advanced Analytics Dashboard',
-              description: 'Deep dive into your business metrics with advanced charts and forecasting.',
+              title: t('dashboard.progressive_features.advanced_analytics_title'),
+              description: t('dashboard.progressive_features.advanced_analytics_desc'),
               category: 'analytics',
               difficulty: 'intermediate',
               action: () => window.location.href = '/analytics'
             },
             {
               id: 'api-integration',
-              title: 'API Integration',
-              description: 'Connect with external accounting software and payment processors.',
+              title: t('dashboard.progressive_features.api_integration_title'),
+              description: t('dashboard.progressive_features.api_integration_desc'),
               category: 'integration',
               difficulty: 'advanced'
             }

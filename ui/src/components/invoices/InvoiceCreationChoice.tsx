@@ -52,7 +52,7 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport, onInventory
         setSelectedFile(file);
       }
     } else {
-      toast.error('Please select a PDF file');
+      toast.error(t('invoices.please_select_pdf_file'));
     }
   };
 
@@ -63,7 +63,7 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport, onInventory
     
     // Add processing notification
     const addNotification = (window as any).addAINotification;
-    const notificationId = addNotification?.('processing', 'Processing Invoice PDF', `Analyzing ${selectedFile.name} with AI...`);
+    const notificationId = addNotification?.('processing', t('invoices.processing_invoice_pdf'), t('invoices.analyzing_with_ai', { fileName: selectedFile.name }));
     
     try {
       // Check LLM configuration status
@@ -82,8 +82,8 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport, onInventory
 
       if (response.success) {
         // Update notification to success
-        addNotification?.('success', 'Invoice PDF Processed', `Successfully extracted data from ${selectedFile.name}`);
-        toast.success('PDF processed successfully!');
+        addNotification?.('success', t('invoices.invoice_pdf_processed'), t('invoices.successfully_extracted_data', { fileName: selectedFile.name }));
+        toast.success(t('invoices.pdf_processed_successfully'));
         const payload = (response?.data?.invoice_data) ?? response?.data ?? response;
         onPdfImport(payload, selectedFile);
       } else {
@@ -92,8 +92,8 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport, onInventory
     } catch (error) {
       console.error('PDF processing error:', error);
       // Update notification to error
-      addNotification?.('error', 'PDF Processing Failed', `Failed to process ${selectedFile.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      toast.error('Failed to process PDF. Proceeding with manual creation.');
+      addNotification?.('error', t('invoices.pdf_processing_failed'), t('invoices.failed_to_process_file', { fileName: selectedFile.name, error: error instanceof Error ? error.message : 'Unknown error' }));
+      toast.error(t('invoices.failed_to_process_pdf_proceeding_manual'));
       onManualCreate(selectedFile);
     } finally {
       setProcessing(false);
@@ -165,7 +165,7 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport, onInventory
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground text-center">
-              Create invoices with Quick Create (single page) or Guided Create (step-by-step)
+              {t('invoices.quick_create_guided_create_manual_description')}
             </p>
 
             <div className="space-y-3">
@@ -204,24 +204,24 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport, onInventory
               <div className="mx-auto w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mb-4">
                 <Package className="w-8 h-8 text-purple-600" />
               </div>
-              <CardTitle className="text-xl">Create with Inventory</CardTitle>
+              <CardTitle className="text-xl">{t('invoices.create_with_inventory')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground text-center">
-                Select items from your inventory catalog with automatic stock tracking and pricing
+                {t('invoices.inventory_catalog_description')}
               </p>
 
               <div className="space-y-3">
                 <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
                   <div className="flex items-center gap-2 text-purple-800">
                     <Package className="w-4 h-4" />
-                    <span className="text-sm font-medium">Features:</span>
+                    <span className="text-sm font-medium">{t('invoices.features')}</span>
                   </div>
                   <ul className="text-sm text-purple-700 mt-2 space-y-1">
-                    <li>• Select from inventory catalog</li>
-                    <li>• Automatic stock validation</li>
-                    <li>• Real-time pricing updates</li>
-                    <li>• Low stock warnings</li>
+                    <li>• {t('invoices.select_from_inventory_catalog')}</li>
+                    <li>• {t('invoices.automatic_stock_validation')}</li>
+                    <li>• {t('invoices.real_time_pricing_updates')}</li>
+                    <li>• {t('invoices.low_stock_warnings')}</li>
                   </ul>
                 </div>
 
@@ -230,7 +230,7 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport, onInventory
                   className="w-full bg-purple-600 hover:bg-purple-700"
                 >
                   <Package className="w-4 h-4 mr-2" />
-                  Create with Inventory
+                  {t('invoices.create_with_inventory')}
                 </Button>
               </div>
             </CardContent>

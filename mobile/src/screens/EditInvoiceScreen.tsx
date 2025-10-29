@@ -1102,7 +1102,7 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
         />
 
         <View style={styles.summarySection}>
-          <Text style={styles.summaryTitle}>Invoice Summary</Text>
+          <Text style={styles.summaryTitle}>t('inventory.invoice_summary')</Text>
           
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Subtotal:</Text>

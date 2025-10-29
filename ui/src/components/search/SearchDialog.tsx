@@ -2,6 +2,7 @@ import { Command } from 'cmdk';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, FileText, Users, CreditCard, Receipt, Building, Paperclip, Package, Bell } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { useSearch } from './SearchProvider';
 import { apiClient } from '@/lib/api';
@@ -52,6 +53,7 @@ const getEntityColor = (type: string) => {
 };
 
 export function SearchDialog() {
+  const { t } = useTranslation();
   const { isOpen, setIsOpen } = useSearch();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -63,7 +65,7 @@ export function SearchDialog() {
     const down = (e: KeyboardEvent) => {
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        setIsOpen((open) => !open);
+        setIsOpen(!isOpen);
       }
     };
 
@@ -83,7 +85,7 @@ export function SearchDialog() {
           setResults(response.results);
         } catch (err) {
           console.error('Search error:', err);
-          setError('Search failed. Please try again.');
+          setError(t('search.search_failed'));
           setResults([]);
         } finally {
           setLoading(false);
@@ -95,7 +97,7 @@ export function SearchDialog() {
       setResults([]);
       setError(null);
     }
-  }, [query]);
+  }, [query, t]);
 
   const handleSelect = (result: SearchResult) => {
     if (result.url) {
@@ -129,7 +131,7 @@ export function SearchDialog() {
             <Command.Input 
               value={query} 
               onValueChange={setQuery}
-              placeholder="Search invoices, clients, payments, expenses, inventory, reminders..."
+              placeholder={t('search.placeholder')}
               className="flex h-12 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
             />
             {loading && (
@@ -141,8 +143,8 @@ export function SearchDialog() {
             {query.trim().length === 0 && (
               <div className="py-6 text-center text-sm text-muted-foreground">
                 <Search className="mx-auto h-8 w-8 mb-2 opacity-50" />
-                <p>Type to search across all your data</p>
-                <p className="text-xs mt-1">Use ⌘K (Mac) or Ctrl+K (Windows) to open search</p>
+                <p>{t('search.type_to_search')}</p>
+                <p className="text-xs mt-1">{t('search.keyboard_shortcut')}</p>
               </div>
             )}
             
@@ -154,8 +156,8 @@ export function SearchDialog() {
             
             {query.trim().length > 0 && !loading && results.length === 0 && !error && (
               <div className="py-6 text-center text-sm text-muted-foreground">
-                <p>No results found for "{query}"</p>
-                <p className="text-xs mt-1">Try different keywords or check spelling</p>
+                <p>{t('search.no_results', { query })}</p>
+                <p className="text-xs mt-1">{t('search.try_different_keywords')}</p>
               </div>
             )}
             
@@ -180,8 +182,8 @@ export function SearchDialog() {
                       </div>
                     )}
                   </div>
-                  <div className="text-xs text-muted-foreground capitalize">
-                    {result.type.replace('_', ' ')}
+                  <div className="text-xs text-muted-foreground">
+                    {t(`search.entity_types.${result.type}`, result.type.replace('_', ' '))}
                   </div>
                 </Command.Item>
               );
@@ -190,7 +192,7 @@ export function SearchDialog() {
           
           {results.length > 0 && (
             <div className="border-t px-3 py-2 text-xs text-muted-foreground">
-              Found {results.length} results • Press Enter to select • Esc to close
+              {t('search.results_footer', { count: results.length })}
             </div>
           )}
         </Command>

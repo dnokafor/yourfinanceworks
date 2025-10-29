@@ -191,8 +191,8 @@ export function ActivityPage() {
     <div className="space-y-8">
       {/* Page Header */}
       <PageHeader
-        title="Activity Timeline"
-        description="Complete history of your business activities"
+        title={t('activity.timeline_title')}
+        description={t('activity.timeline_description')}
         breadcrumbs={[
           { label: 'Dashboard', href: '/' },
           { label: 'Activity Timeline' }
@@ -205,7 +205,7 @@ export function ActivityPage() {
               onClick={() => navigate('/')}
             >
               <ArrowLeft className="h-4 w-4" />
-              Back to Dashboard
+              {t('activity.back_to_dashboard')}
             </ProfessionalButton>
             <ProfessionalButton 
               variant="outline" 
@@ -214,7 +214,7 @@ export function ActivityPage() {
               disabled={loading}
             >
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
+              {t('activity.refresh')}
             </ProfessionalButton>
           </div>
         }
@@ -228,15 +228,15 @@ export function ActivityPage() {
               <ProfessionalCard className="p-6">
                 <h3 className="font-semibold mb-4 flex items-center gap-2">
                   <TrendingUp className="h-4 w-4 text-primary" />
-                  Activity Summary
+                  {t('activity.activity_summary')}
                 </h3>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Total Activities</span>
+                    <span className="text-sm text-muted-foreground">{t('activity.total_activities')}</span>
                     <span className="font-semibold">{allActivities.length}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">This Week</span>
+                    <span className="text-sm text-muted-foreground">{t('activity.this_week')}</span>
                     <span className="font-semibold text-green-600">
                       {allActivities.filter(a => {
                         const activityDate = new Date(a.timestamp);
@@ -246,7 +246,7 @@ export function ActivityPage() {
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Today</span>
+                    <span className="text-sm text-muted-foreground">{t('activity.today')}</span>
                     <span className="font-semibold text-blue-600">
                       {allActivities.filter(a => {
                         const activityDate = new Date(a.timestamp);
@@ -264,7 +264,7 @@ export function ActivityPage() {
                   <div>
                     <h3 className="font-semibold mb-4 flex items-center gap-2">
                       <Filter className="h-4 w-4" />
-                      Filters
+                      {t('activity.filters')}
                     </h3>
                     
                     {/* Activity Type Filter */}

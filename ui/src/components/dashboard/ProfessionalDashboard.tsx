@@ -233,14 +233,14 @@ export function ProfessionalDashboard() {
               }}
             >
               <Zap className="h-4 w-4" />
-              Quick Actions
+              {t('dashboard.actions.quick_actions_button')}
               <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
             </ProfessionalButton>
           </div>
         </div>
 
         {/* Metrics Grid */}
-        <ContentSection title="Key Metrics" description="Overview of your business performance">
+        <ContentSection title={t('dashboard.sections.key_metrics')} description={t('dashboard.sections.key_metrics_desc')}>
           <GridLayout cols={4} gap="lg" responsive>
             {metrics.map((metric, index) => (
               <MetricCard
@@ -265,8 +265,8 @@ export function ProfessionalDashboard() {
           <div className="lg:col-span-2">
             {/* Chart Section */}
             <ContentSection 
-              title="Revenue Trends" 
-              description="Monthly revenue and invoice performance"
+              title={t('dashboard.sections.revenue_trends')} 
+              description={t('dashboard.sections.revenue_trends_desc')}
               variant="card"
             >
               <InvoiceChart />
@@ -277,8 +277,8 @@ export function ProfessionalDashboard() {
           <div className="lg:col-span-1">
             {/* Recent Invoices */}
             <ContentSection 
-              title="Recent Activity" 
-              description="Latest invoices and transactions"
+              title={t('dashboard.sections.recent_activity')} 
+              description={t('dashboard.sections.recent_activity_desc')}
               variant="card"
               actions={
                 <div className="flex items-center gap-2">
@@ -295,7 +295,7 @@ export function ProfessionalDashboard() {
                     size="sm"
                     onClick={() => navigate('/activity')}
                   >
-                    View All
+                    {t('dashboard.actions.view_all')}
                     <ArrowRight className="h-3 w-3" />
                   </ProfessionalButton>
                 </div>
@@ -310,8 +310,8 @@ export function ProfessionalDashboard() {
 
         {/* Full Width Quick Actions */}
         <ContentSection 
-          title="Quick Actions" 
-          description="Common tasks and shortcuts"
+          title={t('dashboard.quick_actions.title')} 
+          description={t('dashboard.quick_actions.subtitle')}
           className="scroll-mt-8"
           data-section="quick-actions"
           variant="card"
@@ -329,8 +329,8 @@ export function ProfessionalDashboard() {
                   <TrendingUp className="h-6 w-6 text-blue-600" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold">Payment Trends</h3>
-                  <p className="text-sm text-muted-foreground">Monthly payment analysis</p>
+                  <h3 className="text-lg font-bold">{t('dashboard.sections.payment_trends')}</h3>
+                  <p className="text-sm text-muted-foreground">{t('dashboard.sections.payment_trends_desc')}</p>
                 </div>
               </div>
               
@@ -338,7 +338,7 @@ export function ProfessionalDashboard() {
                 <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
                   <div className="flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-green-600" />
-                    <span className="text-sm font-medium">On-time Payments</span>
+                    <span className="text-sm font-medium">{t('dashboard.metrics.on_time_payments')}</span>
                   </div>
                   <span className="text-lg font-bold text-green-600">87%</span>
                 </div>
@@ -346,7 +346,7 @@ export function ProfessionalDashboard() {
                 <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
                   <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4 text-yellow-600" />
-                    <span className="text-sm font-medium">Average Payment Time</span>
+                    <span className="text-sm font-medium">{t('dashboard.metrics.average_payment_time')}</span>
                   </div>
                   <span className="text-lg font-bold text-yellow-600">12 days</span>
                 </div>
@@ -354,7 +354,7 @@ export function ProfessionalDashboard() {
                 <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
                   <div className="flex items-center gap-2">
                     <AlertCircle className="h-4 w-4 text-red-600" />
-                    <span className="text-sm font-medium">Overdue Rate</span>
+                    <span className="text-sm font-medium">{t('dashboard.metrics.overdue_rate')}</span>
                   </div>
                   <span className="text-lg font-bold text-red-600">8%</span>
                 </div>
@@ -370,8 +370,8 @@ export function ProfessionalDashboard() {
                   <Users className="h-6 w-6 text-green-600" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold">Business Health</h3>
-                  <p className="text-sm text-muted-foreground">Key performance indicators</p>
+                  <h3 className="text-lg font-bold">{t('dashboard.sections.business_health')}</h3>
+                  <p className="text-sm text-muted-foreground">{t('dashboard.sections.business_health_desc')}</p>
                 </div>
               </div>
               
@@ -379,7 +379,7 @@ export function ProfessionalDashboard() {
                 <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
                   <div className="flex items-center gap-2">
                     <DollarSign className="h-4 w-4 text-blue-600" />
-                    <span className="text-sm font-medium">Monthly Growth</span>
+                    <span className="text-sm font-medium">{t('dashboard.metrics.monthly_growth')}</span>
                   </div>
                   <span className="text-lg font-bold text-green-600">+15%</span>
                 </div>
@@ -387,7 +387,7 @@ export function ProfessionalDashboard() {
                 <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
                   <div className="flex items-center gap-2">
                     <Users className="h-4 w-4 text-purple-600" />
-                    <span className="text-sm font-medium">Active Clients</span>
+                    <span className="text-sm font-medium">{t('dashboard.metrics.active_clients')}</span>
                   </div>
                   <span className="text-lg font-bold">{dashboardStats.totalClients}</span>
                 </div>
@@ -395,7 +395,7 @@ export function ProfessionalDashboard() {
                 <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
                   <div className="flex items-center gap-2">
                     <TrendingUp className="h-4 w-4 text-indigo-600" />
-                    <span className="text-sm font-medium">Revenue Trend</span>
+                    <span className="text-sm font-medium">{t('dashboard.metrics.revenue_trend')}</span>
                   </div>
                   <span className="text-lg font-bold text-green-600">
                     {dashboardStats.trends.income.isPositive ? '↗' : '↘'} {dashboardStats.trends.income.value}%

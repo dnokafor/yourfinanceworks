@@ -146,6 +146,26 @@
       }
     }
   },
+  "search": {
+    "placeholder": "Rechnungen, Kunden, Zahlungen, Ausgaben, Inventar, Erinnerungen suchen...",
+    "type_to_search": "Tippen Sie, um in all Ihren Daten zu suchen",
+    "keyboard_shortcut": "Verwenden Sie ⌘K (Mac) oder Strg+K (Windows), um die Suche zu öffnen",
+    "search_failed": "Suche fehlgeschlagen. Bitte versuchen Sie es erneut.",
+    "no_results": "Keine Ergebnisse für \"{{query}}\" gefunden",
+    "try_different_keywords": "Versuchen Sie andere Suchbegriffe oder überprüfen Sie die Rechtschreibung",
+    "results_footer": "{{count}} Ergebnisse gefunden • Drücken Sie Enter zum Auswählen • Esc zum Schließen",
+    "entity_types": {
+      "invoices": "Rechnungen",
+      "clients": "Kunden", 
+      "payments": "Zahlungen",
+      "expenses": "Ausgaben",
+      "statements": "Kontoauszüge",
+      "attachments": "Anhänge",
+      "inventory": "Inventar",
+      "reminders": "Erinnerungen"
+    },
+    "provider_error": "useSearch muss innerhalb eines SearchProvider verwendet werden"
+  },
   "dashboard": {
     "title": "Dashboard",
     "welcome": "Willkommen zurück, {{name}}!",
@@ -156,7 +176,6 @@
     "total_revenue": "Gesamtumsatz",
     "pending_invoices": "Ausstehende Rechnungen",
     "overdue_invoices": "Überfällige Rechnungen",
-    "recent_invoices": "Kürzliche Rechnungen",
     "recent_payments": "Kürzliche Zahlungen",
     "monthly_revenue": "Monatlicher Umsatz",
     "monthly_invoices": "Monatliche Rechnungen",
@@ -171,16 +190,137 @@
       "clients_description": "Aktive Kundenkonten",
       "overdue_description": "Rechnungen nach Fälligkeitsdatum"
     },
+    "quick_actions": {
+      "title": "Schnellaktionen",
+      "subtitle": "Häufige Aufgaben und Verknüpfungen",
+      "new_expense": "Neue Ausgabe",
+      "new_expense_desc": "Eine neue Geschäftsausgabe erfassen",
+      "new_invoice": "Rechnung erstellen",
+      "new_invoice_desc": "Eine neue Kundenrechnung generieren",
+      "import_expenses": "Ausgaben importieren",
+      "import_expenses_desc": "Belege und Dokumente hochladen",
+      "add_client": "Kunde hinzufügen",
+      "add_client_desc": "Einen neuen Kunden registrieren",
+      "pending_approvals": "Ausstehende Genehmigungen",
+      "pending_approvals_desc": "Ausgabengenehmigungen überprüfen",
+      "inventory": "Inventar",
+      "inventory_desc": "Inventarartikel verwalten",
+      "reports": "Berichte erstellen",
+      "reports_desc": "Finanzberichte erstellen",
+      "reminders": "Erinnerungen",
+      "reminders_desc": "Zahlungserinnerungen verwalten"
+    },
+    "pending_items": {
+      "title": "Benötigt Aufmerksamkeit",
+      "view_all": "Alle anzeigen",
+      "review": "Überprüfen"
+    },
     "errors": {
       "load_failed": "Dashboard-Daten konnten nicht geladen werden"
     },
     "paymentMethodsDistribution": "Verteilung der Zahlungsmethoden",
-    "startCreatingInvoices": "Beginnen Sie mit der Erstellung von Rechnungen, um Ihr Geschäft zu verfolgen"
+    "startCreatingInvoices": "Beginnen Sie mit der Erstellung von Rechnungen, um Ihr Geschäft zu verfolgen",
+    "sections": {
+      "key_metrics": "Wichtige Kennzahlen",
+      "key_metrics_desc": "Überblick über Ihre Geschäftsleistung",
+      "revenue_trends": "Umsatztrends",
+      "revenue_trends_desc": "Monatlicher Umsatz und Rechnungsleistung",
+      "recent_activity": "Kürzliche Aktivitäten",
+      "recent_activity_desc": "Neueste Rechnungen und Transaktionen",
+      "payment_trends": "Zahlungstrends",
+      "payment_trends_desc": "Monatliche Zahlungsanalyse",
+      "business_health": "Geschäftsgesundheit",
+      "business_health_desc": "Wichtige Leistungsindikatoren"
+    },
+    "revenueTrends": {
+      "invoice_overview": "Rechnungsübersicht"
+    },
+    "metrics": {
+      "on_time_payments": "Pünktliche Zahlungen",
+      "average_payment_time": "Durchschnittliche Zahlungszeit",
+      "overdue_rate": "Überfälligkeitsrate",
+      "monthly_growth": "Monatliches Wachstum",
+      "active_clients": "Aktive Kunden",
+      "revenue_trend": "Umsatztrend"
+    },
+    "actions": {
+      "view_all": "Alle anzeigen",
+      "quick_actions_button": "Schnellaktionen"
+    },
+    "progressive_features": {
+      "ai_assistant_title": "KI-Geschäftsassistent",
+      "ai_assistant_desc": "Erhalten Sie intelligente Einblicke in Ihre Geschäftsdaten und automatisieren Sie Routineaufgaben. Konfigurieren Sie unter Einstellungen > KI-Konfiguration (Nur Administratoren).",
+      "email_automation_title": "Automatisierte E-Mail-Erinnerungen",
+      "email_automation_desc": "Richten Sie automatische Zahlungserinnerungen für überfällige Rechnungen ein.",
+      "advanced_analytics_title": "Erweiterte Analyse-Dashboard",
+      "advanced_analytics_desc": "Tauchen Sie tief in Ihre Geschäftsmetriken mit erweiterten Diagrammen und Prognosen ein.",
+      "api_integration_title": "API-Integration",
+      "api_integration_desc": "Verbinden Sie sich mit externer Buchhaltungssoftware und Zahlungsabwicklern."
+    },
+    "help": {
+      "overview_title": "Dashboard-Übersicht",
+      "overview_content": "Dieses Dashboard bietet einen Überblick über Ihre Geschäftsfinanzen, einschließlich Einnahmen, ausstehender Rechnungen und Kundenmetriken."
+    },
+    "activity": {
+      "title": "Aktivitätsübersicht",
+      "no_recent_activity": "Keine kürzlichen Aktivitäten",
+      "activity_will_appear": "Aktivitäten werden hier angezeigt, während Sie das System verwenden",
+      "failed_to_load": "Fehler beim Laden der kürzlichen Aktivitäten",
+      "timeline_title": "Aktivitäts-Zeitlinie",
+      "timeline_description": "Vollständige Historie Ihrer Geschäftsaktivitäten",
+      "activity_summary": "Aktivitätszusammenfassung",
+      "total_activities": "Gesamte Aktivitäten",
+      "this_week": "Diese Woche",
+      "today": "Heute",
+      "filters": "Filter",
+      "activity_type": "Aktivitätstyp",
+      "time_period": "Zeitraum",
+      "all_activities": "Alle Aktivitäten",
+      "all_time": "Alle Zeit",
+      "this_month": "Dieser Monat",
+      "clear_all_filters": "Alle Filter löschen",
+      "chronological_view": "Chronologische Ansicht aller Geschäftsaktivitäten",
+      "no_activities_found": "Keine Aktivitäten gefunden",
+      "no_activities_recorded": "Es wurden noch keine Aktivitäten aufgezeichnet.",
+      "no_filtered_activities": "Keine {{type}}-Aktivitäten für den ausgewählten Zeitraum gefunden.",
+      "clear_filters": "Filter löschen",
+      "back_to_dashboard": "Zurück zum Dashboard",
+      "just_now": "Gerade eben",
+      "minutes_ago": "vor {{count}}m",
+      "hours_ago": "vor {{count}}h",
+      "days_ago": "vor {{count}}T",
+      "refresh": "Aktualisieren",
+      "badges": {
+        "completed": "Abgeschlossen",
+        "pending": "Ausstehend",
+        "attention": "Aufmerksamkeit",
+        "invoice": "Rechnung",
+        "client": "Kunde",
+        "inventory": "Inventar",
+        "approval": "Genehmigung",
+        "reminder": "Erinnerung",
+        "expense": "Ausgabe",
+        "report": "Bericht",
+        "activity": "Aktivität"
+      }
+    },
+    "recent_invoices": {
+      "title": "Kürzliche Rechnungen",
+      "view_all": "Alle anzeigen",
+      "failed_to_load": "Fehler beim Laden der kürzlichen Rechnungen"
+    }
   },
   "invoices": {
     "title": "Rechnungen",
     "description": "Rechnungen erstellen und verwalten",
     "new_invoice": "Neue Rechnung",
+    "inventory_invoice_description": "Erstellen Sie eine neue Rechnung mit Inventarintegration - wählen Sie Artikel aus Ihrem Inventarkatalog aus",
+    "create_with_inventory": "Mit Inventar erstellen",
+    "inventory_catalog_description": "Wählen Sie Artikel aus Ihrem Inventarkatalog mit automatischer Bestandsverfolgung und Preisgestaltung",
+    "select_from_inventory_catalog": "Aus Inventarkatalog auswählen",
+    "automatic_stock_validation": "Automatische Bestandsvalidierung",
+    "real_time_pricing_updates": "Echtzeit-Preisaktualisierungen",
+    "low_stock_warnings": "Niedrige Bestandswarnungen",
     "edit_invoice": "Rechnung bearbeiten",
     "clone_invoice": "Klonen",
     "created_label": "Erstellt",
@@ -227,7 +367,13 @@
     "mark_paid": "Als bezahlt markieren",
     "mark_overdue": "Als überfällig markieren",
     "delete_invoice": "Rechnung löschen",
+    "delete": "Löschen",
     "confirm_delete": "Sind Sie sicher, dass Sie diese Rechnung löschen möchten?",
+    "delete_confirm_title": "Rechnung löschen",
+    "delete_confirm_description": "Sind Sie sicher, dass Sie diese Rechnung löschen möchten? Diese Aktion verschiebt die Rechnung in den Papierkorb.",
+    "permanent_delete_confirm_title": "Rechnung endgültig löschen",
+    "permanent_delete_confirm_description": "Sind Sie sicher, dass Sie diese Rechnung endgültig löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden und die Rechnung wird vollständig aus dem System entfernt.",
+    "permanent_delete": "Endgültig löschen",
     "delete_success": "Rechnung erfolgreich in den Papierkorb verschoben",
     "delete_error": "Fehler beim Löschen der Rechnung",
     "delete_error_linked_expenses": "Rechnung kann nicht gelöscht werden, da verknüpfte Ausgaben vorhanden sind. Bitte trennen Sie zuerst die Verknüpfung auf oder löschen Sie die Ausgaben.",
@@ -365,6 +511,9 @@
     "amount": "Betrag",
     "view_details": "Details anzeigen",
     "no_update_history_available": "Keine Aktualisierungshistorie verfügbar",
+    "invoice_details": "Rechnungsdetails",
+    "creating": "Erstellen...",
+    "updating": "Aktualisieren...",
     "show_discount_in_pdf": "Rabatt im PDF anzeigen",
     "if_checked_discount_details_will_be_visible_in_the_pdf_preview_and_download": "Wenn aktiviert, werden Rabattdetails in der PDF-Vorschau und beim Download sichtbar sein.",
     "create_new_invoice": "Neue Rechnung erstellen",
@@ -1493,7 +1642,20 @@
     "support": "Support",
     "startTour": "Tour starten",
     "viewDocs": "Dokumentation anzeigen",
-    "contactSupport": "Support kontaktieren"
+    "contactSupport": "Support kontaktieren",
+    "help": "Hilfe",
+    "steps": "Schritte",
+    "interactive_walkthrough": "Interaktive Führung durch wichtige Funktionen",
+    "duration": "Dauer: ~{{minutes}} Minuten",
+    "contact_support": "Support kontaktieren",
+    "need_help": "Benötigen Sie zusätzliche Hilfe? Unser Support-Team ist da, um Ihnen zu helfen.",
+    "email_support": "E-Mail-Support",
+    "schedule_demo": "Demo planen",
+    "quick_tips": "Schnelle Tipps",
+    "tip_shortcuts": "Verwenden Sie Tastenkürzel: Strg+N für neue Rechnung",
+    "tip_templates": "Sparen Sie Zeit mit Rechnungsvorlagen",
+    "tip_reminders": "Richten Sie automatische Zahlungserinnerungen ein",
+    "tip_backups": "Exportieren Sie Daten regelmäßig für Backups"
   },
   "taxIntegration": {
     "title": "Steuerdienst-Integration",
@@ -1725,6 +1887,7 @@
     "invoice_details": "Rechnungsdetails",
     "pick_a_date": "Datum auswählen",
     "invoice_summary": "Rechnungszusammenfassung",
+    "subtotal":"Zwischensumme",
     "updating": "Aktualisierung...",
     "creating": "Erstellung...",
     "update_invoice": "Rechnung aktualisieren",
