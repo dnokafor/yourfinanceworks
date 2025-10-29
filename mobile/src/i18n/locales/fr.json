@@ -185,8 +185,6 @@
     "invoice_number": "Numéro de Facture",
     "client": "Client",
     "select_client": "Sélectionner Client",
-    "add_new_client": "Ajouter Nouveau Client",
-    "no_clients_found": "Aucun client trouvé",
     "add_client_to_get_started": "Ajoutez un nouveau client pour commencer",
     "invoice_date": "Date de Facture",
     "select_date": "Sélectionner Date",

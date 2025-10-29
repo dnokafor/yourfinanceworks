@@ -186,8 +186,6 @@
     "invoice_number": "Invoice Number",
     "client": "Client",
     "select_client": "Select Client",
-    "add_new_client": "Add New Client",
-    "no_clients_found": "No clients found",
     "add_client_to_get_started": "Add a new client to get started",
     "invoice_date": "Invoice Date",
     "select_date": "Select Date",
@@ -263,7 +261,6 @@
       "invoiceItemsMissing": "Invoice items could not be loaded properly",
       "invoiceLoadFailed": "Failed to load invoice data"
     },
-    "add_new_client": "Add New Client",
     "date": "Date",
     "new_client": "New Client",
     "no_clients_found": "No clients found. Please add a client first.",

@@ -45,13 +45,13 @@ export function RecentActivity({ refreshKey }: RecentActivityProps) {
         case 'paid':
         case 'approved':
         case 'completed':
-          return <Badge className="text-xs bg-green-100 text-green-800">{t('activity.badges.completed')}</Badge>;
+          return <Badge className="text-xs bg-green-100 text-green-800">{t('dashboard.activity.badges.completed')}</Badge>;
         case 'pending':
         case 'draft':
-          return <Badge className="text-xs bg-yellow-100 text-yellow-800">{t('activity.badges.pending')}</Badge>;
+          return <Badge className="text-xs bg-yellow-100 text-yellow-800">{t('dashboard.activity.badges.pending')}</Badge>;
         case 'overdue':
         case 'rejected':
-          return <Badge className="text-xs bg-red-100 text-red-800">{t('activity.badges.attention')}</Badge>;
+          return <Badge className="text-xs bg-red-100 text-red-800">{t('dashboard.activity.badges.attention')}</Badge>;
         default:
           return <Badge className="text-xs bg-gray-100 text-gray-800">{status}</Badge>;
       }
@@ -59,21 +59,21 @@ export function RecentActivity({ refreshKey }: RecentActivityProps) {
 
     switch (type) {
       case 'invoice':
-        return <Badge className="text-xs bg-blue-100 text-blue-800">{t('activity.badges.invoice')}</Badge>;
+        return <Badge className="text-xs bg-blue-100 text-blue-800">{t('dashboard.activity.badges.invoice')}</Badge>;
       case 'client':
-        return <Badge className="text-xs bg-green-100 text-green-800">{t('activity.badges.client')}</Badge>;
+        return <Badge className="text-xs bg-green-100 text-green-800">{t('dashboard.activity.badges.client')}</Badge>;
       case 'inventory':
-        return <Badge className="text-xs bg-purple-100 text-purple-800">{t('activity.badges.inventory')}</Badge>;
+        return <Badge className="text-xs bg-purple-100 text-purple-800">{t('dashboard.activity.badges.inventory')}</Badge>;
       case 'approval':
-        return <Badge className="text-xs bg-orange-100 text-orange-800">{t('activity.badges.approval')}</Badge>;
+        return <Badge className="text-xs bg-orange-100 text-orange-800">{t('dashboard.activity.badges.approval')}</Badge>;
       case 'reminder':
-        return <Badge className="text-xs bg-red-100 text-red-800">{t('activity.badges.reminder')}</Badge>;
+        return <Badge className="text-xs bg-red-100 text-red-800">{t('dashboard.activity.badges.reminder')}</Badge>;
       case 'expense':
-        return <Badge className="text-xs bg-indigo-100 text-indigo-800">{t('activity.badges.expense')}</Badge>;
+        return <Badge className="text-xs bg-indigo-100 text-indigo-800">{t('dashboard.activity.badges.expense')}</Badge>;
       case 'report':
-        return <Badge className="text-xs bg-teal-100 text-teal-800">{t('activity.badges.report')}</Badge>;
+        return <Badge className="text-xs bg-teal-100 text-teal-800">{t('dashboard.activity.badges.report')}</Badge>;
       default:
-        return <Badge className="text-xs bg-gray-100 text-gray-800">{t('activity.badges.activity')}</Badge>;
+        return <Badge className="text-xs bg-gray-100 text-gray-800">{t('dashboard.activity.badges.activity')}</Badge>;
     }
   };
 
