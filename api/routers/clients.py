@@ -301,10 +301,10 @@ async def update_client(
                 detail=CLIENT_NOT_FOUND
             )
         
-        # Update client fields, excluding email
         update_data = client.model_dump(exclude_unset=True)
-        if 'email' in update_data:
-            del update_data['email']  # Remove email from update data
+        # # Update client fields, excluding email
+        # if 'email' in update_data:
+        #     del update_data['email']  # Remove email from update data
         
         for field, value in update_data.items():
             setattr(db_client, field, value)
