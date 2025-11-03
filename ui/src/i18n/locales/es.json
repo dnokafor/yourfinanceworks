@@ -1045,10 +1045,14 @@
     "deleteUser": "Eliminar Usuario",
     "confirmToggleStatus": "¿Estás seguro de que quieres {{action}} al usuario {{email}}?",
     "confirmDeleteUser": "¿Estás seguro de que quieres eliminar al usuario {{email}}? Esta acción no se puede deshacer.",
-    "enterNewPassword": "Ingresa nueva contraseña para {{email}}:",
+    "enterNewPassword": "Ingresa nueva contraseña para",
     "statusToggled": "Estado del usuario actualizado exitosamente",
     "passwordReset": "Contraseña restablecida exitosamente",
-    "userDeleted": "Usuario eliminado exitosamente"
+    "userDeleted": "Usuario eliminado exitosamente",
+    "resetPasswordDescription": "Ingresa tu nueva contraseña abajo para completar el proceso de restablecimiento.",
+    "newPassword": "Nueva contraseña",
+    "confirmPassword": "Confirmar contraseña",
+    "confirmNewPassword": "Confirmar nueva contraseña"
   },
   "errors": {
     "USER_NOT_FOUND": "El usuario no existe. Por favor regístrese primero.",

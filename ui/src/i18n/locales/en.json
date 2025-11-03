@@ -1081,10 +1081,14 @@
     "deleteUser": "Delete User",
     "confirmToggleStatus": "Are you sure you want to {{action}} user {{email}}?",
     "confirmDeleteUser": "Are you sure you want to delete user {{email}}? This action cannot be undone.",
-    "enterNewPassword": "Enter new password for {{email}}:",
+    "enterNewPassword": "Enter new password",
     "statusToggled": "User status updated successfully",
     "passwordReset": "Password reset successfully",
-    "userDeleted": "User deleted successfully"
+    "userDeleted": "User deleted successfully",
+    "resetPasswordDescription": "Enter your new password below to complete the reset process.",
+    "newPassword": "New Password",
+    "confirmPassword": "Confirm Password",
+    "confirmNewPassword": "Confirm New Password"
   },
   "errors": {
     "USER_NOT_FOUND": "User does not exist. Please sign up first.",

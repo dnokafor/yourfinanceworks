@@ -33,6 +33,16 @@ import {
   DialogFooter,
   DialogTrigger
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from "@/components/ui/alert-dialog";
 import { Loader2, Plus } from "lucide-react";
 import { useTranslation } from 'react-i18next';
 import { getErrorMessage } from '@/lib/api';
@@ -92,6 +102,10 @@ export default function UsersPage() {
   const [togglingStatus, setTogglingStatus] = useState(false);
   const [resettingPassword, setResettingPassword] = useState(false);
   const [deletingUser, setDeletingUser] = useState(false);
+  const [resetPasswordModalOpen, setResetPasswordModalOpen] = useState(false);
+  const [userToReset, setUserToReset] = useState<User | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   // Get current user id from localStorage
   let currentUserId: number | null = null;
@@ -279,19 +293,39 @@ export default function UsersPage() {
     }
   };
 
-  const handleResetPassword = async (userId: number, userEmail: string) => {
-    const newPassword = prompt(t('users.enterNewPassword', { email: userEmail }));
-    if (!newPassword || newPassword.length < 6) {
-      if (newPassword !== null) {
-        toast.error(t('users.passwordTooShort'));
-      }
+  const openResetPasswordModal = (user: User) => {
+    setUserToReset(user);
+    setNewPassword("");
+    setConfirmPassword("");
+    setResetPasswordModalOpen(true);
+  };
+
+  const closeResetPasswordModal = () => {
+    setResetPasswordModalOpen(false);
+    setUserToReset(null);
+    setNewPassword("");
+    setConfirmPassword("");
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userToReset) return;
+
+    if (newPassword.length < 6) {
+      toast.error(t('users.passwordTooShort'));
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.error(t('users.passwordsDoNotMatch'));
       return;
     }
 
     setResettingPassword(true);
     try {
-      await superAdminApi.resetUserPassword(userId, newPassword, false);
+      await superAdminApi.resetUserPassword(userToReset.id, newPassword, false);
       toast.success(t('users.passwordReset'));
+      closeResetPasswordModal();
     } catch (err: any) {
       console.error("Failed to reset password:", err);
       toast.error(getErrorMessage(err, t));
@@ -563,7 +597,7 @@ export default function UsersPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => handleResetPassword(user.id, user.email)}
+                              onClick={() => openResetPasswordModal(user)}
                               disabled={resettingPassword}
                               className="h-8 px-2 text-xs"
                               title={t('users.resetPassword')}
@@ -667,8 +701,70 @@ export default function UsersPage() {
           </DialogContent>
         </Dialog>
 
+        {/* Reset Password Modal */}
+        <AlertDialog open={resetPasswordModalOpen} onOpenChange={setResetPasswordModalOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('users.resetPassword')}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t('users.resetPasswordDescription', { email: userToReset?.email })}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    {t('users.newPassword')}
+                  </label>
+                  <Input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder={t('users.enterNewPassword')}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    {t('users.confirmPassword')}
+                  </label>
+                  <Input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder={t('users.confirmNewPassword')}
+                    required
+                  />
+                </div>
+                {newPassword && newPassword.length > 0 && newPassword.length < 6 && (
+                  <div className="text-xs text-red-600">
+                    {t('users.passwordTooShort')}
+                  </div>
+                )}
+                {newPassword && confirmPassword && newPassword !== confirmPassword && (
+                  <div className="text-xs text-red-600">
+                    {t('users.passwordsDoNotMatch')}
+                  </div>
+                )}
+              </div>
+              <AlertDialogFooter className="flex gap-2">
+                <AlertDialogCancel disabled={resettingPassword}>
+                  {t('common.cancel')}
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  type="submit"
+                  disabled={resettingPassword || !newPassword || !confirmPassword || newPassword !== confirmPassword || newPassword.length < 6}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {resettingPassword ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  {t('users.resetPassword')}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </form>
+          </AlertDialogContent>
+        </AlertDialog>
 
       </div>
     </AppLayout>
   );
-} 
+}
