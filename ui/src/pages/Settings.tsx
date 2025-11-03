@@ -104,12 +104,25 @@ const Settings = () => {
     auto_reminders: true,
   });
 
-  const [taxSettings, setTaxSettings] = useState({
-    enabled: true,
-    base_url: "http://192.168.86.39:8001",
-    api_key: "ak_Pw0viX75yYrLT8tUmS2c912gDDrLsR4qvtIO8XRrruU",
-    timeout: 30,
-    retry_attempts: 3,
+  const [taxSettings, setTaxSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('taxSettings');
+      return saved ? JSON.parse(saved) : {
+        enabled: true,
+        base_url: "",
+        api_key: "",
+        timeout: 30,
+        retry_attempts: 3,
+      };
+    } catch {
+      return {
+        enabled: true,
+        base_url: "",
+        api_key: "",
+        timeout: 30,
+        retry_attempts: 3,
+      };
+    }
   });
   const [testingTaxConnection, setTestingTaxConnection] = useState(false);
   const [taxTestResult, setTaxTestResult] = useState<{success: boolean, message: string} | null>(null);

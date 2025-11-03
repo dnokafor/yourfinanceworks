@@ -39,7 +39,7 @@ SECRET_KEY = os.getenv("SECRET_KEY") or ("dev-insecure-key" if DEBUG else None)
 if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY must be set in the environment for production use")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
 # Simple in-memory rate limiting (per email) to deter brute-force attacks
 # Note: For multi-instance deployments, replace with a shared store (e.g., Redis)

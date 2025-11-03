@@ -144,7 +144,7 @@ class Expense(Base):
     id = Column(Integer, primary_key=True, index=True)
     # No tenant_id needed since each tenant has its own database
 
-    amount = Column(Float, nullable=False)
+    amount = Column(Float, nullable=True)
     currency = Column(String, default="USD", nullable=False)
     expense_date = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     category = Column(String, nullable=False)

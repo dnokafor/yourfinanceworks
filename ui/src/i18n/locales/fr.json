@@ -190,10 +190,12 @@
     "no_data": "Aucune donnée disponible",
     "stats": {
       "total_income": "Revenus Totaux",
+      "total_expenses": "Dépenses Totales",
       "pending_amount": "Montant en Attente",
       "total_clients": "Total des Clients",
       "overdue_invoices": "Factures en Retard",
       "revenue_description": "Revenus des factures payées",
+      "expenses_description": "Dépenses totales d'affaires",
       "pending_description": "En attente de paiement",
       "clients_description": "Comptes clients actifs",
       "overdue_description": "Factures avec date d'échéance dépassée"

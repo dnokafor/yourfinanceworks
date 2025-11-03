@@ -182,10 +182,12 @@
     "no_data": "Keine Daten verfügbar",
     "stats": {
       "total_income": "Gesamteinnahmen",
+      "total_expenses": "Gesamtausgaben",
       "pending_amount": "Ausstehender Betrag",
       "total_clients": "Gesamt Kunden",
       "overdue_invoices": "Überfällige Rechnungen",
       "revenue_description": "Umsatz aus bezahlten Rechnungen",
+      "expenses_description": "Gesamte Geschäftsausgaben",
       "pending_description": "Warten auf Zahlung",
       "clients_description": "Aktive Kundenkonten",
       "overdue_description": "Rechnungen nach Fälligkeitsdatum"

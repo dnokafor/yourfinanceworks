@@ -190,10 +190,12 @@
     "no_data": "No hay datos disponibles",
     "stats": {
       "total_income": "Ingresos Totales",
+      "total_expenses": "Gastos Totales",
       "pending_amount": "Monto Pendiente",
       "total_clients": "Total de Clientes",
       "overdue_invoices": "Facturas Vencidas",
       "revenue_description": "Ingresos de facturas pagadas",
+      "expenses_description": "Gastos totales del negocio",
       "pending_description": "Esperando pago",
       "clients_description": "Cuentas de clientes activas",
       "overdue_description": "Facturas con fecha de vencimiento pasada"

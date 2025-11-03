@@ -80,7 +80,7 @@ services:
       # Enable/disable tax service integration
       - TAX_SERVICE_ENABLED=${TAX_SERVICE_ENABLED:-true}
       # Base URL for tax service API endpoint
-      - TAX_SERVICE_BASE_URL=${TAX_SERVICE_BASE_URL:-http://192.168.86.39:8001}
+      - TAX_SERVICE_BASE_URL=${TAX_SERVICE_BASE_URL:-http://192.168.86.32:8001}
       # API key for authenticating with tax service
       - TAX_SERVICE_API_KEY=${TAX_SERVICE_API_KEY:-ak_Pw0viX75yYrLT8tUmS2c912gDDrLsR4qvtIO8XRrruU}
       # Timeout for tax service requests (in seconds)
