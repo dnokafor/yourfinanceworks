@@ -30,9 +30,15 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def get_attachment_info(invoice, new_attachments):
-    """Helper function to get attachment info considering both old and new style attachments"""
-    has_attachment = len(new_attachments) > 0 or bool(invoice.attachment_filename)
-    attachment_filename = new_attachments[0].filename if new_attachments else invoice.attachment_filename
+    """Helper function to get attachment info from modern attachment system"""
+    has_attachment = len(new_attachments) > 0
+    attachment_filename = new_attachments[0].filename if new_attachments else None
+    
+    # Fallback to legacy fields only if no modern attachments exist
+    if not has_attachment and hasattr(invoice, 'attachment_filename') and invoice.attachment_filename:
+        has_attachment = True
+        attachment_filename = invoice.attachment_filename
+    
     return has_attachment, attachment_filename
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
