@@ -1356,6 +1356,7 @@ export const authApi = {
       body: JSON.stringify(activationData),
     }),
   getCurrentUser: () => apiRequest<any>('/auth/me'),
+  getSSOStatus: () => apiRequest<{ google: boolean; microsoft: boolean; has_sso: boolean }>('/auth/sso-status', {}, { skipTenant: true }),
 };
 
 // User API methods

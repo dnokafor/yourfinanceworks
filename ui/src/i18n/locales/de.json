@@ -120,6 +120,7 @@
       "sign_in": "Anmelden",
       "or_continue_with": "Oder fortfahren mit",
       "sign_up_with_google": "Mit Google registrieren",
+      "sign_up_with_microsoft": "Mit Microsoft registrieren",
       "google_sso_coming_soon": "Google SSO kommt bald!",
       "validation": {
         "passwords_not_match": "Passwörter stimmen nicht überein",

@@ -184,6 +184,7 @@
       "sign_in": "Sign in",
       "or_continue_with": "Or continue with",
       "sign_up_with_google": "Sign up with Google",
+      "sign_up_with_microsoft": "Sign up with Microsoft",
       "google_sso_coming_soon": "Google SSO coming soon!",
       "validation": {
         "passwords_not_match": "Passwords do not match",

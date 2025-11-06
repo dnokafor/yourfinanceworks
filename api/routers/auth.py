@@ -2018,13 +2018,13 @@ async def remove_user_from_organization(
 ):
     """Remove a user from the current organization (admin only)"""
     require_admin(current_user, "remove users")
-    
+
     if user_id == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot remove yourself from the organization")
-    
+
     from models.models import user_tenant_association
     from utils.user_sync import remove_user_from_tenant_database
-    
+
     # Check if user has access to this tenant
     membership = db.execute(
         user_tenant_association.select().where(
@@ -2032,7 +2032,7 @@ async def remove_user_from_organization(
             user_tenant_association.c.tenant_id == current_user.tenant_id
         )
     ).first()
-    
+
     if not membership:
         # Check if it's their primary tenant
         user = db.query(MasterUser).filter(
@@ -2041,15 +2041,15 @@ async def remove_user_from_organization(
         ).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found in this organization")
-        
+
         # Cannot remove user from their primary tenant
         raise HTTPException(status_code=400, detail="Cannot remove user from their home organization")
-    
+
     # Get user details for logging
     user = db.query(MasterUser).filter(MasterUser.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     # Remove from association table
     db.execute(
         user_tenant_association.delete().where(
@@ -2057,10 +2057,23 @@ async def remove_user_from_organization(
             user_tenant_association.c.tenant_id == current_user.tenant_id
         )
     )
-    
+
     # Remove from tenant database
     remove_user_from_tenant_database(user_id, current_user.tenant_id)
-    
+
     db.commit()
-    
+
     return {"message": f"User {user.email} has been removed from the organization"}
+
+@router.get("/sso-status")
+async def get_sso_status():
+    """Get the status of available SSO providers (public endpoint)"""
+    # Check environment variables for SSO enablement
+    google_enabled = os.getenv("GOOGLE_SSO_ENABLED", "false").lower() == "true" and google_oauth_client is not None
+    azure_enabled = os.getenv("AZURE_SSO_ENABLED", "false").lower() == "true" and azure_oauth_client is not None
+
+    return {
+        "google": google_enabled,
+        "microsoft": azure_enabled,
+        "has_sso": google_enabled or azure_enabled
+    }

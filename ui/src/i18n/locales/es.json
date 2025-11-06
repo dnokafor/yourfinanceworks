@@ -128,6 +128,7 @@
       "sign_in": "Iniciar Sesión",
       "or_continue_with": "O continuar con",
       "sign_up_with_google": "Registrarse con Google",
+      "sign_up_with_microsoft": "Registrarse con Microsoft",
       "google_sso_coming_soon": "¡El SSO de Google estará disponible pronto!",
       "validation": {
         "passwords_not_match": "Las contraseñas no coinciden",

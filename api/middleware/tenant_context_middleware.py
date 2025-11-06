@@ -135,6 +135,10 @@ async def tenant_context_middleware(request: Request, call_next):
         "/api/v1/auth/change-password",
         # Google OAuth SSO endpoints must be public
         "/api/v1/auth/google/login", "/api/v1/auth/google/callback",
+        # Azure AD OAuth SSO endpoints must be public
+        "/api/v1/auth/azure/login", "/api/v1/auth/azure/callback",
+        # SSO status endpoint must be public (used by login/signup pages)
+        "/api/v1/auth/sso-status",
         # Organization join endpoints must be public (used during signup)
         "/api/v1/organization-join/lookup", "/api/v1/organization-join/request",
     ]
