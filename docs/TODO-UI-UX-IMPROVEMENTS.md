@@ -150,7 +150,7 @@
 
 ### **TODO 20: Security & Trust Elements**
 - [ ] **SSL Indicators**: Security badges
-- [ ] **Encryption Info**: Data protection notices
+- [x] **Encryption Info**: Data protection notices
 - [ ] **Privacy Links**: Easy access to policies
 - [ ] **Audit Timestamps**: Security audit info
 

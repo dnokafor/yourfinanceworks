@@ -9,8 +9,8 @@ import os
 
 from models.database import get_master_db, get_db, set_tenant_context
 from routers.auth import get_current_user
-from models.models import MasterUser, Tenant, Settings
-from models.models_per_tenant import Invoice, Client, AIConfig, AIChatHistory
+from models.models import MasterUser, Tenant
+from models.models_per_tenant import Invoice, Client, AIConfig, AIChatHistory, Settings
 from schemas.settings import Settings as SettingsSchema
 from services.tenant_database_manager import tenant_db_manager
 from constants.recommendation_codes import (
@@ -211,7 +211,7 @@ async def suggest_actions(
             "error": str(e)
         }
     
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 
 class ChatRequest(BaseModel):
     message: str
@@ -1274,24 +1274,28 @@ This comprehensive statistical analysis was performed using your actual invoice 
             "error": f"Failed to get AI response: {str(e)}"
         }
     
+class ChatMessageRequest(BaseModel):
+    message: str
+    sender: str  # 'user' or 'ai'
+
+    @validator('sender')
+    def validate_sender(cls, v):
+        if v not in ['user', 'ai']:
+            raise ValueError('sender must be either "user" or "ai"')
+        return v
+
 @router.post("/chat/message")
 def save_ai_chat_message(
-    message: str,
-    sender: str,  # 'user' or 'ai'
-    db: Session = Depends(get_master_db),
+    request: ChatMessageRequest,
+    db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
-    # Get tenant_id if available
-    tenant_id = getattr(current_user, 'tenant_id', None)
-    # Manually set tenant context and get tenant database
-    set_tenant_context(tenant_id)
-    tenant_session = tenant_db_manager.get_tenant_session(tenant_id)
     try:
         chat_message = AIChatHistory(
             user_id=current_user.id,
-            tenant_id=tenant_id,
-            message=message,
-            sender=sender,
+            tenant_id=getattr(current_user, 'tenant_id', None),
+            message=request.message,
+            sender=request.sender,
             created_at=datetime.now(timezone.utc)
         )
         db.add(chat_message)
@@ -1312,11 +1316,44 @@ def get_ai_chat_history(
     current_user: MasterUser = Depends(get_current_user)
 ):
     try:
-        # Use tenant database for chat history
+        # Get retention period from settings (default 7 days, max 30 days)
+        # Use the same approach as settings router - get from key-value store
+        retention_setting = db.query(Settings).filter(Settings.key == "ai_chat_history_retention_days").first()
+        retention_days = 7  # default
+        if retention_setting and retention_setting.value:
+            try:
+                retention_days = int(retention_setting.value)
+                # Ensure retention is within allowed range (1-30 days)
+                retention_days = max(1, min(30, retention_days))
+            except (ValueError, TypeError):
+                retention_days = 7
+
+        try:
+            user_id = current_user.id
+            logger.info(f"AI Chat History: retention_days={retention_days}, user_id={user_id}")
+        except AttributeError as e:
+            logger.error(f"AI Chat History: current_user has no id attribute: {e}, user_attrs={dir(current_user)}")
+            raise HTTPException(status_code=500, detail="User authentication error")
+
+        # Calculate cutoff date
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=retention_days)
+
+        # Get chat history within retention period
         history = db.query(AIChatHistory).filter(
-            AIChatHistory.user_id == current_user.id
+            AIChatHistory.user_id == current_user.id,
+            AIChatHistory.created_at >= cutoff_date
         ).order_by(AIChatHistory.created_at.asc()).limit(50).all()
-        
+
+        # Purge old messages (older than retention period)
+        deleted_count = db.query(AIChatHistory).filter(
+            AIChatHistory.user_id == current_user.id,
+            AIChatHistory.created_at < cutoff_date
+        ).delete()
+
+        if deleted_count > 0:
+            db.commit()
+            logger.info(f"Purged {deleted_count} old AI chat messages for user {current_user.id}")
+
         return [{
             "id": msg.id,
             "message": msg.message,
@@ -1324,6 +1361,7 @@ def get_ai_chat_history(
             "created_at": msg.created_at.isoformat()
         } for msg in history]
     except Exception as e:
+        logger.error(f"AI Chat History error: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get AI chat history: {str(e)}"

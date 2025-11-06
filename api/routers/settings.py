@@ -60,6 +60,17 @@ async def get_settings(
         else:
             invoice_settings = default_invoice_settings
         
+        # Get AI chat history retention setting from tenant database
+        ai_chat_history_retention_setting = db.query(Settings).filter(Settings.key == "ai_chat_history_retention_days").first()
+        ai_chat_history_retention_days = 7  # default
+        if ai_chat_history_retention_setting and ai_chat_history_retention_setting.value:
+            try:
+                ai_chat_history_retention_days = int(ai_chat_history_retention_setting.value)
+                # Ensure it's within valid range (1-30 days)
+                ai_chat_history_retention_days = max(1, min(30, ai_chat_history_retention_days))
+            except (ValueError, TypeError):
+                ai_chat_history_retention_days = 7
+
         # Return tenant info formatted as settings
         return {
             "company_info": {
@@ -71,7 +82,8 @@ async def get_settings(
                 "logo": tenant.company_logo_url or ""
             },
             "invoice_settings": invoice_settings,
-            "enable_ai_assistant": tenant.enable_ai_assistant or False
+            "enable_ai_assistant": tenant.enable_ai_assistant or False,
+            "ai_chat_history_retention_days": ai_chat_history_retention_days
         }
     finally:
         master_db.close()
@@ -111,6 +123,29 @@ async def update_settings(
     # Update AI assistant setting
     if "enable_ai_assistant" in settings:
         tenant.enable_ai_assistant = settings["enable_ai_assistant"]
+
+    # Update AI chat history retention setting
+    if "ai_chat_history_retention_days" in settings:
+        retention_days = settings["ai_chat_history_retention_days"]
+        # Validate retention days (1-30)
+        if not isinstance(retention_days, int) or retention_days < 1 or retention_days > 30:
+            raise HTTPException(status_code=400, detail="AI chat history retention days must be between 1 and 30")
+
+        # Get or create the setting record
+        retention_setting = db.query(Settings).filter(Settings.key == "ai_chat_history_retention_days").first()
+        if retention_setting:
+            retention_setting.value = retention_days
+            retention_setting.updated_at = datetime.now(timezone.utc)
+        else:
+            retention_setting = Settings(
+                key="ai_chat_history_retention_days",
+                value=retention_days,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc)
+            )
+            db.add(retention_setting)
+
+        db.commit()
     
     # Update invoice settings in tenant database
     invoice_settings = settings.get("invoice_settings", {})

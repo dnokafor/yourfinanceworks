@@ -486,19 +486,19 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
         return user.tenant_id?.toString();
       } catch { return undefined; }
     })();
-    
+
     const requestUrl = url.startsWith('http') ? url : `${import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'}${url}`;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(token && { 'Authorization': `Bearer ${token}` }),
       ...(tenantId && { 'X-Tenant-ID': tenantId }),
     };
-    
+
     const response = await fetch(requestUrl, {
       ...options,
       headers: { ...headers, ...options.headers },
     });
-    
+
     if (!response.ok) {
       const errorText = await response.text();
       let errorMessage = 'Request failed';
@@ -510,8 +510,23 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
       }
       throw new Error(errorMessage);
     }
-    
+
     return response.json();
+  };
+
+  // Helper function to save chat messages
+  const saveChatMessage = async (message: string, sender: 'user' | 'ai') => {
+    try {
+      await aiApiRequest('/ai/chat/message', {
+        method: 'POST',
+        body: JSON.stringify({
+          message,
+          sender
+        })
+      });
+    } catch (error) {
+      console.error(`Failed to save ${sender} message:`, error);
+    }
   };
 
   const handleSendMessage = async (messageText?: string) => {
@@ -521,6 +536,9 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
     const newMessage: Message = { id: messages.length + 1, sender: 'user', text: textToSend };
     setMessages((prev) => [...prev, newMessage]);
     if (!messageText) setInput('');
+
+    // Save user message to backend
+    await saveChatMessage(textToSend, 'user');
 
     // Show typing indicator
     setIsThinking(true);
@@ -631,6 +649,9 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
               </div>
             );
 
+            // Save AI response to backend
+            await saveChatMessage("Invoice pattern analysis response", 'ai');
+
             setMessages((prev) => [...prev.slice(0, -1), { id: prev.length, sender: 'ai', text: analysisComponent }]);
             setIsThinking(false);
             setIsGenerating(false);
@@ -710,6 +731,9 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
               </div>
             );
             
+            // Save AI response to backend
+            await saveChatMessage("Suggested actions response", 'ai');
+
             setMessages((prev) => [...prev.slice(0, -1), { id: prev.length, sender: 'ai', text: actionsComponent }]);
             setIsThinking(false);
             setIsGenerating(false);
@@ -742,9 +766,12 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
               </div>
             );
             
-            setMessages((prev) => [...prev.slice(0, -1), { 
-              id: prev.length, 
-              sender: 'ai', 
+            // Save AI response to backend
+            await saveChatMessage("Payment charts response", 'ai');
+
+            setMessages((prev) => [...prev.slice(0, -1), {
+              id: prev.length,
+              sender: 'ai',
               text: (
                 <div>
                   {paymentCharts}
@@ -783,6 +810,10 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
 
         if (response.success) {
           const aiResponse = response.data.response || response.data.message || "I'm sorry, I couldn't generate a response.";
+
+          // Save AI response to backend
+          await saveChatMessage(aiResponse, 'ai');
+
           setMessages((prev) => [...prev.slice(0, -1), { id: prev.length, sender: 'ai', text: <EnhancedAIResponse text={aiResponse} /> }]);
           setIsThinking(false);
           setIsGenerating(false);
@@ -815,6 +846,10 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
 
         if (response.success) {
           const aiResponse = response.data.response || response.data.message || "I'm sorry, I couldn't generate a response.";
+
+          // Save AI response to backend
+          await saveChatMessage(aiResponse, 'ai');
+
           setMessages((prev) => [...prev.slice(0, -1), { id: prev.length, sender: 'ai', text: <EnhancedAIResponse text={aiResponse} /> }]);
           setIsThinking(false);
           setIsGenerating(false);
@@ -845,6 +880,10 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
 
         if (response.success) {
           const aiResponse = response.data.response || response.data.message || "I'm sorry, I couldn't generate a response.";
+
+          // Save AI response to backend
+          await saveChatMessage(aiResponse, 'ai');
+
           setMessages((prev) => [...prev.slice(0, -1), { id: prev.length, sender: 'ai', text: <EnhancedAIResponse text={aiResponse} /> }]);
           setIsThinking(false);
           setIsGenerating(false);
