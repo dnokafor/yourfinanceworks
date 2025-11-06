@@ -1689,7 +1689,8 @@
     "implement_stricter_terms": "Strengere Zahlungsbedingungen implementieren",
     "review_business_processes": "Überprüfen Sie Ihre Rechnungs- und Zahlungseinzugsprozesse",
     "error_message": "Entschuldigung, ich bin auf einen Fehler gestoßen. Bitte versuchen Sie es erneut oder überprüfen Sie Ihre KI-Konfiguration.",
-    "no_ai_config_found": "Keine KI-Konfiguration gefunden."
+    "no_ai_config_found": "Keine KI-Konfiguration gefunden.",
+    "chatHistoryRetentionNotice": "Chat-Verlauf wird für {{days}} Tage aufbewahrt"
   },
   "recommendations": {
     "CONSIDER_STRICTER_PAYMENT_TERMS": "Erwägen Sie strengere Zahlungsbedingungen.",

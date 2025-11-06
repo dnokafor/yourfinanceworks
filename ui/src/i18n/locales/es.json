@@ -1761,7 +1761,8 @@
     "review_payment_terms": "Revisar términos de pago",
     "follow_up_recent_invoices": "Dar seguimiento a facturas recientes",
     "implement_stricter_terms": "Implementar términos de pago más estrictos",
-    "review_business_processes": "Revisa tus procesos de facturación y cobro de pagos"
+    "review_business_processes": "Revisa tus procesos de facturación y cobro de pagos",
+    "chatHistoryRetentionNotice": "El historial de chat se conservará durante {{days}} días"
   },
   "currency_manager": {
     "custom_currencies": "Monedas Personalizadas",

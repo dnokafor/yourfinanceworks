@@ -1799,7 +1799,8 @@
     "implement_stricter_terms": "Implement stricter payment terms",
     "review_business_processes": "Review your invoicing and payment collection processes",
     "error_message": "Sorry, I encountered an error. Please try again or check your AI configuration.",
-    "no_ai_config_found": "No AI configuration found. Please check your AI configuration."
+    "no_ai_config_found": "No AI configuration found. Please check your AI configuration.",
+    "chatHistoryRetentionNotice": "Chat history will be retained for {{days}} days"
   },
   "recommendations": {
     "CONSIDER_STRICTER_PAYMENT_TERMS": "Consider implementing stricter payment terms.",
