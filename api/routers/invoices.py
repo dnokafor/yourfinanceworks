@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 
 from models.database import get_db
-from models.models_per_tenant import Invoice, Client, User, InvoiceItem, DiscountRule
+from models.models_per_tenant import Invoice, Client, User, InvoiceItem, DiscountRule, Settings
 from models.models import MasterUser
 from routers.payments import Payment
 from schemas.invoice import InvoiceCreate, InvoiceUpdate, Invoice as InvoiceSchema, InvoiceWithClient, InvoiceHistory, InvoiceHistoryCreate, RecycleBinResponse, DeletedInvoice, RestoreInvoiceRequest
@@ -124,14 +124,24 @@ async def create_invoice(
         incoming_due_date = normalize_to_midnight_naive(invoice.due_date) if invoice.due_date else None
         incoming_created_at = normalize_to_midnight_utc(invoice.date) if getattr(invoice, 'date', None) else None
 
+        # Get default notes from settings if no notes provided
+        default_notes = None
+        if not invoice.notes and not invoice.description:
+            try:
+                invoice_settings_record = db.query(Settings).filter(Settings.key == "invoice_settings").first()
+                if invoice_settings_record and invoice_settings_record.value:
+                    default_notes = invoice_settings_record.value.get("notes", "")
+            except Exception as e:
+                logger.warning(f"Failed to retrieve default notes from settings: {e}")
+
         db_invoice = Invoice(
             number=invoice_number,
             amount=float(invoice.amount),
             currency=invoice_currency,
             due_date=incoming_due_date,
             status=invoice.status,
-            # Persist description into notes field for backward compatibility
-            notes=invoice.description or invoice.notes,
+            # Persist description into notes field for backward compatibility, or use default notes
+            notes=invoice.description or invoice.notes or default_notes,
             client_id=invoice.client_id,
             created_at=incoming_created_at or datetime.now(timezone.utc),
             updated_at=incoming_created_at or datetime.now(timezone.utc),
@@ -2806,7 +2816,17 @@ async def upload_invoice_attachment_new(
         # Include OCR results if available
         if ocr_result:
             response["ocr_result"] = ocr_result
-            
+
+        # Release processing lock for invoice if it was used
+        try:
+            from services.ocr_service import release_processing_lock
+            invoice_id_for_lock = invoice_id
+            released = release_processing_lock("invoice", invoice_id_for_lock)
+            if released:
+                logger.info(f"Released processing lock for invoice {invoice_id_for_lock}")
+        except Exception as lock_error:
+            logger.warning(f"Failed to release processing lock for invoice {invoice_id}: {lock_error}")
+
         return response
 
     except HTTPException:

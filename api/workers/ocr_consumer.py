@@ -765,6 +765,15 @@ def main() -> int:
                             stmt.extracted_count = count
                             db.commit()
                             logger.info(f"Bank statement processed: id={statement_id} count={count}")
+
+                            # Release processing lock for bank statement
+                            try:
+                                from services.ocr_service import release_processing_lock
+                                release_processing_lock("bank_statement", statement_id)
+                                logger.info(f"Released processing lock for bank statement {statement_id}")
+                            except Exception as lock_error:
+                                logger.warning(f"Failed to release processing lock for bank statement {statement_id}: {lock_error}")
+
                             try:
                                 consumer.commit(message=msg, asynchronous=False)
                             except Exception:
@@ -805,6 +814,17 @@ def main() -> int:
                         # Run extraction
                         import asyncio
                         data = asyncio.get_event_loop().run_until_complete(process_pdf_with_ai(file_path, ai_conf))
+
+                        # Release processing lock for invoice
+                        try:
+                            from services.ocr_service import release_processing_lock
+                            # Extract invoice_id from task_id or use a different identifier
+                            # For now, we'll try to parse the task_id or use a generic approach
+                            release_processing_lock("invoice", task_id)
+                            logger.info(f"Released processing lock for invoice task {task_id}")
+                        except Exception as lock_error:
+                            logger.warning(f"Failed to release processing lock for invoice task {task_id}: {lock_error}")
+
                         # Publish result
                         from services.ocr_service import publish_invoice_result
                         publish_invoice_result(task_id, tenant_id, {"invoice_data": data})

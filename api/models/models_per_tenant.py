@@ -181,6 +181,10 @@ class Expense(Base):
     manual_override = Column(Boolean, default=False, nullable=False)
     analysis_updated_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Receipt timestamp fields for expense habit analytics
+    receipt_timestamp = Column(DateTime(timezone=True), nullable=True)  # Exact timestamp from receipt
+    receipt_time_extracted = Column(Boolean, default=False, nullable=False)  # Whether timestamp was extracted from receipt
+
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -938,7 +942,7 @@ class Reminder(Base):
     
     # Metadata
     tags = Column(JSON, nullable=True)  # Array of tags for categorization
-    extra_metadata = Column("metadata", JSON, nullable=True)  # Additional flexible data
+    extra_metadata = Column(JSON, nullable=True)  # Additional flexible data
     
     # Soft delete
     is_deleted = Column(Boolean, default=False, nullable=False)

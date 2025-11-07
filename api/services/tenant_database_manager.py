@@ -301,32 +301,58 @@ class TenantDatabaseManager:
             return []
     
     def get_existing_tenant_ids(self) -> list:
-        """Get list of tenant IDs that have both master record and database"""
+        """Get list of tenant IDs that have both master record and database
+        
+        Optimized to use a single JOIN query instead of N+1 queries
+        """
         try:
-            # Get tenant IDs from master database
+            # Get tenant IDs from master database and check database existence in one query
             master_session_factory = self.master_session
             if master_session_factory is None:
                 return []
             
             master_db = master_session_factory()
             try:
-                tenant_rows = master_db.execute(text("SELECT id FROM tenants WHERE is_active = TRUE")).fetchall()
-                master_tenant_ids = [row[0] for row in tenant_rows]
+                # Use a single query to get active tenants that have databases
+                # This joins the tenants table with pg_database to check existence
+                query = text("""
+                    SELECT t.id 
+                    FROM tenants t
+                    INNER JOIN pg_database d ON d.datname = 'tenant_' || t.id
+                    WHERE t.is_active = TRUE
+                    ORDER BY t.id
+                """)
+                tenant_rows = master_db.execute(query).fetchall()
+                existing_tenant_ids = [row[0] for row in tenant_rows]
+                
+                logger.debug(f"Found {len(existing_tenant_ids)} active tenants with databases")
+                return existing_tenant_ids
             finally:
                 master_db.close()
             
-            # Filter to only those with existing databases
-            existing_tenant_ids = []
-            for tenant_id in master_tenant_ids:
-                if self.tenant_database_exists(tenant_id):
-                    existing_tenant_ids.append(tenant_id)
-                else:
-                    logger.warning(f"Tenant {tenant_id} exists in master but database is missing")
-            
-            return existing_tenant_ids
         except Exception as e:
             logger.error(f"Failed to get existing tenant IDs: {e}")
-            return []
+            # Fallback to old method if the optimized query fails
+            try:
+                master_db = master_session_factory()
+                try:
+                    tenant_rows = master_db.execute(text("SELECT id FROM tenants WHERE is_active = TRUE")).fetchall()
+                    master_tenant_ids = [row[0] for row in tenant_rows]
+                finally:
+                    master_db.close()
+                
+                # Filter to only those with existing databases
+                existing_tenant_ids = []
+                for tenant_id in master_tenant_ids:
+                    if self.tenant_database_exists(tenant_id):
+                        existing_tenant_ids.append(tenant_id)
+                    else:
+                        logger.warning(f"Tenant {tenant_id} exists in master but database is missing")
+                
+                return existing_tenant_ids
+            except Exception as fallback_error:
+                logger.error(f"Fallback method also failed: {fallback_error}")
+                return []
     
     def close_all_connections(self):
         """Close all database connections"""

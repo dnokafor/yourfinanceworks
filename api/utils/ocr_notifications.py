@@ -279,11 +279,46 @@ class OCRNotificationManager:
         if notification_key in self.notifications:
             del self.notifications[notification_key]
     
+    def clear_all_notifications(self) -> int:
+        """
+        Clear all notifications for all users/sessions.
+
+        Returns:
+            Number of notifications cleared
+        """
+        count = len(self.notifications)
+        self.notifications.clear()
+        logger.info(f"Cleared {count} notification entries")
+        return count
+
+    def get_all_notifications_summary(self) -> Dict[str, Any]:
+        """
+        Get summary of all stored notifications.
+
+        Returns:
+            Dictionary with summary information
+        """
+        summary = {
+            "total_users": len(self.notifications),
+            "users": []
+        }
+
+        for notification_key, notifications in self.notifications.items():
+            user_id, session_id = notification_key.split('_', 1)
+            summary["users"].append({
+                "user_id": user_id if user_id != "anonymous" else None,
+                "session_id": session_id if session_id != "no_session" else None,
+                "notification_count": len(notifications),
+                "latest_notification": notifications[-1]["timestamp"] if notifications else None
+            })
+
+        return summary
+
     def _get_filename(self, file_path: str) -> str:
         """Extract filename from file path."""
         from pathlib import Path
         return Path(file_path).name
-    
+
     def _get_current_timestamp(self) -> str:
         """Get current timestamp as ISO string."""
         from datetime import datetime
@@ -318,3 +353,14 @@ def notify_ocr_processing_completed(file_path: str, transaction_count: int, proc
 def notify_ocr_processing_failed(file_path: str, error_message: str, is_retryable: bool = False, retry_delay: Optional[int] = None, user_id: Optional[int] = None, session_id: Optional[str] = None):
     """Notify that OCR processing has failed."""
     ocr_notification_manager.notify_processing_failed(file_path, error_message, is_retryable, retry_delay, user_id, session_id)
+
+
+# Convenience functions for clearing notifications
+def clear_all_ocr_notifications() -> int:
+    """Clear all OCR notifications for all users/sessions."""
+    return ocr_notification_manager.clear_all_notifications()
+
+
+def get_ocr_notifications_summary() -> Dict[str, Any]:
+    """Get summary of all stored OCR notifications."""
+    return ocr_notification_manager.get_all_notifications_summary()

@@ -36,6 +36,10 @@ class ExpenseBase(BaseModel):
     manual_override: Optional[bool] = Field(False, description="True if user manually edited; stops further analysis")
     disable_ai_recognition: Optional[bool] = Field(False, description="Disable AI document recognition for this expense")
 
+    # Receipt timestamp fields for expense habit analytics
+    receipt_timestamp: Optional[datetime] = Field(None, description="Exact timestamp extracted from receipt")
+    receipt_time_extracted: Optional[bool] = Field(False, description="Whether timestamp was successfully extracted from receipt")
+
     @field_validator('amount')
     @classmethod
     def validate_amount(cls, v):
@@ -92,6 +96,8 @@ class ExpenseUpdate(BaseModel):
     analysis_error: Optional[str] = None
     manual_override: Optional[bool] = None
     disable_ai_recognition: Optional[bool] = None
+    receipt_timestamp: Optional[datetime] = None
+    receipt_time_extracted: Optional[bool] = None
 
     @field_validator('status')
     @classmethod
@@ -117,6 +123,8 @@ class Expense(ExpenseBase):
     receipt_filename: Optional[str] = None  # legacy single receipt
     attachments_count: Optional[int] = None
     analysis_updated_at: Optional[datetime] = None
+    receipt_timestamp: Optional[datetime] = None
+    receipt_time_extracted: Optional[bool] = None
 
     model_config = ConfigDict(from_attributes=True)
     

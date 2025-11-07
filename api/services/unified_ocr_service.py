@@ -272,7 +272,9 @@ class StructuredDataEngine:
             return (
                 "You are an OCR parser for expense receipts. Extract key expense fields and respond ONLY with compact JSON. "
                 "Required keys: amount, currency, expense_date (YYYY-MM-DD), category, vendor, tax_rate, tax_amount, "
-                "total_amount, payment_method, reference_number, notes. "
+                "total_amount, payment_method, reference_number, notes, receipt_timestamp (YYYY-MM-DD HH:MM:SS if time is visible on receipt). "
+                "IMPORTANT: For receipt_timestamp, look carefully for any time information on the receipt (like '14:32', '2:45 PM', '10:15 AM', etc.). "
+                "If you find a time, combine it with the date to create a full timestamp. If only date is visible, set receipt_timestamp to null. "
                 "If a field is unknown, set it to null. Do not include any prose."
             )
         

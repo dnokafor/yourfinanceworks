@@ -142,11 +142,15 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
         setDiscountRules(discountRulesData);
         setTenantInfo(tenantData);
         
-        // Auto-generate invoice number
+        // Auto-generate invoice number and populate default notes
         if (settingsData?.invoice_settings) {
-          const { prefix, next_number } = settingsData.invoice_settings;
+          const { prefix, next_number, notes } = settingsData.invoice_settings;
           const invoiceNumber = `${prefix}${next_number}`;
-          setFormData(prev => ({ ...prev, number: invoiceNumber }));
+          setFormData(prev => ({ 
+            ...prev, 
+            number: invoiceNumber,
+            notes: notes || ''
+          }));
         }
       } catch (error) {
         console.error('Failed to load settings:', error);

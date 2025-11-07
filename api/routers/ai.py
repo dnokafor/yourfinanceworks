@@ -250,17 +250,14 @@ async def ai_chat(
                 print(f"Auto-set single active AI config as default: {config.provider_name}")
         
         if not ai_config:
-            # Fallback to environment variables
+            # Fallback to environment variables using unified service
             print("No AI config found in database, checking environment variables...")
             logger.info("No AI config found in database, checking environment variables...")
 
-            # Check for environment variables
-            env_provider = os.getenv("AI_PROVIDER", "")
-            env_model = os.getenv("AI_MODEL", "")
-            env_api_key = os.getenv("AI_API_KEY", "")
-            env_api_url = os.getenv("AI_API_URL", "")
+            from services.ai_config_service import AIConfigService
+            env_config = AIConfigService.get_ai_config(db, component="chat", require_ocr=False)
 
-            if not env_provider or not env_model:
+            if not env_config:
                 return {
                     "success": False,
                     "error": "No AI configuration found. Please configure an AI provider in Settings > AI Provider Configurations."
@@ -268,15 +265,15 @@ async def ai_chat(
 
             # Create a temporary config object from environment variables
             class EnvAIConfig:
-                def __init__(self):
-                    self.provider_name = env_provider
-                    self.model_name = env_model
-                    self.api_key = env_api_key if env_api_key else None
-                    self.provider_url = env_api_url if env_api_url else None
+                def __init__(self, config_dict):
+                    self.provider_name = config_dict["provider_name"]
+                    self.model_name = config_dict["model_name"]
+                    self.api_key = config_dict.get("api_key")
+                    self.provider_url = config_dict.get("provider_url")
                     self.is_active = True
                     self.is_default = True
 
-            ai_config = EnvAIConfig()
+            ai_config = EnvAIConfig(env_config)
             print(f"Using AI config from environment: provider={ai_config.provider_name}, model={ai_config.model_name}")
             logger.info(f"Using AI config from environment: provider={ai_config.provider_name}, model={ai_config.model_name}")
 

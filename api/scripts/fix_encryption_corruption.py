@@ -23,7 +23,7 @@ def setup_environment():
     """Set up the environment for the script."""
     # Set environment variables to prevent hanging during database operations
     os.environ['DB_INIT_PHASE'] = 'false'
-    
+
     # Import required modules
     try:
         from services.encryption_service import get_encryption_service

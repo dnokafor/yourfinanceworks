@@ -1,37 +1,19 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Notification } from '@/components/notifications/NotificationBell';
 
-const STORAGE_KEY = 'ai_notifications';
 const MAX_NOTIFICATIONS = 50;
 
 export function useNotifications() {
+  // Notifications are now ephemeral - they don't persist across page reloads
+  // This is the expected behavior for real-time notifications
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  // Load notifications from localStorage on mount
+  // Clean up any old localStorage data from previous versions
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        const validNotifications = parsed.map((n: any) => ({
-          ...n,
-          timestamp: new Date(n.timestamp)
-        }));
-        setNotifications(validNotifications);
-      }
-    } catch (error) {
-      console.error('Failed to load notifications:', error);
-    }
+    // Remove old notification storage if it exists
+    localStorage.removeItem('ai_notifications');
+    localStorage.removeItem('ai_notifications_version');
   }, []);
-
-  // Save notifications to localStorage whenever they change
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(notifications));
-    } catch (error) {
-      console.error('Failed to save notifications:', error);
-    }
-  }, [notifications]);
 
   const addNotification = useCallback((
     type: Notification['type'],
@@ -61,7 +43,6 @@ export function useNotifications() {
 
   const clearAll = useCallback(() => {
     setNotifications([]);
-    localStorage.removeItem(STORAGE_KEY);
   }, []);
 
   const updateNotification = useCallback((id: string, updates: Partial<Notification>) => {

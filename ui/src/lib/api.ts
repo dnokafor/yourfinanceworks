@@ -401,6 +401,8 @@ export interface Expense {
   imported_from_attachment?: boolean;
   analysis_status?: 'not_started' | 'queued' | 'processing' | 'done' | 'failed' | 'cancelled';
   manual_override?: boolean;
+  receipt_timestamp?: string | null;
+  receipt_time_extracted?: boolean;
 }
 
 export interface ExpenseAttachmentMeta {
@@ -1827,7 +1829,7 @@ export const expenseApi = {
       body: JSON.stringify({ expenses }),
     }),
 
-  // Expense Analytics
+  // Basic Expense Analytics (for Expenses page summary)
   getExpenseSummary: (params?: {
     period?: string;
     start_date?: string;

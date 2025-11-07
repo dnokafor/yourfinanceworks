@@ -585,7 +585,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
       status: invoice ? (isValidInvoiceStatus(invoice.status) ? invoice.status : "pending") : "pending",
       paidAmount: invoice?.paid_amount || 0,
       items: safeItems,
-      notes: invoice?.notes || "",
+      notes: invoice?.notes || settings?.invoice_settings?.notes || "",
       isRecurring: invoice?.is_recurring || false,
       recurringFrequency: invoice?.recurring_frequency || "monthly",
       discountType: "percentage", // Will be overridden by form reset logic if discount rule is found
@@ -744,6 +744,25 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
       form.trigger();
     }
   }, [initialData, attachment, isEdit, form]);
+
+  // Populate default notes from settings when creating a new invoice
+  useEffect(() => {
+    // Only apply default notes when:
+    // 1. Not editing an existing invoice
+    // 2. Settings are loaded
+    // 3. Notes field is empty
+    // 4. initialData doesn't have notes (or no initialData)
+    if (!isEdit && settings?.invoice_settings?.notes) {
+      const currentNotes = form.getValues('notes');
+      const hasInitialDataNotes = initialData?.notes;
+
+      // Only set default notes if the field is empty and initialData didn't provide notes
+      if (!currentNotes && !hasInitialDataNotes) {
+        form.setValue('notes', settings.invoice_settings.notes);
+        console.log('🔍 Applied default notes from settings:', settings.invoice_settings.notes);
+      }
+    }
+  }, [settings, isEdit, form, initialData]);
 
   // Separate useEffect to handle attachment prop changes
   useEffect(() => {

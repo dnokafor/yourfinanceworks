@@ -19,7 +19,7 @@ import { ExpenseApprovalStatus } from '@/components/approvals/ExpenseApprovalSta
 import ExpenseSummary from '@/components/expenses/ExpenseSummary';
 import ExpenseCharts from '@/components/expenses/ExpenseCharts';
 import { format, parseISO, isValid } from 'date-fns';
-import { 
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -31,7 +31,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 // removed duplicate useEffect import
-import { Loader2, Plus, Search, Trash2, Upload, ChevronDown, MoreHorizontal, Edit, Package, ArrowDown } from 'lucide-react';
+import { Loader2, Plus, Search, Trash2, Upload, ChevronDown, MoreHorizontal, Edit, Package, ArrowDown, BarChart3 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Link } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
@@ -117,6 +117,9 @@ const Expenses = () => {
   // Inventory consumption state for edit expense
   const [isEditInventoryConsumption, setIsEditInventoryConsumption] = useState(false);
   const [editConsumptionItems, setEditConsumptionItems] = useState<any[]>([]);
+
+  // Processing lock state for expenses
+  const [processingLocks, setProcessingLocks] = useState<Set<number>>(new Set());
 
   // Fetch invoice options for linking
   useEffect(() => {
@@ -413,19 +416,54 @@ const Expenses = () => {
   };
 
   const handleRequeue = async (expenseId: number) => {
+    // Check if already processing
+    if (processingLocks.has(expenseId)) {
+      toast.warning('This expense is already being processed. Please wait for the current processing to complete.');
+      return;
+    }
+
     const addNotification = (window as any).addAINotification;
     addNotification?.('processing', 'Reprocessing Expense', `Re-analyzing expense receipts with AI...`);
     
     try {
+      // Add to processing locks to prevent multiple clicks
+      setProcessingLocks(prev => new Set([...prev, expenseId]));
+
       await expenseApi.reprocessExpense(expenseId);
-      
+
       addNotification?.('success', 'Expense Reprocessing Started', `Successfully started reprocessing expense receipts.`);
       toast.success('Expense reprocessing started');
+
+      // Refresh the expense list
       const data = await expenseApi.getExpenses(categoryFilter);
       setExpenses(data);
+
+      // Remove from processing locks after a delay
+      setTimeout(() => {
+        setProcessingLocks(prev => {
+          const newLocks = new Set(prev);
+          newLocks.delete(expenseId);
+          return newLocks;
+        });
+      }, 30000); // Remove lock after 30 seconds
+
     } catch (e: any) {
-      addNotification?.('error', 'Expense Reprocessing Failed', `Failed to reprocess expense: ${e?.message || 'Unknown error'}`);
-      toast.error(e?.message || 'Failed to reprocess expense');
+      // Remove from processing locks on error
+      setProcessingLocks(prev => {
+        const newLocks = new Set(prev);
+        newLocks.delete(expenseId);
+        return newLocks;
+      });
+
+      // Handle specific lock error messages
+      const errorMessage = e?.message || 'Failed to reprocess expense';
+      if (errorMessage.includes('already being processed') || errorMessage.includes('processing lock')) {
+        toast.error('This expense is currently being processed by another operation. Please try again in a few minutes.');
+        addNotification?.('warning', 'Processing Lock Active', 'This expense is already being processed. Please wait and try again.');
+      } else {
+        addNotification?.('error', 'Expense Reprocessing Failed', errorMessage);
+        toast.error(errorMessage);
+      }
     }
   };
 
@@ -731,7 +769,16 @@ const Expenses = () => {
                           />
                         </TableCell>
                         <TableCell className="text-muted-foreground whitespace-nowrap">#{e.id}</TableCell>
-                        <TableCell>{e.expense_date ? new Date(e.expense_date).toLocaleDateString('en-US', { timeZone: 'UTC' }) : 'N/A'} UTC</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span>{e.expense_date ? new Date(e.expense_date).toLocaleDateString('en-US', { timeZone: 'UTC' }) : 'N/A'}</span>
+                            {e.receipt_timestamp && e.receipt_time_extracted && (
+                              <span className="text-xs text-muted-foreground">
+                                🕐 {new Date(e.receipt_timestamp).toLocaleTimeString('en-US', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' })} UTC
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell>{e.category}</TableCell>
                         <TableCell>{e.vendor || '—'}</TableCell>
                         <TableCell>
@@ -820,14 +867,28 @@ const Expenses = () => {
                             <span className="text-muted-foreground text-xs">—</span>
                           )}
                           {e.analysis_status && e.analysis_status !== 'done' && canPerformActions() && (
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="ml-2" 
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="ml-2"
                               onClick={() => handleRequeue(e.id)}
-                              disabled={!e.imported_from_attachment && (!e.attachments_count || e.attachments_count === 0)}
+                              disabled={
+                                !e.imported_from_attachment &&
+                                (!e.attachments_count || e.attachments_count === 0) ||
+                                processingLocks.has(e.id) ||
+                                uploadingId === e.id
+                              }
                             >
-                              {t('expenses.process_again', { defaultValue: 'Process Again' })}
+                              {processingLocks.has(e.id) ? (
+                                <div className="flex items-center gap-1">
+                                  <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                  Processing...
+                                </div>
+                              ) : uploadingId === e.id ? (
+                                'Uploading...'
+                              ) : (
+                                t('expenses.process_again', { defaultValue: 'Process Again' })
+                              )}
                             </Button>
                           )}
                         </TableCell>
@@ -992,6 +1053,31 @@ const Expenses = () => {
                     />
                   </PopoverContent>
                 </Popover>
+              </div>
+              <div>
+                <label className="text-sm">Receipt Time (HH:MM)</label>
+                <Input
+                  type="time"
+                  value={newExpense.receipt_timestamp ? new Date(newExpense.receipt_timestamp as string).toISOString().substring(11, 16) : ''}
+                  onChange={(e) => {
+                    if (e.target.value && newExpense.expense_date) {
+                      // Combine date with time
+                      const timestamp = `${newExpense.expense_date}T${e.target.value}:00Z`;
+                      setNewExpense({ 
+                        ...newExpense, 
+                        receipt_timestamp: timestamp,
+                        receipt_time_extracted: true
+                      });
+                    } else {
+                      setNewExpense({ 
+                        ...newExpense, 
+                        receipt_timestamp: null,
+                        receipt_time_extracted: false
+                      });
+                    }
+                  }}
+                  placeholder="14:30"
+                />
               </div>
               <div>
                 <label className="text-sm">{t('expenses.link_to_invoice')}</label>
@@ -1204,6 +1290,36 @@ const Expenses = () => {
                     />
                   </PopoverContent>
                 </Popover>
+              </div>
+              <div>
+                <label className="text-sm">Receipt Time (HH:MM)</label>
+                <Input 
+                  type="time"
+                  value={editExpense.receipt_timestamp ? new Date(editExpense.receipt_timestamp as string).toISOString().substring(11, 16) : ''}
+                  onChange={(e) => {
+                    if (e.target.value && editExpense.expense_date) {
+                      // Combine date with time
+                      const timestamp = `${editExpense.expense_date}T${e.target.value}:00Z`;
+                      setEditExpense({ 
+                        ...editExpense, 
+                        receipt_timestamp: timestamp,
+                        receipt_time_extracted: true
+                      });
+                    } else {
+                      setEditExpense({ 
+                        ...editExpense, 
+                        receipt_timestamp: null,
+                        receipt_time_extracted: false
+                      });
+                    }
+                  }}
+                  placeholder="14:30"
+                />
+                {editExpense.receipt_time_extracted && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    🕐 Extracted from receipt
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-sm">{t('expenses.labels.category')}</label>

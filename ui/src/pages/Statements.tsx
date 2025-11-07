@@ -81,6 +81,7 @@ export default function Statements() {
   const [selectedProvider, setSelectedProvider] = useState<string>('bank');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [statementToDelete, setStatementToDelete] = useState<number | null>(null);
+  const [reprocessingLocks, setReprocessingLocks] = useState<Set<number>>(new Set());
   const readOnly = detail?.status === 'processing';
 
   const formatStatus = (value?: string | null) => {
@@ -279,11 +280,11 @@ export default function Statements() {
   };
 
   const onUpload = async () => {
+    const addNotification = (window as any).addAINotification;
     try {
       if (files.length === 0) { toast.error(t('statements.select_files')); return; }
       setLoading(true);
 
-      const addNotification = (window as any).addAINotification;
       const providerName = STATEMENT_PROVIDERS.find(p => p.value === selectedProvider)?.label || 'Statement';
       addNotification?.('processing', t('statements.processing'), `Analyzing ${files.length} ${providerName.toLowerCase()} statement files with AI...`);
 
@@ -295,7 +296,6 @@ export default function Statements() {
       setUploadModalOpen(false);
       await loadList();
     } catch (e: any) {
-      const addNotification = (window as any).addAINotification;
       addNotification?.('error', t('statements.failed_to_delete'), `Failed to process statements: ${e?.message || 'Unknown error'}`);
       toast.error(e?.message || 'Failed to extract transactions');
     } finally {
@@ -594,8 +594,18 @@ export default function Statements() {
                       variant="destructive"
                       onClick={async () => {
                         if (!selected) return;
+
+                        // Check if already processing
+                        if (reprocessingLocks.has(selected)) {
+                          toast.warning('This statement is already being processed. Please wait for the current processing to complete.');
+                          return;
+                        }
+                        
+                        const addNotification = (window as any).addAINotification;
                         try {
-                          const addNotification = (window as any).addAINotification;
+                          // Add to processing locks to prevent multiple clicks
+                          setReprocessingLocks(prev => new Set([...prev, selected]));
+                          
                           addNotification?.('processing', 'Reprocessing Statement', `Re-analyzing ${detail?.original_filename} with AI...`);
 
                           await bankStatementApi.reprocess(selected);
@@ -603,14 +613,45 @@ export default function Statements() {
                           addNotification?.('success', 'Statement Reprocessing Started', `Successfully started reprocessing ${detail?.original_filename}`);
                           toast.success('Reprocessing started');
                           await openStatement(selected);
+
+                          // Remove from processing locks after a delay
+                          setTimeout(() => {
+                            setReprocessingLocks(prev => {
+                              const newLocks = new Set(prev);
+                              newLocks.delete(selected);
+                              return newLocks;
+                            });
+                          }, 30000); // Remove lock after 30 seconds
+
                         } catch (e: any) {
-                          const addNotification = (window as any).addAINotification;
-                          addNotification?.('error', 'Reprocessing Failed', `Failed to reprocess ${detail?.original_filename}: ${e?.message || 'Unknown error'}`);
-                          toast.error(e?.message || 'Failed to start reprocessing');
+                          // Remove from processing locks on error
+                          setReprocessingLocks(prev => {
+                            const newLocks = new Set(prev);
+                            newLocks.delete(selected);
+                            return newLocks;
+                          });
+
+                          // Handle specific lock error messages
+                          const errorMessage = e?.message || 'Failed to start reprocessing';
+                          if (errorMessage.includes('already being processed') || errorMessage.includes('processing lock')) {
+                            toast.error('This statement is currently being processed by another operation. Please try again in a few minutes.');
+                            addNotification?.('warning', 'Processing Lock Active', 'This statement is already being processed. Please wait and try again.');
+                          } else {
+                            addNotification?.('error', 'Reprocessing Failed', `Failed to reprocess ${detail?.original_filename}: ${errorMessage}`);
+                            toast.error(errorMessage);
+                          }
                         }
                       }}
+                      disabled={reprocessingLocks.has(selected) || loading}
                     >
-                      Process again
+                      {reprocessingLocks.has(selected) ? (
+                        <div className="flex items-center gap-1">
+                          <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                          Processing...
+                        </div>
+                      ) : (
+                        'Process again'
+                      )}
                     </Button>
                   )}
                   <Button variant="outline" onClick={exportToCSV} disabled={rows.length === 0}>

@@ -307,6 +307,8 @@ async def create_expense(
             analysis_result=getattr(expense, "analysis_result", None),
             analysis_error=getattr(expense, "analysis_error", None),
             manual_override=bool(getattr(expense, "manual_override", False)),
+            receipt_timestamp=getattr(expense, "receipt_timestamp", None),
+            receipt_time_extracted=bool(getattr(expense, "receipt_time_extracted", False)),
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
         )
@@ -506,6 +508,8 @@ async def bulk_create_expenses(
                 analysis_result=getattr(expense, "analysis_result", None),
                 analysis_error=getattr(expense, "analysis_error", None),
                 manual_override=bool(getattr(expense, "manual_override", False)),
+                receipt_timestamp=getattr(expense, "receipt_timestamp", None),
+                receipt_time_extracted=bool(getattr(expense, "receipt_time_extracted", False)),
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc),
             )
@@ -932,7 +936,7 @@ async def upload_receipt(
         try:
             cloud_config = get_cloud_storage_config()
             cloud_storage_service = CloudStorageService(db, cloud_config)
-            
+
             # Store file using cloud storage with automatic fallback
             storage_result = await cloud_storage_service.store_file(
                 file_content=contents,
@@ -946,13 +950,13 @@ async def upload_receipt(
                     'expense_id': expense_id
                 }
             )
-            
+
             if not storage_result.success:
                 raise HTTPException(
                     status_code=500,
                     detail=f"Failed to store file: {storage_result.error_message}"
                 )
-            
+
             # Determine storage location and file path
             if storage_result.file_url:
                 # Cloud storage - use file_key as path
@@ -970,29 +974,29 @@ async def upload_receipt(
                 file_path = str(receipts_dir / filename)
                 file_size = len(contents)
                 is_cloud_stored = False
-            
+
             logger.info(f"File stored successfully: {file_path} (cloud: {is_cloud_stored})")
-            
+
         except Exception as e:
             logger.error(f"Cloud storage service error: {e}")
             # Fallback to local storage
             tenant_folder = f"tenant_{tenant_id}"
             receipts_dir = Path("attachments") / tenant_folder / "expenses"
             receipts_dir.mkdir(parents=True, exist_ok=True)
-            
+
             name_without_ext = os.path.splitext(base_name)[0][:100]
             ext_from_ct = allowed_types[file.content_type]
             unique_suffix = str(uuid.uuid4())
             filename = f"expense_{expense_id}_{name_without_ext}_{unique_suffix}{ext_from_ct}"
             file_path = receipts_dir / filename
-            
+
             # Validate file path before writing
             from utils.file_validation import validate_file_path
             validated_path = validate_file_path(str(file_path), must_exist=False)
-            
+
             with open(validated_path, "wb") as buffer:
                 buffer.write(contents)
-            
+
             file_path = str(file_path)
             file_size = len(contents)
             is_cloud_stored = False
@@ -1057,7 +1061,6 @@ async def upload_receipt(
         logger.error(f"Failed to upload receipt: {e}")
         raise HTTPException(status_code=500, detail="Failed to upload receipt")
 
-
 @router.get("/{expense_id}/attachments")
 async def list_expense_attachments(
     expense_id: int,
@@ -1079,7 +1082,6 @@ async def list_expense_attachments(
         for att in attachments
     ]
 
-
 @router.post("/{expense_id}/reprocess")
 async def reprocess_expense(
     expense_id: int,
@@ -1093,7 +1095,7 @@ async def reprocess_expense(
         if not expense:
             raise HTTPException(status_code=404, detail="Expense not found")
 
-        if expense.analysis_status not in ["not_started", "pending", "queued", "failed"]:
+        if expense.analysis_status not in ["not_started", "pending", "queued", "failed", "cancelled"]:
             raise HTTPException(status_code=400, detail=f"Cannot reprocess expense with status: {expense.analysis_status}")
         
         # Find the most recent attachment
@@ -1105,35 +1107,72 @@ async def reprocess_expense(
         )
         if not att or not getattr(att, "file_path", None):
             raise HTTPException(status_code=400, detail="No attachment found to reprocess")
-        
-        from models.database import get_tenant_context
-        tenant_id = get_tenant_context()
-        
-        # Reset status and requeue
-        expense.analysis_status = "queued"
-        expense.analysis_error = None
-        expense.manual_override = False
-        expense.updated_at = datetime.now(timezone.utc)
-        db.commit()
-        
-        queue_or_process_attachment(
-            db=db,
-            tenant_id=tenant_id,
-            expense_id=expense_id,
-            attachment_id=att.id,
-            file_path=str(att.file_path),
-        )
-        
-        return {"message": "Expense reprocessing started", "status": "queued"}
+
+        # Import ProcessingLock model
+        from models.processing_lock import ProcessingLock
+
+        # Check if expense is already being processed
+        if ProcessingLock.is_locked(db, "expense", expense_id):
+            lock_info = ProcessingLock.get_active_lock_info(db, "expense", expense_id)
+            return {
+                "message": "Expense is already being processed",
+                "status": "already_processing",
+                "lock_info": lock_info
+            }
+
+        # Acquire processing lock
+        request_id = f"reprocess_{expense_id}_{datetime.now(timezone.utc).timestamp()}"
+        if not ProcessingLock.acquire_lock(
+            db, "expense", expense_id, current_user.id,
+            lock_duration_minutes=30, metadata={"request_id": request_id}
+        ):
+            # Lock was acquired by someone else between check and acquire
+            lock_info = ProcessingLock.get_active_lock_info(db, "expense", expense_id)
+            return {
+                "message": "Expense is already being processed by another request",
+                "status": "already_processing",
+                "lock_info": lock_info
+            }
+
+        try:
+            from models.database import get_tenant_context
+            tenant_id = get_tenant_context()
+
+            # Reset status and requeue
+            expense.analysis_status = "queued"
+            expense.analysis_error = None
+            expense.manual_override = False
+            expense.updated_at = datetime.now(timezone.utc)
+            db.commit()
+
+            queue_or_process_attachment(
+                db=db,
+                tenant_id=tenant_id,
+                expense_id=expense_id,
+                attachment_id=att.id,
+                file_path=str(att.file_path),
+            )
+
+            logger.info(f"Reprocess started for expense {expense_id} by user {current_user.id} (request_id: {request_id})")
+            return {"message": "Expense reprocessing started", "status": "queued", "request_id": request_id}
+
+        except Exception as e:
+            # Release lock on failure
+            ProcessingLock.release_lock(db, "expense", expense_id)
+            logger.error(f"Failed to reprocess expense {expense_id}: {e}")
+            raise HTTPException(status_code=500, detail="Failed to reprocess expense")
+
     except HTTPException:
         raise
     except Exception as e:
+        # Release lock on unexpected error
+        try:
+            ProcessingLock.release_lock(db, "expense", expense_id)
+        except:
+            pass
         db.rollback()
         logger.error(f"Failed to reprocess expense {expense_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to reprocess expense")
-
-
-
 
 @router.delete("/{expense_id}/attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_expense_attachment(
@@ -1145,17 +1184,9 @@ async def delete_expense_attachment(
     att = db.query(ExpenseAttachment).filter(ExpenseAttachment.id == attachment_id, ExpenseAttachment.expense_id == expense_id).first()
     if not att:
         raise HTTPException(status_code=404, detail="Attachment not found")
-    
-    # Prevent deleting attachments for expenses already analyzed as done
-    try:
-        exp = db.query(Expense).filter(Expense.id == expense_id).first()
-        if exp and getattr(exp, "analysis_status", None) == "done":
-            raise HTTPException(status_code=400, detail="Cannot delete attachments from an analyzed expense")
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.warning(f"Failed to verify expense status before deleting attachment: {e}")
-    
+
+    # Allow deleting attachments even from analyzed expenses (user confirms via UI)
+
     # Try to remove file from storage (cloud or local)
     try:
         if att.file_path:
@@ -1166,26 +1197,26 @@ async def delete_expense_attachment(
                     from services.cloud_storage_service import CloudStorageService
                     from settings.cloud_storage_config import get_cloud_storage_config
                     from models.database import get_tenant_context
-                    
+
                     tenant_id = get_tenant_context()
                     if tenant_id:
                         cloud_config = get_cloud_storage_config()
                         cloud_storage_service = CloudStorageService(db, cloud_config)
-                        
+
                         # Delete file from cloud storage
                         delete_result = await cloud_storage_service.delete_file(
                             file_key=att.file_path,
                             tenant_id=str(tenant_id),
                             user_id=current_user.id
                         )
-                        
+
                         if delete_result.success:
                             logger.info(f"Successfully deleted file from cloud storage: {att.file_path}")
                         else:
                             logger.warning(f"Failed to delete file from cloud storage: {delete_result.error_message}")
                     else:
                         logger.warning("No tenant context available for cloud storage deletion")
-                        
+
                 except Exception as e:
                     logger.warning(f"Failed to delete file from cloud storage: {e}")
             else:
@@ -1197,7 +1228,7 @@ async def delete_expense_attachment(
                     logger.warning(f"Local file not found: {att.file_path}")
     except Exception as e:
         logger.warning(f"Failed to remove attachment file: {e}")
-    
+
     # Delete attachment record from database
     db.delete(att)
     db.commit()
@@ -1296,7 +1327,7 @@ async def download_expense_attachment(
         raise HTTPException(status_code=404, detail="Attachment file not accessible")
 
 
-# Expense Analytics Endpoints
+# Basic Expense Analytics Endpoints (for Expenses page summary)
 @router.get("/analytics/summary")
 async def get_expense_summary(
     period: str = "month",  # "day", "week", "month", "quarter", "year"

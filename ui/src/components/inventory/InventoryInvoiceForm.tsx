@@ -232,6 +232,11 @@ export const InventoryInvoiceForm: React.FC<InventoryInvoiceFormProps> = ({
           form.setValue("currency", (settingsData as { default_currency?: string }).default_currency!);
         }
 
+        // Set default notes from settings when creating a new invoice
+        if (!isEdit && settingsData?.invoice_settings?.notes) {
+          form.setValue("notes", settingsData.invoice_settings.notes);
+        }
+
         // Load invoice data if editing
         if (isEdit && invoice) {
           form.reset({

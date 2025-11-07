@@ -313,12 +313,7 @@ def init_db(skip_migrations=True):
         except Exception as e:
             logger.error(f"Error creating tables for tenant {tenant.id}: {str(e)}")
         
-        # Sync users from master database to tenant database
-        try:
-            sync_users_to_tenant_db(tenant.id)
-        except Exception as e:
-            logger.error(f"Failed to sync users for tenant {tenant.id}: {str(e)}")
-            # Continue with other tenants even if one fails
+        # Note: User sync is deferred until after DB_INIT_PHASE to ensure proper encryption
 
     # Create session
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -366,8 +361,18 @@ def init_db(skip_migrations=True):
     
     logger.info("Database initialized successfully with sample data.")
 
-    # Clear the database initialization phase flag
+    # Clear the database initialization phase flag BEFORE syncing users
+    # This ensures user data is encrypted properly
     os.environ['DB_INIT_PHASE'] = 'false'
+
+    # Re-sync users with encryption enabled to ensure proper encryption
+    logger.info("Re-syncing users with encryption enabled...")
+    for tenant in tenants:
+        try:
+            sync_users_to_tenant_db(tenant.id)
+            logger.info(f"Re-synced users for tenant {tenant.id} with encryption")
+        except Exception as e:
+            logger.error(f"Failed to re-sync users for tenant {tenant.id}: {str(e)}")
 
 if __name__ == "__main__":
     init_db() 

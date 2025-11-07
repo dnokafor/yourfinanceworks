@@ -96,6 +96,63 @@ async def app_lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Failed to start reminder background service: {str(e)}")
 
+        # Initialize processing lock system with crash recovery
+        # Note: Processing locks are tenant-specific, so we run recovery per tenant
+        try:
+            from models.processing_lock import ProcessingLock
+            from services.tenant_database_manager import tenant_db_manager
+            from models.database import set_tenant_context
+
+            # Get all tenant IDs
+            tenant_ids = tenant_db_manager.get_existing_tenant_ids()
+
+            if tenant_ids:
+                logger.info(f"🔄 Running processing lock crash recovery for {len(tenant_ids)} tenants...")
+
+                total_expired = 0
+                total_stuck = 0
+                total_active = 0
+
+                for tenant_id in tenant_ids:
+                    try:
+                        set_tenant_context(tenant_id)
+                        SessionLocalTenant = tenant_db_manager.get_tenant_session(tenant_id)
+                        db = SessionLocalTenant()
+
+                        try:
+                            recovery_result = ProcessingLock.startup_lock_recovery(db, older_than_minutes=30)
+                            total_expired += recovery_result['expired_locks_cleaned']
+                            total_stuck += recovery_result['stuck_locks_recovered']
+                            total_active += recovery_result['remaining_active_locks']
+
+                            if recovery_result['stuck_locks_recovered'] > 0:
+                                logger.warning(f"⚠️  Tenant {tenant_id}: Recovered {recovery_result['stuck_locks_recovered']} stuck locks")
+                        except Exception as e:
+                            # If table doesn't exist yet, skip gracefully
+                            if "does not exist" in str(e).lower():
+                                logger.debug(f"Processing locks table not yet created for tenant {tenant_id}")
+                            else:
+                                logger.error(f"❌ Tenant {tenant_id}: Processing lock recovery failed: {str(e)}")
+                        finally:
+                            db.close()
+                    except Exception as e:
+                        logger.debug(f"Skipping tenant {tenant_id}: {str(e)}")
+
+                logger.info(f"📊 Processing Lock Recovery Summary (all tenants):")
+                logger.info(f"   - Expired locks cleaned: {total_expired}")
+                logger.info(f"   - Stuck locks recovered: {total_stuck}")
+                logger.info(f"   - Remaining active locks: {total_active}")
+
+                if total_stuck > 0:
+                    logger.warning("⚠️  Found and recovered locks that may have been left by crashed services!")
+                else:
+                    logger.info("✅ No stuck locks found - processing lock system is healthy")
+            else:
+                logger.info("No tenants found, skipping processing lock recovery")
+
+        except Exception as e:
+            logger.warning(f"Failed to initialize processing lock recovery: {str(e)}")
+
         yield
     finally:
         # Stop reminder background service

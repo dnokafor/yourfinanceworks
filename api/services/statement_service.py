@@ -864,7 +864,8 @@ JSON:"""
         text_length: int = 0,
         word_count: int = 0,
         success: bool = True,
-        errors: Optional[List[str]] = None
+        errors: Optional[List[str]] = None,
+        statement_id: Optional[int] = None
     ) -> 'BankStatementProcessingResult':
         """
         Create a comprehensive processing result with all metadata.
@@ -913,7 +914,8 @@ JSON:"""
                 ocr_engine="tesseract" if extraction_method == "ocr" else None,
                 pdf_loader_used=getattr(self, 'last_pdf_loader_used', None),
                 contains_bank_keywords=True,  # Assume true for bank statements
-                is_scanned=extraction_method == "ocr"
+                is_scanned=extraction_method == "ocr",
+                statement_id=statement_id
             )
 
             # Add any errors
@@ -923,6 +925,13 @@ JSON:"""
 
             # Mark as completed
             result.mark_completed()
+
+            # Release processing lock for bank statement
+            try:
+                from services.ocr_service import release_processing_lock
+                release_processing_lock("bank_statement", statement_id)
+            except Exception as lock_error:
+                logger.warning(f"Failed to release processing lock for bank statement {statement_id}: {lock_error}")
 
             return result
 

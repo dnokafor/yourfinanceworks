@@ -102,11 +102,7 @@ export default function ExpensesEdit() {
   }, [consumptionItems, isInventoryConsumption]);
 
   const validateExpenseForm = () => {
-    const isAnalyzedDone = (form as any)?.analysis_status === 'done';
-    if (isAnalyzedDone && pendingDelete.size > 0) {
-      toast.error(t('expenses.cannot_delete_analyzed', { defaultValue: 'Cannot delete attachments from an analyzed expense' }));
-      return false;
-    }
+    // Allow deletion of attachments even from analyzed expenses (user already confirmed via dialog)
     // Allow amount 0 if there will be at least one attachment after this save
     const existingCount = (attachments?.length || 0);
     const toDeleteCount = Array.from(pendingDelete).length;
@@ -165,13 +161,22 @@ export default function ExpensesEdit() {
       invoice_id: form.invoice_id ?? null,
       is_inventory_consumption: isInventoryConsumption,
       consumption_items: isInventoryConsumption ? consumptionItems : null,
+      receipt_timestamp: (form as any).receipt_timestamp || null,
+      receipt_time_extracted: (form as any).receipt_time_extracted || false,
     } as any;
     
     await expenseApi.updateExpense(Number(id), payload);
 
     // First apply pending deletions (to satisfy max 5 rule before uploads)
     if (pendingDelete.size > 0) {
-      await Promise.all(Array.from(pendingDelete.values()).map(attId => expenseApi.deleteAttachment(Number(id), attId).catch(() => {})));
+      const deleteResults = await Promise.allSettled(
+        Array.from(pendingDelete.values()).map(attId => expenseApi.deleteAttachment(Number(id), attId))
+      );
+      const failed = deleteResults.filter(r => r.status === 'rejected');
+      if (failed.length > 0) {
+        console.error('Failed to delete some attachments:', failed);
+        toast.error(`Failed to delete ${failed.length} attachment(s)`);
+      }
     }
 
     // Refresh attachments and compute how many new files can be uploaded (cap 10)
@@ -358,6 +363,36 @@ export default function ExpensesEdit() {
               </Popover>
             </div>
             <div>
+              <label className="text-sm">Receipt Time (HH:MM)</label>
+              <Input 
+                type="time"
+                value={(form as any).receipt_timestamp ? new Date((form as any).receipt_timestamp as string).toISOString().substring(11, 16) : ''}
+                onChange={(e) => {
+                  if (e.target.value && form.expense_date) {
+                    // Combine date with time
+                    const timestamp = `${form.expense_date}T${e.target.value}:00Z`;
+                    setForm({
+                      ...form,
+                      receipt_timestamp: timestamp,
+                      receipt_time_extracted: true
+                    } as any);
+                  } else {
+                    setForm({
+                      ...form,
+                      receipt_timestamp: null,
+                      receipt_time_extracted: false
+                    } as any);
+                  }
+                }}
+                placeholder="14:30"
+              />
+              {(form as any).receipt_time_extracted && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  🕐 Extracted from receipt
+                </p>
+              )}
+            </div>
+            <div>
               <label className="text-sm">{t('expenses.labels.category')}</label>
               <Select value={(form.category as string) || 'General'} onValueChange={v => setForm({ ...form, category: v })}>
                 <SelectTrigger className="w-full">
@@ -521,8 +556,13 @@ export default function ExpensesEdit() {
                           <Button
                             variant={pendingDelete.has(att.id) ? 'outline' : 'destructive'}
                             size="sm"
-                            disabled={(form as any)?.analysis_status === 'done'}
                             onClick={() => {
+                              // Warn if expense is analyzed
+                              if ((form as any)?.analysis_status === 'done' && !pendingDelete.has(att.id)) {
+                                if (!confirm('This expense has been analyzed. Deleting attachments may affect the extracted data. Continue?')) {
+                                  return;
+                                }
+                              }
                               setPendingDelete(prev => {
                                 const next = new Set(prev);
                                 if (next.has(att.id)) next.delete(att.id); else next.add(att.id);

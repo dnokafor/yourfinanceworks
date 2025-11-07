@@ -26,6 +26,17 @@ logging.basicConfig(level=_resolve_log_level(os.getenv("LOG_LEVEL", "INFO")))
 logger = logging.getLogger(__name__)
 
 
+# Import unified AI configuration service
+from services.ai_config_service import AIConfigService
+
+def _get_ai_config_from_env() -> Optional[Dict[str, Any]]:
+    """
+    Legacy function for backward compatibility.
+    Use AIConfigService.get_ai_config() for new implementations.
+    """
+    return AIConfigService._get_env_config("ocr")
+
+
 def track_ai_usage(db: Session, ai_config: Dict[str, Any], operation_type: str = "general", metadata: Optional[Dict[str, Any]] = None) -> None:
     """
     Track AI usage by incrementing the usage_count for the given AI config.
@@ -77,7 +88,14 @@ def track_ai_usage(db: Session, ai_config: Dict[str, Any], operation_type: str =
             logger.warning(f"❌ Could not find AI config to track usage: {provider_name}/{model_name}")
             # Log all available configs for debugging
             all_configs = db.query(AIConfigModel).all()
-            logger.info(f"📋 Available AI configs: {[(c.provider_name, c.model_name, c.is_active) for c in all_configs]}")
+            config_list = []
+            for c in all_configs:
+                config_list.append((
+                    c.provider_name or "None",
+                    c.model_name or "None",
+                    c.is_active or False
+                ))
+            logger.info(f"📋 Available AI configs: {config_list}")
     except Exception as e:
         logger.error(f"❌ Failed to track AI usage: {e}")
         # Don't raise exception to avoid breaking the main functionality
@@ -105,7 +123,8 @@ def track_ocr_usage(db: Session, ai_config: Dict[str, Any], extraction_method: s
     track_ai_usage(db, ai_config, operation_type="ocr", metadata=metadata)
 
     # Log OCR-specific metrics for monitoring
-    logger.info(f"📈 OCR Usage Metrics - Method: {extraction_method}, Time: {processing_time:.2f}s, Text Length: {text_length}")
+    time_str = f"{processing_time:.2f}s" if processing_time is not None else "N/A"
+    logger.info(f"📈 OCR Usage Metrics - Method: {extraction_method}, Time: {time_str}, Text Length: {text_length}")
 
 
 def get_ai_usage_stats(db: Session, provider_name: Optional[str] = None) -> Dict[str, Any]:
@@ -162,9 +181,10 @@ def publish_ocr_usage_metrics(db: Session, operation_type: str, extraction_metho
     """
     try:
         # This could be extended to publish to monitoring systems like Prometheus, CloudWatch, etc.
+        time_str = f"{processing_time:.2f}s" if processing_time is not None else "N/A"
         logger.info(
             f"📊 OCR Metrics - Operation: {operation_type}, Method: {extraction_method}, "
-            f"Time: {processing_time:.2f}s, Success: {success}"
+            f"Time: {time_str}, Success: {success}"
         )
 
         # Example: Could publish to a metrics collection service
@@ -180,6 +200,7 @@ def _heuristic_parse_text(text: str) -> Optional[Dict[str, Any]]:
     """Heuristic parser for plain OCR text to extract likely fields."""
     import re
     data: Dict[str, Any] = {}
+
     # Amount / total
     m_total = re.search(r"\btotal\s*[:\-]?\s*([$€£R$]?\s*[0-9.,]+)\b", text, flags=re.IGNORECASE)
     if m_total:
@@ -187,18 +208,63 @@ def _heuristic_parse_text(text: str) -> Optional[Dict[str, Any]]:
     m_amt = re.search(r"\bamount\s*[:\-]?\s*([$€£R$]?\s*[0-9.,]+)\b", text, flags=re.IGNORECASE)
     if m_amt and "total" not in data:
         data["amount"] = m_amt.group(1)
+
     # Currency
     m_cur = re.search(r"\b(USD|EUR|GBP|CAD|AUD|JPY|CHF|CNY|INR|BRL)\b", text, flags=re.IGNORECASE)
     if m_cur:
         data["currency"] = m_cur.group(1).upper()
-    # Date (prefer YYYY-MM-DD or DD/MM/YYYY)
-    m_date = re.search(r"(\d{4}[-/.]\d{2}[-/.]\d{2}|\d{2}[/.-]\d{2}[/.-]\d{4})", text)
-    if m_date:
-        data["date"] = m_date.group(1)
-    # Vendor (first uppercase word line)
+
+    # Enhanced timestamp parsing - try multiple patterns
+    timestamp_found = False
+
+    # Pattern 1: Combined datetime formats (MM/DD/YY HH:MM:SS, YYYY-MM-DD HH:MM:SS, etc.)
+    combined_patterns = [
+        r"(\d{2}/\d{2}/\d{2,4}\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AaPp][Mm])?)",  # MM/DD/YY HH:MM:SS
+        r"(\d{4}[-/.]\d{2}[-/.]\d{2}\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AaPp][Mm])?)",  # YYYY-MM-DD HH:MM:SS
+        r"(\d{2}[-/.]\d{2}[-/.]\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AaPp][Mm])?)",  # DD/MM/YYYY HH:MM:SS
+    ]
+
+    for pattern in combined_patterns:
+        m_combined = re.search(pattern, text)
+        if m_combined:
+            data["receipt_timestamp"] = m_combined.group(1)
+            timestamp_found = True
+            break
+
+    # If no combined timestamp found, try separate date and time
+    if not timestamp_found:
+        # Date patterns
+        m_date = re.search(r"(\d{4}[-/.]\d{2}[-/.]\d{2}|\d{2}[/.-]\d{2}[/.-]\d{2,4})", text)
+        if m_date:
+            data["date"] = m_date.group(1)
+
+        # Time patterns
+        m_time = re.search(r"(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AaPp][Mm])?)", text)
+
+        if m_time and m_date:
+            # Combine date and time if both found
+            try:
+                date_str = m_date.group(1)
+                time_str = m_time.group(1)
+                data["receipt_timestamp"] = f"{date_str} {time_str}"
+                timestamp_found = True
+            except Exception:
+                pass
+        elif m_time:
+            # Just time found, use today's date
+            try:
+                today = datetime.now().strftime("%Y-%m-%d")
+                time_str = m_time.group(1)
+                data["receipt_timestamp"] = f"{today} {time_str}"
+                timestamp_found = True
+            except Exception:
+                pass
+
+    # Vendor
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
     if lines:
-        data["vendor"] = lines[0][:80]
+       data["vendor"] = lines[0][:80]
+
     return data if data else None
 
 
@@ -225,6 +291,11 @@ def _looks_like_base64_encrypted(value: str) -> bool:
 def _extract_json_from_text(text: str) -> Optional[Dict[str, Any]]:
     """Try to find and parse the first JSON object embedded in a text block."""
     import re
+
+    # Strip markdown code blocks if present
+    text = re.sub(r'```json\s*', '', text)
+    text = re.sub(r'```\s*', '', text)
+
     try:
         # Quick path: whole text is JSON
         return json.loads(text)
@@ -609,8 +680,10 @@ async def _run_ocr(file_path: str, custom_prompt: Optional[str] = None, ai_confi
             ocr = OCRProcessor(model_name=model_name, base_url=ocr_endpoint)
             prompt = custom_prompt or (
                 "You are an OCR parser. Extract key expense fields and respond ONLY with compact JSON. "
-                "Required keys: amount, currency, expense_date (YYYY-MM-DD), category, vendor, tax_rate, tax_amount, total_amount, payment_method, reference_number, notes. "
-                "If a field is unknown, set it to null. Do not include any prose."
+                "Required keys: amount, currency, expense_date (YYYY-MM-DD), category, vendor, tax_rate, tax_amount, total_amount, payment_method, reference_number, notes, receipt_timestamp (YYYY-MM-DD HH:MM:SS if available). "
+                "For receipt_timestamp, extract the exact time from the receipt if visible (not just the date). Look for timestamps like '14:32', '2:45 PM', etc. "
+                "If a field is unknown, set it to null. "
+                "IMPORTANT: Return ONLY the JSON object, no markdown formatting, no explanations, no headers like '**Receipt Data Extraction**'."
             )
             loop = asyncio.get_running_loop()
             import time
@@ -687,8 +760,10 @@ async def _run_ocr(file_path: str, custom_prompt: Optional[str] = None, ai_confi
 
                 prompt = custom_prompt or (
                     "You are an OCR parser. Extract key expense fields and respond ONLY with compact JSON. "
-                    "Required keys: amount, currency, expense_date (YYYY-MM-DD), category, vendor, tax_rate, tax_amount, total_amount, payment_method, reference_number, notes. "
-                    "If a field is unknown, set it to null. Do not include any prose."
+                    "Required keys: amount, currency, expense_date (YYYY-MM-DD), category, vendor, tax_rate, tax_amount, total_amount, payment_method, reference_number, notes, receipt_timestamp (YYYY-MM-DD HH:MM:SS if available). "
+                    "For receipt_timestamp, extract the exact time from the receipt if visible (not just the date). Look for timestamps like '14:32', '2:45 PM', etc. "
+                    "If a field is unknown, set it to null. "
+                    "IMPORTANT: Return ONLY the JSON object, no markdown formatting, no explanations, no headers like '**Receipt Data Extraction**'."
                 )
 
                 messages = [
@@ -879,6 +954,13 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
                 logger.warning(f"No OCR-enabled AI config found. Active config exists for {any_active_config.provider_name} but OCR is not enabled. Falling back to environment variables.")
             else:
                 logger.info("No active AI config found in database, falling back to environment variables")
+
+            # Fallback to environment variables
+            ai_config = _get_ai_config_from_env()
+            if ai_config:
+                logger.info(f"Using AI config from environment variables: provider={ai_config.get('provider_name')}, model={ai_config.get('model_name')}")
+            else:
+                logger.warning("No AI configuration available from database or environment variables")
     except Exception as e:
         logger.warning(f"Failed to fetch AI config from database: {e}, falling back to environment variables")
         # Don't log full stack trace for encryption errors to avoid leaking sensitive data
@@ -887,41 +969,59 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
         else:
             logger.debug("AI config fetch failed due to encryption/decryption error (details not logged for security)")
 
+        # Fallback to environment variables
+        ai_config = _get_ai_config_from_env()
+        if ai_config:
+            logger.info(f"Using AI config from environment variables: provider={ai_config.get('provider_name')}, model={ai_config.get('model_name')}")
+        else:
+            logger.warning("No AI configuration available from database or environment variables")
+
     logger.info(f"Processing attachment inline: expense_id={expense_id} attachment_id={attachment_id} file={file_path}")
     
     # Use UnifiedOCRService for expense processing
+    result = None
+    ai_extraction_attempted = False
+
     try:
         from services.unified_ocr_service import UnifiedOCRService, DocumentType, OCRConfig
-        
+
+        # Use AI config from database or fallback to environment variables
+        effective_ai_config = ai_config or _get_ai_config_from_env()
+
         # Configure OCR service
         ocr_config = OCRConfig(
-            ai_config=ai_config,
+            ai_config=effective_ai_config,
             enable_ai_vision=True,
             enable_fallback_parsing=True,
             timeout_seconds=300,
             max_retries=3
         )
-        
+
         ocr_service = UnifiedOCRService(ocr_config)
-        
+
         # Extract structured data from expense receipt
         ocr_result = await ocr_service.extract_structured_data(file_path, DocumentType.EXPENSE_RECEIPT)
-        
+
         if ocr_result.success:
             result = ocr_result.structured_data or {}
-            logger.info(f"✅ Unified OCR extraction successful: {len(result)} fields extracted in {ocr_result.processing_time:.2f}s using {ocr_result.method.value}")
+            ai_extraction_attempted = True
+            time_str = f"{ocr_result.processing_time:.2f}s" if ocr_result.processing_time is not None else "N/A"
+            logger.info(f"✅ Unified OCR extraction successful: {len(result)} fields extracted in {time_str} using {ocr_result.method.value}")
         else:
             logger.error(f"❌ Unified OCR extraction failed: {ocr_result.error_message}")
             # Fallback to legacy OCR for backward compatibility
             logger.info("Falling back to legacy OCR processing...")
-            result = await _run_ocr(file_path, ai_config=ai_config)
-            
+            result = await _run_ocr(file_path, ai_config=effective_ai_config)
+            ai_extraction_attempted = True
+
     except ImportError as e:
         logger.warning(f"UnifiedOCRService not available, using legacy OCR: {e}")
-        result = await _run_ocr(file_path, ai_config=ai_config)
+        result = await _run_ocr(file_path, ai_config=effective_ai_config)
+        ai_extraction_attempted = True
     except Exception as e:
         logger.error(f"UnifiedOCRService failed, using legacy OCR: {e}")
-        result = await _run_ocr(file_path, ai_config=ai_config)
+        result = await _run_ocr(file_path, ai_config=effective_ai_config)
+        ai_extraction_attempted = True
 
     # Track AI usage if ai_config was used and OCR was actually attempted
     if ai_config and not result.get("provider_not_supported"):
@@ -1032,8 +1132,81 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
                         if heur:
                             extracted.update(heur)
                             logger.info(f"Heuristic parse extracted keys: {list(heur.keys())}")
+
+                            # Validate heuristic timestamp extraction quality
+                            if "receipt_timestamp" in heur:
+                                timestamp_str = heur["receipt_timestamp"]
+                                try:
+                                    from dateutil import parser as dateparser
+                                    parsed_dt = dateparser.parse(str(timestamp_str))
+                                    # Check if the parsed date is reasonable (not too far in future/past)
+                                    now = datetime.now(timezone.utc)
+                                    year_diff = abs(parsed_dt.year - now.year)
+                                    if year_diff > 5:  # More than 5 years difference seems suspicious
+                                        logger.warning(f"Heuristic timestamp seems unreasonable: {timestamp_str} (parsed as {parsed_dt})")
+                                        logger.info("Timestamp extraction quality check failed, attempting AI LLM fallback...")
+                                        # Retry with AI LLM for better timestamp extraction
+                                        retry_ai_config = ai_config or _get_ai_config_from_env()
+                                        if retry_ai_config and not ai_extraction_attempted:
+                                            try:
+                                                logger.info("🔄 Retrying with AI LLM due to questionable timestamp...")
+                                                ai_result = await _run_ocr(file_path, ai_config=retry_ai_config)
+                                                if ai_result and isinstance(ai_result, dict) and "receipt_timestamp" in ai_result:
+                                                    # Validate AI result timestamp
+                                                    ai_timestamp = ai_result["receipt_timestamp"]
+                                                    try:
+                                                        ai_parsed_dt = dateparser.parse(str(ai_timestamp))
+                                                        ai_year_diff = abs(ai_parsed_dt.year - now.year)
+                                                        if ai_year_diff <= 5:  # AI result is more reasonable
+                                                            logger.info(f"✅ AI LLM provided better timestamp: {ai_timestamp}")
+                                                            extracted.update(ai_result)
+                                                        else:
+                                                            logger.warning(f"❌ AI LLM timestamp also questionable: {ai_timestamp}")
+                                                    except Exception:
+                                                        logger.warning("❌ AI LLM timestamp parsing failed")
+                                                else:
+                                                    logger.warning("❌ AI LLM retry did not provide timestamp")
+                                            except Exception as retry_error:
+                                                logger.error(f"AI LLM retry failed: {retry_error}")
+                                        else:
+                                            logger.info("AI LLM retry not available for timestamp validation")
+                                except Exception as e:
+                                    logger.warning(f"Failed to validate heuristic timestamp '{timestamp_str}': {e}")
+                        else:
+                            logger.info("Heuristic parsing returned no data, attempting AI LLM extraction...")
+                            # Retry with AI LLM if available and not already attempted
+                            retry_ai_config = ai_config or _get_ai_config_from_env()
+                            if retry_ai_config and not ai_extraction_attempted:
+                                try:
+                                    logger.info("🔄 Retrying with AI LLM due to failed heuristic parsing...")
+                                    ai_result = await _run_ocr(file_path, ai_config=retry_ai_config)
+                                    if ai_result and isinstance(ai_result, dict) and len(ai_result) > 1:
+                                        logger.info("✅ AI LLM retry successful, using AI results")
+                                        extracted.update(ai_result)
+                                    else:
+                                        logger.warning("❌ AI LLM retry also failed")
+                                except Exception as retry_error:
+                                    logger.error(f"AI LLM retry failed: {retry_error}")
+                            else:
+                                logger.info("AI LLM retry not available (no config or already attempted)")
                     except Exception as e:
                         logger.warning(f"Heuristic parse failed: {e}")
+                        logger.info("Heuristic parsing failed, attempting AI LLM extraction...")
+                        # Retry with AI LLM if available and not already attempted
+                        retry_ai_config = ai_config or _get_ai_config_from_env()
+                        if retry_ai_config and not ai_extraction_attempted:
+                            try:
+                                logger.info("🔄 Retrying with AI LLM due to heuristic parsing failure...")
+                                ai_result = await _run_ocr(file_path, ai_config=retry_ai_config)
+                                if ai_result and isinstance(ai_result, dict) and len(ai_result) > 1:
+                                    logger.info("✅ AI LLM retry successful, using AI results")
+                                    extracted.update(ai_result)
+                                else:
+                                    logger.warning("❌ AI LLM retry also failed")
+                            except Exception as retry_error:
+                                logger.error(f"AI LLM retry failed: {retry_error}")
+                        else:
+                            logger.info("AI LLM retry not available (no config or already attempted)")
 
             def parse_number(value: Any) -> Optional[float]:
                 try:
@@ -1062,14 +1235,11 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
                 return None
 
             # Amount/total
-            amt = parse_number(first_key(extracted, [
+            # Extract amount/total from receipt
+            # Note: We'll handle amount updates after extracting all fields
+            extracted_amount = parse_number(first_key(extracted, [
                 "total_amount", "total", "amount", "grand_total", "subtotal"
             ]))
-            if amt is not None:
-                expense.amount = amt if expense.amount in (None, 0) else expense.amount
-                # If no explicit total_amount provided, set total_amount equal to amount
-                if expense.total_amount in (None, 0):
-                    expense.total_amount = amt
 
             # Currency
             cur = first_key(extracted, ["currency", "currency_code", "iso_currency", "total_currency"]) or None
@@ -1086,6 +1256,22 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
                         expense.expense_date = parsed_dt
                 except Exception:
                     pass
+
+            # Receipt timestamp (exact time from receipt)
+            timestamp_str = first_key(extracted, ["receipt_timestamp", "timestamp", "transaction_time", "receipt_time"]) or None
+            if timestamp_str:
+                try:
+                    from dateutil import parser as dateparser  # type: ignore
+                    parsed_timestamp = dateparser.parse(str(timestamp_str))
+                    if parsed_timestamp:
+                        expense.receipt_timestamp = parsed_timestamp
+                        expense.receipt_time_extracted = True
+                        logger.info(f"Extracted receipt timestamp: {parsed_timestamp} for expense {expense_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to parse receipt timestamp '{timestamp_str}': {e}")
+                    expense.receipt_time_extracted = False
+            else:
+                expense.receipt_time_extracted = False
 
             # Category and vendor
             cat = first_key(extracted, ["category", "expense_category"]) or None
@@ -1108,13 +1294,34 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
                     logger.warning(f"Invalid vendor data detected, using default")
                     expense.vendor = "Unknown Vendor"
 
-            # Taxes
+            # Taxes and total
             tr = parse_number(first_key(extracted, ["tax_rate", "vat_rate"]))
             ta = parse_number(first_key(extracted, ["tax_amount", "vat_amount"]))
             tt = parse_number(first_key(extracted, ["total_amount", "total"]))
+            
             expense.tax_rate = tr if tr is not None else expense.tax_rate
             expense.tax_amount = ta if ta is not None else expense.tax_amount
-            expense.total_amount = tt if tt is not None else expense.total_amount
+            
+            # Amount update logic:
+            # 1. If AI extracted a total_amount, use it (most specific)
+            # 2. Otherwise, if AI extracted an amount, use it
+            # 3. If AI didn't extract either, keep the original user input
+            original_amount = expense.amount
+            if tt is not None:
+                # AI found explicit total - override both amount and total_amount
+                logger.info(f"Expense {expense_id}: Updating amount from {original_amount} to {tt} (AI extracted total)")
+                expense.amount = tt
+                expense.total_amount = tt
+            elif extracted_amount is not None:
+                # AI found an amount but no explicit total - override amount
+                logger.info(f"Expense {expense_id}: Updating amount from {original_amount} to {extracted_amount} (AI extracted amount)")
+                expense.amount = extracted_amount
+                # Set total_amount to match if it's not already set
+                if expense.total_amount in (None, 0):
+                    expense.total_amount = extracted_amount
+            else:
+                # AI didn't extract amount - keep original user input
+                logger.info(f"Expense {expense_id}: Keeping original amount {original_amount} (AI did not extract amount)")
 
             # Other details
             pm = first_key(extracted, ["payment_method", "payment", "method"]) or None
@@ -1162,8 +1369,15 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
                         except (TypeError, ValueError) as ve:
                             logger.warning(f"Skipping non-serializable field {key} in analysis_result: {ve}")
                     
-                    expense.analysis_result = sanitized_data if sanitized_data else {"status": "extracted"}
-                    logger.info(f"Stored sanitized analysis_result with keys: {list(sanitized_data.keys())}")
+                    # Add metadata about extraction method
+                    if sanitized_data:
+                        sanitized_data["extraction_metadata"] = {
+                            "ai_extraction_attempted": ai_extraction_attempted,
+                            "timestamp": datetime.now(timezone.utc).isoformat()
+                        }
+
+                    expense.analysis_result = sanitized_data if sanitized_data else {"status": "extracted", "extraction_metadata": {"ai_extraction_attempted": ai_extraction_attempted}}
+                    logger.info(f"Stored sanitized analysis_result with keys: {list(sanitized_data.keys()) if sanitized_data else ['status']}")
                 else:
                     expense.analysis_result = {"items": extracted} if extracted else {"status": "no_data"}
                     
@@ -1209,6 +1423,12 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
         except Exception as cleanup_error:
             logger.warning(f"Failed to clean up temporary file {file_path}: {cleanup_error}")
 
+    # Release processing lock for expense
+    try:
+        release_processing_lock("expense", expense_id)
+    except Exception as lock_error:
+        logger.warning(f"Failed to release processing lock for expense {expense_id}: {lock_error}")
+
 
 def queue_or_process_attachment(db: Session, tenant_id: Optional[int], expense_id: int, attachment_id: int, file_path: str) -> None:
     """Publish OCR job to Kafka if available, otherwise process inline in background."""
@@ -1238,3 +1458,73 @@ def queue_or_process_attachment(db: Session, tenant_id: Optional[int], expense_i
         except RuntimeError:
             # If no running loop (sync context), schedule with new loop via thread
             asyncio.run(process_attachment_inline(db, expense_id, attachment_id, file_path))
+
+
+def acquire_processing_lock(resource_type: str, resource_id: int, timeout_minutes: int = 30) -> bool:
+    """Acquire processing lock for a resource. Returns True if lock was acquired, False if already locked."""
+    try:
+        from models.processing_lock import ProcessingLock
+        from models.database import get_db
+        from datetime import timedelta
+
+        # Get a new database session for lock acquisition
+        db = get_db()
+        try:
+            with next(db) as session:
+                return ProcessingLock.acquire_lock(session, resource_type, resource_id, timeout_minutes)
+        except Exception as e:
+            logger.error(f"Failed to acquire processing lock for {resource_type} {resource_id}: {e}")
+            return False
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Error in acquire_processing_lock for {resource_type} {resource_id}: {e}")
+        return False
+
+def release_processing_lock(resource_type: str, resource_id: int) -> bool:
+    """Release processing lock for a resource after OCR processing completion."""
+    try:
+        from models.processing_lock import ProcessingLock
+        from models.database import get_db
+        from sqlalchemy.orm import Session
+
+        # Get a new database session for lock release
+        db = get_db()
+        try:
+            with next(db) as session:
+                released = ProcessingLock.release_lock(session, resource_type, resource_id)
+                if released:
+                    logger.info(f"Released processing lock for {resource_type} {resource_id}")
+                return released
+        except Exception as e:
+            logger.error(f"Failed to release processing lock for {resource_type} {resource_id}: {e}")
+            return False
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Error in release_processing_lock for {resource_type} {resource_id}: {e}")
+        return False
+
+
+def cleanup_expired_processing_locks() -> int:
+    """Clean up expired processing locks. Returns number of locks cleaned up."""
+    try:
+        from models.processing_lock import ProcessingLock
+        from models.database import get_db
+
+        # Get a new database session for cleanup
+        db = get_db()
+        try:
+            with next(db) as session:
+                cleaned_count = ProcessingLock.cleanup_expired_locks(session)
+                if cleaned_count > 0:
+                    logger.info(f"Cleaned up {cleaned_count} expired processing locks")
+                return cleaned_count
+        except Exception as e:
+            logger.error(f"Failed to cleanup expired processing locks: {e}")
+            return 0
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Error in cleanup_expired_processing_locks: {e}")
+        return 0
