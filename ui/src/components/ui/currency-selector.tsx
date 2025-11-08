@@ -35,8 +35,8 @@ export function CurrencySelector({
   className = "",
   onCurrenciesLoaded,
 }: CurrencySelectorProps) {
-  // Handle empty/null values by using fallback
-  const effectiveValue = value || "";
+  // Handle empty/null values by using fallback - ensure we always have a value
+  const effectiveValue = value || "USD";
   const [currencies, setCurrencies] = useState<Currency[]>(FALLBACK_CURRENCIES);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -89,9 +89,13 @@ export function CurrencySelector({
 
   return (
     <div className={className}>
-      <Select value={effectiveValue} onValueChange={onValueChange} disabled={disabled}>
+      <Select key={effectiveValue} value={effectiveValue} onValueChange={onValueChange} disabled={disabled}>
         <SelectTrigger>
-          <SelectValue placeholder={placeholder} />
+          <SelectValue placeholder={placeholder}>
+            {effectiveValue && activeCurrencies.find(c => c.code === effectiveValue) 
+              ? formatCurrency(activeCurrencies.find(c => c.code === effectiveValue)!)
+              : placeholder}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
           {activeCurrencies.map((currency) => (

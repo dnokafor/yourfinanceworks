@@ -6,6 +6,7 @@ import shutil
 import uuid
 import logging
 from utils.file_validation import validate_file_path
+from utils.file_deletion import delete_file_from_storage
 
 from models.database import get_db
 from sqlalchemy.orm import Session
@@ -625,19 +626,18 @@ async def delete_statement(
         raise HTTPException(status_code=404, detail="Statement not found")
 
     file_path = s.file_path
+    
+    # Delete the statement file from storage (cloud and/or local)
+    if file_path:
+        await delete_file_from_storage(file_path, tenant_id, current_user.id, db)
+    
+    # Delete the statement record
     try:
         db.delete(s)
         db.commit()
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to delete statement: {e}")
-
-    # Best-effort remove file; ignore errors
-    try:
-        if file_path and os.path.exists(file_path):
-            os.remove(file_path)
-    except Exception:
-        pass
 
     return {"success": True}
 

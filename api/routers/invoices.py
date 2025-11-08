@@ -23,6 +23,7 @@ from services.currency_service import CurrencyService
 from utils.invoice import generate_invoice_number
 from utils.rbac import require_non_viewer, require_admin
 from utils.audit import log_audit_event
+from utils.file_deletion import delete_file_from_storage
 from constants.error_codes import FAILED_TO_CREATE_INVOICE, FAILED_TO_FETCH_INVOICE
 
 # Configure logging
@@ -42,6 +43,7 @@ def get_attachment_info(invoice, new_attachments):
     return has_attachment, attachment_filename
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
+
 
 def make_aware(dt):
     if dt is None:
@@ -931,6 +933,26 @@ async def permanently_delete_invoice(
 
         # Only admins can permanently delete invoices
         require_admin(current_user, "permanently delete invoices")
+        
+        # Delete all attachments from storage before deleting the invoice
+        try:
+            from models.models_per_tenant import InvoiceAttachment
+            attachments = db.query(InvoiceAttachment).filter(
+                InvoiceAttachment.invoice_id == invoice_id
+            ).all()
+            
+            for att in attachments:
+                if att.file_path:
+                    await delete_file_from_storage(att.file_path, current_user.tenant_id, current_user.id, db)
+            
+            if attachments:
+                logger.info(f"Deleted {len(attachments)} attachment(s) from storage for invoice {invoice_id}")
+        except Exception as e:
+            logger.warning(f"Failed to delete attachments for invoice {invoice_id}: {e}")
+        
+        # Delete legacy attachment if present
+        if db_invoice.attachment_path:
+            await delete_file_from_storage(db_invoice.attachment_path, current_user.tenant_id, current_user.id, db)
         
         # Unlink any bank statement transactions that reference this invoice  
         try:
@@ -2894,6 +2916,10 @@ async def delete_invoice_attachment(
             invoice.attachment_filename = None
             invoice.attachment_path = None
 
+        # Delete the physical file from storage (cloud and/or local)
+        if attachment.file_path:
+            await delete_file_from_storage(attachment.file_path, current_user.tenant_id, current_user.id, db)
+
         # Create history entry for attachment deletion
         from models.models_per_tenant import InvoiceHistory as InvoiceHistoryModel
         history_entry = InvoiceHistoryModel(
@@ -2909,51 +2935,6 @@ async def delete_invoice_attachment(
         )
         db.add(history_entry)
         db.commit()
-
-        # Remove the physical file after successful database update (cloud or local)
-        try:
-            if attachment.file_path:
-                # Check if this is a cloud storage file
-                if not attachment.file_path.startswith('/') and not attachment.file_path.startswith('attachments'):
-                    # This is likely a cloud storage file key - delete from cloud storage
-                    try:
-                        from services.cloud_storage_service import CloudStorageService
-                        from settings.cloud_storage_config import get_cloud_storage_config
-                        from models.database import get_tenant_context
-                        
-                        tenant_id = get_tenant_context()
-                        if tenant_id:
-                            cloud_config = get_cloud_storage_config()
-                            cloud_storage_service = CloudStorageService(db, cloud_config)
-                            
-                            # Delete file from cloud storage
-                            delete_result = await cloud_storage_service.delete_file(
-                                file_key=attachment.file_path,
-                                tenant_id=str(tenant_id),
-                                user_id=current_user.id
-                            )
-                            
-                            if delete_result.success:
-                                logger.info(f"Successfully deleted file from cloud storage: {attachment.file_path}")
-                            else:
-                                logger.warning(f"Failed to delete file from cloud storage: {delete_result.error_message}")
-                        else:
-                            logger.warning("No tenant context available for cloud storage deletion")
-                            
-                    except Exception as e:
-                        logger.warning(f"Failed to delete file from cloud storage: {e}")
-                else:
-                    # Local file - delete from disk
-                    if os.path.exists(attachment.file_path):
-                        from utils.file_validation import validate_file_path
-                        validated_path = validate_file_path(attachment.file_path)
-                        os.remove(validated_path)
-                        logger.info(f"Successfully deleted local file: {attachment.file_path}")
-                    else:
-                        logger.warning(f"Local file not found: {attachment.file_path}")
-        except Exception as e:
-            logger.warning(f"Failed to remove attachment file {attachment.file_path}: {e}")
-            # Don't fail the deletion if file removal fails
 
         return
 

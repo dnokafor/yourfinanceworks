@@ -175,8 +175,10 @@ class InventoryService:
                 raise DuplicateSKUException(update_data.get('sku', 'Unknown'))
             raise
 
-    def delete_item(self, item_id: int, user_id: int) -> bool:
+    async def delete_item(self, item_id: int, user_id: int, tenant_id: int) -> bool:
         """Delete an inventory item (only if not used in invoices or expenses)"""
+        from utils.file_deletion import delete_file_from_storage
+        
         item = self.db.query(InventoryItem).filter(InventoryItem.id == item_id).first()
         if not item:
             raise ValueError("Item not found")
@@ -193,6 +195,25 @@ class InventoryService:
 
         if invoice_usage > 0 or expense_usage > 0:
             raise ValueError("Cannot delete item that is used in invoices or expenses")
+
+        # Delete all attachments from storage before deleting the item
+        try:
+            from models.models_per_tenant import ItemAttachment
+            attachments = self.db.query(ItemAttachment).filter(
+                ItemAttachment.item_id == item_id
+            ).all()
+            
+            for att in attachments:
+                if att.file_path:
+                    await delete_file_from_storage(att.file_path, tenant_id, user_id, self.db)
+                # Also delete thumbnail if it exists
+                if att.thumbnail_path:
+                    await delete_file_from_storage(att.thumbnail_path, tenant_id, user_id, self.db)
+            
+            if attachments:
+                logger.info(f"Deleted {len(attachments)} attachment(s) from storage for inventory item {item_id}")
+        except Exception as e:
+            logger.warning(f"Failed to delete attachments for inventory item {item_id}: {e}")
 
         self.db.delete(item)
         self.db.commit()

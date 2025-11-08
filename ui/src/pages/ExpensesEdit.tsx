@@ -28,7 +28,7 @@ export default function ExpensesEdit() {
   const { id } = useParams();
   const navigate = useNavigate();
   const categoryOptions = EXPENSE_CATEGORY_OPTIONS;
-  const [form, setForm] = useState<Partial<Expense>>({});
+  const [form, setForm] = useState<Partial<Expense>>({ currency: 'USD' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [newFiles, setNewFiles] = useState<File[]>([]);
@@ -62,7 +62,11 @@ export default function ExpensesEdit() {
           return;
         }
 
-        setForm(exp);
+        // Ensure currency has a value
+        setForm({
+          ...exp,
+          currency: exp.currency || 'USD'
+        });
 
         // Initialize consumption state from existing expense data
         const isConsumption = !!(exp as any).is_inventory_consumption;
@@ -333,7 +337,10 @@ export default function ExpensesEdit() {
             </div>
             <div>
               <label className="text-sm">{t('expenses.labels.currency')}</label>
-              <CurrencySelector value={form.currency || 'USD'} onValueChange={v => setForm({ ...form, currency: v })} />
+              <CurrencySelector 
+                value={form.currency || 'USD'} 
+                onValueChange={v => setForm({ ...form, currency: v })} 
+              />
             </div>
             <div>
               <label className="text-sm">{t('expenses.labels.date')}</label>

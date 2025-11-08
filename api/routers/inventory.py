@@ -314,7 +314,7 @@ async def delete_item(
 ):
     """Delete an inventory item"""
     try:
-        inventory_service.delete_item(item_id, current_user.id)
+        await inventory_service.delete_item(item_id, current_user.id, current_user.tenant_id)
         log_audit_event(db, current_user.id, current_user.email, "DELETE", "inventory_item", str(item_id), "Deleted item", None, None, None, "success", None
         )
         return {"message": "Item deleted successfully"}

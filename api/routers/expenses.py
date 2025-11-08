@@ -21,6 +21,7 @@ from schemas.expense import ExpenseCreate, ExpenseUpdate, Expense as ExpenseSche
 from services.currency_service import CurrencyService
 from utils.rbac import require_non_viewer
 from utils.audit import log_audit_event
+from utils.file_deletion import delete_file_from_storage
 from services.ocr_service import queue_or_process_attachment, cancel_ocr_tasks_for_expense
 from constants.error_codes import EXPENSE_LINKED_TO_INVOICE
 from constants.expense_status import ExpenseStatus
@@ -816,23 +817,17 @@ async def delete_expense(
         # Prevent deleting an expense that is linked to an invoice
         if getattr(db_expense, "invoice_id", None) is not None:
             raise HTTPException(status_code=400, detail=EXPENSE_LINKED_TO_INVOICE)
-        # If there is a saved receipt, try to remove it from disk
+        
         # Remove any legacy single receipt file if present
-        if db_expense.receipt_path and os.path.exists(db_expense.receipt_path):
-            try:
-                os.remove(db_expense.receipt_path)
-            except Exception as e:
-                logger.warning(f"Failed to remove legacy receipt file: {e}")
+        if db_expense.receipt_path:
+            await delete_file_from_storage(db_expense.receipt_path, current_user.tenant_id, current_user.id, db)
 
         # Remove all attachment files associated with this expense
         try:
             attachments = db.query(ExpenseAttachment).filter(ExpenseAttachment.expense_id == expense_id).all()
             for att in attachments:
-                if getattr(att, "file_path", None) and os.path.exists(att.file_path):
-                    try:
-                        os.remove(att.file_path)
-                    except Exception as e:
-                        logger.warning(f"Failed to remove attachment file {att.file_path}: {e}")
+                if getattr(att, "file_path", None):
+                    await delete_file_from_storage(att.file_path, current_user.tenant_id, current_user.id, db)
         except Exception as e:
             logger.warning(f"Failed to enumerate attachments for deletion: {e}")
 
@@ -1181,53 +1176,17 @@ async def delete_expense_attachment(
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user),
 ):
+    require_non_viewer(current_user, "delete attachments")
+    
     att = db.query(ExpenseAttachment).filter(ExpenseAttachment.id == attachment_id, ExpenseAttachment.expense_id == expense_id).first()
     if not att:
         raise HTTPException(status_code=404, detail="Attachment not found")
 
     # Allow deleting attachments even from analyzed expenses (user confirms via UI)
 
-    # Try to remove file from storage (cloud or local)
-    try:
-        if att.file_path:
-            # Check if this is a cloud storage file
-            if not att.file_path.startswith('/') and not att.file_path.startswith('attachments'):
-                # This is likely a cloud storage file key - delete from cloud storage
-                try:
-                    from services.cloud_storage_service import CloudStorageService
-                    from settings.cloud_storage_config import get_cloud_storage_config
-                    from models.database import get_tenant_context
-
-                    tenant_id = get_tenant_context()
-                    if tenant_id:
-                        cloud_config = get_cloud_storage_config()
-                        cloud_storage_service = CloudStorageService(db, cloud_config)
-
-                        # Delete file from cloud storage
-                        delete_result = await cloud_storage_service.delete_file(
-                            file_key=att.file_path,
-                            tenant_id=str(tenant_id),
-                            user_id=current_user.id
-                        )
-
-                        if delete_result.success:
-                            logger.info(f"Successfully deleted file from cloud storage: {att.file_path}")
-                        else:
-                            logger.warning(f"Failed to delete file from cloud storage: {delete_result.error_message}")
-                    else:
-                        logger.warning("No tenant context available for cloud storage deletion")
-
-                except Exception as e:
-                    logger.warning(f"Failed to delete file from cloud storage: {e}")
-            else:
-                # Local file - delete from disk
-                if os.path.exists(att.file_path):
-                    os.remove(att.file_path)
-                    logger.info(f"Successfully deleted local file: {att.file_path}")
-                else:
-                    logger.warning(f"Local file not found: {att.file_path}")
-    except Exception as e:
-        logger.warning(f"Failed to remove attachment file: {e}")
+    # Delete file from storage (cloud and/or local)
+    if att.file_path:
+        await delete_file_from_storage(att.file_path, current_user.tenant_id, current_user.id, db)
 
     # Delete attachment record from database
     db.delete(att)
