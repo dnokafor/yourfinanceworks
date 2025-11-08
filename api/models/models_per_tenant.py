@@ -732,7 +732,7 @@ class ItemAttachment(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     item_id = Column(Integer, ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False)
-    
+
     # File information
     filename = Column(String, nullable=False)  # Original filename
     stored_filename = Column(String, nullable=False)  # Stored filename (usually UUID-based)
@@ -740,34 +740,34 @@ class ItemAttachment(Base):
     file_size = Column(Integer, nullable=False)  # File size in bytes
     content_type = Column(String, nullable=True)  # MIME type
     file_hash = Column(String, nullable=True)  # SHA-256 hash for integrity
-    
+
     # Attachment metadata
     attachment_type = Column(String, nullable=False)  # 'image' or 'document'
     document_type = Column(String, nullable=True)  # For documents: manual, certificate, warranty, etc.
     description = Column(Text, nullable=True)  # User-provided description
     alt_text = Column(String, nullable=True)  # Alt text for images (accessibility)
-    
+
     # Display and organization
     is_primary = Column(Boolean, default=False, nullable=False)  # Primary image for item
     display_order = Column(Integer, default=0, nullable=False)  # Order for display
-    
+
     # Image-specific fields
     image_width = Column(Integer, nullable=True)  # Original image width
     image_height = Column(Integer, nullable=True)  # Original image height
     has_thumbnail = Column(Boolean, default=False, nullable=False)  # Whether thumbnails exist
     thumbnail_path = Column(String, nullable=True)  # Path to thumbnail image
-    
+
     # Upload tracking
     uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     upload_ip = Column(String, nullable=True)  # IP address of uploader
-    
+
     # Status
     is_active = Column(Boolean, default=True, nullable=False)  # Soft delete support
-    
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    
+
     # Relationships
     item = relationship("InventoryItem", back_populates="attachments")
     uploader = relationship("User")
@@ -778,7 +778,7 @@ class InvoiceAttachment(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     invoice_id = Column(Integer, ForeignKey("invoices.id", ondelete="CASCADE"), nullable=False)
-    
+
     # File information
     filename = Column(String, nullable=False)  # Original filename
     stored_filename = Column(String, nullable=False)  # Stored filename (usually UUID-based)
@@ -786,35 +786,65 @@ class InvoiceAttachment(Base):
     file_size = Column(Integer, nullable=False)  # File size in bytes
     content_type = Column(String, nullable=True)  # MIME type
     file_hash = Column(String, nullable=True)  # SHA-256 hash for integrity
-    
+
     # Attachment metadata
     attachment_type = Column(String, nullable=False)  # 'image' or 'document'
     document_type = Column(String, nullable=True)  # For documents: receipt, contract, etc.
     description = Column(Text, nullable=True)  # User-provided description
-    
+
     # Display and organization
     display_order = Column(Integer, default=0, nullable=False)  # Order for display
-    
+
     # Upload tracking
     uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     upload_ip = Column(String, nullable=True)  # IP address of uploader
-    
+
     # Status
     is_active = Column(Boolean, default=True, nullable=False)  # Soft delete support
-    
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    
+
     # Relationships
     invoice = relationship("Invoice", back_populates="attachments")
     uploader = relationship("User")
+
+
+class InvoiceProcessingTask(Base):
+    """Track async invoice PDF processing tasks"""
+    __tablename__ = "invoice_processing_tasks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(String, unique=True, nullable=False, index=True)  # UUID for tracking
+
+    # File information
+    file_path = Column(String, nullable=False)
+    filename = Column(String, nullable=False)
+
+    # Processing status
+    status = Column(String, nullable=False, default="queued")  # queued, processing, completed, failed
+    error_message = Column(Text, nullable=True)
+
+    # Result data (JSON)
+    result_data = Column(JSON, nullable=True)  # Extracted invoice data
+
+    # User tracking
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    user = relationship("User")
 
 # --- Expense Approval Workflow Models ---
 
 class ExpenseApproval(Base):
     __tablename__ = "expense_approvals"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     expense_id = Column(Integer, ForeignKey("expenses.id", ondelete="CASCADE"), nullable=False)
     approver_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -826,10 +856,10 @@ class ExpenseApproval(Base):
     decided_at = Column(DateTime(timezone=True), nullable=True)
     approval_level = Column(Integer, nullable=False, default=1)
     is_current_level = Column(Boolean, nullable=False, default=True)
-    
+
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    
+
     # Relationships
     expense = relationship("Expense")
     approver = relationship("User", foreign_keys=[approver_id])
@@ -838,7 +868,7 @@ class ExpenseApproval(Base):
 
 class ApprovalRule(Base):
     __tablename__ = "approval_rules"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     min_amount = Column(Float, nullable=True)
@@ -850,10 +880,10 @@ class ApprovalRule(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     priority = Column(Integer, default=0, nullable=False)
     auto_approve_below = Column(Float, nullable=True)  # Auto-approve below this amount
-    
+
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    
+
     # Relationships
     approver = relationship("User", foreign_keys=[approver_id])
     expense_approvals = relationship("ExpenseApproval", back_populates="approval_rule")
@@ -861,21 +891,21 @@ class ApprovalRule(Base):
 
 class ApprovalDelegate(Base):
     __tablename__ = "approval_delegates"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     approver_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     delegate_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     start_date = Column(DateTime(timezone=True), nullable=False)
     end_date = Column(DateTime(timezone=True), nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
-    
+
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    
+
     # Relationships
     approver = relationship("User", foreign_keys=[approver_id])
     delegate = relationship("User", foreign_keys=[delegate_id])
-    
+
     # Ensure unique active delegation per approver
     __table_args__ = (
         UniqueConstraint('approver_id', 'delegate_id', 'start_date', name='unique_active_delegation'),
@@ -911,48 +941,48 @@ class ReminderPriority(str, PyEnum):
 
 class Reminder(Base):
     __tablename__ = "reminders"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False, index=True)
     description = Column(Text, nullable=True)
-    
+
     # Scheduling information
     due_date = Column(DateTime(timezone=True), nullable=False)
     next_due_date = Column(DateTime(timezone=True), nullable=True)  # For recurring reminders
     recurrence_pattern = Column(Enum(RecurrencePattern), default=RecurrencePattern.NONE, nullable=False)
     recurrence_interval = Column(Integer, default=1, nullable=False)  # Every N days/weeks/months/years
     recurrence_end_date = Column(DateTime(timezone=True), nullable=True)  # When to stop recurring
-    
+
     # Status and priority
     status = Column(Enum(ReminderStatus), default=ReminderStatus.PENDING, nullable=False)
     priority = Column(Enum(ReminderPriority), default=ReminderPriority.MEDIUM, nullable=False)
-    
+
     # Assignment
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     assigned_to_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
+
     # Snooze functionality
     snoozed_until = Column(DateTime(timezone=True), nullable=True)
     snooze_count = Column(Integer, default=0, nullable=False)
-    
+
     # Completion tracking
     completed_at = Column(DateTime(timezone=True), nullable=True)
     completed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     completion_notes = Column(Text, nullable=True)
-    
+
     # Metadata
     tags = Column(JSON, nullable=True)  # Array of tags for categorization
     extra_metadata = Column(JSON, nullable=True)  # Additional flexible data
-    
+
     # Soft delete
     is_deleted = Column(Boolean, default=False, nullable=False)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     deleted_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    
+
     # Relationships
     created_by = relationship("User", foreign_keys=[created_by_id])
     assigned_to = relationship("User", foreign_keys=[assigned_to_id])
@@ -963,38 +993,38 @@ class Reminder(Base):
 
 class ReminderNotification(Base):
     __tablename__ = "reminder_notifications"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     reminder_id = Column(Integer, ForeignKey("reminders.id", ondelete="CASCADE"), nullable=True)  # Nullable for system notifications
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
+
     # Notification details
     notification_type = Column(String, nullable=False)  # 'due', 'overdue', 'reminder', 'assigned'
     channel = Column(String, nullable=False)  # 'email', 'in_app', 'both'
-    
+
     # Scheduling
     scheduled_for = Column(DateTime(timezone=True), nullable=False)
     sent_at = Column(DateTime(timezone=True), nullable=True)
-    
+
     # Status
     is_sent = Column(Boolean, default=False, nullable=False)
     is_read = Column(Boolean, default=False, nullable=False)  # For in-app notifications
     send_attempts = Column(Integer, default=0, nullable=False)
     last_attempt_at = Column(DateTime(timezone=True), nullable=True)
     error_message = Column(Text, nullable=True)
-    
+
     # Content
     subject = Column(String, nullable=True)
     message = Column(Text, nullable=True)
-    
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    
+
     # Relationships
     reminder = relationship("Reminder", back_populates="notifications")
     user = relationship("User")
-    
+
     # Ensure we don't send duplicate notifications
     __table_args__ = (
         UniqueConstraint('reminder_id', 'user_id', 'notification_type', 'scheduled_for',

@@ -364,3 +364,30 @@ def clear_all_ocr_notifications() -> int:
 def get_ocr_notifications_summary() -> Dict[str, Any]:
     """Get summary of all stored OCR notifications."""
     return ocr_notification_manager.get_all_notifications_summary()
+
+
+def notify_invoice_ocr_complete(db, task_id: str, user_id: int, tenant_id: int):
+    """Send notification when invoice OCR processing is complete."""
+    try:
+        from utils.notifications import send_notification
+        
+        notification_data = {
+            "task_id": task_id,
+            "tenant_id": tenant_id,
+            "timestamp": ocr_notification_manager._get_current_timestamp()
+        }
+        
+        send_notification(
+            db=db,
+            event_type="invoice_ocr_complete",
+            user_id=user_id,
+            resource_type="invoice",
+            resource_id=task_id,
+            resource_name="Invoice PDF Processing",
+            details=notification_data
+        )
+        
+        logger.info(f"Sent invoice OCR completion notification: task_id={task_id}, user_id={user_id}")
+        
+    except Exception as e:
+        logger.error(f"Failed to send invoice OCR notification: {e}")

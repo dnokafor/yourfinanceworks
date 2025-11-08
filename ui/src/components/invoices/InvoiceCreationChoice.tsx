@@ -71,24 +71,56 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport, onInventory
       console.log('PDF Processing - AI Status:', status);
       setLlmStatus(status);
 
-      // Process PDF with LLM
+      // Upload PDF and get task_id
       const formData = new FormData();
       formData.append('pdf_file', selectedFile);
 
-      const response = await apiRequest<any>('/invoices/process-pdf', {
+      const uploadResponse = await apiRequest<any>('/invoices/process-pdf', {
         method: 'POST',
         body: formData,
       });
 
-      if (response.success) {
-        // Update notification to success
-        addNotification?.('success', t('invoices.invoice_pdf_processed'), t('invoices.successfully_extracted_data', { fileName: selectedFile.name }));
-        toast.success(t('invoices.pdf_processed_successfully'));
-        const payload = (response?.data?.invoice_data) ?? response?.data ?? response;
-        onPdfImport(payload, selectedFile);
-      } else {
-        throw new Error(response.message || 'Failed to process PDF');
+      if (!uploadResponse.success || !uploadResponse.task_id) {
+        throw new Error(uploadResponse.message || 'Failed to queue PDF for processing');
       }
+
+      const taskId = uploadResponse.task_id;
+      console.log('PDF queued for processing, task_id:', taskId);
+
+      // Poll for processing status
+      const maxAttempts = 60; // 3 minutes with 3-second intervals
+      let attempts = 0;
+      
+      while (attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
+        
+        try {
+          const statusResponse = await apiRequest<any>(`/invoices/process-status/${taskId}`);
+          console.log('Processing status:', statusResponse.status);
+          
+          if (statusResponse.status === 'completed') {
+            // Success! Extract the data
+            addNotification?.('success', t('invoices.invoice_pdf_processed'), t('invoices.successfully_extracted_data', { fileName: selectedFile.name }));
+            toast.success(t('invoices.pdf_processed_successfully'));
+            
+            const payload = statusResponse.data?.invoice_data || statusResponse.data;
+            onPdfImport(payload, selectedFile);
+            return;
+          } else if (statusResponse.status === 'failed') {
+            throw new Error(statusResponse.error || 'Processing failed');
+          }
+          
+          // Still processing, continue polling
+          attempts++;
+        } catch (pollError) {
+          console.error('Error polling status:', pollError);
+          attempts++;
+        }
+      }
+      
+      // Timeout
+      throw new Error('Processing timeout - please try again');
+      
     } catch (error) {
       console.error('PDF processing error:', error);
       // Update notification to error

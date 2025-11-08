@@ -784,17 +784,43 @@ def main() -> int:
                 # Handle invoice OCR
                 elif topic_name == invoice_topic:
                     try:
-                        # Pull AI config and process invoice using existing PDF processor route logic
-                        from models.models_per_tenant import AIConfig as AIConfigModel
-                        from routers.pdf_processor import process_pdf_with_ai  # uses LiteLLM and active config
-                        # Expect payload to include a temp file path and a generated task_id
+                        from models.models_per_tenant import AIConfig as AIConfigModel, InvoiceProcessingTask, Client
+                        from routers.pdf_processor import process_pdf_with_ai
+                        import re
+                        
                         task_id = str(payload.get("task_id"))
                         file_path = str(payload.get("file_path"))
+                        filename = str(payload.get("filename", "invoice.pdf"))
+                        user_id = int(payload.get("user_id"))
+                        
+                        logger.info(f"Processing invoice OCR: task_id={task_id}, file={file_path}")
+                        
+                        # Create or update processing task record
+                        task = db.query(InvoiceProcessingTask).filter(
+                            InvoiceProcessingTask.task_id == task_id
+                        ).first()
+                        
+                        if not task:
+                            task = InvoiceProcessingTask(
+                                task_id=task_id,
+                                file_path=file_path,
+                                filename=filename,
+                                user_id=user_id,
+                                status="processing"
+                            )
+                            db.add(task)
+                        else:
+                            task.status = "processing"
+                            task.updated_at = datetime.now(timezone.utc)
+                        
+                        db.commit()
+                        
                         # Load AI config, prioritizing default
                         ai_row = db.query(AIConfigModel).filter(
                             AIConfigModel.is_active == True,
                             AIConfigModel.tested == True
                         ).order_by(AIConfigModel.is_default.desc()).first()
+                        
                         if not ai_row:
                             # Fallback to environment configuration
                             model_name = os.getenv("LLM_MODEL_INVOICES") or os.getenv("LLM_MODEL") or os.getenv("OLLAMA_MODEL", "gpt-oss:latest")
@@ -810,30 +836,99 @@ def main() -> int:
                                 tested=True,
                             )
                         else:
-                            ai_conf = ai_row  # reuse model instance
+                            ai_conf = ai_row
+                        
                         # Run extraction
                         import asyncio
-                        data = asyncio.get_event_loop().run_until_complete(process_pdf_with_ai(file_path, ai_conf))
-
-                        # Release processing lock for invoice
+                        extracted_data = asyncio.get_event_loop().run_until_complete(
+                            process_pdf_with_ai(file_path, ai_conf)
+                        )
+                        
+                        # Check if client exists or needs to be created
+                        client_info = extracted_data.get('bills_to', '')
+                        existing_client = None
+                        
+                        if client_info:
+                            email_match = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', client_info)
+                            if email_match:
+                                client_email = email_match.group()
+                                existing_client = db.query(Client).filter(
+                                    Client.email.ilike(client_email)
+                                ).first()
+                        
+                        # Format response data
+                        client_email = None
+                        if client_info:
+                            email_match = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', client_info)
+                            if email_match:
+                                client_email = email_match.group()
+                        
+                        result_data = {
+                            'invoice_data': extracted_data,
+                            'client_exists': existing_client is not None,
+                            'existing_client': {
+                                'id': existing_client.id,
+                                'name': existing_client.name,
+                                'email': existing_client.email
+                            } if existing_client else None,
+                            'suggested_client': {
+                                'name': client_info.split('\n')[0].strip() if client_info else '',
+                                'email': client_email or '',
+                                'address': client_info
+                            } if client_info else None
+                        }
+                        
+                        # Update task with results
+                        task.status = "completed"
+                        task.result_data = result_data
+                        task.completed_at = datetime.now(timezone.utc)
+                        task.updated_at = datetime.now(timezone.utc)
+                        db.commit()
+                        
+                        logger.info(f"Invoice OCR completed successfully: task_id={task_id}")
+                        
+                        # Send notification
+                        try:
+                            from utils.ocr_notifications import notify_invoice_ocr_complete
+                            notify_invoice_ocr_complete(db, task_id, user_id, tenant_id)
+                        except Exception as notif_err:
+                            logger.warning(f"Failed to send invoice OCR notification: {notif_err}")
+                        
+                        # Release processing lock
                         try:
                             from services.ocr_service import release_processing_lock
-                            # Extract invoice_id from task_id or use a different identifier
-                            # For now, we'll try to parse the task_id or use a generic approach
                             release_processing_lock("invoice", task_id)
                             logger.info(f"Released processing lock for invoice task {task_id}")
                         except Exception as lock_error:
-                            logger.warning(f"Failed to release processing lock for invoice task {task_id}: {lock_error}")
-
-                        # Publish result
-                        from services.ocr_service import publish_invoice_result
-                        publish_invoice_result(task_id, tenant_id, {"invoice_data": data})
+                            logger.warning(f"Failed to release processing lock: {lock_error}")
+                        
+                        # Commit message
+                        try:
+                            consumer.commit(message=msg, asynchronous=False)
+                        except Exception as commit_err:
+                            logger.error(f"Failed to commit message: {commit_err}")
+                            
+                    except Exception as e:
+                        logger.error(f"Failed processing invoice OCR: {e}")
+                        # Update task with error
+                        try:
+                            task = db.query(InvoiceProcessingTask).filter(
+                                InvoiceProcessingTask.task_id == task_id
+                            ).first()
+                            if task:
+                                task.status = "failed"
+                                task.error_message = str(e)
+                                task.updated_at = datetime.now(timezone.utc)
+                                db.commit()
+                        except Exception as update_err:
+                            logger.error(f"Failed to update task error: {update_err}")
+                            db.rollback()
+                        
+                        # Commit message to avoid reprocessing
                         try:
                             consumer.commit(message=msg, asynchronous=False)
                         except Exception:
                             pass
-                    except Exception as e:
-                        logger.error(f"Failed processing invoice OCR: {e}")
             finally:
                 db.close()
         except Exception as e:

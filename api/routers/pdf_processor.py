@@ -54,6 +54,57 @@ async def get_ai_status(
         }.get(config_source, "Unknown configuration source")
     }
 
+
+@router.get("/process-status/{task_id}")
+async def get_process_status(
+    task_id: str,
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Get the status of an invoice PDF processing task"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    try:
+        from models.models_per_tenant import InvoiceProcessingTask
+        
+        # Query the processing task
+        task = db.query(InvoiceProcessingTask).filter(
+            InvoiceProcessingTask.task_id == task_id
+        ).first()
+        
+        if not task:
+            # Task might still be in queue, not yet picked up by worker
+            return {
+                'task_id': task_id,
+                'status': 'queued',
+                'message': 'Task is queued for processing'
+            }
+        
+        response = {
+            'task_id': task.task_id,
+            'status': task.status,
+            'created_at': task.created_at.isoformat() if task.created_at else None,
+            'updated_at': task.updated_at.isoformat() if task.updated_at else None
+        }
+        
+        if task.status == 'completed' and task.result_data:
+            response['data'] = task.result_data
+            response['message'] = 'Invoice data extracted successfully'
+        elif task.status == 'failed' and task.error_message:
+            response['error'] = task.error_message
+            response['message'] = 'Invoice processing failed'
+        elif task.status == 'processing':
+            response['message'] = 'Invoice is being processed'
+        else:
+            response['message'] = 'Task is queued for processing'
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Failed to get task status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get task status: {str(e)}")
+
 async def process_pdf_with_ai(pdf_path: str, ai_config) -> Dict[str, Any]:
     """Process PDF using AI configuration and return extracted data"""
     try:
@@ -242,161 +293,87 @@ async def process_pdf(
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
-    """Check if AI is configured (authenticated users only)"""
+    """Queue invoice PDF for async OCR processing"""
     if not current_user:
         raise HTTPException(status_code=401, detail="Unauthorized")
-
-    """Process PDF invoice and extract data using the main.py script"""
 
     if not pdf_file.filename.endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
 
     try:
-        # Save uploaded file temporarily
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
-            content = await pdf_file.read()
-            temp_file.write(content)
-            temp_pdf_path = temp_file.name
+        from models.database import get_tenant_context
+        from services.ocr_service import publish_invoice_task
+        from pathlib import Path
+        import uuid
+        from utils.file_validation import validate_file_path
 
-        # Priority system: AI config → env vars → manual fallback
-        active_config = None
-        config_source = "manual"
+        # Get tenant context
+        tenant_id = get_tenant_context()
+        if not tenant_id:
+            raise HTTPException(status_code=400, detail="Tenant context not available")
+
+        # Save uploaded file to persistent storage
+        tenant_folder = f"tenant_{tenant_id}"
+        temp_dir = Path("attachments") / tenant_folder / "invoices" / "temp"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generate unique filename
+        task_id = str(uuid.uuid4())
+        file_extension = Path(pdf_file.filename).suffix
+        stored_filename = f"{task_id}{file_extension}"
+        file_path = temp_dir / stored_filename
+
+        # Read file content first
+        content = await pdf_file.read()
         
-        # 1. Check if AI config is set up and tested, prioritizing default
-        ai_config = db.query(AIConfigModel).filter(
-            AIConfigModel.is_active == True,
-            AIConfigModel.tested == True
-        ).order_by(AIConfigModel.is_default.desc()).first()
-        
-        if ai_config:
-            active_config = ai_config
-            config_source = "ai_config"
-            logger.info("Using AI configuration from database")
-        else:
-            # 2. Check if env vars are set up
-            env_model = os.getenv("LLM_MODEL_INVOICES") or os.getenv("LLM_MODEL") or os.getenv("OLLAMA_MODEL")
-            env_api_base = os.getenv("LLM_API_BASE") or os.getenv("OLLAMA_API_BASE")
-            env_api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
-            
-            # Debug logging
-            logger.info(f"Environment variables check:")
-            logger.info(f"  LLM_MODEL_INVOICES: {os.getenv('LLM_MODEL_INVOICES')}")
-            logger.info(f"  LLM_MODEL: {os.getenv('LLM_MODEL')}")
-            logger.info(f"  OLLAMA_MODEL: {os.getenv('OLLAMA_MODEL')}")
-            logger.info(f"  LLM_API_BASE: {os.getenv('LLM_API_BASE')}")
-            logger.info(f"  OLLAMA_API_BASE: {os.getenv('OLLAMA_API_BASE')}")
-            logger.info(f"  LLM_API_KEY: {'***' if os.getenv('LLM_API_KEY') else None}")
-            logger.info(f"  OPENAI_API_KEY: {'***' if os.getenv('OPENAI_API_KEY') else None}")
-            logger.info(f"  Final values - model: {env_model}, api_base: {env_api_base}, api_key: {'***' if env_api_key else None}")
-            
-            if env_model or env_api_base or env_api_key:
-                # Determine provider from env vars
-                if env_api_base or os.getenv("OLLAMA_MODEL"):
-                    provider_name = "ollama"
-                elif env_api_key:
-                    provider_name = "openai"
-                else:
-                    provider_name = "ollama"  # Default fallback
-                
-                active_config = SimpleNamespace(
-                    provider_name=provider_name,
-                    provider_url=env_api_base,
-                    api_key=env_api_key,
-                    model_name=env_model or "gpt-oss:latest",
-                    is_active=True,
-                    tested=True,
-                )
-                config_source = "env_vars"
-                logger.info(f"Using AI configuration from environment variables: provider={provider_name}, model={env_model or 'gpt-oss:latest'}, api_base={env_api_base}")
-            else:
-                # 3. Manual fallback - use basic defaults
-                active_config = SimpleNamespace(
-                    provider_name="ollama",
-                    provider_url="http://localhost:11434",
-                    api_key=None,
-                    model_name="gpt-oss:latest",
-                    is_active=True,
-                    tested=False,  # Mark as untested for manual config
-                )
-                config_source = "manual"
-                logger.info("No environment variables found, using manual fallback AI configuration")
+        if not content:
+            raise HTTPException(status_code=400, detail="Empty file provided")
 
-        try:
-            # Process PDF with AI
-            extracted_data = await process_pdf_with_ai(temp_pdf_path, active_config)
-            logger.info(f"PDF processed successfully with AI (config source: {config_source})")
+        # Validate file size (max 10MB)
+        MAX_FILE_SIZE = 10 * 1024 * 1024
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail=f"File too large. Maximum size is 10MB")
 
-            # Track AI usage if we used a database AI config
-            if config_source == "ai_config" and hasattr(active_config, 'provider_name'):
-                ai_config_dict = {
-                    'provider_name': active_config.provider_name,
-                    'model_name': active_config.model_name,
-                    'provider_url': getattr(active_config, 'provider_url', None),
-                    'api_key': getattr(active_config, 'api_key', None)
-                }
-                track_ai_usage(db, ai_config_dict)
+        # Save file (validate path structure but don't require existence)
+        validated_path = validate_file_path(str(file_path), must_exist=False)
+        with open(validated_path, "wb") as f:
+            f.write(content)
 
-        except Exception as e:
-            logger.error(f"PDF processing failed with {config_source} config: {str(e)}")
-            
-            # Provide helpful error message based on config source
-            if config_source == "manual":
-                error_msg = f"PDF processing failed with manual configuration. Please set up AI configuration in Settings or configure environment variables. Error: {str(e)}"
-            elif config_source == "env_vars":
-                error_msg = f"PDF processing failed with environment variables. Please check your LLM environment configuration or set up AI config in Settings. Error: {str(e)}"
-            else:
-                error_msg = f"PDF processing failed with AI configuration. Please verify your AI settings are correct. Error: {str(e)}"
-            
-            raise HTTPException(status_code=500, detail=error_msg)
-
-        # Check if client exists or needs to be created
-        client_info = extracted_data.get('bills_to', '')
-        existing_client = None
-
-        if client_info:
-            # Try to find existing client by email (regex matching)
-            import re
-            email_match = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', client_info)
-            if email_match:
-                client_email = email_match.group()
-                existing_client = db.query(Client).filter(
-                    Client.email.ilike(client_email)
-                ).first()
-
-        # Format response
-        client_email = None
-        if client_info:
-            import re
-            email_match = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', client_info)
-            if email_match:
-                client_email = email_match.group()
-
-        response_data = {
-            'invoice_data': extracted_data,
-            'client_exists': existing_client is not None,
-            'existing_client': {
-                'id': existing_client.id,
-                'name': existing_client.name,
-                'email': existing_client.email
-            } if existing_client else None,
-            'suggested_client': {
-                'name': client_info.split('\n')[0].strip() if client_info else '',
-                'email': client_email or '',
-                'address': client_info
-            } if client_info else None,
-            'config_source': config_source  # Include config source in response
+        # Queue the OCR task
+        message = {
+            "tenant_id": tenant_id,
+            "task_id": task_id,
+            "file_path": str(file_path),
+            "filename": pdf_file.filename,
+            "user_id": current_user.id,
+            "attempt": 0
         }
+
+        success = publish_invoice_task(message)
+
+        if not success:
+            # Clean up file if queueing failed
+            if os.path.exists(str(file_path)):
+                os.unlink(str(file_path))
+            raise HTTPException(
+                status_code=500, 
+                detail="Failed to queue invoice for processing. Please check Kafka configuration."
+            )
+
+        logger.info(f"Invoice PDF queued for processing: task_id={task_id}, tenant_id={tenant_id}")
 
         return {
             'success': True,
-            'data': response_data,
-            'message': f'PDF processed successfully using {config_source} configuration'
+            'task_id': task_id,
+            'status': 'queued',
+            'message': 'Invoice PDF queued for processing. You will be notified when extraction is complete.'
         }
 
-    finally:
-        # Clean up temporary file
-        if os.path.exists(temp_pdf_path):
-            os.unlink(temp_pdf_path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to queue invoice PDF: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to queue invoice: {str(e)}")
 
 
 # Note: Bank statement extraction moved to services/statement_service.py
