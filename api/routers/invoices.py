@@ -2335,7 +2335,7 @@ async def upload_invoice_attachment(
         return {
             "message": "Attachment uploaded successfully",
             "filename": file.filename,
-            "size": os.path.getsize(file_path),
+            "size": len(contents),
             "attachment_path": str(file_path),
             "attachment_filename": api_attachment_filename,
             "has_attachment": api_has_attachment

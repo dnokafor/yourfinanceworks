@@ -18,18 +18,18 @@ class ProcessingLock(Base):
     __tablename__ = "processing_locks"
 
     id = Column(Integer, primary_key=True, index=True)
-    
+
     # Resource identification (matches the table schema)
     resource_type = Column  (String(50), nullable=False, index=True)  # 'expense', 'bank_statement', 'invoice'
     resource_id = Column(String(255), nullable=False, index=True)  # Changed to String for flexibility
-    
+
     # Timestamps
     acquired_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
-    
+
     # Status
     is_active = Column(Boolean, default=True, index=True)
-    
+
     # Additional metadata (JSONB in PostgreSQL)
     lock_metadata = Column(Text)  # JSON string for additional metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
