@@ -82,3 +82,6 @@ azure-identity==1.19.0  # Azure authentication
 hvac==2.3.0  # HashiCorp Vault client
 tenacity==9.0.0  # Retry logic for key vault operations
 cryptography==44.0.1  # Cryptographic operations
+
+# Export Destination
+azure-storage-blob==12.27.1

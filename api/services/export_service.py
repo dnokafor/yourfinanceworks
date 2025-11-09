@@ -448,7 +448,7 @@ class ExportService:
             Exception: If upload fails
         """
         try:
-            from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
+            from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions, ContentSettings
             from azure.core.exceptions import AzureError
             
             # Get decrypted credentials
@@ -506,9 +506,7 @@ class ExportService:
             blob_client.upload_blob(
                 csv_content,
                 overwrite=True,
-                content_settings={
-                    'content_type': 'text/csv'
-                },
+                content_settings=ContentSettings(content_type='text/csv'),
                 metadata={
                     'tenant_id': str(tenant_id),
                     'upload_timestamp': datetime.now(timezone.utc).isoformat()
@@ -878,10 +876,30 @@ class ExportService:
                     f"not found for tenant {tenant_id}"
                 )
             
+            # If destination is inactive, try to use default destination
             if not destination_config.is_active:
-                raise ValueError(
-                    f"Export destination {destination_config.name} is not active"
+                logger.warning(
+                    f"Export destination {destination_config.name} (ID: {destination_config.id}) is not active. "
+                    f"Attempting to use default destination."
                 )
+                default_destination = self.db.query(ExportDestinationConfig).filter(
+                    and_(
+                        ExportDestinationConfig.tenant_id == tenant_id,
+                        ExportDestinationConfig.is_active == True,
+                        ExportDestinationConfig.is_default == True
+                    )
+                ).first()
+                
+                if default_destination:
+                    logger.info(
+                        f"Using default destination: {default_destination.name} (ID: {default_destination.id})"
+                    )
+                    destination_config = default_destination
+                else:
+                    raise ValueError(
+                        f"Export destination {destination_config.name} is not active "
+                        f"and no default destination configured"
+                    )
             
             # Generate CSV from job files
             logger.info(f"Generating CSV for job {job_id}")

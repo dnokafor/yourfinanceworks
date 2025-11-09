@@ -736,7 +736,10 @@ class ExportDestinationService:
         try:
             from azure.storage.blob import BlobServiceClient
             from azure.core.exceptions import AzureError
-            
+        except ImportError:
+            return False, "Azure SDK not installed. Install with: pip install azure-storage-blob"
+        
+        try:
             # Create blob service client
             if 'connection_string' in credentials:
                 blob_service_client = BlobServiceClient.from_connection_string(
@@ -756,8 +759,8 @@ class ExportDestinationService:
             container_client = blob_service_client.get_container_client(container_name)
             
             # List blobs (limit to 1)
-            blob_list = container_client.list_blobs(max_results=1)
-            list(blob_list)  # Force evaluation
+            blob_list = container_client.list_blobs(results_per_page=1)
+            next(iter(blob_list), None)  # Force evaluation
             
             logger.info(f"Azure connection test successful for container {container_name}")
             return True, None

@@ -214,10 +214,24 @@ class BatchProcessingService:
                 )
             ).first()
             
+            # If specified destination not found, try to use default destination
+            if not export_destination:
+                logger.warning(
+                    f"Export destination {export_destination_id} not found for tenant {tenant_id}. "
+                    f"Attempting to use default destination."
+                )
+                export_destination = self.db.query(ExportDestinationConfig).filter(
+                    and_(
+                        ExportDestinationConfig.tenant_id == tenant_id,
+                        ExportDestinationConfig.is_active == True,
+                        ExportDestinationConfig.is_default == True
+                    )
+                ).first()
+            
             if not export_destination:
                 raise ValueError(
                     f"Export destination {export_destination_id} not found or inactive "
-                    f"for tenant {tenant_id}"
+                    f"for tenant {tenant_id} and no default destination configured"
                 )
             
             # Validate files
