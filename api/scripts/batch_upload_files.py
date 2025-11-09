@@ -44,6 +44,24 @@ class BatchFileUploader:
         if api_key:
             self.session.headers.update({'X-API-Key': api_key})
     
+    def test_authentication(self) -> tuple[bool, Optional[str]]:
+        """
+        Test if the API key is valid by making a simple request.
+        
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        try:
+            # Try to list jobs (should return 200 even if empty)
+            url = f"{self.api_url}/api/v1/external-transactions/batch-processing/jobs"
+            response = self.session.get(url)
+            if response.status_code == 200:
+                return True, None
+            else:
+                return False, f"HTTP {response.status_code}: {response.text[:200]}"
+        except Exception as e:
+            return False, str(e)
+    
     def validate_file(self, file_path: str) -> tuple[bool, Optional[str]]:
         """
         Validate a file before upload.
@@ -79,8 +97,9 @@ class BatchFileUploader:
     def upload_batch(
         self,
         file_paths: List[str],
-        export_destination_id: int,
+        export_destination_id: Optional[int] = None,
         document_types: Optional[List[str]] = None,
+        client_id: Optional[int] = None,
         webhook_url: Optional[str] = None,
         custom_fields: Optional[List[str]] = None
     ) -> dict:
@@ -89,8 +108,9 @@ class BatchFileUploader:
         
         Args:
             file_paths: List of file paths to upload
-            export_destination_id: ID of the export destination
+            export_destination_id: Optional ID of the export destination (uses tenant default if not specified)
             document_types: Optional list of document types (invoice, expense, statement) - one per file
+            client_id: Optional client ID for invoice documents
             webhook_url: Optional webhook URL for completion notification
             custom_fields: Optional list of custom fields to include in export
             
@@ -125,12 +145,16 @@ class BatchFileUploader:
             )
         
         # Prepare form data
-        data = {
-            'export_destination_id': export_destination_id
-        }
+        data = {}
+        
+        if export_destination_id is not None:
+            data['export_destination_id'] = export_destination_id
         
         if document_types:
             data['document_types'] = ','.join(document_types)
+        
+        if client_id is not None:
+            data['client_id'] = client_id
         
         if webhook_url:
             data['webhook_url'] = webhook_url
@@ -162,10 +186,32 @@ class BatchFileUploader:
             if e.response is not None:
                 try:
                     error_detail = e.response.json()
-                    print(f"   Error: {error_detail.get('detail', 'Unknown error')}")
+                    detail_msg = error_detail.get('detail', 'Unknown error')
+                    
+                    # Parse and simplify common errors
+                    if 'ForeignKeyViolation' in str(detail_msg) and 'client_id' in str(detail_msg):
+                        # Extract client_id from error message
+                        import re
+                        match = re.search(r'client_id\)=\((\d+)\)', str(detail_msg))
+                        if match:
+                            invalid_client_id = match.group(1)
+                            print(f"\n❌ Client ID {invalid_client_id} does not exist")
+                            print("\n💡 Please create the client first:")
+                            print("   1. Login to the web application")
+                            print("   2. Go to Clients section")
+                            print("   3. Create a new client")
+                            print("   4. Use the client ID when uploading invoices")
+                        else:
+                            print(f"   Error: Invalid client_id - client does not exist")
+                            print("\n💡 Please create the client in the web application first")
+                    else:
+                        # Show first line of error only
+                        first_line = str(detail_msg).split('\n')[0]
+                        print(f"   Error: {first_line}")
                 except:
-                    print(f"   Response: {e.response.text}")
-            raise
+                    # Fallback to simple text response
+                    print(f"   Response: {e.response.text[:200]}")
+            sys.exit(1)
         finally:
             # Ensure all files are closed
             for _, file_tuple in files:
@@ -185,9 +231,27 @@ class BatchFileUploader:
             Job status dictionary
         """
         url = f"{self.api_url}/api/v1/external-transactions/batch-processing/jobs/{job_id}"
-        response = self.session.get(url)
-        response.raise_for_status()
-        return response.json()
+        
+        try:
+            response = self.session.get(url)
+            response.raise_for_status()
+            return response.json()
+        except requests.HTTPError as e:
+            if e.response.status_code == 401:
+                print(f"\n❌ Authentication failed: Invalid or expired API key")
+                print("\n💡 Make sure you're using a valid API key:")
+                print("   - Check that the API key is correct")
+                print("   - Verify the API key hasn't been revoked")
+                print("   - Ensure you're using the same API key that created the job")
+                sys.exit(1)
+            elif e.response.status_code == 404:
+                print(f"\n❌ Job not found: {job_id}")
+                print("\n💡 Possible reasons:")
+                print("   - Job ID is incorrect")
+                print("   - Job was created by a different API key/tenant")
+                print("   - Job has been deleted")
+                sys.exit(1)
+            raise
     
     def monitor_job(self, job_id: str, poll_interval: int = 5):
         """
@@ -202,7 +266,11 @@ class BatchFileUploader:
         
         try:
             while True:
-                status = self.get_job_status(job_id)
+                try:
+                    status = self.get_job_status(job_id)
+                except requests.HTTPError:
+                    # Error already printed in get_job_status
+                    return
                 
                 progress = status.get('progress', {})
                 processed = progress.get('processed_files', 0)
@@ -295,13 +363,18 @@ Examples:
     parser.add_argument(
         '--export-destination',
         type=int,
-        default=1,
-        help='Export destination ID (default: 1)'
+        default=None,
+        help='Export destination ID (uses tenant default if not specified)'
     )
     parser.add_argument(
         '--document-type',
         choices=['invoice', 'expense', 'statement'],
         help='Document type to apply to all files (invoice, expense, or statement). If not specified, system will auto-detect.'
+    )
+    parser.add_argument(
+        '--client-id',
+        type=int,
+        help='Client ID for invoice documents (required if document-type is invoice)'
     )
     parser.add_argument(
         '--webhook',
@@ -344,6 +417,19 @@ Examples:
             api_url=args.api_url,
             api_key=args.api_key
         )
+        
+        # Test authentication before monitoring
+        print("🔐 Testing API key authentication...")
+        is_valid, error_msg = uploader.test_authentication()
+        if not is_valid:
+            print(f"❌ Authentication failed: {error_msg}")
+            print("\n💡 To create a new API key:")
+            print("   1. Login to the web app")
+            print("   2. Go to Settings → API Keys")
+            print("   3. Click 'Create API Key'")
+            print("   4. Copy the generated key")
+            sys.exit(1)
+        print("✓ Authentication successful\n")
         
         # Monitor the existing job
         uploader.monitor_job(args.job_id, poll_interval=args.poll_interval)
@@ -408,13 +494,19 @@ Examples:
     
     try:
         # Upload batch
-        result = uploader.upload_batch(
-            file_paths=file_paths,
-            export_destination_id=args.export_destination,
-            document_types=document_types,
-            webhook_url=args.webhook,
-            custom_fields=args.custom_fields
-        )
+        upload_kwargs = {
+            'file_paths': file_paths,
+            'document_types': document_types,
+            'client_id': args.client_id,
+            'webhook_url': args.webhook,
+            'custom_fields': args.custom_fields
+        }
+        
+        # Only include export_destination_id if specified
+        if args.export_destination is not None:
+            upload_kwargs['export_destination_id'] = args.export_destination
+        
+        result = uploader.upload_batch(**upload_kwargs)
         
         # Monitor if requested
         if args.monitor:

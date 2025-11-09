@@ -1125,6 +1125,7 @@ class BatchProcessingJob(Base):
 
     # Job configuration
     document_types = Column(JSON, nullable=True)  # ["invoice", "expense", "statement"]
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=True)  # Client ID for invoice documents
     total_files = Column(Integer, nullable=False)
     export_destination_type = Column(String(50), nullable=True)  # s3, azure, gcs, google_drive
     export_destination_config_id = Column(Integer, ForeignKey("export_destination_configs.id"), nullable=True)

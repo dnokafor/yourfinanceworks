@@ -38,7 +38,7 @@ class BatchProcessingService:
     
     # Document type mapping
     DOCUMENT_TYPE_TOPICS = {
-        'invoice': 'invoice_ocr',
+        'invoice': 'invoices_ocr',
         'expense': 'expense_ocr',
         'statement': 'bank_statements_ocr'
     }
@@ -175,6 +175,7 @@ class BatchProcessingService:
         api_client_id: str,
         export_destination_id: int,
         document_types: Optional[List[str]] = None,
+        client_id: Optional[int] = None,
         custom_fields: Optional[List[str]] = None,
         webhook_url: Optional[str] = None
     ) -> BatchProcessingJob:
@@ -273,6 +274,7 @@ class BatchProcessingService:
                 user_id=user_id,
                 api_client_id=api_client_id,
                 document_types=document_types,
+                client_id=client_id,
                 total_files=len(files),
                 export_destination_type=export_destination.destination_type,
                 export_destination_config_id=export_destination_id,
@@ -714,7 +716,7 @@ class BatchProcessingService:
         """
         # Get topic from environment variable or use default
         if document_type == 'invoice':
-            topic = os.getenv('KAFKA_INVOICE_TOPIC', 'invoice_ocr')
+            topic = os.getenv('KAFKA_INVOICE_TOPIC', 'invoices_ocr')
         elif document_type == 'expense':
             topic = os.getenv('KAFKA_OCR_TOPIC', 'expense_ocr')
         elif document_type == 'statement':
@@ -879,6 +881,9 @@ class BatchProcessingService:
             if not batch_job:
                 raise ValueError(f"Batch job {batch_file.job_id} not found")
 
+            # Check if this file was already counted (to avoid double-counting retries)
+            was_already_processed = batch_file.status in ["completed", "failed"]
+            
             # Update batch file record
             batch_file.status = status
             batch_file.completed_at = datetime.now(timezone.utc)
@@ -899,13 +904,27 @@ class BatchProcessingService:
                     batch_file.created_statement_id = created_record_id
                 logger.info(f"Linked batch file {file_id} to {record_type} record {created_record_id}")
 
-            # Update job progress counters
-            batch_job.processed_files += 1
+            # Update job progress counters (only if not already counted)
+            if not was_already_processed:
+                batch_job.processed_files += 1
 
-            if status == "completed":
-                batch_job.successful_files += 1
-            elif status == "failed":
-                batch_job.failed_files += 1
+                if status == "completed":
+                    batch_job.successful_files += 1
+                elif status == "failed":
+                    batch_job.failed_files += 1
+            else:
+                # File was retried - update success/failure counts
+                logger.info(f"File {file_id} was retried - updating success/failure counts only")
+                if status == "completed":
+                    # Was failed before, now succeeded
+                    if batch_job.failed_files > 0:
+                        batch_job.failed_files -= 1
+                    batch_job.successful_files += 1
+                elif status == "failed":
+                    # Was completed before, now failed (unlikely but handle it)
+                    if batch_job.successful_files > 0:
+                        batch_job.successful_files -= 1
+                    batch_job.failed_files += 1
 
             # Calculate progress percentage
             if batch_job.total_files > 0:

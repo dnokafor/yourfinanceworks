@@ -358,6 +358,9 @@ const ExportDestinationsTab: React.FC<ExportDestinationsTabProps> = ({ isAdmin }
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
                     <h4 className="font-medium">{destination.name}</h4>
+                    <Badge variant="outline" className="font-mono text-xs">
+                      ID: {destination.id}
+                    </Badge>
                     <Badge variant={destination.is_active ? 'default' : 'secondary'}>
                       {destination.is_active ? t('settings.active') : t('settings.inactive')}
                     </Badge>

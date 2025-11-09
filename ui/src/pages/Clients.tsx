@@ -143,6 +143,7 @@ const Clients = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>ID</TableHead>
                     <TableHead>{t('clients.table.name')}</TableHead>
                     <TableHead>{t('clients.table.email')}</TableHead>
                     <TableHead>{t('clients.table.phone')}</TableHead>
@@ -156,7 +157,7 @@ const Clients = () => {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="h-24 text-center">
+                      <TableCell colSpan={9} className="h-24 text-center">
                         <div className="flex justify-center items-center">
                           <Loader2 className="h-6 w-6 animate-spin mr-2" />
                           {t('clients.loading')}
@@ -166,6 +167,7 @@ const Clients = () => {
                   ) : filteredClients.length > 0 ? (
                     filteredClients.map((client) => (
                       <TableRow key={client.id} className="hover:bg-muted/50">
+                        <TableCell className="font-mono text-xs text-muted-foreground">{client.id}</TableCell>
                         <TableCell className="font-medium">{client.name}</TableCell>
                         <TableCell>{client.email}</TableCell>
                         <TableCell>{client.phone}</TableCell>
@@ -203,7 +205,7 @@ const Clients = () => {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={7} className="h-24 text-center">
+                      <TableCell colSpan={9} className="h-24 text-center">
                         {t('clients.no_clients')}
                       </TableCell>
                     </TableRow>

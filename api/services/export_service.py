@@ -35,8 +35,8 @@ class ExportService:
     various cloud storage providers with retry logic.
     """
 
-    # CSV column definitions
-    CSV_COLUMNS = [
+    # CSV column definitions by document type
+    CSV_COLUMNS_EXPENSE = [
         'file_name',
         'original_filename',
         'cloud_file_url',
@@ -49,6 +49,40 @@ class ExportService:
         'tax_amount',
         'category',
         'line_items',
+        'attachment_paths',
+        'error_message'
+    ]
+    
+    CSV_COLUMNS_INVOICE = [
+        'file_name',
+        'original_filename',
+        'cloud_file_url',
+        'document_type',
+        'status',
+        'invoice_number',
+        'client_name',
+        'amount',
+        'subtotal',
+        'currency',
+        'due_date',
+        'discount',
+        'items',
+        'attachment_paths',
+        'error_message'
+    ]
+    
+    CSV_COLUMNS_STATEMENT = [
+        'file_name',
+        'original_filename',
+        'cloud_file_url',
+        'document_type',
+        'status',
+        'account_number',
+        'statement_date',
+        'transactions_count',
+        'total_debits',
+        'total_credits',
+        'currency',
         'attachment_paths',
         'error_message'
     ]
@@ -122,17 +156,37 @@ class ExportService:
             if not batch_files:
                 raise ValueError(f"No files found for batch job {job_id}")
             
+            # Determine columns based on actual document types in the files
+            # Check what document types are actually present in the batch files
+            actual_doc_types = set()
+            for bf in batch_files:
+                if bf.document_type:
+                    actual_doc_types.add(bf.document_type)
+            
+            logger.info(f"Actual document types in batch files: {actual_doc_types}")
+            
+            # Choose column set based on primary document type
+            if 'invoice' in actual_doc_types:
+                default_columns = self.CSV_COLUMNS_INVOICE
+                logger.info("Using invoice columns")
+            elif 'statement' in actual_doc_types:
+                default_columns = self.CSV_COLUMNS_STATEMENT
+                logger.info("Using statement columns")
+            else:
+                default_columns = self.CSV_COLUMNS_EXPENSE
+                logger.info("Using expense columns (default)")
+            
             # Determine columns to include
             if custom_fields:
                 # Validate custom fields
-                invalid_fields = [f for f in custom_fields if f not in self.CSV_COLUMNS]
+                invalid_fields = [f for f in custom_fields if f not in default_columns]
                 if invalid_fields:
                     logger.warning(
                         f"Invalid custom fields ignored: {', '.join(invalid_fields)}"
                     )
-                columns = [f for f in custom_fields if f in self.CSV_COLUMNS]
+                columns = [f for f in custom_fields if f in default_columns]
             else:
-                columns = self.CSV_COLUMNS
+                columns = default_columns
             
             # Create CSV in memory
             output = io.StringIO()
@@ -185,22 +239,40 @@ class ExportService:
         # Extract data from extracted_data JSON field
         extracted_data = batch_file.extracted_data or {}
         
-        # Build row with all possible columns
+        # Build row with all possible columns (expense, invoice, and statement fields)
         row_data = {
+            # Common fields
             'file_name': batch_file.original_filename or '',
             'original_filename': batch_file.original_filename or '',
             'cloud_file_url': batch_file.cloud_file_url or '',
             'document_type': batch_file.document_type or '',
             'status': batch_file.status or '',
+            'attachment_paths': self._format_attachment_paths(batch_file),
+            'error_message': batch_file.error_message or '',
+            
+            # Expense fields
             'vendor': extracted_data.get('vendor', ''),
-            'amount': self._format_number(extracted_data.get('amount')),
+            'amount': self._format_number(extracted_data.get('amount') or extracted_data.get('total_amount')),
             'currency': extracted_data.get('currency', ''),
             'date': self._format_date(extracted_data.get('date')),
             'tax_amount': self._format_number(extracted_data.get('tax_amount')),
             'category': extracted_data.get('category', ''),
             'line_items': self._serialize_line_items(extracted_data.get('line_items')),
-            'attachment_paths': self._format_attachment_paths(batch_file),
-            'error_message': batch_file.error_message or ''
+            
+            # Invoice fields
+            'invoice_number': extracted_data.get('invoice_number', ''),
+            'client_name': extracted_data.get('bills_to', extracted_data.get('client_name', '')),
+            'subtotal': self._format_number(extracted_data.get('total_amount', 0) - extracted_data.get('total_discount', 0)),
+            'due_date': self._format_date(extracted_data.get('due_date')),
+            'discount': self._format_number(extracted_data.get('total_discount')),
+            'items': self._serialize_line_items(extracted_data.get('items', extracted_data.get('line_items'))),
+            
+            # Statement fields
+            'account_number': extracted_data.get('account_number', ''),
+            'statement_date': self._format_date(extracted_data.get('statement_date')),
+            'transactions_count': str(extracted_data.get('transaction_count', extracted_data.get('transactions_count', ''))),
+            'total_debits': self._format_number(extracted_data.get('total_debits')),
+            'total_credits': self._format_number(extracted_data.get('total_credits')),
         }
         
         # Return only requested columns
@@ -371,7 +443,6 @@ class ExportService:
             
             # Build S3 key with path prefix
             if path_prefix:
-                # Ensure path prefix ends with /
                 if not path_prefix.endswith('/'):
                     path_prefix += '/'
                 s3_key = f"{path_prefix}{filename}"
@@ -489,7 +560,6 @@ class ExportService:
             
             # Build blob name with path prefix
             if path_prefix:
-                # Ensure path prefix ends with /
                 if not path_prefix.endswith('/'):
                     path_prefix += '/'
                 blob_name = f"{path_prefix}{filename}"
@@ -596,7 +666,6 @@ class ExportService:
             
             # Build blob name with path prefix
             if path_prefix:
-                # Ensure path prefix ends with /
                 if not path_prefix.endswith('/'):
                     path_prefix += '/'
                 blob_name = f"{path_prefix}{filename}"
@@ -910,9 +979,22 @@ class ExportService:
             )
             
             # Generate filename
-            filename = self.generate_csv_filename(job_id)
+            csv_filename = self.generate_csv_filename(job_id)
             
-            # Upload to destination with retry logic
+            # Save CSV to job folder
+            base_dir = os.getenv("BATCH_FILES_DIR", "api/batch_files")
+            job_dir = os.path.join(base_dir, f"tenant_{tenant_id}", job_id)
+            csv_path = os.path.join(job_dir, csv_filename)
+            
+            try:
+                with open(csv_path, 'wb') as f:
+                    f.write(csv_content)
+                logger.info(f"Saved CSV to job folder: {csv_path}")
+            except Exception as e:
+                logger.warning(f"Failed to save CSV to job folder: {e}")
+            
+            # Upload to destination with retry logic (include job_id in cloud path)
+            cloud_filename = f"{job_id}/{csv_filename}"
             logger.info(
                 f"Uploading CSV to {destination_config.destination_type} "
                 f"destination: {destination_config.name}"
@@ -921,13 +1003,13 @@ class ExportService:
             export_url = await self.upload_with_retry(
                 csv_content=csv_content,
                 destination_config=destination_config,
-                filename=filename,
+                filename=cloud_filename,
                 tenant_id=tenant_id
             )
             
             # Update batch job with export results
             batch_job.export_file_url = export_url
-            batch_job.export_file_key = filename
+            batch_job.export_file_key = cloud_filename
             batch_job.export_completed_at = datetime.now(timezone.utc)
             
             # Determine final job status
@@ -965,7 +1047,7 @@ class ExportService:
                         "total_files": batch_job.total_files,
                         "successful_files": batch_job.successful_files,
                         "failed_files": batch_job.failed_files,
-                        "export_filename": filename,
+                        "export_filename": cloud_filename,
                         "final_status": batch_job.status
                     },
                     status="success"
@@ -977,7 +1059,7 @@ class ExportService:
                 "job_id": job_id,
                 "status": batch_job.status,
                 "export_url": export_url,
-                "export_filename": filename,
+                "export_filename": cloud_filename,
                 "destination_type": destination_config.destination_type,
                 "destination_name": destination_config.name,
                 "total_files": batch_job.total_files,

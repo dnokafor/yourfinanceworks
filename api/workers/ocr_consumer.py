@@ -866,6 +866,32 @@ class InvoiceMessageHandler(BaseMessageHandler):
                     from types import SimpleNamespace
                     from datetime import datetime, timezone
                     
+                    # Get batch job to retrieve client_id
+                    from models.models_per_tenant import BatchProcessingJob, Client
+                    batch_job = db.query(BatchProcessingJob).filter(
+                        BatchProcessingJob.job_id == batch_job_id
+                    ).first()
+                    
+                    client_id = batch_job.client_id if batch_job else None
+                    
+                    # Validate client_id exists before processing
+                    if client_id is not None:
+                        client = db.query(Client).filter(Client.id == client_id).first()
+                        if not client:
+                            error_msg = f"Client ID {client_id} does not exist. Cannot create invoice."
+                            self.logger.error(f"Batch invoice processing aborted: {error_msg}")
+                            
+                            # Mark file as failed without processing
+                            from services.batch_processing_service import BatchProcessingService
+                            batch_service = BatchProcessingService(db)
+                            await batch_service.process_file_completion(
+                                file_id=int(batch_file_id),
+                                extracted_data={},
+                                status="failed",
+                                error_message=error_msg
+                            )
+                            return ProcessingResult(success=False, error_message=error_msg, committed=True)
+                    
                     # Get AI config
                     ai_conf = await self._get_ai_config(db)
                     
@@ -874,17 +900,18 @@ class InvoiceMessageHandler(BaseMessageHandler):
                     
                     # Create Invoice record from extracted data
                     created_invoice_id = None
+                    invoice_creation_error = None
                     try:
+                        # Calculate subtotal and amount
+                        total_amount = extracted_data.get('total_amount', 0.0)
+                        
                         invoice = Invoice(
-                            user_id=user_id,
+                            client_id=client_id,
                             number=extracted_data.get('invoice_number', f'BATCH-{batch_file_id}'),
-                            client_name=extracted_data.get('vendor', 'Unknown Client'),
-                            client_email=extracted_data.get('client_email', ''),
-                            date=extracted_data.get('date') or datetime.now(timezone.utc).date(),
-                            due_date=extracted_data.get('due_date') or datetime.now(timezone.utc).date(),
-                            amount=extracted_data.get('total_amount', 0.0),
+                            due_date=extracted_data.get('due_date') or datetime.now(timezone.utc),
+                            amount=total_amount,
+                            subtotal=total_amount,  # No discount for batch invoices
                             currency=extracted_data.get('currency', 'USD'),
-                            paid_amount=0.0,
                             status='draft',
                             notes=f"Batch processed from job {batch_job_id}"
                         )
@@ -892,12 +919,12 @@ class InvoiceMessageHandler(BaseMessageHandler):
                         db.flush()  # Get the invoice ID
                         
                         # Create invoice items if available
-                        line_items = extracted_data.get('line_items', [])
-                        for item_data in line_items:
+                        items = extracted_data.get('items', extracted_data.get('line_items', []))
+                        for item_data in items:
                             item = InvoiceItem(
                                 invoice_id=invoice.id,
                                 description=item_data.get('description', 'Item'),
-                                quantity=item_data.get('quantity', 1),
+                                quantity=item_data.get('quantity', 1.0),
                                 price=item_data.get('price', 0.0),
                                 amount=item_data.get('amount', 0.0)
                             )
@@ -921,20 +948,32 @@ class InvoiceMessageHandler(BaseMessageHandler):
                         created_invoice_id = invoice.id
                         self.logger.info(f"Created invoice record {created_invoice_id} from batch file {batch_file_id}")
                     except Exception as e:
-                        self.logger.error(f"Failed to create invoice record: {e}")
+                        self.logger.error(f"Failed to create invoice record: {e}", exc_info=True)
                         db.rollback()
-                        # Continue anyway - we still have the extracted data
+                        invoice_creation_error = str(e)
                     
                     # Update batch processing
                     from services.batch_processing_service import BatchProcessingService
                     batch_service = BatchProcessingService(db)
-                    await batch_service.process_file_completion(
-                        file_id=int(batch_file_id),
-                        extracted_data=extracted_data,
-                        status="completed",
-                        created_record_id=created_invoice_id,
-                        record_type='invoice'
-                    )
+                    
+                    # If invoice creation failed, mark as failed
+                    if created_invoice_id is None:
+                        await batch_service.process_file_completion(
+                            file_id=int(batch_file_id),
+                            extracted_data=extracted_data,
+                            status="failed",
+                            error_message=f"Failed to create invoice record: {invoice_creation_error}"
+                        )
+                        self.logger.warning(f"Batch invoice OCR completed but invoice creation failed: batch_file_id={batch_file_id}")
+                        return ProcessingResult(success=False, error_message=invoice_creation_error, committed=True)
+                    else:
+                        await batch_service.process_file_completion(
+                            file_id=int(batch_file_id),
+                            extracted_data=extracted_data,
+                            status="completed",
+                            created_record_id=created_invoice_id,
+                            record_type='invoice'
+                        )
                     
                     self.logger.info(f"Batch invoice OCR completed: batch_file_id={batch_file_id}")
                     return ProcessingResult(success=True, committed=True)

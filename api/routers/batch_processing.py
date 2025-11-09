@@ -167,6 +167,7 @@ async def upload_batch(
     files: List[UploadFile] = File(..., description="Files to process (max 50)"),
     export_destination_id: Optional[int] = Form(None, description="Export destination configuration ID (uses default if not provided)"),
     document_types: Optional[str] = Form(None, description="Comma-separated document types (invoice,expense,statement)"),
+    client_id: Optional[int] = Form(None, description="Client ID for invoice documents"),
     custom_fields: Optional[str] = Form(None, description="Comma-separated custom fields to include in export"),
     webhook_url: Optional[str] = Form(None, description="Optional webhook URL for completion notification"),
     auth_context: tuple = Depends(get_api_key_auth),
@@ -329,6 +330,7 @@ async def upload_batch(
                 api_client_id=api_client_id,
                 export_destination_id=export_destination_id,
                 document_types=doc_types_list,
+                client_id=client_id,
                 custom_fields=custom_fields_list,
                 webhook_url=webhook_url
             )
@@ -421,7 +423,7 @@ async def upload_batch(
 async def get_job_status(
     job_id: str,
     auth_context: tuple = Depends(get_api_key_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_batch_db),
     service: BatchProcessingService = Depends(get_batch_processing_service)
 ):
     """
@@ -511,7 +513,7 @@ async def list_jobs(
     limit: int = 20,
     offset: int = 0,
     auth_context: tuple = Depends(get_api_key_auth),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_batch_db)
 ):
     """
     List all batch processing jobs for the authenticated API client.
@@ -610,7 +612,7 @@ async def list_jobs(
         
         logger.info(
             f"Returning {len(job_summaries)} jobs (total: {total}) "
-            f"for user {current_user.id}"
+            f"for API client {api_client_id} (user {user_id})"
         )
         
         return {
