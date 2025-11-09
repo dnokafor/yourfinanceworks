@@ -28,3 +28,5 @@ from .external_transactions import *
 from .inventory import *
 from .inventory_attachments import *
 from .approvals import *
+from .export_destinations import *
+from .batch_processing import *

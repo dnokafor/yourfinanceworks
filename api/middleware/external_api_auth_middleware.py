@@ -127,6 +127,7 @@ class ExternalAPIAuthMiddleware(BaseHTTPMiddleware):
         # API client endpoints (require API keys)
         api_client_paths = [
             "/api/v1/external-transactions/transactions",
+            "/api/v1/external-transactions/batch-processing",  # Batch processing uses API keys
             "/api/v1/external-auth"
         ]
 

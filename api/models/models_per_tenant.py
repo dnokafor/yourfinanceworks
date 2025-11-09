@@ -1109,3 +1109,133 @@ class StorageOperationLog(Base):
 
     def __repr__(self):
         return f"<StorageOperationLog(id={self.id}, operation='{self.operation_type}', provider='{self.provider}', success={self.success})>"
+
+
+# --- Batch File Processing and Export Models ---
+
+class BatchProcessingJob(Base):
+    """Tracks batch file processing jobs for external API clients"""
+    __tablename__ = "batch_processing_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(String(36), unique=True, nullable=False, index=True)  # UUID
+    tenant_id = Column(Integer, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    api_client_id = Column(String(100), nullable=False)  # Reference to API client
+
+    # Job configuration
+    document_types = Column(JSON, nullable=True)  # ["invoice", "expense", "statement"]
+    total_files = Column(Integer, nullable=False)
+    export_destination_type = Column(String(50), nullable=True)  # s3, azure, gcs, google_drive
+    export_destination_config_id = Column(Integer, ForeignKey("export_destination_configs.id"), nullable=True)
+    custom_fields = Column(JSON, nullable=True)  # Optional field selection
+    webhook_url = Column(String(500), nullable=True)  # Optional webhook for completion notification
+
+    # Status tracking
+    status = Column(String(50), default="pending", nullable=False, index=True)  # pending, processing, completed, failed, partial_failure
+    processed_files = Column(Integer, default=0, nullable=False)
+    successful_files = Column(Integer, default=0, nullable=False)
+    failed_files = Column(Integer, default=0, nullable=False)
+    progress_percentage = Column(Float, default=0.0, nullable=False)
+
+    # Export results
+    export_file_url = Column(String(500), nullable=True)
+    export_file_key = Column(String(500), nullable=True)
+    export_completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    user = relationship("User")
+    files = relationship("BatchFileProcessing", back_populates="job", cascade="all, delete-orphan")
+    export_destination = relationship("ExportDestinationConfig")
+
+    def __repr__(self):
+        return f"<BatchProcessingJob(job_id='{self.job_id}', status='{self.status}', total_files={self.total_files})>"
+
+
+class BatchFileProcessing(Base):
+    """Tracks individual file processing within a batch job"""
+    __tablename__ = "batch_file_processing"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(String(36), ForeignKey("batch_processing_jobs.job_id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # File information
+    original_filename = Column(String(500), nullable=False)
+    stored_filename = Column(String(500), nullable=True)
+    file_path = Column(String(1000), nullable=True)
+    cloud_file_url = Column(String(1000), nullable=True)
+    file_size = Column(Integer, nullable=True)
+    document_type = Column(String(50), nullable=True, index=True)  # invoice, expense, statement
+
+    # Processing status
+    status = Column(String(50), default="pending", nullable=False, index=True)  # pending, processing, completed, failed
+    retry_count = Column(Integer, default=0, nullable=False)
+    error_message = Column(Text, nullable=True)
+
+    # Extracted data (stored as JSON for flexibility)
+    extracted_data = Column(JSON, nullable=True)  # Vendor, amount, date, line items, etc.
+
+    # Created record IDs (links to actual Invoice/Expense/BankStatement records)
+    created_invoice_id = Column(Integer, ForeignKey("invoices.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_expense_id = Column(Integer, ForeignKey("expenses.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_statement_id = Column(Integer, ForeignKey("bank_statements.id", ondelete="SET NULL"), nullable=True, index=True)
+
+    # Kafka tracking
+    kafka_topic = Column(String(100), nullable=True)
+    kafka_message_id = Column(String(100), nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    processing_started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    job = relationship("BatchProcessingJob", back_populates="files")
+    created_invoice = relationship("Invoice", foreign_keys=[created_invoice_id])
+    created_expense = relationship("Expense", foreign_keys=[created_expense_id])
+    created_statement = relationship("BankStatement", foreign_keys=[created_statement_id])
+
+    def __repr__(self):
+        return f"<BatchFileProcessing(id={self.id}, job_id='{self.job_id}', filename='{self.original_filename}', status='{self.status}')>"
+
+
+class ExportDestinationConfig(Base):
+    """Stores export destination configurations per tenant"""
+    __tablename__ = "export_destination_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, nullable=False, index=True)
+
+    # Destination details
+    name = Column(String(200), nullable=False)  # User-friendly name
+    destination_type = Column(String(50), nullable=False)  # s3, azure, gcs, google_drive
+    is_active = Column(Boolean, default=True, nullable=False)
+    is_default = Column(Boolean, default=False, nullable=False)
+
+    # Encrypted credentials (using tenant encryption key)
+    encrypted_credentials = Column(Text, nullable=True)  # Encrypted JSON blob
+
+    # Destination-specific configuration
+    config = Column(JSON, nullable=True)  # Bucket name, container, folder ID, path prefix, etc.
+
+    # Connection testing
+    last_test_at = Column(DateTime(timezone=True), nullable=True)
+    last_test_success = Column(Boolean, nullable=True)
+    last_test_error = Column(Text, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # Relationships
+    creator = relationship("User", foreign_keys=[created_by])
+    batch_jobs = relationship("BatchProcessingJob", back_populates="export_destination")
+
+    def __repr__(self):
+        return f"<ExportDestinationConfig(id={self.id}, name='{self.name}', type='{self.destination_type}', active={self.is_active})>"
