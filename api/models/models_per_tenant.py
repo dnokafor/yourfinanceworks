@@ -1139,7 +1139,7 @@ class BatchProcessingJob(Base):
     progress_percentage = Column(Float, default=0.0, nullable=False)
 
     # Export results
-    export_file_url = Column(String(500), nullable=True)
+    export_file_url = Column(String(2000), nullable=True)
     export_file_key = Column(String(500), nullable=True)
     export_completed_at = Column(DateTime(timezone=True), nullable=True)
 

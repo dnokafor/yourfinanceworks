@@ -165,7 +165,7 @@ def get_batch_processing_service(
 )
 async def upload_batch(
     files: List[UploadFile] = File(..., description="Files to process (max 50)"),
-    export_destination_id: int = Form(..., description="Export destination configuration ID"),
+    export_destination_id: Optional[int] = Form(None, description="Export destination configuration ID (uses default if not provided)"),
     document_types: Optional[str] = Form(None, description="Comma-separated document types (invoice,expense,statement)"),
     custom_fields: Optional[str] = Form(None, description="Comma-separated custom fields to include in export"),
     webhook_url: Optional[str] = Form(None, description="Optional webhook URL for completion notification"),
@@ -174,13 +174,13 @@ async def upload_batch(
 ):
     """
     Upload a batch of files for processing.
-    
+
     Accepts multipart/form-data with up to 50 files.
     Files are validated, stored, and enqueued for OCR processing.
     Results are exported to the specified destination when complete.
-    
+
     **Authentication**: Requires API key via X-API-Key header.
-    
+
     Args:
         files: List of files to process (max 50, max 20MB each)
         export_destination_id: ID of export destination configuration
@@ -190,22 +190,43 @@ async def upload_batch(
         auth_context: Authenticated API client context (tenant_id, user_id, api_client_id, api_client)
         db: Database session
         service: Batch processing service
-        
+
     Returns:
         Job details including job_id, status, and status_url
-        
+
     Raises:
         HTTPException: If validation fails or processing cannot be started
     """
     try:
         # Extract authentication context from API key
         tenant_id, user_id, api_client_id, api_client = auth_context
-        
+
+        # If no export destination specified, use default
+        if export_destination_id is None:
+            from models.models_per_tenant import ExportDestinationConfig
+            from sqlalchemy import and_
+            default_dest = service.db.query(ExportDestinationConfig).filter(
+                and_(
+                    ExportDestinationConfig.tenant_id == tenant_id,
+                    ExportDestinationConfig.is_active == True,
+                    ExportDestinationConfig.is_default == True
+                )
+            ).first()
+
+            if not default_dest:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No export destination specified and no default destination configured"
+                )
+
+            export_destination_id = default_dest.id
+            logger.info(f"Using default export destination: {default_dest.name} (ID: {export_destination_id})")
+
         logger.info(
             f"Batch upload request from user {user_id} (tenant {tenant_id}): "
             f"{len(files)} files, destination {export_destination_id}"
         )
-        
+
         # Check concurrent job limits (default: 5 concurrent jobs, or from custom quotas)
         rate_limiter = get_rate_limiter()
         allowed, error_message, active_count = rate_limiter.check_concurrent_jobs(
@@ -214,7 +235,7 @@ async def upload_batch(
             max_concurrent_jobs=5,  # Configurable default
             custom_quotas=api_client.custom_quotas
         )
-        
+
         if not allowed:
             logger.warning(
                 f"Concurrent job limit exceeded for {api_client_id}: {error_message}"
@@ -224,20 +245,20 @@ async def upload_batch(
                 detail=error_message,
                 headers={"X-Active-Jobs": str(active_count)}
             )
-        
+
         # Validate file count
         if len(files) == 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="At least one file is required"
             )
-        
+
         if len(files) > 50:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Maximum 50 files allowed per batch. Received {len(files)} files."
             )
-        
+
         # Parse document types if provided
         doc_types_list = None
         if document_types:
@@ -251,19 +272,19 @@ async def upload_batch(
                     detail=f"Invalid document types: {', '.join(invalid_types)}. "
                            f"Valid types: {', '.join(valid_types)}"
                 )
-        
+
         # Parse custom fields if provided
         custom_fields_list = None
         if custom_fields:
             custom_fields_list = [cf.strip() for cf in custom_fields.split(',') if cf.strip()]
-        
+
         # Read file contents and prepare file info
         file_infos = []
         for idx, file in enumerate(files):
             try:
                 # Read file content
                 content = await file.read()
-                
+
                 # Validate file size
                 file_size = len(content)
                 if file_size == 0:
@@ -271,25 +292,25 @@ async def upload_batch(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"File '{file.filename}' is empty"
                     )
-                
+
                 if file_size > 20 * 1024 * 1024:  # 20MB
                     raise HTTPException(
                         status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                         detail=f"File '{file.filename}' exceeds maximum size of 20MB"
                     )
-                
+
                 file_infos.append({
                     'content': content,
                     'filename': file.filename or f'file_{idx}',
                     'size': file_size,
                     'content_type': file.content_type
                 })
-                
+
                 logger.debug(
                     f"Read file {idx+1}/{len(files)}: {file.filename} "
                     f"({file_size} bytes)"
                 )
-                
+
             except HTTPException:
                 raise
             except Exception as e:
@@ -298,7 +319,7 @@ async def upload_batch(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Failed to read file '{file.filename}': {str(e)}"
                 )
-        
+
         # Create batch job
         try:
             batch_job = await service.create_batch_job(
@@ -311,11 +332,11 @@ async def upload_batch(
                 custom_fields=custom_fields_list,
                 webhook_url=webhook_url
             )
-            
+
             logger.info(
                 f"Created batch job {batch_job.job_id} with {batch_job.total_files} files"
             )
-            
+
         except ValueError as e:
             logger.error(f"Validation error creating batch job: {e}")
             raise HTTPException(
@@ -328,7 +349,7 @@ async def upload_batch(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to create batch job: {str(e)}"
             )
-        
+
         # Enqueue files to Kafka for processing
         try:
             enqueue_result = await service.enqueue_files_to_kafka(batch_job.job_id)
@@ -337,7 +358,7 @@ async def upload_batch(
                 f"Enqueued {enqueue_result['enqueued']} files for job {batch_job.job_id}, "
                 f"{enqueue_result['failed']} failed"
             )
-            
+
         except Exception as e:
             logger.error(f"Failed to enqueue files for job {batch_job.job_id}: {e}")
             # Job is created but enqueueing failed - mark as failed
@@ -347,7 +368,7 @@ async def upload_batch(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to enqueue files for processing: {str(e)}"
             )
-        
+
         # Log audit event
         log_audit_event(
             db=service.db,
@@ -367,10 +388,10 @@ async def upload_batch(
             },
             status="success"
         )
-        
+
         # Calculate estimated completion time (rough estimate: 30 seconds per file)
         estimated_completion_minutes = max(1, (batch_job.total_files * 30) // 60)
-        
+
         # Build response
         return {
             "job_id": batch_job.job_id,
@@ -380,7 +401,7 @@ async def upload_batch(
             "status_url": f"/api/v1/batch-processing/jobs/{batch_job.job_id}",
             "message": f"Batch job created successfully. {enqueue_result['enqueued']} files enqueued for processing."
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -389,7 +410,6 @@ async def upload_batch(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error processing batch upload: {str(e)}"
         )
-
 
 
 @router.get(

@@ -396,26 +396,26 @@ class ExportDestinationService:
                     ExportDestinationConfig.tenant_id == self.tenant_id  # Tenant isolation
                 )
             ).first()
-            
+
             if not destination:
                 raise ValueError(f"Export destination {destination_id} not found")
-            
+
             if not destination.encrypted_credentials:
                 # Check for environment variable fallback
                 return self._get_fallback_credentials(destination.destination_type)
-            
+
             # Decrypt credentials using tenant-specific encryption key
             decrypted_json = self.encryption_service.decrypt_data(
                 destination.encrypted_credentials,
                 self.tenant_id
             )
-            
+
             credentials = json.loads(decrypted_json)
-            
+
             logger.debug(f"Decrypted credentials for destination {destination_id} (tenant {self.tenant_id})")
-            
+
             return credentials
-            
+
         except DecryptionError as e:
             logger.error(f"Failed to decrypt credentials for destination {destination_id}: {str(e)}")
             raise
@@ -426,16 +426,16 @@ class ExportDestinationService:
     def _get_fallback_credentials(self, destination_type: str) -> Dict[str, Any]:
         """
         Get credentials from environment variables as fallback.
-        
+
         Checks for destination-specific environment variables when credentials
         are not configured in the database. Logs when fallback is used.
-        
+
         Args:
             destination_type: Type of destination
-            
+
         Returns:
             Credentials dictionary from environment variables
-            
+
         Raises:
             ValueError: If required environment variables are not set
         """
@@ -443,14 +443,14 @@ class ExportDestinationService:
             f"No credentials configured for {destination_type} destination. "
             f"Attempting to use environment variable fallback for tenant {self.tenant_id}"
         )
-        
+
         if destination_type == 's3':
             # For S3: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, AWS_S3_BUCKET
             access_key = os.getenv('AWS_ACCESS_KEY_ID')
             secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
             region = os.getenv('AWS_REGION', 'us-east-1')
             bucket = os.getenv('AWS_S3_BUCKET')
-            
+
             if not all([access_key, secret_key, bucket]):
                 missing = []
                 if not access_key:
@@ -463,11 +463,11 @@ class ExportDestinationService:
                     f"Missing required S3 environment variables: {', '.join(missing)}. "
                     "Please configure credentials in the export destination settings."
                 )
-            
+
             logger.info(
                 f"Using S3 environment variable fallback: bucket={bucket}, region={region}"
             )
-            
+
             return {
                 'access_key_id': access_key,
                 'secret_access_key': secret_key,
@@ -475,12 +475,12 @@ class ExportDestinationService:
                 'bucket_name': bucket,
                 'path_prefix': os.getenv('AWS_S3_PATH_PREFIX', '')
             }
-        
+
         elif destination_type == 'azure':
             # For Azure: AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER
             connection_string = os.getenv('AZURE_STORAGE_CONNECTION_STRING')
             container = os.getenv('AZURE_STORAGE_CONTAINER')
-            
+
             if not all([connection_string, container]):
                 missing = []
                 if not connection_string:
@@ -491,22 +491,22 @@ class ExportDestinationService:
                     f"Missing required Azure environment variables: {', '.join(missing)}. "
                     "Please configure credentials in the export destination settings."
                 )
-            
+
             logger.info(
                 f"Using Azure environment variable fallback: container={container}"
             )
-            
+
             return {
                 'connection_string': connection_string,
                 'container_name': container,
                 'path_prefix': os.getenv('AZURE_STORAGE_PATH_PREFIX', '')
             }
-        
+
         elif destination_type == 'gcs':
             # For GCS: GOOGLE_APPLICATION_CREDENTIALS, GCS_BUCKET_NAME
             credentials_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
             bucket = os.getenv('GCS_BUCKET_NAME')
-            
+
             if not all([credentials_path, bucket]):
                 missing = []
                 if not credentials_path:
@@ -517,7 +517,7 @@ class ExportDestinationService:
                     f"Missing required GCS environment variables: {', '.join(missing)}. "
                     "Please configure credentials in the export destination settings."
                 )
-            
+
             # Read service account JSON
             try:
                 with open(credentials_path, 'r') as f:
@@ -531,17 +531,17 @@ class ExportDestinationService:
                 raise ValueError(
                     f"Failed to read GCS service account file: {str(e)}"
                 )
-            
+
             logger.info(
                 f"Using GCS environment variable fallback: bucket={bucket}"
             )
-            
+
             return {
                 'service_account_json': service_account_json,
                 'bucket_name': bucket,
                 'path_prefix': os.getenv('GCS_PATH_PREFIX', '')
             }
-        
+
         elif destination_type == 'google_drive':
             logger.error(
                 "Google Drive does not support environment variable fallback (OAuth2 required)"
@@ -551,21 +551,21 @@ class ExportDestinationService:
                 "environment variable fallback. Please configure credentials in the "
                 "export destination settings."
             )
-        
+
         else:
             raise ValueError(f"Unknown destination type: {destination_type}")
 
     def mask_credentials(self, credentials: Dict[str, Any]) -> Dict[str, str]:
         """
         Mask sensitive credential values for API responses.
-        
+
         SECURITY: This method ensures sensitive credentials are never exposed in API responses.
         Sensitive fields (secrets, keys, passwords) show only the last 4 characters.
         Non-sensitive fields (regions, bucket names, etc.) show full values.
-        
+
         Args:
             credentials: Credentials dictionary
-            
+
         Returns:
             Dictionary with masked sensitive values (e.g., "****ABCD") and full non-sensitive values
         """
@@ -576,9 +576,9 @@ class ExportDestinationService:
             'refresh_token', 'connection_string', 'service_account_json',
             'private_key', 'api_key', 'password', 'token', 'secret', 'access_token'
         }
-        
+
         masked = {}
-        
+
         for key, value in credentials.items():
             # Check if this field should be masked (exact match or contains sensitive keyword)
             key_lower = key.lower()
@@ -592,7 +592,7 @@ class ExportDestinationService:
                 'password' in key_lower or
                 'token' in key_lower and key_lower != 'token_type'
             )
-            
+
             # Explicitly exclude non-sensitive fields that might match patterns
             non_sensitive_fields = {
                 'bucket_name', 'container_name', 'region', 'project_id',
@@ -600,7 +600,7 @@ class ExportDestinationService:
             }
             if key_lower in non_sensitive_fields:
                 should_mask = False
-            
+
             if should_mask and isinstance(value, str):
                 if len(value) > 4:
                     # Show only last 4 characters for identification
@@ -611,30 +611,30 @@ class ExportDestinationService:
             else:
                 # Non-sensitive fields or non-string values: show as-is
                 masked[key] = str(value) if value is not None else ''
-        
+
         logger.debug(f"Masked {len([k for k in credentials.keys() if any(s in k.lower() for s in sensitive_fields)])} sensitive fields out of {len(credentials)} total fields")
-        
+
         return masked
 
     async def test_connection(self, destination_id: int) -> Tuple[bool, Optional[str]]:
         """
         Test connection to an export destination.
-        
+
         Args:
             destination_id: ID of the destination to test
-            
+
         Returns:
             Tuple of (success, error_message)
         """
         try:
             destination = self.get_destination(destination_id)
-            
+
             if not destination:
                 return False, f"Destination {destination_id} not found"
-            
+
             # Get decrypted credentials
             credentials = self.get_decrypted_credentials(destination_id)
-            
+
             # Test based on destination type
             if destination.destination_type == 's3':
                 success, error = await self._test_s3_connection(credentials)
@@ -646,36 +646,36 @@ class ExportDestinationService:
                 success, error = await self._test_google_drive_connection(credentials)
             else:
                 return False, f"Unknown destination type: {destination.destination_type}"
-            
+
             # Update test results
             destination.last_test_at = datetime.now(timezone.utc)
             destination.last_test_success = success
             destination.last_test_error = error if not success else None
-            
+
             self.db.commit()
-            
+
             return success, error
-            
+
         except Exception as e:
             error_msg = f"Connection test failed: {str(e)}"
             logger.error(f"Failed to test destination {destination_id}: {error_msg}")
-            
+
             # Update test results
             if destination:
                 destination.last_test_at = datetime.now(timezone.utc)
                 destination.last_test_success = False
                 destination.last_test_error = error_msg
                 self.db.commit()
-            
+
             return False, error_msg
 
     async def _test_s3_connection(self, credentials: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         """
         Test AWS S3 connection by attempting to list bucket contents.
-        
+
         Args:
             credentials: S3 credentials
-            
+
         Returns:
             Tuple of (success, error_message)
         """
@@ -683,18 +683,18 @@ class ExportDestinationService:
             import boto3
             from botocore.exceptions import ClientError, NoCredentialsError
             import os
-            
+
             # Extract credentials with environment variable fallback
             access_key_id = credentials.get('access_key_id', '').strip() or os.getenv('AWS_S3_ACCESS_KEY_ID', '')
             secret_access_key = credentials.get('secret_access_key', '').strip() or os.getenv('AWS_S3_SECRET_ACCESS_KEY', '')
             region = credentials.get('region', '').strip() or os.getenv('AWS_S3_REGION', 'us-east-1')
             bucket_name = credentials.get('bucket_name', '').strip() or os.getenv('AWS_S3_BUCKET_NAME', '')
             path_prefix = credentials.get('path_prefix', '').strip()
-            
+
             using_env_fallback = not credentials.get('access_key_id')
             if using_env_fallback:
                 logger.info("Using environment variables for S3 credentials")
-            
+
             # Create S3 client
             s3_client = boto3.client(
                 's3',
@@ -702,18 +702,18 @@ class ExportDestinationService:
                 aws_secret_access_key=secret_access_key,
                 region_name=region
             )
-            
+
             # Attempt to list bucket contents (limit to 1 object)
-            
+
             s3_client.list_objects_v2(
                 Bucket=bucket_name,
                 Prefix=path_prefix,
                 MaxKeys=1
             )
-            
+
             logger.info(f"S3 connection test successful for bucket {bucket_name}")
             return True, None
-            
+
         except NoCredentialsError:
             return False, "Invalid AWS credentials"
         except ClientError as e:
@@ -726,10 +726,10 @@ class ExportDestinationService:
     async def _test_azure_connection(self, credentials: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         """
         Test Azure Blob Storage connection by attempting to list container.
-        
+
         Args:
             credentials: Azure credentials
-            
+
         Returns:
             Tuple of (success, error_message)
         """
@@ -738,7 +738,7 @@ class ExportDestinationService:
             from azure.core.exceptions import AzureError
         except ImportError:
             return False, "Azure SDK not installed. Install with: pip install azure-storage-blob"
-        
+
         try:
             # Create blob service client
             if 'connection_string' in credentials:
@@ -753,18 +753,18 @@ class ExportDestinationService:
                     account_url=account_url,
                     credential=account_key
                 )
-            
+
             # Attempt to list container contents
             container_name = credentials.get('container_name')
             container_client = blob_service_client.get_container_client(container_name)
-            
+
             # List blobs (limit to 1)
             blob_list = container_client.list_blobs(results_per_page=1)
             next(iter(blob_list), None)  # Force evaluation
-            
+
             logger.info(f"Azure connection test successful for container {container_name}")
             return True, None
-            
+
         except AzureError as e:
             return False, f"Azure error: {str(e)}"
         except Exception as e:
@@ -773,10 +773,10 @@ class ExportDestinationService:
     async def _test_gcs_connection(self, credentials: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         """
         Test Google Cloud Storage connection by attempting to list bucket.
-        
+
         Args:
             credentials: GCS credentials
-            
+
         Returns:
             Tuple of (success, error_message)
         """
@@ -784,8 +784,12 @@ class ExportDestinationService:
             from google.cloud import storage
             from google.oauth2 import service_account
             from google.api_core.exceptions import GoogleAPIError
+        except ImportError:
+            return False, "Google Cloud SDK not installed. Install with: pip install google-cloud-storage"
+
+        try:
             import json
-            
+
             # Parse service account credentials
             if 'service_account_json' in credentials:
                 service_account_info = json.loads(credentials['service_account_json'])
@@ -798,23 +802,23 @@ class ExportDestinationService:
                 credentials_obj = service_account.Credentials.from_service_account_info(
                     credentials_info
                 )
-            
+
             # Create storage client
             storage_client = storage.Client(
                 credentials=credentials_obj,
                 project=credentials_obj.project_id
             )
-            
+
             # Attempt to list bucket contents
             bucket_name = credentials.get('bucket_name')
             bucket = storage_client.bucket(bucket_name)
-            
+
             # List blobs (limit to 1)
             blobs = list(bucket.list_blobs(max_results=1))
-            
+
             logger.info(f"GCS connection test successful for bucket {bucket_name}")
             return True, None
-            
+
         except GoogleAPIError as e:
             return False, f"GCS error: {str(e)}"
         except Exception as e:
@@ -823,10 +827,10 @@ class ExportDestinationService:
     async def _test_google_drive_connection(self, credentials: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         """
         Test Google Drive connection by attempting to access folder.
-        
+
         Args:
             credentials: Google Drive credentials
-            
+
         Returns:
             Tuple of (success, error_message)
         """
@@ -834,30 +838,30 @@ class ExportDestinationService:
             from googleapiclient.discovery import build
             from google.oauth2.credentials import Credentials
             from googleapiclient.errors import HttpError
-            
+
             # Create credentials object
             creds = Credentials(
                 token=credentials.get('oauth_token'),
                 refresh_token=credentials.get('refresh_token')
             )
-            
+
             # Build Drive API service
             service = build('drive', 'v3', credentials=creds)
-            
+
             # Attempt to get folder metadata
             folder_id = credentials.get('folder_id')
             folder = service.files().get(
                 fileId=folder_id,
                 fields='id,name,mimeType'
             ).execute()
-            
+
             # Verify it's a folder
             if folder.get('mimeType') != 'application/vnd.google-apps.folder':
                 return False, "Specified ID is not a folder"
-            
+
             logger.info(f"Google Drive connection test successful for folder {folder_id}")
             return True, None
-            
+
         except HttpError as e:
             return False, f"Google Drive error: {str(e)}"
         except Exception as e:
