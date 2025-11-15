@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -30,6 +30,13 @@ interface BulkResult {
   error_message?: string;
 }
 
+interface IntegrationStatus {
+  enabled: boolean;
+  configured: boolean;
+  connection_tested: boolean;
+  last_test_result?: string;
+}
+
 export const BulkSendToTaxServiceDialog: React.FC<BulkSendToTaxServiceDialogProps> = ({
   open,
   onOpenChange,
@@ -41,6 +48,29 @@ export const BulkSendToTaxServiceDialog: React.FC<BulkSendToTaxServiceDialogProp
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState<BulkResult[]>([]);
+  const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatus | null>(null);
+  const [statusLoading, setStatusLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchIntegrationStatus = async () => {
+      try {
+        const response = await api.get<IntegrationStatus>('/tax-integration/status');
+        setIntegrationStatus(response);
+      } catch (error) {
+        console.error('Error fetching tax integration status:', error);
+        // Default to disabled if we can't fetch status
+        setIntegrationStatus({
+          enabled: false,
+          configured: false,
+          connection_tested: false,
+        });
+      } finally {
+        setStatusLoading(false);
+      }
+    };
+
+    fetchIntegrationStatus();
+  }, []);
 
   React.useEffect(() => {
     if (open) {
@@ -69,6 +99,11 @@ export const BulkSendToTaxServiceDialog: React.FC<BulkSendToTaxServiceDialogProp
   const handleBulkSend = async () => {
     if (selectedIds.length === 0) {
       toast.error(t('taxIntegration.errors.noItemsSelected'));
+      return;
+    }
+
+    if (!integrationStatus?.enabled || !integrationStatus?.configured) {
+      toast.error(t('taxIntegration.errors.notEnabled'));
       return;
     }
 
@@ -234,7 +269,12 @@ export const BulkSendToTaxServiceDialog: React.FC<BulkSendToTaxServiceDialogProp
           </Button>
           <Button
             onClick={handleBulkSend}
-            disabled={selectedIds.length === 0 || isProcessing}
+            disabled={
+              selectedIds.length === 0 ||
+              isProcessing ||
+              !integrationStatus?.enabled ||
+              !integrationStatus?.configured
+            }
           >
             {isProcessing ? (
               <Loader2 className="h-4 w-4 animate-spin mr-2" />

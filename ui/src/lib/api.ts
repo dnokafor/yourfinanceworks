@@ -732,6 +732,13 @@ export interface InvoiceHistoryCreate {
   current_values?: Record<string, any>;
 }
 
+export interface TaxIntegrationStatus {
+  enabled: boolean;
+  configured: boolean;
+  connection_tested: boolean;
+  last_test_result?: string;
+}
+
 // Generic API request function with error handling
 export async function apiRequest<T>(
   url: string,

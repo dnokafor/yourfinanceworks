@@ -13,7 +13,7 @@ import { Loader2, Download, Database, Upload, Plus, Edit, Trash2, Calculator, Ch
 import { settingsApi, discountRulesApi, aiConfigApi, DiscountRule, DiscountRuleCreate, AIConfig, AIConfigCreate, AIProviderInfo } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { CurrencyManager } from "@/components/ui/currency-manager";
 import { CurrencySelector } from "@/components/ui/currency-selector";
@@ -24,6 +24,7 @@ import APIClientManagement from "@/components/APIClientManagement/APIClientManag
 import CookieSettings from "@/components/settings/CookieSettings";
 import ExportDestinationsTab from "@/components/settings/ExportDestinationsTab";
 import { getCurrentUser } from "@/utils/auth";
+import { useTaxIntegration } from "@/hooks/useTaxIntegration";
 
 const Settings = () => {
   const { t } = useTranslation();
@@ -37,6 +38,9 @@ const Settings = () => {
   // Get current user and check if admin
   const currentUser = getCurrentUser();
   const isAdmin = currentUser?.role === 'admin';
+
+  // Tax integration status
+  const { status: taxIntegrationStatus, isEnabled: taxIntegrationEnabled } = useTaxIntegration();
 
   // Backend hardcoded English defaults used for detection
   const BACKEND_DEFAULT_NOTES = t('settings.thank_you');
@@ -107,28 +111,17 @@ const Settings = () => {
 
   const [timezone, setTimezone] = useState("UTC");
 
-  const [taxSettings, setTaxSettings] = useState(() => {
-    try {
-      const saved = localStorage.getItem('taxSettings');
-      return saved ? JSON.parse(saved) : {
-        enabled: true,
-        base_url: "",
-        api_key: "",
-        timeout: 30,
-        retry_attempts: 3,
-      };
-    } catch {
-      return {
-        enabled: true,
-        base_url: "",
-        api_key: "",
-        timeout: 30,
-        retry_attempts: 3,
-      };
-    }
+  const [taxSettings, setTaxSettings] = useState({
+    enabled: taxIntegrationEnabled,
+    base_url: "",
+    api_key: "",
+    timeout: 30,
+    retry_attempts: 3,
   });
   const [testingTaxConnection, setTestingTaxConnection] = useState(false);
   const [taxTestResult, setTaxTestResult] = useState<{success: boolean, message: string} | null>(null);
+  const [taxConnectionTested, setTaxConnectionTested] = useState(false);
+  const [taxEnabledSwitch, setTaxEnabledSwitch] = useState(taxIntegrationEnabled);
 
   const [emailSettings, setEmailSettings] = useState({
     provider: "aws_ses",
@@ -234,6 +227,9 @@ const Settings = () => {
       window.history.replaceState({}, '', newUrl);
     }
   }, [activeTab]);
+
+  // Note: Tax settings are initialized from taxIntegrationEnabled in useState above
+  // We don't sync continuously to avoid overriding user's manual toggle actions
 
   // Handle highlighting for AI Assistant toggle
   useEffect(() => {
@@ -639,29 +635,32 @@ const Settings = () => {
     setTaxTestResult(null);
 
     try {
-      // This would typically call an API endpoint to test the tax service connection
-      // For now, we'll simulate a test with a timeout
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Call the real API endpoint to test the tax service connection
+      const result = await api.post<{ success: boolean; message: string }>('/tax-integration/test-connection');
 
-      // Simulate success/failure based on whether the base URL is set
-      if (taxSettings.base_url && taxSettings.base_url.includes('http')) {
+      if (result.success) {
+        console.log('Tax connection test PASSED - setting taxConnectionTested to true');
         setTaxTestResult({
           success: true,
-          message: "Tax service connection successful! API responded correctly."
+          message: result.message || "Tax service connection successful!"
         });
+        setTaxConnectionTested(true);
         toast.success("Tax service connection test passed!");
       } else {
         setTaxTestResult({
           success: false,
-          message: "Tax service connection failed. Please check your base URL configuration."
+          message: result.message || "Tax service connection failed."
         });
+        setTaxConnectionTested(false);
         toast.error("Tax service connection test failed!");
       }
     } catch (error) {
+      console.error("Error testing tax connection:", error);
       setTaxTestResult({
         success: false,
         message: "Connection test failed due to network error or invalid configuration."
       });
+      setTaxConnectionTested(false);
       toast.error("Tax service connection test failed!");
     } finally {
       setTestingTaxConnection(false);
@@ -671,17 +670,30 @@ const Settings = () => {
   const handleSaveTaxSettings = async () => {
     // Only allow admin to save tax settings
     if (!isAdmin) return;
-    
+
+    // Validate that if enabled=true, connection must have been tested OR already enabled
+    if (taxEnabledSwitch && !taxConnectionTested && !taxIntegrationEnabled) {
+      toast.error("Tax service must be tested and connection verified before enabling.");
+      return;
+    }
+
     setSaving(true);
     try {
-      // This would typically call an API endpoint to save tax settings
-      // For now, we'll simulate saving with a timeout
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Save tax settings to local storage or API
-      localStorage.setItem('taxSettings', JSON.stringify(taxSettings));
+      // Call the tax integration settings API
+      await api.put('/tax-integration/settings', taxSettings);
 
       toast.success("Tax settings saved successfully!");
+
+      // Only reset test status if tax integration is being disabled
+      // If enabled, keep the tested state so user can toggle on/off without re-testing
+      if (!taxSettings.enabled) {
+        setTaxConnectionTested(false);
+        setTaxTestResult(null);
+      }
+      setTaxEnabledSwitch(taxSettings.enabled);
+
+      // Refetch tax integration status to update the UI
+      queryClient.invalidateQueries({ queryKey: ['tax-integration-status'] });
     } catch (error) {
       console.error("Failed to save tax settings:", error);
       toast.error(getErrorMessage(error, t));
@@ -2427,30 +2439,18 @@ const Settings = () => {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Calculator className="h-5 w-5" />
-                    Tax Service Configuration
+                    {t('taxIntegration.configuration.title')}
                   </CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    Configure integration with your tax calculation service
+                    {t('taxIntegration.configuration.description')}
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="tax_enabled">Enable Tax Service Integration</Label>
-                      <p className="text-sm text-muted-foreground">Enable automatic tax calculation for invoices</p>
-                    </div>
-                    <Switch
-                      id="tax_enabled"
-                      checked={taxSettings.enabled}
-                      onCheckedChange={(checked) => setTaxSettings(prev => ({ ...prev, enabled: checked }))}
-                    />
-                  </div>
-
-                  {taxSettings.enabled && (
-                    <>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Always show configuration fields so users can test before enabling */}
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
-                          <Label htmlFor="tax_base_url">Tax Service Base URL</Label>
+                          <Label htmlFor="tax_base_url">{t('taxIntegration.configuration.baseUrl')}</Label>
                           <Input
                             id="tax_base_url"
                             type="url"
@@ -2461,20 +2461,20 @@ const Settings = () => {
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor="tax_api_key">API Key</Label>
+                          <Label htmlFor="tax_api_key">{t('taxIntegration.configuration.apiKey')}</Label>
                           <Input
                             id="tax_api_key"
                             type="password"
                             value={taxSettings.api_key}
                             onChange={(e) => setTaxSettings(prev => ({ ...prev, api_key: e.target.value }))}
-                            placeholder="Enter your API key"
+                            placeholder={t('taxIntegration.configuration.apiKeyPlaceholder')}
                           />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
-                          <Label htmlFor="tax_timeout">Request Timeout (seconds)</Label>
+                          <Label htmlFor="tax_timeout">{t('taxIntegration.configuration.timeout')}</Label>
                           <Input
                             id="tax_timeout"
                             type="number"
@@ -2486,7 +2486,7 @@ const Settings = () => {
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor="tax_retry_attempts">Retry Attempts</Label>
+                          <Label htmlFor="tax_retry_attempts">{t('taxIntegration.configuration.retryAttempts')}</Label>
                           <Input
                             id="tax_retry_attempts"
                             type="number"
@@ -2498,59 +2498,69 @@ const Settings = () => {
                         </div>
                       </div>
 
-                      {/* Test Connection Section */}
-                      <div className="space-y-4 p-4 border rounded-lg bg-gray-50">
-                        <h4 className="font-medium">Test Connection</h4>
-                        <p className="text-sm text-muted-foreground">
-                          Verify that your tax service configuration is working correctly
-                        </p>
-
-                        {taxTestResult && (
-                          <div className={`p-3 rounded-md text-sm ${
-                            taxTestResult.success
-                              ? 'bg-green-50 text-green-800 border border-green-200'
-                              : 'bg-red-50 text-red-800 border border-red-200'
-                          }`}>
-                            <div className="flex items-center gap-2">
-                              {taxTestResult.success ? (
-                                <CheckCircle className="h-4 w-4" />
-                              ) : (
-                                <XCircle className="h-4 w-4" />
-                              )}
-                              <span>{taxTestResult.message}</span>
-                            </div>
+                      {/* Test Results */}
+                      {taxTestResult && (
+                        <div className={`p-3 rounded-md text-sm ${
+                          taxTestResult.success
+                            ? 'bg-green-50 text-green-800 border border-green-200'
+                            : 'bg-red-50 text-red-800 border border-red-200'
+                        }`}>
+                          <div className="flex items-center gap-2">
+                            {taxTestResult.success ? (
+                              <CheckCircle className="h-4 w-4" />
+                            ) : (
+                              <XCircle className="h-4 w-4" />
+                            )}
+                            <span>{taxTestResult.message}</span>
                           </div>
-                        )}
+                        </div>
+                      )}
 
+                      {taxConnectionTested && (
+                        <div className="p-3 rounded-md text-sm bg-green-50 text-green-800 border border-green-200">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4" />
+                            <span>{t('taxIntegration.configuration.connectionTestedSuccess')}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Action Buttons */}
+                      <div className="flex justify-end gap-3 pt-4">
                         <Button
                           type="button"
                           variant="outline"
                           onClick={() => handleTestTaxConnection()}
-                          disabled={testingTaxConnection}
-                          className="w-full sm:w-auto"
+                          disabled={testingTaxConnection || !taxSettings.base_url}
                         >
                           {testingTaxConnection && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                          Test Tax Service Connection
+                          {t('taxIntegration.configuration.testConnection')}
+                        </Button>
+                        <Button
+                          onClick={handleSaveTaxSettings}
+                          disabled={saving}
+                        >
+                          {saving ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              {t('taxIntegration.configuration.saving')}
+                            </>
+                          ) : (
+                            t('taxIntegration.configuration.saveTaxSettings')
+                          )}
                         </Button>
                       </div>
 
-                      <div className="flex justify-end pt-4 border-t">
-                        <Button onClick={() => handleSaveTaxSettings()} disabled={saving}>
-                          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                          Save Tax Settings
-                        </Button>
-                      </div>
-                    </>
-                  )}
+                  </>
                 </CardContent>
               </Card>
 
               {/* Tax Integration Status Section */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Integration Status</CardTitle>
+                  <CardTitle>{t('taxIntegration.configuration.integrationStatus')}</CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    Current status of tax service integration
+                    {t('taxIntegration.configuration.integrationStatusDescription')}
                   </p>
                 </CardHeader>
                 <CardContent>
@@ -2559,23 +2569,23 @@ const Settings = () => {
                       <div className="text-2xl font-bold text-blue-600">
                         {taxSettings.enabled ? '✅' : '❌'}
                       </div>
-                      <h3 className="font-medium text-blue-900 mt-2">Service Status</h3>
+                      <h3 className="font-medium text-blue-900 mt-2">{t('taxIntegration.configuration.serviceStatus')}</h3>
                       <p className="text-sm text-blue-700 mt-1">
-                        {taxSettings.enabled ? 'Enabled' : 'Disabled'}
+                        {taxSettings.enabled ? t('taxIntegration.configuration.enabled') : t('taxIntegration.configuration.disabled')}
                       </p>
                     </div>
                     <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
                       <div className="text-2xl font-bold text-green-600">🔗</div>
-                      <h3 className="font-medium text-green-900 mt-2">API Connection</h3>
+                      <h3 className="font-medium text-green-900 mt-2">{t('taxIntegration.configuration.apiConnection')}</h3>
                       <p className="text-sm text-green-700 mt-1">
-                        {taxTestResult?.success ? 'Connected' : 'Not Tested'}
+                        {taxTestResult?.success ? t('taxIntegration.configuration.connected') : t('taxIntegration.configuration.notTested')}
                       </p>
                     </div>
                     <div className="text-center p-4 bg-purple-50 rounded-lg border border-purple-200">
                       <div className="text-2xl font-bold text-purple-600">⚙️</div>
-                      <h3 className="font-medium text-purple-900 mt-2">Configuration</h3>
+                      <h3 className="font-medium text-purple-900 mt-2">{t('taxIntegration.configuration.configuration')}</h3>
                       <p className="text-sm text-purple-700 mt-1">
-                        {taxSettings.base_url ? 'Configured' : 'Not Configured'}
+                        {taxSettings.base_url ? t('taxIntegration.configuration.configured') : t('taxIntegration.configuration.notConfigured')}
                       </p>
                     </div>
                   </div>

@@ -8,9 +8,11 @@ from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 import logging
+from datetime import datetime, timezone
 
 from models.database import get_db
 from models.models import MasterUser
+from models.models_per_tenant import Settings
 from routers.auth import get_current_user
 from services.tax_integration_service import (
     get_tax_integration_service,
@@ -71,16 +73,29 @@ class BulkIntegrationResponse(BaseModel):
 
 @router.get("/status", response_model=IntegrationStatus)
 async def get_integration_status(
-    current_user: MasterUser = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """Get current tax service integration status"""
     try:
+        # Check database settings first, fallback to env vars
+        tax_settings_record = db.query(Settings).filter(Settings.key == "tax_integration_settings").first()
+
+        if tax_settings_record and tax_settings_record.value:
+            tax_settings = tax_settings_record.value
+            enabled = tax_settings.get("enabled", config.TAX_SERVICE_ENABLED)
+            api_key = tax_settings.get("api_key", config.TAX_SERVICE_API_KEY)
+        else:
+            # No DB settings, use env vars
+            enabled = config.TAX_SERVICE_ENABLED
+            api_key = config.TAX_SERVICE_API_KEY
+
         service = get_tax_integration_service()
 
-        if not service:
+        if not service or not enabled:
             return IntegrationStatus(
-                enabled=False,
-                configured=False,
+                enabled=enabled,
+                configured=bool(api_key),
                 connection_tested=False
             )
 
@@ -88,8 +103,8 @@ async def get_integration_status(
         connection_ok = await service.test_connection()
 
         return IntegrationStatus(
-            enabled=config.TAX_SERVICE_ENABLED,
-            configured=bool(config.TAX_SERVICE_API_KEY),
+            enabled=enabled,
+            configured=bool(api_key),
             connection_tested=connection_ok,
             last_test_result="Connection successful" if connection_ok else "Connection failed"
         )
@@ -106,24 +121,48 @@ async def get_integration_status(
 
 @router.post("/test-connection")
 async def test_tax_service_connection(
-    current_user: MasterUser = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    """Test connection to tax service"""
+    """Test connection to tax service using database settings"""
     try:
-        service = get_tax_integration_service()
+        # Get settings from database first, fallback to env vars
+        tax_settings_record = db.query(Settings).filter(Settings.key == "tax_integration_settings").first()
 
-        if not service:
-            raise HTTPException(
-                status_code=400,
-                detail="Tax service integration is not configured"
-            )
+        if tax_settings_record and tax_settings_record.value:
+            tax_settings = tax_settings_record.value
+            base_url = tax_settings.get("base_url", config.TAX_SERVICE_BASE_URL)
+            api_key = tax_settings.get("api_key", config.TAX_SERVICE_API_KEY)
+            timeout = tax_settings.get("timeout", config.TAX_SERVICE_TIMEOUT)
+            retry_attempts = tax_settings.get("retry_attempts", config.TAX_SERVICE_RETRY_ATTEMPTS)
+        else:
+            # No DB settings, use env vars
+            base_url = config.TAX_SERVICE_BASE_URL
+            api_key = config.TAX_SERVICE_API_KEY
+            timeout = config.TAX_SERVICE_TIMEOUT
+            retry_attempts = config.TAX_SERVICE_RETRY_ATTEMPTS
 
-        connection_ok = await service.test_connection()
+        # Create temporary service instance with current settings
+        from services.tax_integration_service import TaxServiceConfig, TaxIntegrationService
+        temp_config = TaxServiceConfig(
+            base_url=base_url,
+            api_key=api_key,
+            timeout=timeout,
+            retry_attempts=retry_attempts,
+            enabled=True
+        )
+        temp_service = TaxIntegrationService(temp_config)
 
-        return {
-            "success": connection_ok,
-            "message": "Connection successful" if connection_ok else "Connection failed"
-        }
+        try:
+            connection_ok = await temp_service.test_connection()
+
+            return {
+                "success": connection_ok,
+                "message": "Connection successful" if connection_ok else "Connection failed"
+            }
+        finally:
+            # Clean up the temporary service
+            await temp_service.close()
 
     except Exception as e:
         logger.error(f"Error testing connection: {str(e)}")
@@ -369,27 +408,45 @@ async def send_bulk_to_tax_service(
 
 @router.get("/settings", response_model=IntegrationSettings)
 async def get_integration_settings(
-    current_user: MasterUser = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """Get current integration settings (masked for security)"""
+    # Check database settings first, fallback to env vars
+    tax_settings_record = db.query(Settings).filter(Settings.key == "tax_integration_settings").first()
+
+    if tax_settings_record and tax_settings_record.value:
+        tax_settings = tax_settings_record.value
+        enabled = tax_settings.get("enabled", config.TAX_SERVICE_ENABLED)
+        base_url = tax_settings.get("base_url", config.TAX_SERVICE_BASE_URL)
+        api_key = tax_settings.get("api_key", config.TAX_SERVICE_API_KEY)
+        timeout = tax_settings.get("timeout", config.TAX_SERVICE_TIMEOUT)
+        retry_attempts = tax_settings.get("retry_attempts", config.TAX_SERVICE_RETRY_ATTEMPTS)
+    else:
+        # No DB settings, use env vars
+        enabled = config.TAX_SERVICE_ENABLED
+        base_url = config.TAX_SERVICE_BASE_URL
+        api_key = config.TAX_SERVICE_API_KEY
+        timeout = config.TAX_SERVICE_TIMEOUT
+        retry_attempts = config.TAX_SERVICE_RETRY_ATTEMPTS
+
     return IntegrationSettings(
-        enabled=config.TAX_SERVICE_ENABLED,
-        base_url=config.TAX_SERVICE_BASE_URL,
-        api_key=f"{'*' * 8}...{config.TAX_SERVICE_API_KEY[-4:]}" if config.TAX_SERVICE_API_KEY else "",
-        timeout=config.TAX_SERVICE_TIMEOUT,
-        retry_attempts=config.TAX_SERVICE_RETRY_ATTEMPTS
+        enabled=enabled,
+        base_url=base_url,
+        api_key=f"{'*' * 8}...{api_key[-4:]}" if api_key else "",
+        timeout=timeout,
+        retry_attempts=retry_attempts
     )
 
 
 @router.put("/settings", response_model=IntegrationSettings)
 async def update_integration_settings(
     settings: IntegrationSettings,
-    current_user: MasterUser = Depends(get_current_user)
+    current_user: MasterUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """Update tax integration settings"""
     try:
-        # Here you would typically save settings to database or environment
-        # For now, we'll just return the settings as they would be updated
         logger.info(f"Updating tax integration settings for user {current_user.id}")
 
         # Validate settings
@@ -399,10 +456,47 @@ async def update_integration_settings(
         if settings.retry_attempts < 0 or settings.retry_attempts > 10:
             raise HTTPException(status_code=400, detail="Retry attempts must be between 0 and 10")
 
-        # In a real implementation, you would:
-        # 1. Save to database
-        # 2. Update environment variables
-        # 3. Restart services if needed
+        # Get or create the settings record
+        tax_settings_record = db.query(Settings).filter(Settings.key == "tax_integration_settings").first()
+
+        # Prepare settings data
+        settings_data = {
+            "enabled": settings.enabled,
+            "base_url": settings.base_url,
+            "api_key": settings.api_key,  # Store the actual API key
+            "timeout": settings.timeout,
+            "retry_attempts": settings.retry_attempts
+        }
+
+        if tax_settings_record:
+            # Update existing record
+            tax_settings_record.value = settings_data
+            tax_settings_record.updated_at = datetime.now(timezone.utc)
+        else:
+            # Create new record
+            tax_settings_record = Settings(
+                key="tax_integration_settings",
+                value=settings_data,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc)
+            )
+            db.add(tax_settings_record)
+
+        db.commit()
+
+        # Log audit event
+        from utils.audit import log_audit_event
+        log_audit_event(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="UPDATE",
+            resource_type="tax_integration_settings",
+            resource_id="1",
+            resource_name="Tax Integration Settings",
+            details={"enabled": settings.enabled},
+            status="success"
+        )
 
         return IntegrationSettings(
             enabled=settings.enabled,

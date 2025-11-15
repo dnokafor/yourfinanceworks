@@ -74,11 +74,9 @@ services:
       - OLLAMA_API_BASE=http://host.docker.internal:11434 # OLLAMA_API_BASE is used by Ollama service
       - LLM_API_KEY=
       - LLM_MODEL_EXPENSES=llama3.2-vision:11b
-
       # Component-specific configuration (takes priority)
       - LLM_MODEL_INVOICES=gpt-oss:latest
       - LLM_MODEL_BANK_STATEMENTS=gpt-oss:latest
-
       # AI Chat configuration
       - AI_PROVIDER=ollama
       - AI_MODEL=llama3.2-vision:11b
@@ -90,11 +88,11 @@ services:
       # Tax Service Integration Configuration
       # ============================================================================
       # Enable/disable tax service integration
-      - TAX_SERVICE_ENABLED=${TAX_SERVICE_ENABLED:-true}
+      - TAX_SERVICE_ENABLED=false
       # Base URL for tax service API endpoint
-      - TAX_SERVICE_BASE_URL=${TAX_SERVICE_BASE_URL:-http://192.168.86.32:8001}
+      - TAX_SERVICE_BASE_URL=${TAX_SERVICE_BASE_URL}
       # API key for authenticating with tax service
-      - TAX_SERVICE_API_KEY=${TAX_SERVICE_API_KEY:-ak_Pw0viX75yYrLT8tUmS2c912gDDrLsR4qvtIO8XRrruU}
+      - TAX_SERVICE_API_KEY=${TAX_SERVICE_API_KEY}
       # Timeout for tax service requests (in seconds)
       - TAX_SERVICE_TIMEOUT=${TAX_SERVICE_TIMEOUT:-30}
       # Number of retry attempts for failed requests
@@ -105,7 +103,6 @@ services:
       - OPENSEARCH_HOST=opensearch
       - OPENSEARCH_PORT=9200
       - OPENSEARCH_ENABLED=${OPENSEARCH_ENABLED:-true}
-
       # ============================================================================
       # Database Encryption Configuration
       # ============================================================================

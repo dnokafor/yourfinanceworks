@@ -61,6 +61,86 @@
     "hide": "Ocultar",
     "show": "Mostrar"
   },
+  "taxIntegration": {
+    "title": "Integración del Servicio Fiscal",
+    "sendToTaxService": "Enviar al Servicio Fiscal",
+    "tax_send_success": "Factura enviada al servicio fiscal exitosamente",
+    "tax_send_error": "Error al enviar al servicio fiscal",
+    "testConnection": "Probar Conexión",
+    "sendSelected": "Enviar Seleccionados ({{count}})",
+    "bulkSendTitle": "Enviar {{itemType}} al Servicio Fiscal",
+    "selectAll": "Seleccionar Todo",
+    "results": "Resultados",
+    "configuration": {
+      "title": "Configuración del Servicio Fiscal",
+      "description": "Configurar integración con su servicio de cálculo fiscal",
+      "baseUrl": "URL Base del Servicio Fiscal",
+      "apiKey": "Clave API",
+      "apiKeyPlaceholder": "Ingrese su clave API",
+      "timeout": "Tiempo de Espera de Solicitud (segundos)",
+      "retryAttempts": "Intentos de Reintento",
+      "testConnection": "Probar Conexión",
+      "saveTaxSettings": "Guardar Configuración Fiscal",
+      "saving": "Guardando...",
+      "connectionTestedSuccess": "Conexión probada exitosamente. Ahora puede habilitar la integración fiscal.",
+      "integrationStatus": "Estado de Integración",
+      "integrationStatusDescription": "Estado actual de la integración del servicio fiscal",
+      "serviceStatus": "Estado del Servicio",
+      "apiConnection": "Conexión API",
+      "configuration": "Configuración",
+      "enabled": "Habilitado",
+      "disabled": "Deshabilitado",
+      "connected": "Conectado",
+      "notTested": "No Probado",
+      "configured": "Configurado",
+      "notConfigured": "No Configurado"
+    },
+    "status": {
+      "unknown": "Desconocido",
+      "disabled": "Deshabilitado",
+      "notConfigured": "No Configurado",
+      "connectionFailed": "Fallo en la Conexión",
+      "connected": "Conectado",
+      "lastTestResult": "Último resultado de prueba"
+    },
+    "warnings": {
+      "notEnabled": "La integración del servicio fiscal no está habilitada. Habilítela en su configuración de entorno.",
+      "notConfigured": "La integración del servicio fiscal no está configurada correctamente. Verifique su clave API y URL base."
+    },
+    "success": {
+      "sentToTaxService": "{{itemType}} enviado al servicio fiscal exitosamente (ID de transacción: {{transactionId}})",
+      "connectionTestSuccessful": "Prueba de conexión exitosa",
+      "bulkSendCompleted": "Se enviaron exitosamente {{successful}} de {{total}} elementos al servicio fiscal"
+    },
+    "errors": {
+      "invalidItemId": "ID de elemento inválido",
+      "sendFailed": "Error al enviar al servicio fiscal",
+      "fetchStatusFailed": "Error al obtener el estado de integración",
+      "connectionTestFailed": "Prueba de conexión fallida",
+      "fetchSettingsFailed": "Error al obtener la configuración de integración",
+      "noItemsSelected": "No hay elementos seleccionados",
+      "bulkSendFailed": "Envío masivo fallido",
+      "bulkSendPartialFailure": "Error al enviar {{failed}} de {{total}} elementos"
+    },
+    "refresh": "Actualizar",
+    "settings": {
+      "title": "Configuración de Integración Fiscal",
+      "configured": "Configurado",
+      "notConfigured": "No Configurado",
+      "disabled": "Deshabilitado",
+      "notAvailable": "Configuración no disponible",
+      "baseUrl": "URL Base",
+      "apiKey": "Clave API",
+      "timeout": "Tiempo de Espera",
+      "retryAttempts": "Intentos de Reintento",
+      "configurationHelp": "Ayuda de Configuración",
+      "help": {
+        "apiKey": "Configure su clave API del servicio fiscal en la variable de entorno TAX_SERVICE_API_KEY",
+        "baseUrl": "Establezca la URL base del servicio fiscal en la variable de entorno TAX_SERVICE_BASE_URL",
+        "environment": "Use el script de configuración para configurar estos ajustes de forma interactiva"
+      }
+    }
+  },
   "navigation": {
     "dashboard": "Panel de Control",
     "invoices": "Facturas",
@@ -1922,62 +2002,6 @@
     "tip_templates": "Ahorra tiempo con plantillas de facturas",
     "tip_reminders": "Configura recordatorios automáticos de pago",
     "tip_backups": "Exporta datos regularmente para respaldos"
-  },
-  "taxIntegration": {
-    "title": "Integración del Servicio Fiscal",
-    "sendToTaxService": "Enviar al Servicio Fiscal",
-    "tax_send_success": "Factura enviada al servicio fiscal exitosamente",
-    "tax_send_error": "Error al enviar al servicio fiscal",
-    "testConnection": "Probar Conexión",
-    "sendSelected": "Enviar Seleccionados ({{count}})",
-    "bulkSendTitle": "Enviar {{itemType}} al Servicio Fiscal",
-    "selectAll": "Seleccionar Todo",
-    "results": "Resultados",
-    "refresh": "Actualizar",
-    "status": {
-      "unknown": "Desconocido",
-      "disabled": "Deshabilitado",
-      "notConfigured": "No Configurado",
-      "connectionFailed": "Conexión Fallida",
-      "connected": "Conectado",
-      "lastTestResult": "Último resultado de prueba"
-    },
-    "warnings": {
-      "notEnabled": "La integración del servicio fiscal no está habilitada. Habilítala en tu configuración de entorno.",
-      "notConfigured": "La integración del servicio fiscal no está configurada correctamente. Verifica tu clave API y URL base."
-    },
-    "success": {
-      "sentToTaxService": "{{itemType}} enviado al servicio fiscal exitosamente (ID de Transacción: {{transactionId}})",
-      "connectionTestSuccessful": "Prueba de conexión exitosa",
-      "bulkSendCompleted": "Enviado exitosamente {{successful}} de {{total}} elementos al servicio fiscal"
-    },
-    "errors": {
-      "invalidItemId": "ID de elemento inválido",
-      "sendFailed": "Error al enviar al servicio fiscal",
-      "fetchStatusFailed": "Error al obtener el estado de integración",
-      "connectionTestFailed": "Prueba de conexión fallida",
-      "fetchSettingsFailed": "Error al obtener la configuración de integración",
-      "noItemsSelected": "No hay elementos seleccionados",
-      "bulkSendFailed": "Envío masivo fallido",
-      "bulkSendPartialFailure": "Error al enviar {{failed}} de {{total}} elementos"
-    },
-    "settings": {
-      "title": "Configuración de Integración Fiscal",
-      "configured": "Configurado",
-      "notConfigured": "No Configurado",
-      "disabled": "Deshabilitado",
-      "notAvailable": "Configuración no disponible",
-      "baseUrl": "URL Base",
-      "apiKey": "Clave API",
-      "timeout": "Tiempo de Espera",
-      "retryAttempts": "Intentos de Reintento",
-      "configurationHelp": "Ayuda de Configuración",
-      "help": {
-        "apiKey": "Configura tu clave API del servicio fiscal en la variable de entorno TAX_SERVICE_API_KEY",
-        "baseUrl": "Establece la URL base del servicio fiscal en la variable de entorno TAX_SERVICE_BASE_URL",
-        "environment": "Usa el script de configuración para configurar estas opciones de manera interactiva"
-      }
-    }
   },
   "inventory": {
     "title": "Inventario",

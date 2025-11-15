@@ -53,6 +53,86 @@
     "hide": "Verbergen",
     "show": "Anzeigen"
   },
+  "taxIntegration": {
+    "title": "Steuerservice-Integration",
+    "sendToTaxService": "An Steuerservice senden",
+    "tax_send_success": "Rechnung erfolgreich an Steuerservice gesendet",
+    "tax_send_error": "Fehler beim Senden an Steuerservice",
+    "testConnection": "Verbindung testen",
+    "sendSelected": "Ausgewählte senden ({{count}})",
+    "bulkSendTitle": "{{itemType}} an Steuerservice senden",
+    "selectAll": "Alle auswählen",
+    "results": "Ergebnisse",
+    "configuration": {
+      "title": "Steuerservice-Konfiguration",
+      "description": "Integration mit Ihrem Steuerberechnungsservice konfigurieren",
+      "baseUrl": "Steuerservice Basis-URL",
+      "apiKey": "API-Schlüssel",
+      "apiKeyPlaceholder": "Geben Sie Ihren API-Schlüssel ein",
+      "timeout": "Anfrage-Timeout (Sekunden)",
+      "retryAttempts": "Wiederholungsversuche",
+      "testConnection": "Verbindung testen",
+      "saveTaxSettings": "Steuereinstellungen speichern",
+      "saving": "Wird gespeichert...",
+      "connectionTestedSuccess": "Verbindung erfolgreich getestet. Sie können jetzt die Steuerintegration aktivieren.",
+      "integrationStatus": "Integrationsstatus",
+      "integrationStatusDescription": "Aktueller Status der Steuerservice-Integration",
+      "serviceStatus": "Service-Status",
+      "apiConnection": "API-Verbindung",
+      "configuration": "Konfiguration",
+      "enabled": "Aktiviert",
+      "disabled": "Deaktiviert",
+      "connected": "Verbunden",
+      "notTested": "Nicht getestet",
+      "configured": "Konfiguriert",
+      "notConfigured": "Nicht konfiguriert"
+    },
+    "status": {
+      "unknown": "Unbekannt",
+      "disabled": "Deaktiviert",
+      "notConfigured": "Nicht konfiguriert",
+      "connectionFailed": "Verbindung fehlgeschlagen",
+      "connected": "Verbunden",
+      "lastTestResult": "Letztes Testergebnis"
+    },
+    "warnings": {
+      "notEnabled": "Die Steuerservice-Integration ist nicht aktiviert. Aktivieren Sie sie in Ihrer Umgebungskonfiguration.",
+      "notConfigured": "Die Steuerservice-Integration ist nicht richtig konfiguriert. Überprüfen Sie Ihren API-Schlüssel und die Basis-URL."
+    },
+    "success": {
+      "sentToTaxService": "{{itemType}} erfolgreich an Steuerservice gesendet (Transaktions-ID: {{transactionId}})",
+      "connectionTestSuccessful": "Verbindungstest erfolgreich",
+      "bulkSendCompleted": "{{successful}} von {{total}} Elementen erfolgreich an Steuerservice gesendet"
+    },
+    "errors": {
+      "invalidItemId": "Ungültige Element-ID",
+      "sendFailed": "Fehler beim Senden an Steuerservice",
+      "fetchStatusFailed": "Fehler beim Abrufen des Integrationsstatus",
+      "connectionTestFailed": "Verbindungstest fehlgeschlagen",
+      "fetchSettingsFailed": "Fehler beim Abrufen der Integrationseinstellungen",
+      "noItemsSelected": "Keine Elemente ausgewählt",
+      "bulkSendFailed": "Massenversand fehlgeschlagen",
+      "bulkSendPartialFailure": "Fehler beim Senden von {{failed}} von {{total}} Elementen"
+    },
+    "refresh": "Aktualisieren",
+    "settings": {
+      "title": "Steuerintegrations-Einstellungen",
+      "configured": "Konfiguriert",
+      "notConfigured": "Nicht konfiguriert",
+      "disabled": "Deaktiviert",
+      "notAvailable": "Einstellungen nicht verfügbar",
+      "baseUrl": "Basis-URL",
+      "apiKey": "API-Schlüssel",
+      "timeout": "Timeout",
+      "retryAttempts": "Wiederholungsversuche",
+      "configurationHelp": "Konfigurationshilfe",
+      "help": {
+        "apiKey": "Konfigurieren Sie Ihren Steuerservice-API-Schlüssel in der Umgebungsvariable TAX_SERVICE_API_KEY",
+        "baseUrl": "Setzen Sie die Steuerservice-Basis-URL in der Umgebungsvariable TAX_SERVICE_BASE_URL",
+        "environment": "Verwenden Sie das Setup-Skript, um diese Einstellungen interaktiv zu konfigurieren"
+      }
+    }
+  },
   "navigation": {
     "dashboard": "Dashboard",
     "invoices": "Rechnungen",
@@ -1723,62 +1803,6 @@
     "tip_templates": "Sparen Sie Zeit mit Rechnungsvorlagen",
     "tip_reminders": "Richten Sie automatische Zahlungserinnerungen ein",
     "tip_backups": "Exportieren Sie Daten regelmäßig für Backups"
-  },
-  "taxIntegration": {
-    "title": "Steuerdienst-Integration",
-    "sendToTaxService": "An Steuerdienst senden",
-    "tax_send_success": "Rechnung erfolgreich an Steuerdienst gesendet",
-    "tax_send_error": "Fehler beim Senden an Steuerdienst",
-    "testConnection": "Verbindung testen",
-    "sendSelected": "Ausgewählte senden ({{count}})",
-    "bulkSendTitle": "{{itemType}} an Steuerdienst senden",
-    "selectAll": "Alle auswählen",
-    "results": "Ergebnisse",
-    "refresh": "Aktualisieren",
-    "status": {
-      "unknown": "Unbekannt",
-      "disabled": "Deaktiviert",
-      "notConfigured": "Nicht konfiguriert",
-      "connectionFailed": "Verbindung fehlgeschlagen",
-      "connected": "Verbunden",
-      "lastTestResult": "Letztes Testergebnis"
-    },
-    "warnings": {
-      "notEnabled": "Die Steuerdienst-Integration ist nicht aktiviert. Aktivieren Sie sie in Ihrer Umgebungskonfiguration.",
-      "notConfigured": "Die Steuerdienst-Integration ist nicht korrekt konfiguriert. Überprüfen Sie Ihren API-Schlüssel und die Basis-URL."
-    },
-    "success": {
-      "sentToTaxService": "{{itemType}} erfolgreich an Steuerdienst gesendet (Transaktions-ID: {{transactionId}})",
-      "connectionTestSuccessful": "Verbindungstest erfolgreich",
-      "bulkSendCompleted": "Erfolgreich {{successful}} von {{total}} Elementen an Steuerdienst gesendet"
-    },
-    "errors": {
-      "invalidItemId": "Ungültige Element-ID",
-      "sendFailed": "Senden an Steuerdienst fehlgeschlagen",
-      "fetchStatusFailed": "Abrufen des Integrationsstatus fehlgeschlagen",
-      "connectionTestFailed": "Verbindungstest fehlgeschlagen",
-      "fetchSettingsFailed": "Abrufen der Integrationseinstellungen fehlgeschlagen",
-      "noItemsSelected": "Keine Elemente ausgewählt",
-      "bulkSendFailed": "Massenversand fehlgeschlagen",
-      "bulkSendPartialFailure": "Senden von {{failed}} von {{total}} Elementen fehlgeschlagen"
-    },
-    "settings": {
-      "title": "Steuerintegrations-Einstellungen",
-      "configured": "Konfiguriert",
-      "notConfigured": "Nicht konfiguriert",
-      "disabled": "Deaktiviert",
-      "notAvailable": "Einstellungen nicht verfügbar",
-      "baseUrl": "Basis-URL",
-      "apiKey": "API-Schlüssel",
-      "timeout": "Zeitüberschreitung",
-      "retryAttempts": "Wiederholungsversuche",
-      "configurationHelp": "Konfigurationshilfe",
-      "help": {
-        "apiKey": "Konfigurieren Sie Ihren Steuerdienst-API-Schlüssel in der Umgebungsvariablen TAX_SERVICE_API_KEY",
-        "baseUrl": "Legen Sie die Basis-URL des Steuerdienstes in der Umgebungsvariablen TAX_SERVICE_BASE_URL fest",
-        "environment": "Verwenden Sie das Konfigurationsskript, um diese Optionen interaktiv zu konfigurieren"
-      }
-    }
   },
   "currency_manager": {
     "custom_currencies": "Benutzerdefinierte Währungen",

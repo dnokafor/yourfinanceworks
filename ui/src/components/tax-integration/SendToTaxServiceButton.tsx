@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Loader2, Send } from 'lucide-react';
 import { toast } from 'sonner';
@@ -14,6 +14,13 @@ interface SendToTaxServiceButtonProps {
   size?: 'default' | 'sm' | 'lg';
 }
 
+interface IntegrationStatus {
+  enabled: boolean;
+  configured: boolean;
+  connection_tested: boolean;
+  last_test_result?: string;
+}
+
 export const SendToTaxServiceButton: React.FC<SendToTaxServiceButtonProps> = ({
   itemId,
   itemType,
@@ -24,6 +31,34 @@ export const SendToTaxServiceButton: React.FC<SendToTaxServiceButtonProps> = ({
 }) => {
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
+  const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatus | null>(null);
+  const [statusLoading, setStatusLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchIntegrationStatus = async () => {
+      try {
+        const response = await api.get<IntegrationStatus>('/tax-integration/status');
+        setIntegrationStatus(response);
+      } catch (error) {
+        console.error('Error fetching tax integration status:', error);
+        // Default to disabled if we can't fetch status
+        setIntegrationStatus({
+          enabled: false,
+          configured: false,
+          connection_tested: false,
+        });
+      } finally {
+        setStatusLoading(false);
+      }
+    };
+
+    fetchIntegrationStatus();
+  }, []);
+
+  // Don't render if tax integration is not enabled or configured
+  if (statusLoading || !integrationStatus?.enabled || !integrationStatus?.configured) {
+    return null;
+  }
 
   const handleSendToTaxService = async () => {
     if (!itemId) {

@@ -9,13 +9,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Plus, Search, Send, Eye, Download } from 'lucide-react';
+import { Plus, Search, Send, Eye, Download } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { invoiceApi, Invoice } from '@/lib/api';
+import { invoiceApi, Invoice, api } from '@/lib/api';
 import { CurrencyDisplay } from '@/components/ui/currency-display';
 
 // Import Tax Integration Components
@@ -24,14 +22,7 @@ import {
   TaxIntegrationStatus,
   BulkSendToTaxServiceDialog,
 } from '@/components/tax-integration';
-
-// Helper functions
-const formatDateToISO = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+import { useTaxIntegration } from '@/hooks/useTaxIntegration';
 
 const safeParseDateString = (dateString?: string): Date => {
   if (!dateString) return new Date();
@@ -57,10 +48,12 @@ const InvoicesWithTaxIntegration: React.FC = () => {
 
   // Tax Integration State
   const [bulkSendDialogOpen, setBulkSendDialogOpen] = useState(false);
+  const { isEnabled: taxIntegrationEnabled } = useTaxIntegration();
 
   useEffect(() => {
     fetchInvoices();
   }, [statusFilter, page, pageSize]);
+
 
   const fetchInvoices = async () => {
     try {
@@ -144,7 +137,7 @@ const InvoicesWithTaxIntegration: React.FC = () => {
         </div>
 
         {/* Bulk Actions */}
-        {selectedIds.length > 0 && (
+        {selectedIds.length > 0 && taxIntegrationEnabled && (
           <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-200 rounded-md">
             <div className="flex items-center space-x-2">
               <span className="text-sm font-medium">
