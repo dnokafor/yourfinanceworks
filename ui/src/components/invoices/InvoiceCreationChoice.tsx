@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { Upload, FileText, Loader2, AlertCircle, Package } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { apiRequest } from "@/lib/api";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+
 import { FeatureGate } from "@/components/FeatureGate";
 
 interface InvoiceCreationChoiceProps {
@@ -138,138 +138,191 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport, onInventory
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-6">
-      <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold">{t('invoices.create_new_invoice')}</h2>
-        <p className="text-muted-foreground">{t('invoices.choose_creation_method')}</p>
+    <div className="w-full max-w-5xl mx-auto space-y-8 animate-fade-in-up">
+      <div className="text-center space-y-3">
+        <h2 className="text-3xl font-bold tracking-tight text-gradient-primary">
+          {t('invoices.create_new_invoice')}
+        </h2>
+        <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+          {t('invoices.choose_creation_method')}
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {/* PDF Import Option */}
         <FeatureGate feature="ai_invoice">
-          <Card className="cursor-pointer hover:shadow-lg transition-shadow">
-            <CardHeader className="text-center">
-              <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-                <Upload className="w-8 h-8 text-blue-600" />
-              </div>
-              <CardTitle className="text-xl">{t('invoices.import_from_pdf')}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground text-center">
-                {t('invoices.upload_pdf_to_extract_invoice_details')}
-              </p>
+          <div
+            className="professional-card group cursor-pointer relative overflow-hidden h-full interactive-lift"
+            onClick={() => !processing && document.getElementById('pdf-upload')?.click()}
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
-              <div className="space-y-3">
-                <div>
-                  <Label htmlFor="pdf-upload">{t('invoices.select_pdf_file')}</Label>
+            <CardContent className="p-8 space-y-6 relative z-10 flex flex-col h-full">
+              <div className="mx-auto w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/30 flex items-center justify-center transform group-hover:scale-110 transition-transform duration-300">
+                <Upload className="w-10 h-10 text-white" />
+              </div>
+
+              <div className="text-center space-y-2 flex-grow">
+                <h3 className="text-xl font-bold text-foreground group-hover:text-blue-600 transition-colors">
+                  {t('invoices.import_from_pdf')}
+                </h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {t('invoices.upload_pdf_to_extract_invoice_details')}
+                </p>
+              </div>
+
+              <div className="space-y-4 mt-auto">
+                <div className="hidden">
                   <Input
                     id="pdf-upload"
                     type="file"
                     accept=".pdf"
                     onChange={(e) => handleFileSelect(e)}
-                    className="cursor-pointer"
+                    onClick={(e) => e.stopPropagation()}
                   />
                 </div>
 
-                {selectedFile && (
-                  <div className="text-sm text-green-600 bg-green-50 p-2 rounded">
-                    {t('invoices.selected_file')}: {selectedFile.name}
+                {selectedFile ? (
+                  <div className="text-sm text-blue-600 bg-blue-50/50 border border-blue-100 p-3 rounded-lg flex items-center justify-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    <span className="truncate max-w-[200px]">{selectedFile.name}</span>
+                  </div>
+                ) : (
+                  <div className="h-[46px] flex items-center justify-center text-sm text-muted-foreground/60 border border-dashed border-border rounded-lg bg-muted/20">
+                    Drag & drop or click to upload
                   </div>
                 )}
 
                 <Button
-                  onClick={processPdfImport}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    processPdfImport();
+                  }}
                   disabled={!selectedFile || processing}
-                  className="w-full"
+                  className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg shadow-blue-500/20"
                 >
                   {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {processing ? t('invoices.processing_pdf') : t('invoices.import_from_pdf')}
                 </Button>
               </div>
             </CardContent>
-          </Card>
+          </div>
         </FeatureGate>
 
         {/* Manual Creation Option */}
-        <Card className="cursor-pointer hover:shadow-lg transition-shadow">
-          <CardHeader className="text-center">
-            <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-              <FileText className="w-8 h-8 text-green-600" />
-            </div>
-            <CardTitle className="text-xl">{t('invoices.create_manually')}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground text-center">
-              {t('invoices.quick_create_guided_create_manual_description')}
-            </p>
+        <div
+          className="professional-card group cursor-pointer relative overflow-hidden h-full interactive-lift"
+          onClick={() => handleManualCreate()}
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
-            <div className="space-y-3">
-              <div>
-                <Label htmlFor="manual-attachment">{t('invoices.optional_attachment')}</Label>
-                <Input
-                  id="manual-attachment"
-                  type="file"
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                  onChange={(e) => handleFileSelect(e, true)}
-                  className="cursor-pointer"
-                />
+          <CardContent className="p-8 space-y-6 relative z-10 flex flex-col h-full">
+            <div className="mx-auto w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg shadow-emerald-500/30 flex items-center justify-center transform group-hover:scale-110 transition-transform duration-300">
+              <FileText className="w-10 h-10 text-white" />
+            </div>
+
+            <div className="text-center space-y-2 flex-grow">
+              <h3 className="text-xl font-bold text-foreground group-hover:text-emerald-600 transition-colors">
+                {t('invoices.create_manually')}
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {t('invoices.quick_create_guided_create_manual_description')}
+              </p>
+            </div>
+
+            <div className="space-y-4 mt-auto">
+              <div onClick={(e) => e.stopPropagation()}>
+                <Label htmlFor="manual-attachment" className="sr-only">{t('invoices.optional_attachment')}</Label>
+                <div className="relative">
+                  <Input
+                    id="manual-attachment"
+                    type="file"
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                    onChange={(e) => handleFileSelect(e, true)}
+                    className="cursor-pointer opacity-0 absolute inset-0 w-full h-full z-20"
+                  />
+                  <div className="h-10 w-full border border-input rounded-md bg-background flex items-center px-3 text-sm text-muted-foreground">
+                    {manualAttachment ? (
+                      <span className="text-emerald-600 flex items-center gap-2">
+                        <FileText className="w-4 h-4" />
+                        {manualAttachment.name}
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        <Upload className="w-4 h-4" />
+                        {t('invoices.optional_attachment')}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              {manualAttachment && (
-                <div className="text-sm text-green-600 bg-green-50 p-2 rounded">
-                  {t('invoices.attachment_selected')}: {manualAttachment.name}
-                </div>
-              )}
-
               <Button
-                onClick={handleManualCreate}
-                className="w-full"
-                variant="outline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleManualCreate();
+                }}
+                className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-lg shadow-emerald-500/20"
               >
                 {t('invoices.create_manually')}
               </Button>
             </div>
           </CardContent>
-        </Card>
+        </div>
 
         {/* Inventory Integration Option */}
         {onInventoryCreate && (
-          <Card className="cursor-pointer hover:shadow-lg transition-shadow">
-            <CardHeader className="text-center">
-              <div className="mx-auto w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mb-4">
-                <Package className="w-8 h-8 text-purple-600" />
-              </div>
-              <CardTitle className="text-xl">{t('invoices.create_with_inventory')}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground text-center">
-                {t('invoices.inventory_catalog_description')}
-              </p>
+          <div
+            className="professional-card group cursor-pointer relative overflow-hidden h-full interactive-lift"
+            onClick={onInventoryCreate}
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
-              <div className="space-y-3">
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                  <div className="flex items-center gap-2 text-purple-800">
-                    <Package className="w-4 h-4" />
-                    <span className="text-sm font-medium">{t('invoices.features')}</span>
-                  </div>
-                  <ul className="text-sm text-purple-700 mt-2 space-y-1">
-                    <li>• {t('invoices.select_from_inventory_catalog')}</li>
-                    <li>• {t('invoices.automatic_stock_validation')}</li>
-                    <li>• {t('invoices.real_time_pricing_updates')}</li>
-                    <li>• {t('invoices.low_stock_warnings')}</li>
+            <CardContent className="p-8 space-y-6 relative z-10 flex flex-col h-full">
+              <div className="mx-auto w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 shadow-lg shadow-purple-500/30 flex items-center justify-center transform group-hover:scale-110 transition-transform duration-300">
+                <Package className="w-10 h-10 text-white" />
+              </div>
+
+              <div className="text-center space-y-2 flex-grow">
+                <h3 className="text-xl font-bold text-foreground group-hover:text-purple-600 transition-colors">
+                  {t('invoices.create_with_inventory')}
+                </h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {t('invoices.inventory_catalog_description')}
+                </p>
+              </div>
+
+              <div className="space-y-4 mt-auto">
+                <div className="bg-purple-50/50 border border-purple-100/50 rounded-xl p-4 backdrop-blur-sm">
+                  <ul className="text-xs text-purple-700 space-y-2">
+                    <li className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                      {t('invoices.select_from_inventory_catalog')}
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                      {t('invoices.automatic_stock_validation')}
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                      {t('invoices.real_time_pricing_updates')}
+                    </li>
                   </ul>
                 </div>
 
                 <Button
-                  onClick={onInventoryCreate}
-                  className="w-full bg-purple-600 hover:bg-purple-700"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onInventoryCreate();
+                  }}
+                  className="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white shadow-lg shadow-purple-500/20"
                 >
                   <Package className="w-4 h-4 mr-2" />
                   {t('invoices.create_with_inventory')}
                 </Button>
               </div>
             </CardContent>
-          </Card>
+          </div>
         )}
       </div>
     </div>
