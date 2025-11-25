@@ -2356,7 +2356,8 @@
     "status": {
       "pending": "Ausstehend",
       "completed": "Abgeschlossen",
-      "snoozed": "Verschoben",
+      "snoozed": "Zurückgestellt",
+      "snoozed_until": "Zurückgestellt bis",
       "cancelled": "Abgebrochen"
     },
     "actions": {
@@ -2495,5 +2496,5 @@
     "empty_recycle_bin_confirm_description": "Sind Sie sicher, dass Sie alle Rechnungen im Papierkorb endgültig löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden und alle gelöschten Rechnungen werden vollständig aus dem System entfernt.",
     "recycle_bin_emptied_successfully": "Papierkorb erfolgreich geleert",
     "failed_to_empty_recycle_bin": "Fehler beim Leeren des Papierkorbs"
-    }
+  }
 }

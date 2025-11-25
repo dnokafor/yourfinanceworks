@@ -17,6 +17,8 @@ const OAuthCallback = () => {
         const user = JSON.parse(userJson);
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(user));
+        // Dispatch custom event to notify FeatureContext
+        window.dispatchEvent(new Event('auth-changed'));
         navigate(next, { replace: true });
         return;
       } catch (e) {

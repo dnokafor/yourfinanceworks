@@ -2402,6 +2402,7 @@
       "pending": "Pendiente",
       "completed": "Completado",
       "snoozed": "Pospuesto",
+      "snoozed_until": "Pospuesto hasta",
       "cancelled": "Cancelado"
     },
     "actions": {

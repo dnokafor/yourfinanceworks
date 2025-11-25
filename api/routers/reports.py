@@ -18,6 +18,7 @@ import time
 
 from models.database import get_db
 from models.models import MasterUser
+from utils.feature_gate import require_feature
 from services.report_service import ReportService
 from services.report_template_service import ReportTemplateService
 from services.scheduled_report_service import ScheduledReportService

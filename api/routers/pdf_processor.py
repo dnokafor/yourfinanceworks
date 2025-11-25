@@ -12,6 +12,7 @@ from models.models import MasterUser
 from models.models_per_tenant import AIConfig as AIConfigModel, Client
 from routers.auth import get_current_user
 from services.ocr_service import track_ai_usage
+from utils.feature_gate import require_feature
 
 router = APIRouter(prefix="/invoices", tags=["pdf-processing"])
 logger = logging.getLogger(__name__)
@@ -296,6 +297,9 @@ async def process_pdf(
     """Queue invoice PDF for async OCR processing"""
     if not current_user:
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # Check if ai_invoice feature is enabled
+    require_feature("ai_invoice", db)
 
     if not pdf_file.filename.endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")

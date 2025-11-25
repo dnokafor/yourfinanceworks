@@ -1,6 +1,69 @@
 # Changelog
 
-## [Latest] - January 2025
+## [Latest] - November 2025
+
+### Comprehensive Licensing System with Feature Gating
+
+**Summary**: Complete licensing and monetization system with JWT-based license keys, 30-day trials, and granular feature control supporting personal (free) and business (trial/paid) usage models.
+
+#### 🔐 Core Licensing Infrastructure
+
+**Backend Services:**
+- **LicenseService**: JWT-based license validation with RSA signatures, 30-day trial + 7-day grace period
+- **FeatureConfigService**: Centralized feature configuration with 13 licensable features
+- **Feature Gate Decorators**: `@require_feature` and `@require_business_license` for API protection
+- **InstallationInfo Model**: Track installation ID, trial dates, license status, and feature entitlements
+- **License API Endpoints**: `/api/v1/license` router with status, activation, validation, and deactivation
+
+**Frontend Integration:**
+- **FeatureContext**: Global license state management with real-time updates
+- **FeatureGate Component**: Conditional rendering with upgrade prompts and loading states
+- **LicenseManagement UI**: Trial countdown, feature indicators, and license activation interface
+- **Settings Integration**: License tab with AI Assistant toggle and feature status
+
+#### 🎯 Feature Gating Implementation
+
+**13 Licensable Features:**
+- **AI Features**: `ai_invoice`, `ai_expense`, `ai_bank_statement`, `ai_chat`
+- **Integrations**: `cloud_storage`, `tax_integration`, `slack_integration`, `sso`
+- **Advanced**: `batch_processing`, `api_keys`, `approvals`, `advanced_search`
+- **Core**: `reporting` (default: true), inventory (always available)
+
+**Backend Protection:**
+- Invoice PDF processing (`pdf_processor.py`) - requires `ai_invoice`
+- Bank statement upload (`statements.py`) - requires `ai_bank_statement`
+- Expense AI analysis - requires `ai_expense` (uploads still work)
+- API key management (`external_api_auth.py`) - requires business license
+- All premium endpoints return HTTP 402 without valid license
+
+**Frontend UX:**
+- **Invoice PDF Import**: Hidden menu items and cards when `ai_invoice` disabled
+- **Bank Statements**: Disabled button with tooltip when `ai_bank_statement` disabled
+- **Expense Attachments**: Informational alerts (uploads work, AI skipped without license)
+- **Progressive Disclosure**: Users see features with upgrade prompts, not hard blocks
+
+#### 🐛 Bug Fixes
+
+**OCR Worker:**
+- Fixed async/await issue in `notify_invoice_ocr_complete()` 
+- Fixed invoice processing status mismatch (done → completed)
+- Resolved infinite polling when frontend never recognized completion
+
+**Inventory:**
+- Removed from licensable features (now core feature)
+- Cleaned up `@require_feature("inventory")` gates
+- Fixed JSON query compatibility issues
+
+#### ⚠️ Breaking Changes
+
+- Premium API endpoints return HTTP 402 without license
+- Fresh installations require usage type selection
+- Invoice PDF, bank statement upload, and expense AI require respective features
+- API key management requires business license (not available for personal use)
+
+---
+
+## [Previous] - January 2025
 
 ### Expense Approval Workflow & Reminders System
 

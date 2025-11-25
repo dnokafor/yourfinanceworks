@@ -14,6 +14,7 @@ from models.database import get_db
 from models.models import MasterUser
 from models.models_per_tenant import Settings
 from routers.auth import get_current_user
+from utils.feature_gate import require_feature
 from services.tax_integration_service import (
     get_tax_integration_service,
     IntegrationResult,
@@ -72,6 +73,7 @@ class BulkIntegrationResponse(BaseModel):
 
 
 @router.get("/status", response_model=IntegrationStatus)
+@require_feature("tax_integration")
 async def get_integration_status(
     current_user: MasterUser = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -120,6 +122,7 @@ async def get_integration_status(
 
 
 @router.post("/test-connection")
+@require_feature("tax_integration")
 async def test_tax_service_connection(
     current_user: MasterUser = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -173,6 +176,7 @@ async def test_tax_service_connection(
 
 
 @router.post("/send", response_model=IntegrationResponse)
+@require_feature("tax_integration")
 async def send_to_tax_service(
     request: SendToTaxServiceRequest,
     background_tasks: BackgroundTasks,
@@ -280,6 +284,7 @@ async def send_to_tax_service(
 
 
 @router.post("/send-bulk", response_model=BulkIntegrationResponse)
+@require_feature("tax_integration")
 async def send_bulk_to_tax_service(
     request: BulkSendToTaxServiceRequest,
     background_tasks: BackgroundTasks,
@@ -407,6 +412,7 @@ async def send_bulk_to_tax_service(
 
 
 @router.get("/settings", response_model=IntegrationSettings)
+@require_feature("tax_integration")
 async def get_integration_settings(
     current_user: MasterUser = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -440,6 +446,7 @@ async def get_integration_settings(
 
 
 @router.put("/settings", response_model=IntegrationSettings)
+@require_feature("tax_integration")
 async def update_integration_settings(
     settings: IntegrationSettings,
     current_user: MasterUser = Depends(get_current_user),
@@ -517,6 +524,7 @@ async def update_integration_settings(
 
 
 @router.get("/expenses/{expense_id}/tax-transaction")
+@require_feature("tax_integration")
 async def get_expense_tax_transaction(
     expense_id: int,
     db: Session = Depends(get_db),
@@ -575,6 +583,7 @@ async def get_expense_tax_transaction(
 
 
 @router.get("/invoices/{invoice_id}/tax-transaction")
+@require_feature("tax_integration")
 async def get_invoice_tax_transaction(
     invoice_id: int,
     db: Session = Depends(get_db),

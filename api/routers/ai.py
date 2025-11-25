@@ -13,6 +13,7 @@ from models.models import MasterUser, Tenant
 from models.models_per_tenant import Invoice, Client, AIConfig, AIChatHistory, Settings
 from schemas.settings import Settings as SettingsSchema
 from services.tenant_database_manager import tenant_db_manager
+from utils.feature_gate import require_feature
 from constants.recommendation_codes import (
     CONSIDER_STRICTER_PAYMENT_TERMS,
     REVIEW_PAYMENT_TERMS_SLOW_CLIENTS,
@@ -30,6 +31,7 @@ router = APIRouter(
 )
 
 @router.get("/analyze-patterns", summary="Analyze invoice patterns and trends")
+@require_feature("ai_invoice")
 async def analyze_patterns(
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
@@ -128,6 +130,7 @@ async def analyze_patterns(
         }
     
 @router.get("/suggest-actions", summary="Suggest actionable items based on invoice analysis")
+@require_feature("ai_invoice")
 async def suggest_actions(
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
@@ -218,6 +221,7 @@ class ChatRequest(BaseModel):
     config_id: int = 0  # Default to 0 if not provided
 
 @router.post("/chat")
+@require_feature("ai_chat")
 async def ai_chat(
     request: ChatRequest,
     db: Session = Depends(get_db),

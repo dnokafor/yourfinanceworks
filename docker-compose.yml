@@ -141,6 +141,26 @@ services:
       - ENCRYPTION_ALERT_WEBHOOK_URL=${ENCRYPTION_ALERT_WEBHOOK_URL:-}
       - ENCRYPTION_METRICS_ENDPOINT=${ENCRYPTION_METRICS_ENDPOINT:-/metrics}
       # ============================================================================
+      # Licensing System Configuration
+      # ============================================================================
+      # Feature flags (default enabled for all features)
+      - FEATURE_AI_INVOICE_ENABLED=${FEATURE_AI_INVOICE_ENABLED:-true}
+      - FEATURE_AI_EXPENSE_ENABLED=${FEATURE_AI_EXPENSE_ENABLED:-true}
+      - FEATURE_AI_BANK_STATEMENT_ENABLED=${FEATURE_AI_BANK_STATEMENT_ENABLED:-true}
+      - FEATURE_AI_CHAT_ENABLED=${FEATURE_AI_CHAT_ENABLED:-true}
+      - FEATURE_TAX_INTEGRATION_ENABLED=${FEATURE_TAX_INTEGRATION_ENABLED:-true}
+      - FEATURE_SLACK_INTEGRATION_ENABLED=${FEATURE_SLACK_INTEGRATION_ENABLED:-true}
+      - FEATURE_CLOUD_STORAGE_ENABLED=${FEATURE_CLOUD_STORAGE_ENABLED:-true}
+      - FEATURE_SSO_AUTH_ENABLED=${FEATURE_SSO_AUTH_ENABLED:-true}
+      - FEATURE_APPROVALS_ENABLED=${FEATURE_APPROVALS_ENABLED:-true}
+      - FEATURE_REPORTING_ENABLED=${FEATURE_REPORTING_ENABLED:-true}
+      - FEATURE_BATCH_PROCESSING_ENABLED=${FEATURE_BATCH_PROCESSING_ENABLED:-true}
+      - FEATURE_ADVANCED_SEARCH_ENABLED=${FEATURE_ADVANCED_SEARCH_ENABLED:-true}
+      # License system settings
+      - LICENSE_TRIAL_DAYS=${LICENSE_TRIAL_DAYS:-30}
+      - LICENSE_GRACE_PERIOD_DAYS=${LICENSE_GRACE_PERIOD_DAYS:-7}
+      - LICENSE_VALIDATION_CACHE_TTL=${LICENSE_VALIDATION_CACHE_TTL:-3600}
+      # ============================================================================
     ports:
       - "8000:8000"
     depends_on:
@@ -289,13 +309,13 @@ services:
       # Logging
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       # LLM Configuration
-      - LLM_API_BASE=http://192.168.86.32:11434
-      - OLLAMA_API_BASE=http://192.168.86.32:11434 # OLLAMA_API_BASE is used by Ollama service
+      - LLM_API_BASE=http://host.docker.internal:11434
+      - OLLAMA_API_BASE=http://host.docker.internal:11434 # OLLAMA_API_BASE is used by Ollama service
       - LLM_MODEL_INVOICES=gpt-oss:latest
       - LLM_MODEL_BANK_STATEMENTS=gpt-oss:latest
       - LLM_MODEL_EXPENSES=llama3.2-vision:11b
       # OCR Configuration
-      - OLLAMA_OCR_ENDPOINT=http://192.168.86.32:11434/api/generate
+      - OLLAMA_OCR_ENDPOINT=http://host.docker.internal:11434/api/generate
       - OLLAMA_OCR_MODEL=llama3.2-vision:11b
       # Database Encryption Configuration
       - ENCRYPTION_ENABLED=${ENCRYPTION_ENABLED:-true}

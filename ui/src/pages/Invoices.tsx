@@ -19,6 +19,7 @@ import { formatDate } from '@/lib/utils';
 import { canPerformActions } from "@/utils/auth";
 import { useTranslation } from 'react-i18next';
 import { InvoiceCard } from "@/components/invoices/InvoiceCard";
+import { FeatureGate } from "@/components/FeatureGate";
 
 
 
@@ -288,12 +289,14 @@ const Invoices = () => {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem asChild>
-                      <Link to="/invoices/new" className="flex items-center w-full">
-                        <Upload className="mr-2 h-4 w-4" />
-                        {t('invoices.import_from_pdf')}
-                      </Link>
-                    </DropdownMenuItem>
+                    <FeatureGate feature="ai_invoice">
+                      <DropdownMenuItem asChild>
+                        <Link to="/invoices/new" className="flex items-center w-full">
+                          <Upload className="mr-2 h-4 w-4" />
+                          {t('invoices.import_from_pdf')}
+                        </Link>
+                      </DropdownMenuItem>
+                    </FeatureGate>
                     <DropdownMenuItem asChild>
                       <Link to="/invoices/new-manual" className="flex items-center w-full">
                         <Edit className="mr-2 h-4 w-4" />

@@ -17,6 +17,7 @@ from models.database import get_db
 from models.models import MasterUser
 from routers.auth import get_current_user
 from utils.rbac import require_admin
+from utils.feature_gate import require_feature
 from services.cloud_storage_service import CloudStorageService
 from services.attachment_migration_service import AttachmentMigrationService
 from services.storage_monitoring_service import StorageMonitoringService
@@ -25,7 +26,11 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/cloud-storage", tags=["cloud-storage"])
+router = APIRouter(
+    prefix="/cloud-storage",
+    tags=["cloud-storage"],
+    dependencies=[Depends(lambda db=Depends(get_db): require_feature("cloud_storage")(lambda: None)())]
+)
 
 
 # Pydantic models for request/response

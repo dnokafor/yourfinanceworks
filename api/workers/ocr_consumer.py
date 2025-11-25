@@ -90,6 +90,7 @@ class ProcessingStatus(Enum):
     QUEUED = "queued"
     PROCESSING = "processing"
     DONE = "done"
+    COMPLETED = "completed"  # For invoice processing tasks
     FAILED = "failed"
     SKIPPED = "skipped"
 
@@ -849,7 +850,7 @@ class BankStatementMessageHandler(BaseMessageHandler):
     async def _release_processing_lock(self, lock_type: str, item_id: Union[int, str]):
         """Release processing lock"""
         try:
-            await release_processing_lock(lock_type, item_id)
+            release_processing_lock(lock_type, item_id)
             self.logger.info(f"Released processing lock for {lock_type} {item_id}")
         except Exception as e:
             self.logger.warning(f"Failed to release processing lock: {e}")
@@ -1078,7 +1079,7 @@ class InvoiceMessageHandler(BaseMessageHandler):
                     }
                     
                     # Update task with results
-                    task.status = ProcessingStatus.DONE.value
+                    task.status = ProcessingStatus.COMPLETED.value
                     task.result_data = result_data
                     task.completed_at = datetime.now(timezone.utc)
                     task.updated_at = datetime.now(timezone.utc)
@@ -1235,7 +1236,7 @@ class InvoiceMessageHandler(BaseMessageHandler):
     async def _release_processing_lock(self, lock_type: str, item_id: Union[int, str]):
         """Release processing lock"""
         try:
-            await release_processing_lock(lock_type, item_id)
+            release_processing_lock(lock_type, item_id)
             self.logger.info(f"Released processing lock for {lock_type} {item_id}")
         except Exception as e:
             self.logger.warning(f"Failed to release processing lock: {e}")

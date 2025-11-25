@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CurrencySelector } from '@/components/ui/currency-selector';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Upload, X, Package, Eye } from 'lucide-react';
+import { CalendarIcon, Upload, X, Package, Eye, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { expenseApi, approvalApi, Expense, ExpenseAttachmentMeta, linkApi } from '@/lib/api';
@@ -22,12 +22,16 @@ import { Label } from '@/components/ui/label';
 import { Users } from 'lucide-react';
 import { InventoryConsumptionForm } from '@/components/inventory/InventoryConsumptionForm';
 import { ApprovalSubmissionDialog } from '@/components/expenses/ApprovalSubmissionDialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useFeatures } from '@/contexts/FeatureContext';
 
 export default function ExpensesEdit() {
   const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const categoryOptions = EXPENSE_CATEGORY_OPTIONS;
+  const { isFeatureEnabled } = useFeatures();
+  const hasAIExpenseFeature = isFeatureEnabled('ai_expense');
   const [form, setForm] = useState<Partial<Expense>>({ currency: 'USD' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -526,6 +530,15 @@ export default function ExpensesEdit() {
               <label className="text-sm">{t('expenses.max_attachments')}</label>
               {(form as any)?.analysis_status === 'done' && (
                 <div className="text-xs text-muted-foreground mt-1">{t('expenses.attachments_cannot_delete', { defaultValue: 'Attachments cannot be deleted after analysis is completed.' })}</div>
+              )}
+              {!hasAIExpenseFeature && (
+                <Alert className="my-3 border-amber-200 bg-amber-50">
+                  <AlertCircle className="h-4 w-4 text-amber-600" />
+                  <AlertDescription className="text-amber-800">
+                    <strong>Note:</strong> AI-powered receipt analysis is not available in your current plan. 
+                    Files will be uploaded as attachments only, without automatic data extraction.
+                  </AlertDescription>
+                </Alert>
               )}
               <div className="flex items-center gap-3">
                 <label className="inline-flex items-center gap-2 cursor-pointer">

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from routers.auth import get_current_user
 from models.models import MasterUser
 from utils.rbac import require_non_viewer
+from utils.feature_gate import require_feature
 from services.statement_service import extract_transactions_from_pdf_paths
 from models.models_per_tenant import BankStatement, BankStatementTransaction
 from datetime import datetime
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.post("/upload", response_model=Dict[str, Any])
+@require_feature("ai_bank_statement")
 async def upload_statements(
     files: List[UploadFile] = File(..., description="Up to 12 PDF or CSV statements"),
     db: Session = Depends(get_db),
@@ -275,6 +277,7 @@ async def get_statement(
 
 
 @router.post("/{statement_id}/reprocess", response_model=Dict[str, Any])
+@require_feature("ai_bank_statement")
 async def reprocess_statement(
     statement_id: int,
     db: Session = Depends(get_db),

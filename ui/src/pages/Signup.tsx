@@ -250,6 +250,8 @@ const Signup: React.FC = () => {
         // Store token and user info
         localStorage.setItem('token', data.access_token);
         localStorage.setItem('user', JSON.stringify(data.user));
+        // Dispatch custom event to notify FeatureContext
+        window.dispatchEvent(new Event('auth-changed'));
         navigate('/dashboard');
       } else {
         // Join existing organization - submit join request

@@ -13,7 +13,9 @@ import { CurrencyDisplay } from '@/components/ui/currency-display';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, X, Eye } from 'lucide-react';
+import { CalendarIcon, X, Eye, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useFeatures } from '@/contexts/FeatureContext';
 import { BulkExpenseModal } from '@/components/BulkExpenseModal';
 import { InventoryConsumptionForm } from '@/components/inventory/InventoryConsumptionForm';
 import { ExpenseApprovalStatus } from '@/components/approvals/ExpenseApprovalStatus';
@@ -78,6 +80,8 @@ const defaultNewExpense: Partial<Expense> = {
 
 const Expenses = () => {
   const { t } = useTranslation();
+  const { isFeatureEnabled } = useFeatures();
+  const hasAIExpenseFeature = isFeatureEnabled('ai_expense');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const categoryOptions = EXPENSE_CATEGORY_OPTIONS;
   const [loading, setLoading] = useState(true);
@@ -1207,6 +1211,15 @@ const Expenses = () => {
               </div>
               <div className="sm:col-span-2">
                 <label className="text-sm">{t('expenses.labels.receipt')}</label>
+                {!hasAIExpenseFeature && (
+                  <Alert className="mb-3 border-amber-200 bg-amber-50">
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="text-amber-800 text-sm">
+                      <strong>Note:</strong> AI-powered receipt analysis is not available. 
+                      Files will be uploaded as attachments only, without automatic data extraction.
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <input
                   type="file"
                   accept="application/pdf,image/jpeg,image/png"
@@ -1445,6 +1458,15 @@ const Expenses = () => {
               </div>
               <div className="sm:col-span-2">
                 <label className="text-sm">{t('expenses.labels.receipt')}</label>
+                {!hasAIExpenseFeature && (
+                  <Alert className="mb-3 border-amber-200 bg-amber-50">
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="text-amber-800 text-sm">
+                      <strong>Note:</strong> AI-powered receipt analysis is not available. 
+                      Files will be uploaded as attachments only, without automatic data extraction.
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <input
                   type="file"
                   accept="application/pdf,image/jpeg,image/png"

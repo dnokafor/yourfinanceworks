@@ -13,6 +13,7 @@ from models.models_per_tenant import Client, Invoice, Payment, User
 from schemas.client import ClientCreate
 from schemas.invoice import InvoiceCreate
 from services.tenant_database_manager import tenant_db_manager
+from utils.feature_gate import require_feature
 from sqlalchemy import func, Float
 
 logger = logging.getLogger(__name__)
@@ -633,6 +634,7 @@ class SlackInvoiceBot:
 bot = SlackInvoiceBot()
 
 @router.post("/commands")
+@require_feature("slack_integration")
 async def handle_slack_command(request: Request, db: Session = Depends(get_slack_db)):
     """Handle Slack slash commands"""
     try:
@@ -663,6 +665,7 @@ async def handle_slack_command(request: Request, db: Session = Depends(get_slack
         })
 
 @router.get("/health")
+@require_feature("slack_integration")
 async def slack_health_check():
     """Health check for Slack integration"""
     return {

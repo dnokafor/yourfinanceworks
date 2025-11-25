@@ -844,10 +844,12 @@ export async function apiRequest<T>(
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         localStorage.removeItem('selected_tenant_id');
-        // Show toast and redirect to login
-        toast.error('Session expired. Please log in again.');
-        // Use window.location.replace for reliability
-        setTimeout(() => window.location.replace('/login'), 100);
+        // Show toast and redirect to login only if not already on login page
+        if (!window.location.pathname.includes('/login')) {
+          toast.error('Session expired. Please log in again.');
+          // Use window.location.replace for reliability
+          setTimeout(() => window.location.replace('/login'), 100);
+        }
         throw new Error('Authentication failed. Please log in again.');
       }
       
@@ -870,7 +872,7 @@ export async function apiRequest<T>(
       }
 
       // Handle 400 errors that might be tenant context issues
-      if (response.status === 400 && errorData.detail && errorData.detail.includes('Tenant context required')) {
+      if (response.status === 400 && errorData.detail && typeof errorData.detail === 'string' && errorData.detail.includes('Tenant context required')) {
         // This is a session/tenant context issue - log out the user
         localStorage.removeItem('token');
         localStorage.removeItem('user');
@@ -892,16 +894,34 @@ export async function apiRequest<T>(
           
           console.error('Validation error:', errorMessages);
           throw new Error(`Validation error: ${errorMessages}`);
+        } else if (typeof errorData.detail === 'object' && errorData.detail !== null) {
+          // Handle object error details (e.g., {error: "CODE", message: "text"})
+          const message = errorData.detail.message || errorData.detail.error || JSON.stringify(errorData.detail);
+          console.error('API error:', errorData.detail);
+          throw new Error(message);
         } else {
-          // Handle other error detail formats
+          // Handle string error details
           console.error('API error:', errorData.detail);
           throw new Error(String(errorData.detail));
         }
       }
 
-      // Handle other errors
-      const errorMessage = errorData.detail || `Error: ${response.status} ${response.statusText}`;
-      throw new Error(errorMessage);
+      // Handle other errors with object details
+      if (errorData.detail) {
+        let errorMessage: string;
+        if (typeof errorData.detail === 'string') {
+          errorMessage = errorData.detail;
+        } else if (typeof errorData.detail === 'object' && errorData.detail !== null) {
+          // Handle object error details (e.g., {error: "CODE", message: "text"})
+          errorMessage = errorData.detail.message || errorData.detail.error || JSON.stringify(errorData.detail);
+        } else {
+          errorMessage = String(errorData.detail);
+        }
+        throw new Error(errorMessage);
+      }
+
+      // Fallback error message
+      throw new Error(`Error: ${response.status} ${response.statusText}`);
     }
 
     // For DELETE requests with 204 No Content
@@ -3140,6 +3160,74 @@ export const exportDestinationApi = {
   // Test connection to an export destination
   testConnection: (id: number) =>
     apiRequest<ExportDestinationTestResult>(`/export-destinations/${id}/test`, {
+      method: 'POST',
+    }),
+};
+
+// ============================================================================
+// License Management API
+// ============================================================================
+
+export interface LicenseStatus {
+  installation_id: string;
+  is_trial: boolean;
+  trial_start_date?: string;
+  trial_end_date?: string;
+  trial_days_remaining?: number;
+  is_licensed: boolean;
+  license_key?: string;
+  license_expires_at?: string;
+  license_days_remaining?: number;
+  in_grace_period: boolean;
+  enabled_features: string[];
+}
+
+export interface LicenseFeatureInfo {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  enabled: boolean;
+}
+
+export interface LicenseFeaturesResponse {
+  features: Record<string, boolean>;
+  feature_list: LicenseFeatureInfo[];
+  license_status: {
+    is_trial: boolean;
+    trial_days_remaining?: number;
+    is_licensed: boolean;
+    license_expires_at?: string;
+    license_days_remaining?: number;
+    in_grace_period: boolean;
+  };
+}
+
+export const licenseApi = {
+  // Get license status
+  getStatus: () =>
+    apiRequest<LicenseStatus>('/license/status'),
+
+  // Get enabled features
+  getFeatures: () =>
+    apiRequest<LicenseFeaturesResponse>('/license/features'),
+
+  // Activate a license
+  activateLicense: (licenseKey: string) =>
+    apiRequest<{ success: boolean; message: string }>('/license/activate', {
+      method: 'POST',
+      body: JSON.stringify({ license_key: licenseKey }),
+    }),
+
+  // Deactivate current license
+  deactivateLicense: () =>
+    apiRequest<{ success: boolean; message: string }>('/license/deactivate', {
+      method: 'POST',
+    }),
+
+  // Validate current license
+  validateLicense: () =>
+    apiRequest<{ valid: boolean; message: string }>('/license/validate', {
       method: 'POST',
     }),
 };

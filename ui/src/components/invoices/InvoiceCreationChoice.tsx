@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { apiRequest } from "@/lib/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FeatureGate } from "@/components/FeatureGate";
 
 interface InvoiceCreationChoiceProps {
   onManualCreate: (attachment?: File) => void;
@@ -60,11 +61,11 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport, onInventory
     if (!selectedFile) return;
 
     setProcessing(true);
-    
+
     // Add processing notification
     const addNotification = (window as any).addAINotification;
     const notificationId = addNotification?.('processing', t('invoices.processing_invoice_pdf'), t('invoices.analyzing_with_ai', { fileName: selectedFile.name }));
-    
+
     try {
       // Check LLM configuration status
       const status = await checkLlmConfiguration();
@@ -90,26 +91,26 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport, onInventory
       // Poll for processing status
       const maxAttempts = 60; // 3 minutes with 3-second intervals
       let attempts = 0;
-      
+
       while (attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
-        
+
         try {
           const statusResponse = await apiRequest<any>(`/invoices/process-status/${taskId}`);
           console.log('Processing status:', statusResponse.status);
-          
+
           if (statusResponse.status === 'completed') {
             // Success! Extract the data
             addNotification?.('success', t('invoices.invoice_pdf_processed'), t('invoices.successfully_extracted_data', { fileName: selectedFile.name }));
             toast.success(t('invoices.pdf_processed_successfully'));
-            
+
             const payload = statusResponse.data?.invoice_data || statusResponse.data;
             onPdfImport(payload, selectedFile);
             return;
           } else if (statusResponse.status === 'failed') {
             throw new Error(statusResponse.error || 'Processing failed');
           }
-          
+
           // Still processing, continue polling
           attempts++;
         } catch (pollError) {
@@ -117,10 +118,10 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport, onInventory
           attempts++;
         }
       }
-      
+
       // Timeout
       throw new Error('Processing timeout - please try again');
-      
+
     } catch (error) {
       console.error('PDF processing error:', error);
       // Update notification to error
@@ -145,47 +146,49 @@ export function InvoiceCreationChoice({ onManualCreate, onPdfImport, onInventory
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* PDF Import Option */}
-        <Card className="cursor-pointer hover:shadow-lg transition-shadow">
-          <CardHeader className="text-center">
-            <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-              <Upload className="w-8 h-8 text-blue-600" />
-            </div>
-            <CardTitle className="text-xl">{t('invoices.import_from_pdf')}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground text-center">
-              {t('invoices.upload_pdf_to_extract_invoice_details')}
-            </p>
-            
-            <div className="space-y-3">
-              <div>
-                <Label htmlFor="pdf-upload">{t('invoices.select_pdf_file')}</Label>
-                <Input
-                  id="pdf-upload"
-                  type="file"
-                  accept=".pdf"
-                  onChange={(e) => handleFileSelect(e)}
-                  className="cursor-pointer"
-                />
+        <FeatureGate feature="ai_invoice">
+          <Card className="cursor-pointer hover:shadow-lg transition-shadow">
+            <CardHeader className="text-center">
+              <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                <Upload className="w-8 h-8 text-blue-600" />
               </div>
+              <CardTitle className="text-xl">{t('invoices.import_from_pdf')}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground text-center">
+                {t('invoices.upload_pdf_to_extract_invoice_details')}
+              </p>
 
-              {selectedFile && (
-                <div className="text-sm text-green-600 bg-green-50 p-2 rounded">
-                  {t('invoices.selected_file')}: {selectedFile.name}
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="pdf-upload">{t('invoices.select_pdf_file')}</Label>
+                  <Input
+                    id="pdf-upload"
+                    type="file"
+                    accept=".pdf"
+                    onChange={(e) => handleFileSelect(e)}
+                    className="cursor-pointer"
+                  />
                 </div>
-              )}
 
-              <Button
-                onClick={processPdfImport}
-                disabled={!selectedFile || processing}
-                className="w-full"
-              >
-                {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {processing ? t('invoices.processing_pdf') : t('invoices.import_from_pdf')}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+                {selectedFile && (
+                  <div className="text-sm text-green-600 bg-green-50 p-2 rounded">
+                    {t('invoices.selected_file')}: {selectedFile.name}
+                  </div>
+                )}
+
+                <Button
+                  onClick={processPdfImport}
+                  disabled={!selectedFile || processing}
+                  className="w-full"
+                >
+                  {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {processing ? t('invoices.processing_pdf') : t('invoices.import_from_pdf')}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </FeatureGate>
 
         {/* Manual Creation Option */}
         <Card className="cursor-pointer hover:shadow-lg transition-shadow">

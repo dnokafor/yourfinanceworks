@@ -1,6 +1,66 @@
 # FastMCP Refactoring Changes
 
-## Latest Changes (2024-12-19)
+## Latest Changes (2025-11-23)
+
+### 🔐 Licensing System Integration
+
+#### Feature-Gated MCP Tools
+The MCP server now respects the application's licensing system for premium features:
+
+**AI-Powered Features (require respective licenses):**
+- `ai_invoice` - Invoice PDF processing and AI extraction
+- `ai_expense` - Expense receipt analysis and data extraction
+- `ai_bank_statement` - Bank statement OCR and transaction matching
+- `ai_chat` - AI assistant and natural language queries
+
+**Business Features (require business license):**
+- `api_keys` - API client management and external integrations
+- `batch_processing` - Bulk file processing operations
+
+**Integration Features:**
+- `cloud_storage` - Cloud storage provider management
+- `tax_integration` - Tax calculation and reporting
+- `slack_integration` - Slack notifications and webhooks
+- `sso` - Single sign-on authentication
+
+**Advanced Features:**
+- `approvals` - Approval workflow management
+- `advanced_search` - Enhanced search capabilities
+- `reporting` - Advanced analytics and reports
+
+#### MCP Tool Behavior with Licensing
+- Tools automatically check license status before execution
+- Unlicensed features return clear error messages with upgrade instructions
+- Personal use installations get all features free forever
+- Business use installations require license after 30-day trial
+- Environment variable overrides available for self-hosted deployments
+
+#### Example Usage with Licensing
+```bash
+# With ai_expense license:
+"List all expenses from this quarter"  # ✅ Works
+"Upload receipt for expense analysis"  # ✅ Works with AI
+
+# Without ai_expense license:
+"List all expenses from this quarter"  # ✅ Works (basic listing)
+"Upload receipt for expense analysis"  # ⚠️ Uploads work, AI analysis skipped
+
+# With business license:
+"Create API client for external integration"  # ✅ Works
+
+# Without business license (personal use):
+"Create API client for external integration"  # ❌ Requires business license
+```
+
+#### License Status in MCP
+- MCP tools respect the same license checks as the web UI
+- Trial period countdown visible in tool responses
+- Grace period warnings for expired licenses
+- Clear upgrade paths provided in error messages
+
+---
+
+## Previous Changes (2024-12-19)
 
 ### AI-Powered Intent Classification for MCP Integration
 

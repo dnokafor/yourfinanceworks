@@ -16,6 +16,7 @@ from models.models import MasterUser
 from models.api_models import APIClient
 from models.models_per_tenant import BatchProcessingJob
 from routers.auth import get_current_user
+from utils.feature_gate import require_feature
 from services.batch_processing_service import BatchProcessingService
 from services.rate_limiter_service import get_rate_limiter
 from utils.audit import log_audit_event
@@ -163,6 +164,7 @@ def get_batch_processing_service(
     summary="Upload batch of files for processing",
     description="Upload up to 50 files for batch OCR processing and export. Requires API key authentication via X-API-Key header."
 )
+@require_feature("batch_processing")
 async def upload_batch(
     files: List[UploadFile] = File(..., description="Files to process (max 50)"),
     export_destination_id: Optional[int] = Form(None, description="Export destination configuration ID (uses default if not provided)"),
@@ -446,6 +448,7 @@ async def upload_batch(
     summary="Get batch job status",
     description="Get detailed status and progress of a batch processing job. Requires API key authentication via X-API-Key header."
 )
+@require_feature("batch_processing")
 async def get_job_status(
     job_id: str,
     auth_context: tuple = Depends(get_api_key_auth),
@@ -534,6 +537,7 @@ async def get_job_status(
     summary="List batch jobs",
     description="List all batch processing jobs for the authenticated API client. Requires API key authentication via X-API-Key header."
 )
+@require_feature("batch_processing")
 async def list_jobs(
     status_filter: Optional[str] = None,
     limit: int = 20,

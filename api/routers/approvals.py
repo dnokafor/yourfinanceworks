@@ -35,11 +35,16 @@ from utils.rbac import (
     require_non_viewer, require_admin, require_approval_submission,
     require_approval_permission
 )
+from utils.feature_gate import require_feature
 from utils.audit import log_audit_event
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/approvals", tags=["approvals"])
+router = APIRouter(
+    prefix="/approvals",
+    tags=["approvals"],
+    dependencies=[Depends(lambda db=Depends(get_db): require_feature("approvals")(lambda: None)())]
+)
 
 
 def get_approval_service(db: Session = Depends(get_db)) -> ApprovalService:

@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CurrencySelector } from '@/components/ui/currency-selector';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Upload, Package } from 'lucide-react';
+import { CalendarIcon, Upload, Package, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { expenseApi, approvalApi, Expense, linkApi } from '@/lib/api';
@@ -21,11 +21,15 @@ import { Label } from '@/components/ui/label';
 import { Users } from 'lucide-react';
 import { ApprovalSubmissionDialog } from '@/components/expenses/ApprovalSubmissionDialog';
 import { useTranslation } from 'react-i18next';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useFeatures } from '@/contexts/FeatureContext';
 
 export default function ExpensesNew() {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const categoryOptions = EXPENSE_CATEGORY_OPTIONS;
+  const { isFeatureEnabled } = useFeatures();
+  const hasAIExpenseFeature = isFeatureEnabled('ai_expense');
 
   // Get prefill values from URL parameters
   const prefillAmount = searchParams.get('amount');
@@ -501,6 +505,16 @@ export default function ExpensesNew() {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {!hasAIExpenseFeature && (
+              <Alert className="mb-4 border-amber-200 bg-amber-50">
+                <AlertCircle className="h-4 w-4 text-amber-600" />
+                <AlertDescription className="text-amber-800">
+                  <strong>Note:</strong> AI-powered receipt analysis is not available in your current plan. 
+                  Files will be uploaded as attachments only, without automatic data extraction. 
+                  Please enter expense details manually.
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="sm:col-span-2">
               <FileUpload
                 title={t('expenses.receipt_attachments_max_10')}

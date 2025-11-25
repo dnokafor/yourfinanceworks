@@ -249,7 +249,7 @@
     "results_footer": "Found {{count}} results • Press Enter to select • Esc to close",
     "entity_types": {
       "invoices": "Invoices",
-      "clients": "Clients", 
+      "clients": "Clients",
       "payments": "Payments",
       "expenses": "Expenses",
       "statements": "Statements",
@@ -2436,6 +2436,7 @@
       "pending": "Pending",
       "completed": "Completed",
       "snoozed": "Snoozed",
+      "snoozed_until": "Snoozed until",
       "cancelled": "Cancelled"
     },
     "actions": {

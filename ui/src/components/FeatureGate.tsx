@@ -1,0 +1,114 @@
+import React from 'react';
+import { useFeatures } from '@/contexts/FeatureContext';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Lock, AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Link } from 'react-router-dom';
+
+interface FeatureGateProps {
+  feature: string;
+  children: React.ReactNode;
+  fallback?: React.ReactNode;
+  showUpgradePrompt?: boolean;
+  upgradeMessage?: string;
+}
+
+export const FeatureGate: React.FC<FeatureGateProps> = ({
+  feature,
+  children,
+  fallback,
+  showUpgradePrompt = false,
+  upgradeMessage,
+}) => {
+  const { isFeatureEnabled, loading, licenseStatus } = useFeatures();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-4">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
+
+  if (!isFeatureEnabled(feature)) {
+    if (showUpgradePrompt) {
+      const defaultMessage = upgradeMessage || `This feature requires a license upgrade.`;
+      const isTrialExpired = licenseStatus && licenseStatus.is_trial && (licenseStatus.trial_days_remaining || 0) <= 0;
+      const isLicenseExpired = licenseStatus && licenseStatus.is_licensed && (licenseStatus.license_days_remaining || 0) <= 0;
+
+      return (
+        <Alert className="border-amber-200 bg-amber-50">
+          <Lock className="h-4 w-4 text-amber-600" />
+          <AlertTitle className="text-amber-900">Feature Locked</AlertTitle>
+          <AlertDescription className="text-amber-800">
+            <p className="mb-3">{defaultMessage}</p>
+            {isTrialExpired && (
+              <p className="mb-3 text-sm">Your trial period has ended. Activate a license to continue using this feature.</p>
+            )}
+            {isLicenseExpired && (
+              <p className="mb-3 text-sm">Your license has expired. Please renew to continue using this feature.</p>
+            )}
+            <div className="flex gap-2">
+              <Button asChild size="sm" variant="default">
+                <Link to="/settings?tab=license">Manage License</Link>
+              </Button>
+              <Button asChild size="sm" variant="outline">
+                <a href="https://your-pricing-page.com" target="_blank" rel="noopener noreferrer">
+                  View Pricing
+                </a>
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      );
+    }
+    
+    return fallback ? <>{fallback}</> : null;
+  }
+
+  return <>{children}</>;
+};
+
+interface FeatureAlertProps {
+  feature: string;
+  title?: string;
+  message?: string;
+}
+
+export const FeatureAlert: React.FC<FeatureAlertProps> = ({
+  feature,
+  title = 'Feature Not Available',
+  message,
+}) => {
+  const { licenseStatus } = useFeatures();
+  
+  const defaultMessage = message || `The ${feature} feature is not available in your current plan.`;
+  const isTrialExpired = licenseStatus && licenseStatus.is_trial && (licenseStatus.trial_days_remaining || 0) <= 0;
+  const isLicenseExpired = licenseStatus && licenseStatus.is_licensed && (licenseStatus.license_days_remaining || 0) <= 0;
+
+  return (
+    <Alert className="border-blue-200 bg-blue-50">
+      <AlertCircle className="h-4 w-4 text-blue-600" />
+      <AlertTitle className="text-blue-900">{title}</AlertTitle>
+      <AlertDescription className="text-blue-800">
+        <p className="mb-3">{defaultMessage}</p>
+        {isTrialExpired && (
+          <p className="mb-3 text-sm">Your trial period has ended. Activate a license to access this feature.</p>
+        )}
+        {isLicenseExpired && (
+          <p className="mb-3 text-sm">Your license has expired. Please renew to access this feature.</p>
+        )}
+        <div className="flex gap-2">
+          <Button asChild size="sm" variant="default">
+            <Link to="/settings?tab=license">Manage License</Link>
+          </Button>
+          <Button asChild size="sm" variant="outline">
+            <a href="https://your-pricing-page.com" target="_blank" rel="noopener noreferrer">
+              Learn More
+            </a>
+          </Button>
+        </div>
+      </AlertDescription>
+    </Alert>
+  );
+};

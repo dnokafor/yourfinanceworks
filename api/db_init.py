@@ -187,8 +187,10 @@ def sync_users_to_tenant_db(tenant_id: int):
             tenant_db = tenant_session()
             
             try:
-                # Check if admin user already exists in tenant database
-                existing_user = tenant_db.query(TenantUser).filter(TenantUser.email == admin_user.email).first()
+                # Check if admin user already exists in tenant database (by email or ID)
+                existing_user = tenant_db.query(TenantUser).filter(
+                    (TenantUser.email == admin_user.email) | (TenantUser.id == admin_user.id)
+                ).first()
                 
                 if not existing_user:
                     # Create admin user in tenant database
@@ -220,7 +222,7 @@ def sync_users_to_tenant_db(tenant_id: int):
                     existing_user.is_verified = admin_user.is_verified
                     existing_user.google_id = admin_user.google_id
                     existing_user.updated_at = datetime.now(timezone.utc)
-                    logger.info(f"Updated admin user {admin_user.email} in tenant database {tenant_id}")
+                    logger.info(f"Updated existing admin user {admin_user.email} in tenant database {tenant_id}")
                 
                 tenant_db.commit()
                 logger.info(f"Successfully synced admin user to tenant database {tenant_id}")

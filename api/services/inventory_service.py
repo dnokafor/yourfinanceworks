@@ -189,9 +189,23 @@ class InventoryService:
         ).scalar()
 
         # Check if item is used in expenses
-        expense_usage = self.db.query(func.count(Expense.id)).filter(
-            func.json_extract(Expense.inventory_items, '$[*].item_id') == str(item_id)
-        ).scalar()
+        # Check if item is used in expenses
+        # Note: inventory_items is encrypted, so we must fetch and check in Python
+        # This might be slow for large datasets, but necessary due to encryption
+        expenses = self.db.query(Expense).filter(
+            Expense.is_inventory_purchase == True
+        ).all()
+
+        expense_usage = 0
+        for expense in expenses:
+            if expense.inventory_items:
+                for inv_item in expense.inventory_items:
+                    # Check for item_id match (handle string/int comparison)
+                    if str(inv_item.get('item_id')) == str(item_id):
+                        expense_usage = 1
+                        break
+            if expense_usage > 0:
+                break
 
         if invoice_usage > 0 or expense_usage > 0:
             raise ValueError("Cannot delete item that is used in invoices or expenses")
@@ -202,7 +216,7 @@ class InventoryService:
             attachments = self.db.query(ItemAttachment).filter(
                 ItemAttachment.item_id == item_id
             ).all()
-            
+
             for att in attachments:
                 if att.file_path:
                     await delete_file_from_storage(att.file_path, tenant_id, user_id, self.db)
@@ -428,24 +442,22 @@ class InventoryService:
         sales_data = {row.item_id: row for row in sales_query.all()}
 
         # Get purchase data from expenses
-        purchase_query = self.db.query(
-            func.json_extract(Expense.inventory_items, '$[*].item_id').label('item_ids'),
-            func.json_extract(Expense.inventory_items, '$[*].quantity').label('quantities'),
-            func.json_extract(Expense.inventory_items, '$[*].unit_cost').label('unit_costs'),
-            Expense.expense_date
-        ).filter(
+        # Note: inventory_items is encrypted, so we must fetch and process in Python
+        expenses = self.db.query(Expense).filter(
             Expense.is_inventory_purchase == True,
             Expense.expense_date.between(start_date, end_date)
-        )
+        ).all()
 
         purchase_data = {}
-        for row in purchase_query.all():
-            if row.item_ids and row.quantities and row.unit_costs:
-                for i, item_id in enumerate(row.item_ids):
-                    if i < len(row.quantities) and i < len(row.unit_costs):
+        for expense in expenses:
+            if expense.inventory_items:
+                for item in expense.inventory_items:
+                    item_id = item.get('item_id')
+                    quantity = float(item.get('quantity', 0))
+                    unit_cost = float(item.get('unit_cost', 0))
+
+                    if item_id:
                         item_id_int = int(item_id)
-                        quantity = float(row.quantities[i])
-                        unit_cost = float(row.unit_costs[i])
 
                         if item_id_int not in purchase_data:
                             purchase_data[item_id_int] = {

@@ -33,6 +33,8 @@ const Login = () => {
       // Store token and user info
       localStorage.setItem("token", data.access_token);
       localStorage.setItem("user", JSON.stringify(data.user));
+      // Dispatch custom event to notify FeatureContext
+      window.dispatchEvent(new Event('auth-changed'));
       toast.success(t('auth.login_success'));
       navigate("/dashboard");
     } catch (error: any) {
@@ -72,6 +74,8 @@ const Login = () => {
           const user = JSON.parse(userJson);
           localStorage.setItem('token', token);
           localStorage.setItem('user', JSON.stringify(user));
+          // Dispatch custom event to notify FeatureContext
+          window.dispatchEvent(new Event('auth-changed'));
           // Clear hash and navigate
           window.history.replaceState(null, '', next);
           navigate(next, { replace: true });

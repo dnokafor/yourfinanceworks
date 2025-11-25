@@ -32,7 +32,10 @@ from exceptions.inventory_exceptions import InventoryException
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/inventory", tags=["inventory"])
+router = APIRouter(
+    prefix="/inventory",
+    tags=["inventory"]
+)
 
 
 # Dependency to get inventory service

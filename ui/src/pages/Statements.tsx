@@ -13,12 +13,14 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { CalendarIcon, Upload, ArrowLeft, Eye, Download, ExternalLink, Trash2, FileText, Plus, Copy, X, Edit, MoreHorizontal } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
 import { bankStatementApi, BankTransactionEntry, BankStatementDetail, BankStatementSummary, expenseApi, invoiceApi, clientApi } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { InvoiceForm } from '@/components/invoices/InvoiceForm';
+import { useFeatures } from '@/contexts/FeatureContext';
 
 const CATEGORY_OPTIONS = [
   'Income', 'Food', 'Transportation', 'Shopping', 'Bills', 'Healthcare', 'Entertainment', 'Financial', 'Travel', 'Other'
@@ -34,6 +36,40 @@ const STATEMENT_PROVIDERS = [
 ];
 
 type BankRow = BankTransactionEntry & { id?: number; invoice_id?: number | null; expense_id?: number | null; backend_id?: number | null };
+
+// Statement Upload Button with feature gating
+function StatementUploadButton({ onUpload }: { onUpload: () => void }) {
+  const { t } = useTranslation();
+  const { isFeatureEnabled } = useFeatures();
+  const hasFeature = isFeatureEnabled('ai_bank_statement');
+
+  if (!hasFeature) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>
+              <Button disabled className="opacity-50 cursor-not-allowed">
+                <Plus className="w-4 h-4 mr-2" />
+                {t('statements.new_statement', { defaultValue: 'New Statement' })}
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Bank statement processing requires the ai_bank_statement feature. Please upgrade your plan.</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  return (
+    <Button onClick={onUpload}>
+      <Plus className="w-4 h-4 mr-2" />
+      {t('statements.new_statement', { defaultValue: 'New Statement' })}
+    </Button>
+  );
+}
 
 // Helper function to format date without timezone issues
 const formatDateToISO = (date: Date): string => {
@@ -445,12 +481,7 @@ export default function Statements() {
             <h1 className="text-3xl font-bold">{t('statements.title')}</h1>
             <p className="text-muted-foreground">{t('statements.description')}</p>
           </div>
-          {!selected && (
-            <Button onClick={() => setUploadModalOpen(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              {t('statements.new_statement', { defaultValue: 'New Statement' })}
-            </Button>
-          )}
+          {!selected && <StatementUploadButton onUpload={() => setUploadModalOpen(true)} />}
         </div>
 
         {!selected && (

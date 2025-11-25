@@ -10,6 +10,7 @@ import { Textarea } from '../ui/textarea';
 import { Copy, Key, Trash2, RotateCcw, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../lib/api';
+import { FeatureGate } from '../FeatureGate';
 
 interface APIClient {
   id: number;
@@ -92,15 +93,78 @@ const OAUTH_SCOPES = [
 ];
 
 const APIClientManagement: React.FC = () => {
+  return (
+    <FeatureGate
+      feature="api_keys"
+      fallback={
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-12 shadow-sm border border-gray-200 dark:border-gray-700">
+          <div className="text-center max-w-2xl mx-auto">
+            <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Key className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">Business License Required</h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
+              API keys enable external system integration and automation - a clear indicator of business use.
+              Upgrade to a business license to create and manage API keys for your integrations.
+            </p>
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-6 mb-6">
+              <h4 className="font-semibold text-gray-900 dark:text-white mb-3">With Business License, you get:</h4>
+              <ul className="text-left space-y-2 text-gray-700 dark:text-gray-300">
+                <li className="flex items-start">
+                  <span className="text-blue-600 mr-2">✓</span>
+                  <span>Create up to 2 API keys for external integrations</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="text-blue-600 mr-2">✓</span>
+                  <span>Configurable rate limits and security settings</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="text-blue-600 mr-2">✓</span>
+                  <span>Webhook notifications for real-time updates</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="text-blue-600 mr-2">✓</span>
+                  <span>IP whitelisting for enhanced security</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="text-blue-600 mr-2">✓</span>
+                  <span>OAuth 2.0 client support for enterprise integrations</span>
+                </li>
+              </ul>
+            </div>
+            <div className="flex justify-center space-x-4">
+              <Button
+                onClick={() => window.location.href = '/settings?tab=license'}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                Upgrade to Business
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => window.open('https://docs.example.com/api-keys', '_blank')}
+              >
+                Learn More
+              </Button>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <APIClientManagementContent />
+    </FeatureGate>
+  );
+};
+
+const APIClientManagementContent: React.FC = () => {
   const [clients, setClients] = useState<APIClient[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showOAuthDialog, setShowOAuthDialog] = useState(false);
   const [showApiKey, setShowApiKey] = useState<APIKeyResponse | null>(null);
   const [showOAuthCredentials, setShowOAuthCredentials] = useState<any>(null);
-  const [showRevokeConfirm, setShowRevokeConfirm] = useState<{clientId: string, clientName: string} | null>(null);
-  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState<{clientId: string, clientName: string} | null>(null);
-  
+  const [showRevokeConfirm, setShowRevokeConfirm] = useState<{ clientId: string, clientName: string } | null>(null);
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState<{ clientId: string, clientName: string } | null>(null);
+
   // Create API key form state
   const [createForm, setCreateForm] = useState<APIKeyCreateRequest>({
     client_name: '',
@@ -162,17 +226,17 @@ const APIClientManagement: React.FC = () => {
         toast.error('Client name is required');
         return;
       }
-      
+
       if (createForm.allowed_document_types.length === 0) {
         toast.error('At least one document type is required');
         return;
       }
 
       const apiKeyResponse: APIKeyResponse = await api.post('/external-auth/api-keys', createForm);
-      
+
       setShowCreateDialog(false);
       setShowApiKey(apiKeyResponse);
-      
+
       // Reset form
       setCreateForm({
         client_name: '',
@@ -187,7 +251,7 @@ const APIClientManagement: React.FC = () => {
         is_sandbox: false,
         expires_in_days: undefined
       });
-      
+
       // Reload clients list
       await loadClients();
 
@@ -204,7 +268,7 @@ const APIClientManagement: React.FC = () => {
         toast.error('Client name is required');
         return;
       }
-      
+
       if (oauthForm.allowed_document_types.length === 0) {
         toast.error('At least one document type is required');
         return;
@@ -229,7 +293,7 @@ const APIClientManagement: React.FC = () => {
 
       setShowOAuthDialog(false);
       setShowOAuthCredentials(response);
-      
+
       // Reset form
       setOAuthForm({
         client_name: '',
@@ -241,7 +305,7 @@ const APIClientManagement: React.FC = () => {
         rate_limit_per_hour: 2000,
         rate_limit_per_day: 20000
       });
-      
+
       toast.success('OAuth client created successfully');
     } catch (error) {
       console.error('Failed to create OAuth client:', error);
@@ -255,7 +319,7 @@ const APIClientManagement: React.FC = () => {
 
   const confirmRevokeApiKey = async () => {
     if (!showRevokeConfirm) return;
-    
+
     try {
       await api.delete(`/external-auth/api-keys/${showRevokeConfirm.clientId}`);
       loadClients();
@@ -273,7 +337,7 @@ const APIClientManagement: React.FC = () => {
 
   const confirmRegenerateApiKey = async () => {
     if (!showRegenerateConfirm) return;
-    
+
     try {
       const apiKeyResponse: APIKeyResponse = await api.post(`/external-auth/api-keys/${showRegenerateConfirm.clientId}/regenerate`);
       setShowApiKey(apiKeyResponse);
@@ -397,14 +461,13 @@ const APIClientManagement: React.FC = () => {
             <div>
               <h2 className="text-2xl font-bold text-gray-900">API Clients</h2>
               <p className="text-gray-600">
-                Manage your API keys and OAuth clients 
-                <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${
-                  clients.length >= 2 
-                    ? 'bg-red-100 text-red-800' 
-                    : clients.length === 1 
-                    ? 'bg-yellow-100 text-yellow-800' 
-                    : 'bg-green-100 text-green-800'
-                }`}>
+                Manage your API keys and OAuth clients
+                <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${clients.length >= 2
+                    ? 'bg-red-100 text-red-800'
+                    : clients.length === 1
+                      ? 'bg-yellow-100 text-yellow-800'
+                      : 'bg-green-100 text-green-800'
+                  }`}>
                   {clients.length}/2 API keys used
                 </span>
               </p>
@@ -413,338 +476,337 @@ const APIClientManagement: React.FC = () => {
           <div className="flex space-x-3">
             <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
               <DialogTrigger asChild>
-                <button 
+                <button
                   disabled={clients.length >= 2}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center space-x-2 ${
-                    clients.length >= 2 
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center space-x-2 ${clients.length >= 2
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       : 'bg-blue-600 hover:bg-blue-700 text-white'
-                  }`}
+                    }`}
                   title={clients.length >= 2 ? 'Maximum of 2 API keys allowed per user' : 'Create a new API key'}
                 >
                   <Key className="w-4 h-4" />
                   <span>Create API Key {clients.length >= 2 ? `(${clients.length}/2)` : ''}</span>
                 </button>
               </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Create New API Key</DialogTitle>
-              </DialogHeader>
-              
-              {clients.length === 1 && (
-                <Alert>
-                  <AlertDescription>
-                    <strong>Note:</strong> You can create one more API key. Maximum limit is 2 API keys per account.
-                  </AlertDescription>
-                </Alert>
-              )}
-              
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="client_name">Client Name *</Label>
-                    <Input
-                      id="client_name"
-                      value={createForm.client_name}
-                      onChange={(e) => setCreateForm({ ...createForm, client_name: e.target.value })}
-                      placeholder="My Accounting System"
-                    />
-                  </div>
-                  
-                  <div>
-                    <Label>
-                      <Switch
-                        checked={createForm.is_sandbox}
-                        onCheckedChange={(checked) => setCreateForm({ ...createForm, is_sandbox: checked })}
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Create New API Key</DialogTitle>
+                </DialogHeader>
+
+                {clients.length === 1 && (
+                  <Alert>
+                    <AlertDescription>
+                      <strong>Note:</strong> You can create one more API key. Maximum limit is 2 API keys per account.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="space-y-6">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="client_name">Client Name *</Label>
+                      <Input
+                        id="client_name"
+                        value={createForm.client_name}
+                        onChange={(e) => setCreateForm({ ...createForm, client_name: e.target.value })}
+                        placeholder="My Accounting System"
                       />
-                      <span className="ml-2">Sandbox Mode</span>
-                    </Label>
-                  </div>
-                </div>
-                
-                <div>
-                  <Label htmlFor="client_description">Description</Label>
-                  <Textarea
-                    id="client_description"
-                    value={createForm.client_description}
-                    onChange={(e) => setCreateForm({ ...createForm, client_description: e.target.value })}
-                    placeholder="Integration with accounting software"
-                    rows={2}
-                  />
-                </div>
-                
-                <div>
-                  <Label>Document Types *</Label>
-                  <div className="grid grid-cols-1 gap-2 mt-2">
-                    {DOCUMENT_TYPES.map((type) => (
-                      <div key={type.value} className="flex items-center space-x-2">
+                    </div>
+
+                    <div>
+                      <Label>
                         <Switch
-                          id={type.value}
-                          checked={createForm.allowed_document_types.includes(type.value)}
-                          onCheckedChange={(checked) => handleDocumentTypeToggle(type.value, checked)}
+                          checked={createForm.is_sandbox}
+                          onCheckedChange={(checked) => setCreateForm({ ...createForm, is_sandbox: checked })}
                         />
-                        <Label htmlFor={type.value} className="text-sm">
-                          {type.label}
-                        </Label>
-                      </div>
-                    ))}
+                        <span className="ml-2">Sandbox Mode</span>
+                      </Label>
+                    </div>
                   </div>
-                </div>
 
-                <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <Label htmlFor="rate_limit_per_minute">Per Minute</Label>
-                    <Input
-                      id="rate_limit_per_minute"
-                      type="number"
-                      value={createForm.rate_limit_per_minute}
-                      onChange={(e) => setCreateForm({ ...createForm, rate_limit_per_minute: parseInt(e.target.value) })}
+                    <Label htmlFor="client_description">Description</Label>
+                    <Textarea
+                      id="client_description"
+                      value={createForm.client_description}
+                      onChange={(e) => setCreateForm({ ...createForm, client_description: e.target.value })}
+                      placeholder="Integration with accounting software"
+                      rows={2}
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="rate_limit_per_hour">Per Hour</Label>
-                    <Input
-                      id="rate_limit_per_hour"
-                      type="number"
-                      value={createForm.rate_limit_per_hour}
-                      onChange={(e) => setCreateForm({ ...createForm, rate_limit_per_hour: parseInt(e.target.value) })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="rate_limit_per_day">Per Day</Label>
-                    <Input
-                      id="rate_limit_per_day"
-                      type="number"
-                      value={createForm.rate_limit_per_day}
-                      onChange={(e) => setCreateForm({ ...createForm, rate_limit_per_day: parseInt(e.target.value) })}
-                    />
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="max_transaction_amount">Max Transaction Amount</Label>
-                    <Input
-                      id="max_transaction_amount"
-                      type="number"
-                      step="0.01"
-                      value={createForm.max_transaction_amount || ''}
-                      onChange={(e) => setCreateForm({ 
-                        ...createForm, 
-                        max_transaction_amount: e.target.value ? parseFloat(e.target.value) : undefined 
-                      })}
-                      placeholder="No limit"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="expires_in_days">Expires in Days</Label>
-                    <Input
-                      id="expires_in_days"
-                      type="number"
-                      value={createForm.expires_in_days || ''}
-                      onChange={(e) => setCreateForm({ 
-                        ...createForm, 
-                        expires_in_days: e.target.value ? parseInt(e.target.value) : undefined 
-                      })}
-                      placeholder="Never expires"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="webhook_url">Webhook URL</Label>
-                  <Input
-                    id="webhook_url"
-                    value={createForm.webhook_url}
-                    onChange={(e) => setCreateForm({ ...createForm, webhook_url: e.target.value })}
-                    placeholder="https://your-app.com/webhooks/invoice-system"
-                  />
-                </div>
-
-                <div>
-                  <Label>Allowed IP Addresses</Label>
-                  <div className="flex space-x-2 mt-2">
-                    <Input
-                      value={ipAddressInput}
-                      onChange={(e) => setIpAddressInput(e.target.value)}
-                      placeholder="192.168.1.100 or 10.0.0.0/24"
-                    />
-                    <Button type="button" onClick={addIpAddress} variant="outline">
-                      Add
-                    </Button>
-                  </div>
-                  {createForm.allowed_ip_addresses && createForm.allowed_ip_addresses.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {createForm.allowed_ip_addresses.map((ip) => (
-                        <Badge key={ip} variant="secondary" className="cursor-pointer" onClick={() => removeIpAddress(ip)}>
-                          {ip} ✕
-                        </Badge>
+                    <Label>Document Types *</Label>
+                    <div className="grid grid-cols-1 gap-2 mt-2">
+                      {DOCUMENT_TYPES.map((type) => (
+                        <div key={type.value} className="flex items-center space-x-2">
+                          <Switch
+                            id={type.value}
+                            checked={createForm.allowed_document_types.includes(type.value)}
+                            onCheckedChange={(checked) => handleDocumentTypeToggle(type.value, checked)}
+                          />
+                          <Label htmlFor={type.value} className="text-sm">
+                            {type.label}
+                          </Label>
+                        </div>
                       ))}
                     </div>
-                  )}
-                </div>
-                
-                <div className="flex justify-end space-x-2">
-                  <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={createApiKey}>
-                    Create API Key
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog open={showOAuthDialog} onOpenChange={setShowOAuthDialog}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Shield className="w-4 h-4 mr-2" />
-                Create OAuth Client
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Create OAuth 2.0 Client</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-6">
-                <Alert>
-                  <AlertDescription>
-                    OAuth clients are for enterprise integrations and require admin approval.
-                  </AlertDescription>
-                </Alert>
-
-                <div>
-                  <Label htmlFor="oauth_client_name">Client Name *</Label>
-                  <Input
-                    id="oauth_client_name"
-                    value={oauthForm.client_name}
-                    onChange={(e) => setOAuthForm({ ...oauthForm, client_name: e.target.value })}
-                    placeholder="Enterprise Integration"
-                  />
-                </div>
-                
-                <div>
-                  <Label htmlFor="oauth_client_description">Description</Label>
-                  <Textarea
-                    id="oauth_client_description"
-                    value={oauthForm.client_description}
-                    onChange={(e) => setOAuthForm({ ...oauthForm, client_description: e.target.value })}
-                    placeholder="OAuth client for enterprise system"
-                    rows={2}
-                  />
-                </div>
-
-                <div>
-                  <Label>OAuth Scopes *</Label>
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    {OAUTH_SCOPES.map((scope) => (
-                      <div key={scope.value} className="flex items-center space-x-2">
-                        <Switch
-                          id={scope.value}
-                          checked={oauthForm.scopes.includes(scope.value)}
-                          onCheckedChange={(checked) => handleOAuthScopeToggle(scope.value, checked)}
-                        />
-                        <Label htmlFor={scope.value} className="text-sm">
-                          {scope.label}
-                        </Label>
-                      </div>
-                    ))}
                   </div>
-                </div>
 
-                <div>
-                  <Label>Document Types *</Label>
-                  <div className="grid grid-cols-1 gap-2 mt-2">
-                    {DOCUMENT_TYPES.map((type) => (
-                      <div key={type.value} className="flex items-center space-x-2">
-                        <Switch
-                          id={`oauth_${type.value}`}
-                          checked={oauthForm.allowed_document_types.includes(type.value)}
-                          onCheckedChange={(checked) => handleOAuthDocumentTypeToggle(type.value, checked)}
-                        />
-                        <Label htmlFor={`oauth_${type.value}`} className="text-sm">
-                          {type.label}
-                        </Label>
-                      </div>
-                    ))}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="rate_limit_per_minute">Per Minute</Label>
+                      <Input
+                        id="rate_limit_per_minute"
+                        type="number"
+                        value={createForm.rate_limit_per_minute}
+                        onChange={(e) => setCreateForm({ ...createForm, rate_limit_per_minute: parseInt(e.target.value) })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="rate_limit_per_hour">Per Hour</Label>
+                      <Input
+                        id="rate_limit_per_hour"
+                        type="number"
+                        value={createForm.rate_limit_per_hour}
+                        onChange={(e) => setCreateForm({ ...createForm, rate_limit_per_hour: parseInt(e.target.value) })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="rate_limit_per_day">Per Day</Label>
+                      <Input
+                        id="rate_limit_per_day"
+                        type="number"
+                        value={createForm.rate_limit_per_day}
+                        onChange={(e) => setCreateForm({ ...createForm, rate_limit_per_day: parseInt(e.target.value) })}
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <div>
-                  <Label>Redirect URIs *</Label>
-                  <div className="flex space-x-2 mt-2">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="max_transaction_amount">Max Transaction Amount</Label>
+                      <Input
+                        id="max_transaction_amount"
+                        type="number"
+                        step="0.01"
+                        value={createForm.max_transaction_amount || ''}
+                        onChange={(e) => setCreateForm({
+                          ...createForm,
+                          max_transaction_amount: e.target.value ? parseFloat(e.target.value) : undefined
+                        })}
+                        placeholder="No limit"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="expires_in_days">Expires in Days</Label>
+                      <Input
+                        id="expires_in_days"
+                        type="number"
+                        value={createForm.expires_in_days || ''}
+                        onChange={(e) => setCreateForm({
+                          ...createForm,
+                          expires_in_days: e.target.value ? parseInt(e.target.value) : undefined
+                        })}
+                        placeholder="Never expires"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="webhook_url">Webhook URL</Label>
                     <Input
-                      value={redirectUriInput}
-                      onChange={(e) => setRedirectUriInput(e.target.value)}
-                      placeholder="https://your-app.com/oauth/callback"
+                      id="webhook_url"
+                      value={createForm.webhook_url}
+                      onChange={(e) => setCreateForm({ ...createForm, webhook_url: e.target.value })}
+                      placeholder="https://your-app.com/webhooks/invoice-system"
                     />
-                    <Button type="button" onClick={addRedirectUri} variant="outline">
-                      Add
+                  </div>
+
+                  <div>
+                    <Label>Allowed IP Addresses</Label>
+                    <div className="flex space-x-2 mt-2">
+                      <Input
+                        value={ipAddressInput}
+                        onChange={(e) => setIpAddressInput(e.target.value)}
+                        placeholder="192.168.1.100 or 10.0.0.0/24"
+                      />
+                      <Button type="button" onClick={addIpAddress} variant="outline">
+                        Add
+                      </Button>
+                    </div>
+                    {createForm.allowed_ip_addresses && createForm.allowed_ip_addresses.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {createForm.allowed_ip_addresses.map((ip) => (
+                          <Badge key={ip} variant="secondary" className="cursor-pointer" onClick={() => removeIpAddress(ip)}>
+                            {ip} ✕
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-end space-x-2">
+                    <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={createApiKey}>
+                      Create API Key
                     </Button>
                   </div>
-                  {oauthForm.redirect_uris.filter(uri => uri.trim()).length > 0 && (
-                    <div className="space-y-2 mt-2">
-                      {oauthForm.redirect_uris.map((uri, index) => (
-                        uri.trim() && (
-                          <div key={index} className="flex items-center space-x-2">
-                            <Input value={uri} readOnly />
-                            <Button 
-                              type="button" 
-                              onClick={() => removeRedirectUri(index)} 
-                              variant="outline" 
-                              size="sm"
-                            >
-                              Remove
-                            </Button>
-                          </div>
-                        )
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={showOAuthDialog} onOpenChange={setShowOAuthDialog}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Shield className="w-4 h-4 mr-2" />
+                  Create OAuth Client
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Create OAuth 2.0 Client</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-6">
+                  <Alert>
+                    <AlertDescription>
+                      OAuth clients are for enterprise integrations and require admin approval.
+                    </AlertDescription>
+                  </Alert>
+
+                  <div>
+                    <Label htmlFor="oauth_client_name">Client Name *</Label>
+                    <Input
+                      id="oauth_client_name"
+                      value={oauthForm.client_name}
+                      onChange={(e) => setOAuthForm({ ...oauthForm, client_name: e.target.value })}
+                      placeholder="Enterprise Integration"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="oauth_client_description">Description</Label>
+                    <Textarea
+                      id="oauth_client_description"
+                      value={oauthForm.client_description}
+                      onChange={(e) => setOAuthForm({ ...oauthForm, client_description: e.target.value })}
+                      placeholder="OAuth client for enterprise system"
+                      rows={2}
+                    />
+                  </div>
+
+                  <div>
+                    <Label>OAuth Scopes *</Label>
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      {OAUTH_SCOPES.map((scope) => (
+                        <div key={scope.value} className="flex items-center space-x-2">
+                          <Switch
+                            id={scope.value}
+                            checked={oauthForm.scopes.includes(scope.value)}
+                            onCheckedChange={(checked) => handleOAuthScopeToggle(scope.value, checked)}
+                          />
+                          <Label htmlFor={scope.value} className="text-sm">
+                            {scope.label}
+                          </Label>
+                        </div>
                       ))}
                     </div>
-                  )}
-                </div>
+                  </div>
 
-                <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <Label htmlFor="oauth_rate_limit_per_minute">Per Minute</Label>
-                    <Input
-                      id="oauth_rate_limit_per_minute"
-                      type="number"
-                      value={oauthForm.rate_limit_per_minute}
-                      onChange={(e) => setOAuthForm({ ...oauthForm, rate_limit_per_minute: parseInt(e.target.value) })}
-                    />
+                    <Label>Document Types *</Label>
+                    <div className="grid grid-cols-1 gap-2 mt-2">
+                      {DOCUMENT_TYPES.map((type) => (
+                        <div key={type.value} className="flex items-center space-x-2">
+                          <Switch
+                            id={`oauth_${type.value}`}
+                            checked={oauthForm.allowed_document_types.includes(type.value)}
+                            onCheckedChange={(checked) => handleOAuthDocumentTypeToggle(type.value, checked)}
+                          />
+                          <Label htmlFor={`oauth_${type.value}`} className="text-sm">
+                            {type.label}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
                   </div>
+
                   <div>
-                    <Label htmlFor="oauth_rate_limit_per_hour">Per Hour</Label>
-                    <Input
-                      id="oauth_rate_limit_per_hour"
-                      type="number"
-                      value={oauthForm.rate_limit_per_hour}
-                      onChange={(e) => setOAuthForm({ ...oauthForm, rate_limit_per_hour: parseInt(e.target.value) })}
-                    />
+                    <Label>Redirect URIs *</Label>
+                    <div className="flex space-x-2 mt-2">
+                      <Input
+                        value={redirectUriInput}
+                        onChange={(e) => setRedirectUriInput(e.target.value)}
+                        placeholder="https://your-app.com/oauth/callback"
+                      />
+                      <Button type="button" onClick={addRedirectUri} variant="outline">
+                        Add
+                      </Button>
+                    </div>
+                    {oauthForm.redirect_uris.filter(uri => uri.trim()).length > 0 && (
+                      <div className="space-y-2 mt-2">
+                        {oauthForm.redirect_uris.map((uri, index) => (
+                          uri.trim() && (
+                            <div key={index} className="flex items-center space-x-2">
+                              <Input value={uri} readOnly />
+                              <Button
+                                type="button"
+                                onClick={() => removeRedirectUri(index)}
+                                variant="outline"
+                                size="sm"
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          )
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <Label htmlFor="oauth_rate_limit_per_day">Per Day</Label>
-                    <Input
-                      id="oauth_rate_limit_per_day"
-                      type="number"
-                      value={oauthForm.rate_limit_per_day}
-                      onChange={(e) => setOAuthForm({ ...oauthForm, rate_limit_per_day: parseInt(e.target.value) })}
-                    />
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="oauth_rate_limit_per_minute">Per Minute</Label>
+                      <Input
+                        id="oauth_rate_limit_per_minute"
+                        type="number"
+                        value={oauthForm.rate_limit_per_minute}
+                        onChange={(e) => setOAuthForm({ ...oauthForm, rate_limit_per_minute: parseInt(e.target.value) })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="oauth_rate_limit_per_hour">Per Hour</Label>
+                      <Input
+                        id="oauth_rate_limit_per_hour"
+                        type="number"
+                        value={oauthForm.rate_limit_per_hour}
+                        onChange={(e) => setOAuthForm({ ...oauthForm, rate_limit_per_hour: parseInt(e.target.value) })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="oauth_rate_limit_per_day">Per Day</Label>
+                      <Input
+                        id="oauth_rate_limit_per_day"
+                        type="number"
+                        value={oauthForm.rate_limit_per_day}
+                        onChange={(e) => setOAuthForm({ ...oauthForm, rate_limit_per_day: parseInt(e.target.value) })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end space-x-2">
+                    <Button variant="outline" onClick={() => setShowOAuthDialog(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={createOAuthClient}>
+                      Create OAuth Client
+                    </Button>
                   </div>
                 </div>
-                
-                <div className="flex justify-end space-x-2">
-                  <Button variant="outline" onClick={() => setShowOAuthDialog(false)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={createOAuthClient}>
-                    Create OAuth Client
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       </div>
@@ -762,29 +824,29 @@ const APIClientManagement: React.FC = () => {
                   Please copy and save this API key securely. It will not be shown again for security reasons.
                 </AlertDescription>
               </Alert>
-              
+
               <div className="space-y-3">
                 <div>
                   <Label>Client ID</Label>
                   <div className="flex items-center space-x-2">
                     <Input value={showApiKey.client_id} readOnly />
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
+                    <Button
+                      size="sm"
+                      variant="outline"
                       onClick={() => copyToClipboard(showApiKey.client_id)}
                     >
                       <Copy className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>
-                
+
                 <div>
                   <Label>API Key</Label>
                   <div className="flex items-center space-x-2">
                     <Input value={showApiKey.api_key} readOnly className="font-mono" />
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
+                    <Button
+                      size="sm"
+                      variant="outline"
                       onClick={() => copyToClipboard(showApiKey.api_key)}
                     >
                       <Copy className="w-4 h-4" />
@@ -819,7 +881,7 @@ const APIClientManagement: React.FC = () => {
                   </div>
                 )}
               </div>
-              
+
               <div className="flex justify-end space-x-2">
                 <Button onClick={() => copyToClipboard(showApiKey.api_key)} variant="outline">
                   Copy API Key
@@ -846,29 +908,29 @@ const APIClientManagement: React.FC = () => {
                   Please copy and save these OAuth credentials securely. The client secret will not be shown again.
                 </AlertDescription>
               </Alert>
-              
+
               <div className="space-y-3">
                 <div>
                   <Label>Client ID</Label>
                   <div className="flex items-center space-x-2">
                     <Input value={showOAuthCredentials.oauth_client_id} readOnly />
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
+                    <Button
+                      size="sm"
+                      variant="outline"
                       onClick={() => copyToClipboard(showOAuthCredentials.oauth_client_id)}
                     >
                       <Copy className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>
-                
+
                 <div>
                   <Label>Client Secret</Label>
                   <div className="flex items-center space-x-2">
                     <Input value={showOAuthCredentials.oauth_client_secret} readOnly className="font-mono" />
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
+                    <Button
+                      size="sm"
+                      variant="outline"
                       onClick={() => copyToClipboard(showOAuthCredentials.oauth_client_secret)}
                     >
                       <Copy className="w-4 h-4" />
@@ -897,7 +959,7 @@ const APIClientManagement: React.FC = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="flex justify-end space-x-2">
                 <Button onClick={() => copyToClipboard(showOAuthCredentials.oauth_client_secret)} variant="outline">
                   Copy Client Secret
@@ -928,7 +990,7 @@ const APIClientManagement: React.FC = () => {
                   <strong>Warning:</strong> This action cannot be undone. The API key will be permanently revoked and any applications using it will lose access immediately.
                 </AlertDescription>
               </Alert>
-              
+
               <div className="space-y-2">
                 <p className="text-sm text-gray-600">
                   You are about to revoke the API key for:
@@ -977,7 +1039,7 @@ const APIClientManagement: React.FC = () => {
                   <strong>Warning:</strong> This will generate a new API key and invalidate the current one. Any applications using the current key will lose access immediately.
                 </AlertDescription>
               </Alert>
-              
+
               <div className="space-y-2">
                 <p className="text-sm text-gray-600">
                   You are about to regenerate the API key for:
@@ -1078,11 +1140,10 @@ const APIClientManagement: React.FC = () => {
                       </p>
                     </div>
                   </div>
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                    client.is_active
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${client.is_active
                       ? 'bg-green-100 text-green-800'
                       : 'bg-red-100 text-red-800'
-                  }`}>
+                    }`}>
                     {client.is_active ? 'Active' : 'Inactive'}
                   </span>
                 </div>
@@ -1169,7 +1230,7 @@ const APIClientManagement: React.FC = () => {
                       )}
                     </div>
                   )}
-                  
+
                   <div className="flex space-x-2">
                     {client.is_active && (
                       <Button
@@ -1181,7 +1242,7 @@ const APIClientManagement: React.FC = () => {
                         Regenerate Key
                       </Button>
                     )}
-                    
+
                     <Button
                       size="sm"
                       variant="destructive"

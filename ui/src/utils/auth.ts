@@ -184,6 +184,8 @@ export const logout = () => {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
   localStorage.removeItem('selected_tenant_id');
+  // Dispatch custom event to notify FeatureContext
+  window.dispatchEvent(new Event('auth-changed'));
   window.location.href = '/login';
 };
 

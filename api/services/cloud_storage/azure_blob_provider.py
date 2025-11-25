@@ -891,7 +891,7 @@ class AzureBlobProvider(CloudStorageProvider):
             logger.error(f"Failed to create tenant container for {tenant_id}: {str(e)}")
             return False
    
- async def delete_folder(self, folder_prefix: str) -> bool:
+    async def delete_folder(self, folder_prefix: str) -> bool:
         """
         Delete all blobs with a given prefix (folder) from Azure Blob Storage.
         

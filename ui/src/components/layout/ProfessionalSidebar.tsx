@@ -287,6 +287,8 @@ export function ProfessionalSidebar() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    // Dispatch custom event to notify FeatureContext
+    window.dispatchEvent(new Event('auth-changed'));
     queryClient.clear();
     navigate('/login');
   };

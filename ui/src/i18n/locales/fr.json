@@ -249,7 +249,7 @@
     "results_footer": "{{count}} résultats trouvés • Appuyez sur Entrée pour sélectionner • Échap pour fermer",
     "entity_types": {
       "invoices": "Factures",
-      "clients": "Clients", 
+      "clients": "Clients",
       "payments": "Paiements",
       "expenses": "Dépenses",
       "statements": "Relevés",
@@ -2336,6 +2336,7 @@
       "pending": "En Attente",
       "completed": "Terminé",
       "snoozed": "Reporté",
+      "snoozed_until": "Reporté jusqu'au",
       "cancelled": "Annulé"
     },
     "actions": {

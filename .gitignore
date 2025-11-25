@@ -46,3 +46,10 @@ api/api/
 api/attachments/*
 # But do not ignore the directory itself
 !api/attachments/.gitkeep
+
+# License signing keys (keep private key secure!)
+api/keys/*.pem
+# But do not ignore the directory itself
+!api/keys/
+!api/keys/.gitkeep
+!api/keys/public_key.pem

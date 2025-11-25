@@ -98,7 +98,7 @@ export function AppSidebar() {
   })();
   const [currentOrgId, setCurrentOrgId] = useState(initialOrgId);
   const [isSwitchingOrg, setIsSwitchingOrg] = useState(false);
-  
+
   // Check super admin status via API
   useEffect(() => {
     const checkSuperAdminStatus = async () => {
@@ -113,16 +113,16 @@ export function AppSidebar() {
 
     checkSuperAdminStatus();
   }, [currentOrgId, user?.is_superuser, user?.tenant_id]);
-  
-  console.log('Sidebar: User check:', { 
-    user, 
-    userRole, 
+
+  console.log('Sidebar: User check:', {
+    user,
+    userRole,
     effectiveRole,
     isAdminEffective,
     isSuperUser,
     currentOrgId,
     primaryTenant: user?.tenant_id?.toString(),
-    shouldFetchSettings: isAdminEffective 
+    shouldFetchSettings: isAdminEffective
   });
 
   // Get company name from settings with reduced refetching frequency (only for admin users)
@@ -161,7 +161,7 @@ export function AppSidebar() {
         const me: any = await apiRequest('/auth/me');
         if (me && me.role) {
           setEffectiveRole(me.role);
-          
+
           // Update localStorage with the effective role for this organization
           // so that auth utility functions use the correct role
           const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
@@ -169,7 +169,7 @@ export function AppSidebar() {
             console.log(`🔄 Role updated: ${currentUser.role} → ${me.role} for org ${currentOrgId}`);
             const updatedUser = { ...currentUser, role: me.role };
             localStorage.setItem('user', JSON.stringify(updatedUser));
-            
+
             // Trigger auth refresh for other components
             window.dispatchEvent(new CustomEvent('auth-updated'));
           }
@@ -292,38 +292,38 @@ export function AppSidebar() {
 
     fetchUserOrganizations();
   }, [user?.id, user?.tenant_id]); // Removed settings?.company_info?.name dependency
-  
+
   const handleOrganizationSwitch = async (orgId: string) => {
     if (orgId === currentOrgId) return;
-    
+
     const selectedOrg = userOrganizations.find(org => org.id.toString() === orgId);
     const orgName = selectedOrg?.name || `Organization ${orgId}`;
-    
+
     console.log(`🔄 Switching organization from ${currentOrgId} to ${orgId} (${orgName})`);
     setIsSwitchingOrg(true);
-    
+
     try {
       // Show loading toast
       toast.loading(`Switching to ${orgName}...`, { id: 'org-switch' });
-      
+
       // Store the selected organization
       localStorage.setItem('selected_tenant_id', orgId);
       console.log(`✅ Stored selected_tenant_id: ${orgId}`);
-      
+
       // Store the selected organization
       localStorage.setItem('selected_tenant_id', orgId);
       localStorage.removeItem('react-query-offline-cache');
       console.log(`✅ Stored selected_tenant_id: ${orgId}`);
-      
+
       // Clear all cached data and force reload
       queryClient.clear();
       queryClient.invalidateQueries();
       sessionStorage.clear();
       console.log('🗑️ Cleared all caches');
-      
+
       // Show success toast
       toast.success(`Switched to ${orgName}`, { id: 'org-switch' });
-      
+
       // Reload page
       setTimeout(() => {
         window.location.reload();
@@ -376,7 +376,7 @@ export function AppSidebar() {
     // Listen for both custom events and storage events
     window.addEventListener('settings-updated', handleSettingsUpdate);
     window.addEventListener('storage', handleStorageChange);
-    
+
     return () => {
       window.removeEventListener('settings-updated', handleSettingsUpdate);
       window.removeEventListener('storage', handleStorageChange);
@@ -387,10 +387,13 @@ export function AppSidebar() {
     // Clear authentication data
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    
+
+    // Dispatch custom event to notify FeatureContext
+    window.dispatchEvent(new Event('auth-changed'));
+
     // Clear React Query cache to prevent 403 errors
     queryClient.clear();
-    
+
     // Redirect to login page
     navigate('/login');
   };
@@ -487,10 +490,10 @@ export function AppSidebar() {
       icon: <BarChart className="w-5 h-5" />
     }] : []),
     // Only show Super Admin for super users in their primary tenant
-    ...((user?.is_superuser && isPrimaryTenant) ? [{ 
-      path: '/super-admin', 
-      label: t('navigation.super_admin'), 
-      icon: <ShieldCheck className="w-5 h-5" /> 
+    ...((user?.is_superuser && isPrimaryTenant) ? [{
+      path: '/super-admin',
+      label: t('navigation.super_admin'),
+      icon: <ShieldCheck className="w-5 h-5" />
     }] : [])
   ];
 
@@ -540,7 +543,7 @@ export function AppSidebar() {
               </Button>
             </SidebarTrigger>
           </div>
-          
+
           {/* Enhanced User Profile Section */}
           <div className="bg-slate-800/30 rounded-xl p-3 border border-slate-700/20 backdrop-blur-sm">
             <div className="flex items-center gap-3">
@@ -615,7 +618,7 @@ export function AppSidebar() {
               </div>
             </div>
           )}
-          
+
           <SidebarMenu className="space-y-6">
             {/* Core Navigation Section */}
             <div className="space-y-1">
@@ -627,11 +630,10 @@ export function AppSidebar() {
               {mainMenuItems.map((item) => (
                 <SidebarMenuItem key={item.path}>
                   <SidebarMenuButton
-                    className={`mx-2 rounded-xl transition-all duration-200 group relative overflow-hidden ${
-                      isActive(item.path)
+                    className={`mx-2 rounded-xl transition-all duration-200 group relative overflow-hidden ${isActive(item.path)
                         ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg ring-2 ring-blue-500/20"
                         : "text-slate-300 hover:text-white hover:bg-slate-700/30 hover:shadow-sm"
-                    }`}
+                      }`}
                     isActive={isActive(item.path)}
                   >
                     <Link
@@ -639,11 +641,10 @@ export function AppSidebar() {
                       className="flex items-center gap-3 w-full h-full py-3 px-4"
                       data-tour={item.tourId}
                     >
-                      <div className={`p-2 rounded-lg transition-all duration-200 ${
-                        isActive(item.path)
+                      <div className={`p-2 rounded-lg transition-all duration-200 ${isActive(item.path)
                           ? "bg-white/20 shadow-sm"
                           : "bg-slate-700/30 group-hover:bg-slate-600/30"
-                      }`}>
+                        }`}>
                         {item.icon}
                       </div>
                       <span className="font-medium text-sm">{item.label}</span>
@@ -668,11 +669,10 @@ export function AppSidebar() {
               {settingsMenuItems.map((item) => (
                 <SidebarMenuItem key={item.path}>
                   <SidebarMenuButton
-                    className={`mx-2 rounded-xl transition-all duration-200 group relative overflow-hidden ${
-                      isActive(item.path)
+                    className={`mx-2 rounded-xl transition-all duration-200 group relative overflow-hidden ${isActive(item.path)
                         ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg ring-2 ring-blue-500/20"
                         : "text-slate-300 hover:text-white hover:bg-slate-700/30 hover:shadow-sm"
-                    }`}
+                      }`}
                     isActive={isActive(item.path)}
                   >
                     <Link
@@ -680,11 +680,10 @@ export function AppSidebar() {
                       className="flex items-center gap-3 w-full h-full py-3 px-4"
                       data-tour={item.tourId}
                     >
-                      <div className={`p-2 rounded-lg transition-all duration-200 ${
-                        isActive(item.path)
+                      <div className={`p-2 rounded-lg transition-all duration-200 ${isActive(item.path)
                           ? "bg-white/20 shadow-sm"
                           : "bg-slate-700/30 group-hover:bg-slate-600/30"
-                      }`}>
+                        }`}>
                         {item.icon}
                       </div>
                       <span className="font-medium text-sm">{item.label}</span>

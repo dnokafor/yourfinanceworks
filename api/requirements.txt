@@ -6,6 +6,7 @@ python-dotenv==1.1.1
 sqlalchemy==2.0.42
 alembic==1.13.0
 python-jose[cryptography]==3.5.0
+PyJWT==2.10.1  # JWT encoding/decoding for license keys
 python-multipart==0.0.20
 passlib[bcrypt]==1.7.4
 bcrypt==4.1.3

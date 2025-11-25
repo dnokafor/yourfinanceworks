@@ -16,6 +16,7 @@ from models.models import Tenant, MasterUser
 from routers.auth import get_current_user
 from utils.rbac import require_admin
 from utils.audit import log_audit_event
+from utils.feature_gate import feature_enabled
 from constants.error_codes import FAILED_TO_IMPORT_DATA
 from services.tenant_database_manager import tenant_db_manager
 
@@ -132,6 +133,13 @@ async def update_settings(
 
     # Update AI assistant setting
     if "enable_ai_assistant" in settings:
+        # Check license if enabling or keeping enabled
+        if settings["enable_ai_assistant"]:
+            if not feature_enabled("ai_chat", db):
+                raise HTTPException(
+                    status_code=402,
+                    detail="AI Assistant feature requires a valid license. Please upgrade your plan."
+                )
         tenant.enable_ai_assistant = settings["enable_ai_assistant"]
 
     # Update AI chat history retention setting

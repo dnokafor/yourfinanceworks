@@ -366,7 +366,7 @@ def get_ocr_notifications_summary() -> Dict[str, Any]:
     return ocr_notification_manager.get_all_notifications_summary()
 
 
-def notify_invoice_ocr_complete(db, task_id: str, user_id: int, tenant_id: int):
+async def notify_invoice_ocr_complete(db, task_id: str, user_id: int, tenant_id: int):
     """Send notification when invoice OCR processing is complete."""
     try:
         from utils.notifications import send_notification

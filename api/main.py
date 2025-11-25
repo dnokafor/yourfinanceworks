@@ -49,7 +49,8 @@ from routers import (
     files,  # Add the new files router
     cloud_storage,  # Add the new cloud storage router
     export_destinations,  # Add the export destinations router
-    batch_processing  # Add the batch processing router
+    batch_processing,  # Add the batch processing router
+    license  # Add the license management router
 )
 from models.database import engine
 from models import models
@@ -297,6 +298,7 @@ app.include_router(files.router, prefix="/api/v1") # Include the new files route
 app.include_router(cloud_storage.router, prefix="/api/v1") # Include the new cloud storage router
 app.include_router(export_destinations.router, prefix="/api/v1") # Include the export destinations router
 app.include_router(batch_processing.router, prefix="/api/v1") # Include the batch processing router
+app.include_router(license.router, prefix="/api/v1") # Include the license management router
 
 @app.get("/")
 def read_root():

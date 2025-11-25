@@ -139,6 +139,8 @@ async def tenant_context_middleware(request: Request, call_next):
         "/api/v1/auth/azure/login", "/api/v1/auth/azure/callback",
         # SSO status endpoint must be public (used by login/signup pages)
         "/api/v1/auth/sso-status",
+        # License features endpoint must be public (used by UI to determine available features)
+        "/api/v1/license/features",
         # Organization join endpoints must be public (used during signup)
         "/api/v1/organization-join/lookup", "/api/v1/organization-join/request",
     ]

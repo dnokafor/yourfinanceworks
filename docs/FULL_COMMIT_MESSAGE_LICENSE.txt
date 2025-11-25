@@ -1,0 +1,284 @@
+feat: implement comprehensive licensing system with feature gating
+
+Add JWT-based licensing with RSA signatures, 30-day trials, and granular feature control.
+Support personal (free) and business (trial/paid) usage types with 13 licensable features.
+
+Backend: LicenseService, FeatureConfigService, @require_feature decorators, /api/v1/license endpoints
+Frontend: FeatureGate component, FeatureContext, LicenseManagement UI with trial countdown
+Features: ai_invoice, ai_expense, ai_bank_statement, ai_chat, cloud_storage, tax_integration, 
+  slack_integration, sso, batch_processing, api_keys, approvals, advanced_search, reporting
+
+UI Gating: Invoice PDF import hidden, bank statement upload disabled with tooltip, expense 
+  attachments show informational alerts (uploads work, AI skipped without license)
+
+Fixes: Invoice OCR async/await error, processing status mismatch (done→completed), infinite polling
+
+Breaking: Premium API endpoints return HTTP 402 without license. Fresh installs require usage 
+  type selection. Invoice PDF, bank statement upload, and expense AI require respective features.
+
+Migration: Run migrations, execute deploy_licensing_system.sh. Existing users get 30-day trial.
+  Personal use gets all features free. Business use requires license after trial.
+
+TODO: Feature gating for api_keys and batch_processing (see docs/TODO_API_KEYS_BATCH_PROCESSING_FEATURE_GATING.md)
+
+## Core Licensing Infrastructure
+
+### Backend Services
+- Add LicenseService for license validation and feature management
+  * JWT-based license key verification with RSA signatures
+  * 30-day trial period with 7-day grace period
+  * Personal vs business usage type selection
+  * Feature availability checks with environment variable fallback
+  
+- Add FeatureConfigService for centralized feature configuration
+  * Define 13 licensable features across AI, integration, and advanced categories
+  * Support for environment variable overrides (FEATURE_*_ENABLED)
+  * Three-tier priority: license check → env var → default value
+  
+- Add feature_gate utilities with decorators
+  * @require_feature decorator for API endpoint protection
+  * @require_business_license for business-only features
+  * HTTP 402 (Payment Required) responses for unlicensed features
+  * Automatic fallback to env vars for fresh installations
+
+### Database Schema
+- Add InstallationInfo model to models_per_tenant.py
+  * Track installation ID, trial dates, license status
+  * Store licensed features and activation metadata
+  * Support license validation caching (1-hour TTL)
+  * Personal vs business usage type tracking
+
+### API Endpoints
+- Add /api/v1/license router with comprehensive endpoints:
+  * POST /select-usage-type - Choose personal or business use
+  * GET /status - Get current license and trial status
+  * POST /activate - Activate license keys
+  * POST /validate - Validate license keys without activation
+  * GET /features - Public endpoint for feature metadata
+  * POST /deactivate - Deactivate current license
+
+## Feature Gating Implementation
+
+### Protected Features (default: False)
+- AI Features: ai_invoice, ai_expense, ai_bank_statement, ai_chat
+- Integrations: cloud_storage, tax_integration, slack_integration, sso
+- Advanced: batch_processing, api_keys, approvals, advanced_search
+
+### Core Features (always available)
+- Inventory management (removed from licensing)
+- Basic reporting (default: True)
+- Standard invoice/expense processing
+
+### Backend Router Protection
+- Add @require_feature gates to protected endpoints:
+  * Invoice PDF processing (pdf_processor.py) - ai_invoice
+  * Bank statement upload (statements.py) - ai_bank_statement
+  * AI processing endpoints (ai.py)
+  * Batch processing (batch_processing.py)
+  * Tax integration (tax_integration.py)
+  * Slack integration (slack_simplified.py)
+  * Cloud storage management (cloud_storage.py)
+  * Approvals workflow (approvals.py)
+  
+- Add @require_business_license to business-only features:
+  * API key management (external_api_auth.py)
+  * External API access endpoints
+
+### Frontend Feature Gating
+
+#### Invoice Features
+- Add FeatureGate to Invoice PDF import (ai_invoice)
+  * Hide "Import from PDF" dropdown menu item in Invoices.tsx
+  * Hide PDF import card in InvoiceCreationChoice.tsx
+  * Show upgrade prompt when feature not available
+  * Backend blocks /invoices/process-pdf endpoint
+
+#### Bank Statement Features  
+- Add disabled button with tooltip for statement upload (ai_bank_statement)
+  * Show greyed-out "New Statement" button when feature disabled
+  * Display tooltip: "Bank statement processing requires the ai_bank_statement feature"
+  * Backend blocks /statements/upload endpoint
+  * Implement StatementUploadButton component with feature check
+
+#### Expense Features
+- Add informational alerts for expense attachments (ai_expense)
+  * Show amber alert in New Expense modal (Expenses.tsx)
+  * Show amber alert in Edit Expense modal (Expenses.tsx)
+  * Show amber alert in New Expense page (ExpensesNew.tsx)
+  * Show amber alert in Edit Expense page (ExpensesEdit.tsx)
+  * Alert message: "AI-powered receipt analysis is not available. Files will be uploaded as attachments only, without automatic data extraction."
+  * Allow file uploads but skip AI processing when feature disabled
+
+## Frontend Integration
+
+### License Management UI
+- Add LicenseManagement.tsx page
+  * Display trial status with countdown
+  * Show licensed features with visual indicators
+  * License key activation interface
+  * Usage type selection (personal/business)
+  * Grace period warnings
+
+- Add FeatureContext for global license state management
+  * Real-time license status updates via /license/status endpoint
+  * Feature availability checks with isFeatureEnabled()
+  * Trial expiration notifications
+  * Automatic feature refresh on login/token change
+
+- Add FeatureGate component for conditional rendering
+  * Hide/show features based on license status
+  * Display upgrade prompts for unlicensed features (showUpgradePrompt prop)
+  * Support for custom fallback content
+  * Loading state handling
+
+### Settings Integration
+- Update Settings.tsx with license tab
+  * Integrate LicenseManagement component
+  * AI Assistant toggle with license check
+  * Prevent enabling AI without ai_chat feature
+  * Display feature status indicators
+
+### API Client Management
+- Refactor APIClientManagement.tsx
+  * Add business license requirement checks
+  * Display upgrade prompts for personal users
+  * Integrate with license context
+
+## Configuration & Deployment
+
+### Environment Variables
+- Add feature flags to docker-compose.yml:
+  * FEATURE_AI_INVOICE_ENABLED
+  * FEATURE_AI_EXPENSE_ENABLED
+  * FEATURE_AI_BANK_STATEMENT_ENABLED
+  * FEATURE_AI_CHAT_ENABLED
+  * FEATURE_TAX_INTEGRATION_ENABLED
+  * FEATURE_SLACK_INTEGRATION_ENABLED
+  * FEATURE_CLOUD_STORAGE_ENABLED
+  * FEATURE_SSO_AUTH_ENABLED
+  * FEATURE_APPROVALS_ENABLED
+  * FEATURE_REPORTING_ENABLED
+  * FEATURE_BATCH_PROCESSING_ENABLED
+  * FEATURE_ADVANCED_SEARCH_ENABLED
+
+- Add license system configuration:
+  * LICENSE_TRIAL_DAYS (default: 30)
+  * LICENSE_GRACE_PERIOD_DAYS (default: 7)
+  * LICENSE_VALIDATION_CACHE_TTL (default: 3600)
+
+### Deployment Scripts
+- Add deploy_licensing_system.sh for automated deployment
+  * Database migration execution
+  * Public key embedding verification
+  * Feature flag configuration
+  * Installation record initialization
+  * License service testing
+
+- Add generate_license_keys.py for RSA key pair generation
+- Add test scripts for license validation and feature gating
+
+## Testing & Verification
+
+### Test Coverage
+- Add comprehensive test suites:
+  * test_license_comprehensive.py - Core license functionality
+  * test_trial_functionality.py - Trial period behavior
+  * test_feature_gates.py - Feature gate decorators
+  * test_feature_gating_comprehensive.py - End-to-end feature gating
+  * test_feature_gating_fix.py - Edge cases and fallbacks
+  * test_payment_flow_e2e.py - Complete payment workflow
+  * test_license_generation_verification.py - License key validation
+
+### Verification Scripts
+- Add verify_fix.py for testing invalid license fallback
+- Add verify_ai_license_check.py for AI feature protection
+- Add test_license_service.py for service layer testing
+
+## Documentation
+
+### Admin Guides
+- LICENSING_DEPLOYMENT_GUIDE.md - Deployment procedures
+- LICENSE_ADMINISTRATION_GUIDE.md - Admin operations
+- EXISTING_CUSTOMER_MIGRATION_GUIDE.md - Migration steps
+
+### User Guides
+- LICENSE_ACTIVATION_GUIDE.md - End-user activation instructions
+
+### Technical Documentation
+- LICENSE_MANAGEMENT_API.md - API endpoint documentation
+- FEATURE_MATRIX.md - Feature availability matrix
+- USAGE_TYPE_IMPLEMENTATION_SUMMARY.md - Implementation details
+- BUSINESS_FEATURES_IMPLEMENTATION.md - Business feature strategy
+
+## Bug Fixes & Improvements
+
+### OCR Worker Fixes
+- Fix async/await issue in invoice OCR notification
+  * Make notify_invoice_ocr_complete() async in ocr_notifications.py
+  * Resolve "object NoneType can't be used in 'await' expression" error
+  
+- Fix invoice processing status mismatch
+  * Add ProcessingStatus.COMPLETED enum value for invoice tasks
+  * Change task status from "done" to "completed" to match frontend expectations
+  * Fix infinite polling issue where frontend never recognized completion
+
+### Inventory Management
+- Remove inventory from licensable features (now core feature)
+- Remove @require_feature("inventory") gate from inventory router
+- Update tests to use 'reporting' instead of 'inventory'
+- Clean up FEATURE_INVENTORY_ENABLED environment variable
+
+### Settings & AI Configuration
+- Fix AI Assistant toggle to check ai_chat license
+- Prevent enabling AI without valid license
+- Add license requirement messages in UI
+
+### Encryption & Data Integrity
+- Fix inventory service JSON query compatibility
+- Update delete_item and get_profitability_analysis methods
+- Replace json_extract with Python-side processing
+
+### Translation Updates
+- Add reminders.snoozed_until translations (en, de, es, fr)
+- Update i18n locale files
+
+## User Experience Improvements
+
+### Feature Discovery
+- Users can see disabled features with explanatory tooltips
+- Informational alerts explain what happens without AI features
+- Clear upgrade paths with "Manage License" links
+- Consistent messaging across all gated features
+
+### Progressive Disclosure
+- Personal users see all features but with upgrade prompts
+- Business trial users see countdown and feature status
+- Expired licenses show grace period warnings
+- Feature gates don't block basic functionality
+
+## Breaking Changes
+
+- API endpoints for premium features now return HTTP 402 without license
+- Fresh installations require usage type selection before full access
+- Business features (API keys) require business license, not available for personal use
+- Invoice PDF processing requires ai_invoice feature
+- Bank statement upload requires ai_bank_statement feature
+- Expense AI analysis requires ai_expense feature (uploads still work)
+
+## Migration Notes
+
+For existing installations:
+1. Run database migrations to add InstallationInfo table
+2. Execute deploy_licensing_system.sh to initialize license system
+3. Existing users will be granted 30-day trial automatically
+4. Personal use installations get all features free forever
+5. Business use installations require license after trial
+
+## TODO
+
+- Implement feature gating for api_keys feature (see docs/TODO_API_KEYS_BATCH_PROCESSING_FEATURE_GATING.md)
+- Implement feature gating for batch_processing feature
+- Consider rate limiting based on license tier
+- Add telemetry for feature usage analytics
+
+Closes: #XXX (license system implementation)
