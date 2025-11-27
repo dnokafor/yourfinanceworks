@@ -1289,14 +1289,14 @@ const Settings = () => {
                 <TabsTrigger value="api-keys" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.api_keys')}</TabsTrigger>
                 <TabsTrigger value="search" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.search')}</TabsTrigger>
                 <TabsTrigger value="email-notifications" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.email_notifications')}</TabsTrigger>
-                <TabsTrigger value="email-integration" className="text-xs md:text-sm min-w-0 flex-shrink-0">Email Integration</TabsTrigger>
+                <TabsTrigger value="email-integration" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('emailIntegration.title')}</TabsTrigger>
                 {isFeatureEnabled('tax_integration') && (
                   <TabsTrigger value="tax-integration" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.tax_integration')}</TabsTrigger>
                 )}
                 {isFeatureEnabled('cloud_storage') && (
                   <TabsTrigger value="export-destinations" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.export_destinations')}</TabsTrigger>
                 )}
-                <TabsTrigger value="license" className="text-xs md:text-sm min-w-0 flex-shrink-0">License</TabsTrigger>
+                <TabsTrigger value="license" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('license.tabTitle')}</TabsTrigger>
               </>
             )}
             <TabsTrigger value="cookies" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.cookies')}</TabsTrigger>

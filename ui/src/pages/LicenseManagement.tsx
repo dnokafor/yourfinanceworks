@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,6 +48,7 @@ interface FeatureInfo {
 }
 
 export const LicenseManagement: React.FC = () => {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [activating, setActivating] = useState(false);
   const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
@@ -65,22 +67,22 @@ export const LicenseManagement: React.FC = () => {
         api.get<LicenseInfo>('/license/status'),
         api.get<{ features: FeatureInfo[] }>('/license/features'),
       ]);
-      
+
       setLicenseInfo(statusResponse);
-      
+
       // Map features with actual enabled status from license
       const enabledFeatureIds = statusResponse.enabled_features || [];
       const hasAllFeatures = statusResponse.has_all_features || enabledFeatureIds.includes('all');
-      
+
       const featuresWithStatus = (featuresResponse.features || []).map(feature => ({
         ...feature,
         enabled: hasAllFeatures || enabledFeatureIds.includes(feature.id)
       }));
-      
+
       setFeatures(featuresWithStatus);
     } catch (error) {
       console.error('Failed to fetch license status:', error);
-      toast.error('Failed to load license information');
+      toast.error(t('license.failedToLoad'));
     } finally {
       setLoading(false);
     }
@@ -88,7 +90,7 @@ export const LicenseManagement: React.FC = () => {
 
   const handleActivateLicense = async () => {
     if (!licenseKey.trim()) {
-      toast.error('Please enter a license key');
+      toast.error(t('license.activate.enterKey'));
       return;
     }
 
@@ -99,39 +101,39 @@ export const LicenseManagement: React.FC = () => {
       });
 
       if (response.success) {
-        toast.success('License activated successfully!');
+        toast.success(t('license.activate.success'));
         setLicenseKey('');
         await fetchLicenseStatus();
         await refetch(); // Refresh feature flags
       } else {
-        toast.error(response.message || 'Failed to activate license');
+        toast.error(response.message || t('license.activate.error'));
       }
     } catch (error: any) {
       console.error('Failed to activate license:', error);
-      toast.error(error.message || 'Failed to activate license');
+      toast.error(error.message || t('license.activate.error'));
     } finally {
       setActivating(false);
     }
   };
 
   const handleDeactivateLicense = async () => {
-    if (!confirm('Are you sure you want to deactivate your license? This will disable licensed features.')) {
+    if (!confirm(t('license.status.confirmDeactivate'))) {
       return;
     }
 
     try {
       const response = await api.post<{ success: boolean; message: string }>('/license/deactivate');
-      
+
       if (response.success) {
-        toast.success('License deactivated successfully');
+        toast.success(t('license.status.deactivateSuccess'));
         await fetchLicenseStatus();
         await refetch(); // Refresh feature flags
       } else {
-        toast.error(response.message || 'Failed to deactivate license');
+        toast.error(response.message || t('license.status.deactivateError'));
       }
     } catch (error: any) {
       console.error('Failed to deactivate license:', error);
-      toast.error(error.message || 'Failed to deactivate license');
+      toast.error(error.message || t('license.status.deactivateError'));
     }
   };
 
@@ -140,34 +142,34 @@ export const LicenseManagement: React.FC = () => {
 
     if (licenseInfo.is_licensed) {
       if (licenseInfo.trial_info.in_grace_period) {
-        return <Badge variant="destructive" className="ml-2">Expired (Grace Period)</Badge>;
+        return <Badge variant="destructive" className="ml-2">{t('license.badges.expiredGrace')}</Badge>;
       }
       const daysRemaining = getLicenseDaysRemaining();
       if (daysRemaining <= 0) {
-        return <Badge variant="destructive" className="ml-2">Expired</Badge>;
+        return <Badge variant="destructive" className="ml-2">{t('license.badges.expired')}</Badge>;
       }
       if (daysRemaining <= 30) {
-        return <Badge variant="outline" className="ml-2 border-amber-500 text-amber-700">Expiring Soon</Badge>;
+        return <Badge variant="outline" className="ml-2 border-amber-500 text-amber-700">{t('license.badges.expiringSoon')}</Badge>;
       }
-      return <Badge variant="default" className="ml-2 bg-green-600">Active</Badge>;
+      return <Badge variant="default" className="ml-2 bg-green-600">{t('license.badges.active')}</Badge>;
     }
 
     if (licenseInfo.trial_info.trial_active) {
       const daysRemaining = licenseInfo.trial_info.days_remaining;
       if (daysRemaining <= 0) {
-        return <Badge variant="destructive" className="ml-2">Trial Expired</Badge>;
+        return <Badge variant="destructive" className="ml-2">{t('license.badges.trialExpired')}</Badge>;
       }
       if (daysRemaining <= 7) {
-        return <Badge variant="outline" className="ml-2 border-amber-500 text-amber-700">Trial Ending Soon</Badge>;
+        return <Badge variant="outline" className="ml-2 border-amber-500 text-amber-700">{t('license.badges.trialEndingSoon')}</Badge>;
       }
-      return <Badge variant="secondary" className="ml-2">Trial Active</Badge>;
+      return <Badge variant="secondary" className="ml-2">{t('license.badges.trialActive')}</Badge>;
     }
 
     if (licenseInfo.is_personal) {
-      return <Badge variant="default" className="ml-2 bg-blue-600">Personal Use</Badge>;
+      return <Badge variant="default" className="ml-2 bg-blue-600">{t('license.badges.personalUse')}</Badge>;
     }
 
-    return <Badge variant="outline" className="ml-2">No License</Badge>;
+    return <Badge variant="outline" className="ml-2">{t('license.badges.noLicense')}</Badge>;
   };
 
   const formatDate = (dateString?: string) => {
@@ -204,7 +206,7 @@ export const LicenseManagement: React.FC = () => {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="h-8 w-8 animate-spin mr-2" />
-        <span>Loading license information...</span>
+        <span>{t('license.loading')}</span>
       </div>
     );
   }
@@ -223,22 +225,22 @@ export const LicenseManagement: React.FC = () => {
       {showWarning && (
         <Alert variant={licenseInfo.trial_info.in_grace_period || (licenseInfo.trial_info.trial_active && licenseInfo.trial_info.days_remaining <= 0) || (licenseInfo.is_licensed && licenseDaysRemaining <= 0) ? 'destructive' : 'default'} className="border-amber-200 bg-amber-50">
           <AlertTriangle className="h-4 w-4 text-amber-600" />
-          <AlertTitle className="text-amber-900">Action Required</AlertTitle>
+          <AlertTitle className="text-amber-900">{t('license.warnings.actionRequired')}</AlertTitle>
           <AlertDescription className="text-amber-800">
             {licenseInfo.trial_info.in_grace_period && (
-              <p>Your license has expired. You are in a grace period. Please renew your license to continue using all features.</p>
+              <p>{t('license.warnings.gracePeriod')}</p>
             )}
             {licenseInfo.trial_info.trial_active && licenseInfo.trial_info.days_remaining <= 0 && (
-              <p>Your trial period has ended. Activate a license to continue using premium features.</p>
+              <p>{t('license.warnings.trialEnded')}</p>
             )}
             {licenseInfo.trial_info.trial_active && licenseInfo.trial_info.days_remaining > 0 && licenseInfo.trial_info.days_remaining <= 7 && (
-              <p>Your trial period ends in {licenseInfo.trial_info.days_remaining} days. Activate a license to avoid interruption.</p>
+              <p>{t('license.warnings.trialEnding', { days: licenseInfo.trial_info.days_remaining })}</p>
             )}
             {licenseInfo.is_licensed && !licenseInfo.trial_info.in_grace_period && licenseDaysRemaining <= 30 && licenseDaysRemaining > 0 && (
-              <p>Your license expires in {licenseDaysRemaining} days. Please renew to avoid service interruption.</p>
+              <p>{t('license.warnings.expiring', { days: licenseDaysRemaining })}</p>
             )}
             {licenseInfo.is_licensed && licenseDaysRemaining <= 0 && (
-              <p>Your license has expired. Please renew to continue using all features.</p>
+              <p>{t('license.warnings.expired')}</p>
             )}
           </AlertDescription>
         </Alert>
@@ -249,24 +251,24 @@ export const LicenseManagement: React.FC = () => {
         <CardHeader>
           <CardTitle className="flex items-center">
             <Shield className="h-5 w-5 mr-2" />
-            License Status
+            {t('license.status.title')}
             {getLicenseStatusBadge()}
           </CardTitle>
           <CardDescription>
-            View your current license information and manage your subscription
+            {t('license.status.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label className="text-sm font-medium text-muted-foreground">Installation ID</Label>
+              <Label className="text-sm font-medium text-muted-foreground">{t('license.status.installationId')}</Label>
               <div className="flex items-center gap-2">
                 <code className="text-sm bg-muted px-2 py-1 rounded">{licenseInfo?.installation_id || 'N/A'}</code>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm font-medium text-muted-foreground">Usage Type</Label>
+              <Label className="text-sm font-medium text-muted-foreground">{t('license.status.usageType')}</Label>
               <div className="text-sm capitalize">
                 {licenseInfo?.usage_type || 'Not Selected'}
               </div>
@@ -275,15 +277,15 @@ export const LicenseManagement: React.FC = () => {
             {licenseInfo?.trial_info.trial_active && (
               <>
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-muted-foreground">Trial Period</Label>
+                  <Label className="text-sm font-medium text-muted-foreground">{t('license.status.trialPeriod')}</Label>
                   <div className="text-sm">
                     {formatDate(licenseInfo.trial_info.trial_start_date || undefined)} - {formatDate(licenseInfo.trial_info.trial_end_date || undefined)}
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-muted-foreground">Days Remaining</Label>
+                  <Label className="text-sm font-medium text-muted-foreground">{t('license.status.daysRemaining')}</Label>
                   <div className="text-sm font-semibold">
-                    {licenseInfo.trial_info.days_remaining} days
+                    {licenseInfo.trial_info.days_remaining} {t('license.recurrence.days')}
                   </div>
                 </div>
               </>
@@ -292,7 +294,7 @@ export const LicenseManagement: React.FC = () => {
             {licenseInfo?.is_licensed && licenseInfo.license_info.expires_at && (
               <>
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-muted-foreground">License Expiration</Label>
+                  <Label className="text-sm font-medium text-muted-foreground">{t('license.status.expiration')}</Label>
                   <div className="text-sm flex items-center gap-2">
                     <Calendar className="h-4 w-4" />
                     {formatDate(licenseInfo.license_info.expires_at)}
@@ -300,7 +302,7 @@ export const LicenseManagement: React.FC = () => {
                 </div>
                 {licenseInfo.license_info.customer_name && (
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium text-muted-foreground">Licensed To</Label>
+                    <Label className="text-sm font-medium text-muted-foreground">{t('license.status.licensedTo')}</Label>
                     <div className="text-sm">
                       {licenseInfo.license_info.customer_name}
                       {licenseInfo.license_info.organization_name && ` (${licenseInfo.license_info.organization_name})`}
@@ -314,7 +316,7 @@ export const LicenseManagement: React.FC = () => {
           {licenseInfo?.is_licensed && (
             <div className="pt-4 border-t">
               <Button variant="outline" size="sm" onClick={handleDeactivateLicense}>
-                Deactivate License
+                {t('license.status.deactivate')}
               </Button>
             </div>
           )}
@@ -327,19 +329,19 @@ export const LicenseManagement: React.FC = () => {
           <CardHeader>
             <CardTitle className="flex items-center">
               <Key className="h-5 w-5 mr-2" />
-              Activate License
+              {t('license.activate.title')}
             </CardTitle>
             <CardDescription>
-              Enter your license key to activate premium features
+              {t('license.activate.description')}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="license-key">License Key</Label>
+              <Label htmlFor="license-key">{t('license.activate.keyLabel')}</Label>
               <Input
                 id="license-key"
                 type="text"
-                placeholder="Enter your license key"
+                placeholder={t('license.activate.keyPlaceholder')}
                 value={licenseKey}
                 onChange={(e) => setLicenseKey(e.target.value)}
                 disabled={activating}
@@ -348,12 +350,12 @@ export const LicenseManagement: React.FC = () => {
             <div className="flex gap-2">
               <Button onClick={handleActivateLicense} disabled={activating || !licenseKey.trim()}>
                 {activating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Activate License
+                {t('license.activate.button')}
               </Button>
               <Button variant="outline" asChild>
                 <a href="https://your-pricing-page.com" target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="mr-2 h-4 w-4" />
-                  Purchase License
+                  {t('license.activate.purchase')}
                 </a>
               </Button>
             </div>
@@ -364,9 +366,9 @@ export const LicenseManagement: React.FC = () => {
       {/* Features Card */}
       <Card>
         <CardHeader>
-          <CardTitle>Available Features</CardTitle>
+          <CardTitle>{t('license.features.title')}</CardTitle>
           <CardDescription>
-            Features available in your current plan
+            {t('license.features.description')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -391,7 +393,7 @@ export const LicenseManagement: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-medium">{feature.name}</p>
                           {feature.enabled && (
-                            <Badge variant="secondary" className="text-xs">Enabled</Badge>
+                            <Badge variant="secondary" className="text-xs">{t('license.features.enabled')}</Badge>
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">{feature.description}</p>
@@ -408,22 +410,22 @@ export const LicenseManagement: React.FC = () => {
       {/* Help Card */}
       <Card>
         <CardHeader>
-          <CardTitle>Need Help?</CardTitle>
+          <CardTitle>{t('license.help.title')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           <p className="text-sm text-muted-foreground">
-            If you have questions about licensing or need assistance, please contact our support team.
+            {t('license.help.description')}
           </p>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" asChild>
               <a href="mailto:support@example.com">
-                Contact Support
+                {t('license.help.contactSupport')}
               </a>
             </Button>
             <Button variant="outline" size="sm" asChild>
               <a href="https://docs.example.com/licensing" target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="mr-2 h-4 w-4" />
-                Documentation
+                {t('license.help.documentation')}
               </a>
             </Button>
           </div>

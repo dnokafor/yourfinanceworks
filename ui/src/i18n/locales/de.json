@@ -2496,5 +2496,98 @@
     "empty_recycle_bin_confirm_description": "Sind Sie sicher, dass Sie alle Rechnungen im Papierkorb endgültig löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden und alle gelöschten Rechnungen werden vollständig aus dem System entfernt.",
     "recycle_bin_emptied_successfully": "Papierkorb erfolgreich geleert",
     "failed_to_empty_recycle_bin": "Fehler beim Leeren des Papierkorbs"
+  },
+  "emailIntegration": {
+    "title": "E-Mail-Integration",
+    "description": "Konfigurieren Sie IMAP-Einstellungen, um Ausgaben automatisch aus Ihrer E-Mail zu importieren. Das System scannt nach Belegen und Rechnungen in den angegebenen Ordnern.",
+    "enable": "E-Mail-Integration aktivieren",
+    "serviceProvider": "Dienstanbieter",
+    "selectProvider": "Anbieter auswählen",
+    "gmailAlert": {
+      "title": "Gmail-Konfiguration",
+      "description": "Gmail erfordert ein App-Passwort für die Verbindung über IMAP. Ihr reguläres Passwort funktioniert nicht.",
+      "step1": "1. Aktivieren Sie die Bestätigung in 2 Schritten in Ihrem Google-Konto.",
+      "step2": "2. Gehen Sie zu App-Passwörter.",
+      "step3": "3. Generieren Sie ein neues Passwort für \"Mail\" und verwenden Sie es unten."
+    },
+    "imapHost": "IMAP-Host",
+    "imapPort": "IMAP-Port",
+    "username": "Benutzername / E-Mail",
+    "password": "Passwort / App-Passwort",
+    "passwordPlaceholder": "Neues Passwort eingeben",
+    "passwordHint": "Verwenden Sie für Gmail ein App-Passwort.",
+    "allowedSenders": "Erlaubte Absender (Optional)",
+    "allowedSendersPlaceholder": "belege@uber.com, rechnung@aws.com",
+    "allowedSendersHint": "Kommagetrennte Liste von E-Mail-Adressen. Leer lassen, um alle zuzulassen.",
+    "lookbackDays": "Rückschau-Tage",
+    "lookbackDaysHint": "Wie viele Tage zurück nach E-Mails gesucht werden soll (Standard: 30).",
+    "saveSettings": "Einstellungen speichern",
+    "testConnection": "Verbindung testen",
+    "syncNow": "Jetzt synchronisieren",
+    "syncComplete": "Synchronisierung abgeschlossen",
+    "syncFailed": "Synchronisierung fehlgeschlagen",
+    "connectionSuccessful": "Verbindung erfolgreich!",
+    "connectionFailed": "Verbindung fehlgeschlagen",
+    "syncStarted": "Synchronisierung im Hintergrund gestartet..."
+  },
+  "license": {
+    "tabTitle": "Lizenz",
+    "status": {
+      "title": "Lizenzstatus",
+      "description": "Sehen Sie Ihre aktuellen Lizenzinformationen und verwalten Sie Ihr Abonnement",
+      "installationId": "Installations-ID",
+      "usageType": "Nutzungstyp",
+      "trialPeriod": "Testzeitraum",
+      "daysRemaining": "Verbleibende Tage",
+      "expiration": "Lizenzablauf",
+      "licensedTo": "Lizenziert für",
+      "deactivate": "Lizenz deaktivieren",
+      "confirmDeactivate": "Sind Sie sicher, dass Sie Ihre Lizenz deaktivieren möchten? Dadurch werden lizenzierte Funktionen deaktiviert.",
+      "deactivateSuccess": "Lizenz erfolgreich deaktiviert",
+      "deactivateError": "Fehler beim Deaktivieren der Lizenz"
+    },
+    "activate": {
+      "title": "Lizenz aktivieren",
+      "description": "Geben Sie Ihren Lizenzschlüssel ein, um Premium-Funktionen zu aktivieren",
+      "keyLabel": "Lizenzschlüssel",
+      "keyPlaceholder": "Geben Sie Ihren Lizenzschlüssel ein",
+      "button": "Lizenz aktivieren",
+      "purchase": "Lizenz kaufen",
+      "success": "Lizenz erfolgreich aktiviert!",
+      "error": "Fehler beim Aktivieren der Lizenz",
+      "enterKey": "Bitte geben Sie einen Lizenzschlüssel ein"
+    },
+    "features": {
+      "title": "Verfügbare Funktionen",
+      "description": "In Ihrem aktuellen Plan verfügbare Funktionen",
+      "enabled": "Aktiviert"
+    },
+    "help": {
+      "title": "Brauchen Sie Hilfe?",
+      "description": "Wenn Sie Fragen zur Lizenzierung haben oder Unterstützung benötigen, wenden Sie sich bitte an unser Support-Team.",
+      "contactSupport": "Support kontaktieren",
+      "documentation": "Dokumentation"
+    },
+    "badges": {
+      "expiredGrace": "Abgelaufen (Gnadenfrist)",
+      "expired": "Abgelaufen",
+      "expiringSoon": "Läuft bald ab",
+      "active": "Aktiv",
+      "trialExpired": "Testzeitraum abgelaufen",
+      "trialEndingSoon": "Testzeitraum endet bald",
+      "trialActive": "Testzeitraum aktiv",
+      "personalUse": "Persönliche Nutzung",
+      "noLicense": "Keine Lizenz"
+    },
+    "warnings": {
+      "actionRequired": "Handlung erforderlich",
+      "gracePeriod": "Ihre Lizenz ist abgelaufen. Sie befinden sich in einer Gnadenfrist. Bitte erneuern Sie Ihre Lizenz, um weiterhin alle Funktionen nutzen zu können.",
+      "trialEnded": "Ihr Testzeitraum ist abgelaufen. Aktivieren Sie eine Lizenz, um weiterhin Premium-Funktionen nutzen zu können.",
+      "trialEnding": "Ihr Testzeitraum endet in {{days}} Tagen. Aktivieren Sie eine Lizenz, um Unterbrechungen zu vermeiden.",
+      "expiring": "Ihre Lizenz läuft in {{days}} Tagen ab. Bitte erneuern Sie, um Serviceunterbrechungen zu vermeiden.",
+      "expired": "Ihre Lizenz ist abgelaufen. Bitte erneuern Sie, um weiterhin alle Funktionen nutzen zu können."
+    },
+    "loading": "Lizenzinformationen werden geladen...",
+    "failedToLoad": "Fehler beim Laden der Lizenzinformationen"
   }
 }

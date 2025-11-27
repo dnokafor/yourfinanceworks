@@ -2553,5 +2553,98 @@
         "resetInfo": "Cambios restablecidos a las preferencias guardadas anteriormente"
       }
     }
+  },
+  "emailIntegration": {
+    "title": "Integración de Correo",
+    "description": "Configure los ajustes IMAP para ingerir automáticamente gastos desde su correo. El sistema escaneará recibos y facturas en las carpetas especificadas.",
+    "enable": "Habilitar Integración de Correo",
+    "serviceProvider": "Proveedor de Servicio",
+    "selectProvider": "Seleccione un proveedor",
+    "gmailAlert": {
+      "title": "Configuración de Gmail",
+      "description": "Gmail requiere una Contraseña de Aplicación para conectar vía IMAP. Su contraseña habitual no funcionará.",
+      "step1": "1. Habilite la Verificación en 2 Pasos en su Cuenta de Google.",
+      "step2": "2. Vaya a Contraseñas de Aplicación.",
+      "step3": "3. Genere una nueva contraseña para \"Correo\" y úsela a continuación."
+    },
+    "imapHost": "Host IMAP",
+    "imapPort": "Puerto IMAP",
+    "username": "Usuario / Correo",
+    "password": "Contraseña / Contraseña de Aplicación",
+    "passwordPlaceholder": "Ingrese nueva contraseña",
+    "passwordHint": "Para Gmail, use una Contraseña de Aplicación.",
+    "allowedSenders": "Remitentes Permitidos (Opcional)",
+    "allowedSendersPlaceholder": "recibos@uber.com, facturacion@aws.com",
+    "allowedSendersHint": "Lista de direcciones de correo separadas por comas. Deje vacío para permitir todos.",
+    "lookbackDays": "Días de Búsqueda",
+    "lookbackDaysHint": "Cuántos días atrás buscar correos (predeterminado: 30).",
+    "saveSettings": "Guardar Ajustes",
+    "testConnection": "Probar Conexión",
+    "syncNow": "Sincronizar Ahora",
+    "syncComplete": "Sincronización completa",
+    "syncFailed": "Sincronización fallida",
+    "connectionSuccessful": "¡Conexión exitosa!",
+    "connectionFailed": "Conexión fallida",
+    "syncStarted": "Sincronización iniciada en segundo plano..."
+  },
+  "license": {
+    "tabTitle": "Licencia",
+    "status": {
+      "title": "Estado de la Licencia",
+      "description": "Vea su información de licencia actual y administre su suscripción",
+      "installationId": "ID de Instalación",
+      "usageType": "Tipo de Uso",
+      "trialPeriod": "Período de Prueba",
+      "daysRemaining": "Días Restantes",
+      "expiration": "Expiración de Licencia",
+      "licensedTo": "Licenciado A",
+      "deactivate": "Desactivar Licencia",
+      "confirmDeactivate": "¿Está seguro de que desea desactivar su licencia? Esto deshabilitará las funciones licenciadas.",
+      "deactivateSuccess": "Licencia desactivada exitosamente",
+      "deactivateError": "Error al desactivar la licencia"
+    },
+    "activate": {
+      "title": "Activar Licencia",
+      "description": "Ingrese su clave de licencia para activar funciones premium",
+      "keyLabel": "Clave de Licencia",
+      "keyPlaceholder": "Ingrese su clave de licencia",
+      "button": "Activar Licencia",
+      "purchase": "Comprar Licencia",
+      "success": "¡Licencia activada exitosamente!",
+      "error": "Error al activar la licencia",
+      "enterKey": "Por favor ingrese una clave de licencia"
+    },
+    "features": {
+      "title": "Funciones Disponibles",
+      "description": "Funciones disponibles en su plan actual",
+      "enabled": "Habilitado"
+    },
+    "help": {
+      "title": "¿Necesita Ayuda?",
+      "description": "Si tiene preguntas sobre licencias o necesita asistencia, por favor contacte a nuestro equipo de soporte.",
+      "contactSupport": "Contactar Soporte",
+      "documentation": "Documentación"
+    },
+    "badges": {
+      "expiredGrace": "Expirado (Período de Gracia)",
+      "expired": "Expirado",
+      "expiringSoon": "Expira Pronto",
+      "active": "Activo",
+      "trialExpired": "Prueba Expirada",
+      "trialEndingSoon": "Prueba Termina Pronto",
+      "trialActive": "Prueba Activa",
+      "personalUse": "Uso Personal",
+      "noLicense": "Sin Licencia"
+    },
+    "warnings": {
+      "actionRequired": "Acción Requerida",
+      "gracePeriod": "Su licencia ha expirado. Está en un período de gracia. Por favor renueve su licencia para continuar usando todas las funciones.",
+      "trialEnded": "Su período de prueba ha terminado. Active una licencia para continuar usando funciones premium.",
+      "trialEnding": "Su período de prueba termina en {{days}} días. Active una licencia para evitar interrupciones.",
+      "expiring": "Su licencia expira en {{days}} días. Por favor renueve para evitar interrupciones del servicio.",
+      "expired": "Su licencia ha expirado. Por favor renueve para continuar usando todas las funciones."
+    },
+    "loading": "Cargando información de licencia...",
+    "failedToLoad": "Error al cargar información de licencia"
   }
 }

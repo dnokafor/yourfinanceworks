@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from "react-i18next";
 import {
     Card,
     CardContent,
@@ -42,6 +43,7 @@ const PROVIDERS = [
 ];
 
 const EmailIntegrationSettings: React.FC = () => {
+    const { t } = useTranslation();
     const [config, setConfig] = useState<EmailConfig>({
         imap_host: '',
         imap_port: 993,
@@ -85,11 +87,11 @@ const EmailIntegrationSettings: React.FC = () => {
 
                     if (data.status === 'completed') {
                         setSyncing(false);
-                        toast.success(data.message || "Sync complete");
+                        toast.success(data.message || t('emailIntegration.syncComplete'));
                         localStorage.removeItem('email_sync_state');
                     } else if (data.status === 'failed') {
                         setSyncing(false);
-                        toast.error(data.message || "Sync failed");
+                        toast.error(data.message || t('emailIntegration.syncFailed'));
                         localStorage.removeItem('email_sync_state');
                     }
                     // If running or starting, just keep polling
@@ -129,7 +131,7 @@ const EmailIntegrationSettings: React.FC = () => {
         setTestResult(null);
         try {
             await api.post('/email-integration/config', config);
-            toast.success("Settings saved successfully");
+            toast.success(t('settings.save_success'));
             // After save, mark that password exists
             setHasExistingPassword(true);
         } catch (error) {
@@ -146,12 +148,12 @@ const EmailIntegrationSettings: React.FC = () => {
             // If password field is empty but we have an existing password, 
             // the backend will use the saved one
             await api.post('/email-integration/test', config);
-            setTestResult({ success: true, message: "Connection successful!" });
-            toast.success("Connection successful!");
+            setTestResult({ success: true, message: t('emailIntegration.connectionSuccessful') });
+            toast.success(t('emailIntegration.connectionSuccessful'));
         } catch (error) {
             const msg = getErrorMessage(error, (k) => k);
             setTestResult({ success: false, message: msg });
-            toast.error("Connection failed");
+            toast.error(t('emailIntegration.connectionFailed'));
         } finally {
             setTesting(false);
         }
@@ -164,7 +166,7 @@ const EmailIntegrationSettings: React.FC = () => {
 
         try {
             await api.post('/email-integration/sync');
-            toast.info("Sync started in background...");
+            toast.info(t('emailIntegration.syncStarted'));
         } catch (error) {
             setSyncing(false);
             localStorage.removeItem('email_sync_state');
@@ -177,11 +179,10 @@ const EmailIntegrationSettings: React.FC = () => {
             <CardHeader>
                 <div className="flex items-center gap-2">
                     <Mail className="h-5 w-5 text-primary" />
-                    <CardTitle>Email Integration</CardTitle>
+                    <CardTitle>{t('emailIntegration.title')}</CardTitle>
                 </div>
                 <CardDescription>
-                    Configure IMAP settings to automatically ingest expenses from your email.
-                    The system will scan for receipts and invoices in the specified folders.
+                    {t('emailIntegration.description')}
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -200,11 +201,11 @@ const EmailIntegrationSettings: React.FC = () => {
                         checked={config.enabled}
                         onCheckedChange={(checked) => handleChange('enabled', checked)}
                     />
-                    <Label htmlFor="email-enabled">Enable Email Integration</Label>
+                    <Label htmlFor="email-enabled">{t('emailIntegration.enable')}</Label>
                 </div>
 
                 <div className="space-y-2">
-                    <Label>Service Provider</Label>
+                    <Label>{t('emailIntegration.serviceProvider')}</Label>
                     <Select
                         value={PROVIDERS.find(p => p.host === config.imap_host)?.id || 'custom'}
                         onValueChange={(value) => {
@@ -220,7 +221,7 @@ const EmailIntegrationSettings: React.FC = () => {
                         disabled={loading}
                     >
                         <SelectTrigger>
-                            <SelectValue placeholder="Select a provider" />
+                            <SelectValue placeholder={t('emailIntegration.selectProvider')} />
                         </SelectTrigger>
                         <SelectContent>
                             {PROVIDERS.map(provider => (
@@ -235,22 +236,22 @@ const EmailIntegrationSettings: React.FC = () => {
                 {config.imap_host === 'imap.gmail.com' && (
                     <Alert className="bg-blue-50 border-blue-200 text-blue-800">
                         <AlertCircle className="h-4 w-4 text-blue-800" />
-                        <AlertTitle>Gmail Configuration</AlertTitle>
+                        <AlertTitle>{t('emailIntegration.gmailAlert.title')}</AlertTitle>
                         <AlertDescription>
-                            Gmail requires an <strong>App Password</strong> to connect via IMAP. Your regular password will not work.
+                            {t('emailIntegration.gmailAlert.description')}
                             <br />
-                            1. Enable 2-Step Verification in your Google Account.
+                            {t('emailIntegration.gmailAlert.step1')}
                             <br />
-                            2. Go to <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="underline font-medium">App Passwords</a>.
+                            <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="underline font-medium">{t('emailIntegration.gmailAlert.step2')}</a>
                             <br />
-                            3. Generate a new password for "Mail" and use it below.
+                            {t('emailIntegration.gmailAlert.step3')}
                         </AlertDescription>
                     </Alert>
                 )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                        <Label htmlFor="imap_host">IMAP Host</Label>
+                        <Label htmlFor="imap_host">{t('emailIntegration.imapHost')}</Label>
                         <Input
                             id="imap_host"
                             placeholder="imap.gmail.com"
@@ -261,7 +262,7 @@ const EmailIntegrationSettings: React.FC = () => {
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="imap_port">IMAP Port</Label>
+                        <Label htmlFor="imap_port">{t('emailIntegration.imapPort')}</Label>
                         <Input
                             id="imap_port"
                             type="number"
@@ -272,7 +273,7 @@ const EmailIntegrationSettings: React.FC = () => {
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="username">Username / Email</Label>
+                        <Label htmlFor="username">{t('emailIntegration.username')}</Label>
                         <Input
                             id="username"
                             value={config.username}
@@ -282,33 +283,33 @@ const EmailIntegrationSettings: React.FC = () => {
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="password">Password / App Password</Label>
+                        <Label htmlFor="password">{t('emailIntegration.password')}</Label>
                         <Input
                             id="password"
                             type="password"
                             value={config.password}
                             onChange={(e) => handleChange('password', e.target.value)}
-                            placeholder={config.password ? "********" : "Enter new password"}
+                            placeholder={config.password ? "********" : t('emailIntegration.passwordPlaceholder')}
                             disabled={loading}
                         />
-                        <p className="text-xs text-muted-foreground">For Gmail, use an App Password.</p>
+                        <p className="text-xs text-muted-foreground">{t('emailIntegration.passwordHint')}</p>
                     </div>
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="allowed_senders">Allowed Senders (Optional)</Label>
+                    <Label htmlFor="allowed_senders">{t('emailIntegration.allowedSenders')}</Label>
                     <Input
                         id="allowed_senders"
                         value={config.allowed_senders}
                         onChange={(e) => handleChange('allowed_senders', e.target.value)}
-                        placeholder="receipts@uber.com, billing@aws.com"
+                        placeholder={t('emailIntegration.allowedSendersPlaceholder')}
                         disabled={loading}
                     />
-                    <p className="text-xs text-muted-foreground">Comma separated list of email addresses. Leave empty to allow all.</p>
+                    <p className="text-xs text-muted-foreground">{t('emailIntegration.allowedSendersHint')}</p>
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="lookback_days">Lookback Days</Label>
+                    <Label htmlFor="lookback_days">{t('emailIntegration.lookbackDays')}</Label>
                     <Input
                         id="lookback_days"
                         type="number"
@@ -318,7 +319,7 @@ const EmailIntegrationSettings: React.FC = () => {
                         onChange={(e) => handleChange('lookback_days', parseInt(e.target.value))}
                         disabled={loading}
                     />
-                    <p className="text-xs text-muted-foreground">How many days back to search for emails (default: 30).</p>
+                    <p className="text-xs text-muted-foreground">{t('emailIntegration.lookbackDaysHint')}</p>
                 </div>
 
                 <div className="flex flex-wrap gap-4 pt-4">
@@ -328,7 +329,7 @@ const EmailIntegrationSettings: React.FC = () => {
                         className="gap-2"
                     >
                         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                        Save Settings
+                        {t('emailIntegration.saveSettings')}
                     </Button>
 
                     <Button
@@ -338,7 +339,7 @@ const EmailIntegrationSettings: React.FC = () => {
                         className="gap-2"
                     >
                         {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                        Test Connection
+                        {t('emailIntegration.testConnection')}
                     </Button>
 
                     <Button
@@ -348,7 +349,7 @@ const EmailIntegrationSettings: React.FC = () => {
                         className="gap-2"
                     >
                         {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                        Sync Now
+                        {t('emailIntegration.syncNow')}
                     </Button>
                 </div>
             </CardContent>

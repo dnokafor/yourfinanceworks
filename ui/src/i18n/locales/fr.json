@@ -2487,5 +2487,98 @@
         "resetInfo": "Modifications réinitialisées aux préférences sauvegardées précédemment"
       }
     }
+  },
+  "emailIntegration": {
+    "title": "Intégration Email",
+    "description": "Configurez les paramètres IMAP pour ingérer automatiquement les dépenses depuis votre email. Le système analysera les reçus et factures dans les dossiers spécifiés.",
+    "enable": "Activer l'Intégration Email",
+    "serviceProvider": "Fournisseur de Service",
+    "selectProvider": "Sélectionner un fournisseur",
+    "gmailAlert": {
+      "title": "Configuration Gmail",
+      "description": "Gmail nécessite un Mot de passe d'application pour se connecter via IMAP. Votre mot de passe habituel ne fonctionnera pas.",
+      "step1": "1. Activez la Validation en 2 étapes dans votre Compte Google.",
+      "step2": "2. Allez dans Mots de passe d'application.",
+      "step3": "3. Générez un nouveau mot de passe pour \"Mail\" et utilisez-le ci-dessous."
+    },
+    "imapHost": "Hôte IMAP",
+    "imapPort": "Port IMAP",
+    "username": "Nom d'utilisateur / Email",
+    "password": "Mot de passe / Mot de passe d'application",
+    "passwordPlaceholder": "Entrer le nouveau mot de passe",
+    "passwordHint": "Pour Gmail, utilisez un Mot de passe d'application.",
+    "allowedSenders": "Expéditeurs Autorisés (Optionnel)",
+    "allowedSendersPlaceholder": "recus@uber.com, facturation@aws.com",
+    "allowedSendersHint": "Liste d'adresses email séparées par des virgules. Laisser vide pour tout autoriser.",
+    "lookbackDays": "Jours de Recherche",
+    "lookbackDaysHint": "Combien de jours en arrière rechercher les emails (défaut : 30).",
+    "saveSettings": "Enregistrer les Paramètres",
+    "testConnection": "Tester la Connexion",
+    "syncNow": "Synchroniser Maintenant",
+    "syncComplete": "Synchronisation terminée",
+    "syncFailed": "Échec de la synchronisation",
+    "connectionSuccessful": "Connexion réussie !",
+    "connectionFailed": "Échec de la connexion",
+    "syncStarted": "Synchronisation démarrée en arrière-plan..."
+  },
+  "license": {
+    "tabTitle": "Licence",
+    "status": {
+      "title": "Statut de la Licence",
+      "description": "Voir vos informations de licence actuelles et gérer votre abonnement",
+      "installationId": "ID d'Installation",
+      "usageType": "Type d'Utilisation",
+      "trialPeriod": "Période d'Essai",
+      "daysRemaining": "Jours Restants",
+      "expiration": "Expiration de la Licence",
+      "licensedTo": "Licencié À",
+      "deactivate": "Désactiver la Licence",
+      "confirmDeactivate": "Êtes-vous sûr de vouloir désactiver votre licence ? Cela désactivera les fonctionnalités sous licence.",
+      "deactivateSuccess": "Licence désactivée avec succès",
+      "deactivateError": "Échec de la désactivation de la licence"
+    },
+    "activate": {
+      "title": "Activer la Licence",
+      "description": "Entrez votre clé de licence pour activer les fonctionnalités premium",
+      "keyLabel": "Clé de Licence",
+      "keyPlaceholder": "Entrez votre clé de licence",
+      "button": "Activer la Licence",
+      "purchase": "Acheter une Licence",
+      "success": "Licence activée avec succès !",
+      "error": "Échec de l'activation de la licence",
+      "enterKey": "Veuillez entrer une clé de licence"
+    },
+    "features": {
+      "title": "Fonctionnalités Disponibles",
+      "description": "Fonctionnalités disponibles dans votre plan actuel",
+      "enabled": "Activé"
+    },
+    "help": {
+      "title": "Besoin d'Aide ?",
+      "description": "Si vous avez des questions sur les licences ou avez besoin d'aide, veuillez contacter notre équipe de support.",
+      "contactSupport": "Contacter le Support",
+      "documentation": "Documentation"
+    },
+    "badges": {
+      "expiredGrace": "Expiré (Période de Grâce)",
+      "expired": "Expiré",
+      "expiringSoon": "Expire Bientôt",
+      "active": "Actif",
+      "trialExpired": "Essai Expiré",
+      "trialEndingSoon": "Essai Bientôt Terminé",
+      "trialActive": "Essai Actif",
+      "personalUse": "Usage Personnel",
+      "noLicense": "Pas de Licence"
+    },
+    "warnings": {
+      "actionRequired": "Action Requise",
+      "gracePeriod": "Votre licence a expiré. Vous êtes dans une période de grâce. Veuillez renouveler votre licence pour continuer à utiliser toutes les fonctionnalités.",
+      "trialEnded": "Votre période d'essai est terminée. Activez une licence pour continuer à utiliser les fonctionnalités premium.",
+      "trialEnding": "Votre période d'essai se termine dans {{days}} jours. Activez une licence pour éviter toute interruption.",
+      "expiring": "Votre licence expire dans {{days}} jours. Veuillez renouveler pour éviter toute interruption de service.",
+      "expired": "Votre licence a expiré. Veuillez renouveler pour continuer à utiliser toutes les fonctionnalités."
+    },
+    "loading": "Chargement des informations de licence...",
+    "failedToLoad": "Échec du chargement des informations de licence"
   }
 }
