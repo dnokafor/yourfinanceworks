@@ -78,6 +78,13 @@ class FeatureConfigService:
             'env_var': 'FEATURE_SSO_ENABLED',
             'default': False
         },
+        'email_integration': {
+            'name': 'Email Integration',
+            'description': 'Ingest expenses from email via IMAP',
+            'category': 'integration',
+            'env_var': 'FEATURE_EMAIL_INTEGRATION_ENABLED',
+            'default': False
+        },
         
         # Advanced Features
         'batch_processing': {

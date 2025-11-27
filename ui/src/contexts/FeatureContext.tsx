@@ -16,6 +16,7 @@ interface FeatureFlags {
   inventory: boolean;
   approvals: boolean;
   advanced_search: boolean;
+  email_integration: boolean;
   crm: boolean;
   [key: string]: boolean;
 }
@@ -70,6 +71,7 @@ export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ child
           inventory: false,
           approvals: false,
           advanced_search: false,
+          email_integration: false,
           crm: false,
         });
         setLicenseStatus(null);
@@ -109,6 +111,7 @@ export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ child
         inventory: hasAllFeatures || enabledFeatures.includes('inventory'),
         approvals: hasAllFeatures || enabledFeatures.includes('approvals'),
         advanced_search: hasAllFeatures || enabledFeatures.includes('advanced_search'),
+        email_integration: hasAllFeatures || enabledFeatures.includes('email_integration'),
         crm: false, // CRM removed from licensing
       };
       
@@ -163,6 +166,7 @@ export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ child
         inventory: false,
         approvals: false,
         advanced_search: false,
+        email_integration: false,
         crm: false,
       });
       setLicenseStatus(null);

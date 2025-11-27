@@ -42,7 +42,68 @@ const PROVIDERS = [
     { id: 'yahoo', name: 'Yahoo Mail', host: 'imap.mail.yahoo.com', port: 993 },
 ];
 
+import { FeatureGate } from "@/components/FeatureGate";
+
 const EmailIntegrationSettings: React.FC = () => {
+    return (
+        <FeatureGate
+            feature="email_integration"
+            fallback={
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-12 shadow-sm border border-gray-200 dark:border-gray-700">
+                    <div className="text-center max-w-2xl mx-auto">
+                        <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Mail className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">Business License Required</h3>
+                        <p className="text-gray-600 dark:text-gray-300 mb-6">
+                            Email integration allows you to automatically ingest expenses from your inbox - a powerful automation feature.
+                            Upgrade to a business license to enable email integration and save time on manual entry.
+                        </p>
+                        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-6 mb-6">
+                            <h4 className="font-semibold text-gray-900 dark:text-white mb-3">With Business License, you get:</h4>
+                            <ul className="text-left space-y-2 text-gray-700 dark:text-gray-300">
+                                <li className="flex items-start">
+                                    <span className="text-blue-600 mr-2">✓</span>
+                                    <span>Automatic expense ingestion from email</span>
+                                </li>
+                                <li className="flex items-start">
+                                    <span className="text-blue-600 mr-2">✓</span>
+                                    <span>Support for Gmail, Outlook, and custom IMAP</span>
+                                </li>
+                                <li className="flex items-start">
+                                    <span className="text-blue-600 mr-2">✓</span>
+                                    <span>AI-powered expense classification</span>
+                                </li>
+                                <li className="flex items-start">
+                                    <span className="text-blue-600 mr-2">✓</span>
+                                    <span>Secure and encrypted connection</span>
+                                </li>
+                            </ul>
+                        </div>
+                        <div className="flex justify-center space-x-4">
+                            <Button
+                                onClick={() => window.location.href = '/settings?tab=license'}
+                                className="bg-blue-600 hover:bg-blue-700 text-white"
+                            >
+                                Upgrade to Business
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={() => window.open('https://docs.example.com/email-integration', '_blank')}
+                            >
+                                Learn More
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            }
+        >
+            <EmailIntegrationSettingsContent />
+        </FeatureGate>
+    );
+};
+
+const EmailIntegrationSettingsContent: React.FC = () => {
     const { t } = useTranslation();
     const [config, setConfig] = useState<EmailConfig>({
         imap_host: '',

@@ -2586,99 +2586,99 @@
         "saveError": "Failed to save cookie preferences",
         "resetInfo": "Changes reset to last saved preferences"
       }
-    },
-    "emailIntegration": {
-      "title": "Email Integration",
-      "description": "Configure IMAP settings to automatically ingest expenses from your email. The system will scan for receipts and invoices in the specified folders.",
-      "enable": "Enable Email Integration",
-      "serviceProvider": "Service Provider",
-      "selectProvider": "Select a provider",
-      "gmailAlert": {
-        "title": "Gmail Configuration",
-        "description": "Gmail requires an App Password to connect via IMAP. Your regular password will not work.",
-        "step1": "1. Enable 2-Step Verification in your Google Account.",
-        "step2": "2. Go to App Passwords.",
-        "step3": "3. Generate a new password for \"Mail\" and use it below."
-      },
-      "imapHost": "IMAP Host",
-      "imapPort": "IMAP Port",
-      "username": "Username / Email",
-      "password": "Password / App Password",
-      "passwordPlaceholder": "Enter new password",
-      "passwordHint": "For Gmail, use an App Password.",
-      "allowedSenders": "Allowed Senders (Optional)",
-      "allowedSendersPlaceholder": "receipts@uber.com, billing@aws.com",
-      "allowedSendersHint": "Comma separated list of email addresses. Leave empty to allow all.",
-      "lookbackDays": "Lookback Days",
-      "lookbackDaysHint": "How many days back to search for emails (default: 30).",
-      "saveSettings": "Save Settings",
-      "testConnection": "Test Connection",
-      "syncNow": "Sync Now",
-      "syncComplete": "Sync complete",
-      "syncFailed": "Sync failed",
-      "connectionSuccessful": "Connection successful!",
-      "connectionFailed": "Connection failed",
-      "syncStarted": "Sync started in background..."
-    },
-    "license": {
-      "tabTitle": "License",
-      "status": {
-        "title": "License Status",
-        "description": "View your current license information and manage your subscription",
-        "installationId": "Installation ID",
-        "usageType": "Usage Type",
-        "trialPeriod": "Trial Period",
-        "daysRemaining": "Days Remaining",
-        "expiration": "License Expiration",
-        "licensedTo": "Licensed To",
-        "deactivate": "Deactivate License",
-        "confirmDeactivate": "Are you sure you want to deactivate your license? This will disable licensed features.",
-        "deactivateSuccess": "License deactivated successfully",
-        "deactivateError": "Failed to deactivate license"
-      },
-      "activate": {
-        "title": "Activate License",
-        "description": "Enter your license key to activate premium features",
-        "keyLabel": "License Key",
-        "keyPlaceholder": "Enter your license key",
-        "button": "Activate License",
-        "purchase": "Purchase License",
-        "success": "License activated successfully!",
-        "error": "Failed to activate license",
-        "enterKey": "Please enter a license key"
-      },
-      "features": {
-        "title": "Available Features",
-        "description": "Features available in your current plan",
-        "enabled": "Enabled"
-      },
-      "help": {
-        "title": "Need Help?",
-        "description": "If you have questions about licensing or need assistance, please contact our support team.",
-        "contactSupport": "Contact Support",
-        "documentation": "Documentation"
-      },
-      "badges": {
-        "expiredGrace": "Expired (Grace Period)",
-        "expired": "Expired",
-        "expiringSoon": "Expiring Soon",
-        "active": "Active",
-        "trialExpired": "Trial Expired",
-        "trialEndingSoon": "Trial Ending Soon",
-        "trialActive": "Trial Active",
-        "personalUse": "Personal Use",
-        "noLicense": "No License"
-      },
-      "warnings": {
-        "actionRequired": "Action Required",
-        "gracePeriod": "Your license has expired. You are in a grace period. Please renew your license to continue using all features.",
-        "trialEnded": "Your trial period has ended. Activate a license to continue using premium features.",
-        "trialEnding": "Your trial period ends in {{days}} days. Activate a license to avoid interruption.",
-        "expiring": "Your license expires in {{days}} days. Please renew to avoid service interruption.",
-        "expired": "Your license has expired. Please renew to continue using all features."
-      },
-      "loading": "Loading license information...",
-      "failedToLoad": "Failed to load license information"
     }
+  },
+  "emailIntegration": {
+    "title": "Email Integration",
+    "description": "Configure IMAP settings to automatically ingest expenses from your email. The system will scan for receipts and invoices in the specified folders.",
+    "enable": "Enable Email Integration",
+    "serviceProvider": "Service Provider",
+    "selectProvider": "Select a provider",
+    "gmailAlert": {
+      "title": "Gmail Configuration",
+      "description": "Gmail requires an App Password to connect via IMAP. Your regular password will not work.",
+      "step1": "1. Enable 2-Step Verification in your Google Account.",
+      "step2": "2. Go to App Passwords.",
+      "step3": "3. Generate a new password for \"Mail\" and use it below."
+    },
+    "imapHost": "IMAP Host",
+    "imapPort": "IMAP Port",
+    "username": "Username / Email",
+    "password": "Password / App Password",
+    "passwordPlaceholder": "Enter new password",
+    "passwordHint": "For Gmail, use an App Password.",
+    "allowedSenders": "Allowed Senders (Optional)",
+    "allowedSendersPlaceholder": "receipts@uber.com, billing@aws.com",
+    "allowedSendersHint": "Comma separated list of email addresses. Leave empty to allow all.",
+    "lookbackDays": "Lookback Days",
+    "lookbackDaysHint": "How many days back to search for emails (default: 30).",
+    "saveSettings": "Save Settings",
+    "testConnection": "Test Connection",
+    "syncNow": "Sync Now",
+    "syncComplete": "Sync complete",
+    "syncFailed": "Sync failed",
+    "connectionSuccessful": "Connection successful!",
+    "connectionFailed": "Connection failed",
+    "syncStarted": "Sync started in background..."
+  },
+  "license": {
+    "tabTitle": "License",
+    "status": {
+      "title": "License Status",
+      "description": "View your current license information and manage your subscription",
+      "installationId": "Installation ID",
+      "usageType": "Usage Type",
+      "trialPeriod": "Trial Period",
+      "daysRemaining": "Days Remaining",
+      "expiration": "License Expiration",
+      "licensedTo": "Licensed To",
+      "deactivate": "Deactivate License",
+      "confirmDeactivate": "Are you sure you want to deactivate your license? This will disable licensed features.",
+      "deactivateSuccess": "License deactivated successfully",
+      "deactivateError": "Failed to deactivate license"
+    },
+    "activate": {
+      "title": "Activate License",
+      "description": "Enter your license key to activate premium features",
+      "keyLabel": "License Key",
+      "keyPlaceholder": "Enter your license key",
+      "button": "Activate License",
+      "purchase": "Purchase License",
+      "success": "License activated successfully!",
+      "error": "Failed to activate license",
+      "enterKey": "Please enter a license key"
+    },
+    "features": {
+      "title": "Available Features",
+      "description": "Features available in your current plan",
+      "enabled": "Enabled"
+    },
+    "help": {
+      "title": "Need Help?",
+      "description": "If you have questions about licensing or need assistance, please contact our support team.",
+      "contactSupport": "Contact Support",
+      "documentation": "Documentation"
+    },
+    "badges": {
+      "expiredGrace": "Expired (Grace Period)",
+      "expired": "Expired",
+      "expiringSoon": "Expiring Soon",
+      "active": "Active",
+      "trialExpired": "Trial Expired",
+      "trialEndingSoon": "Trial Ending Soon",
+      "trialActive": "Trial Active",
+      "personalUse": "Personal Use",
+      "noLicense": "No License"
+    },
+    "warnings": {
+      "actionRequired": "Action Required",
+      "gracePeriod": "Your license has expired. You are in a grace period. Please renew your license to continue using all features.",
+      "trialEnded": "Your trial period has ended. Activate a license to continue using premium features.",
+      "trialEnding": "Your trial period ends in {{days}} days. Activate a license to avoid interruption.",
+      "expiring": "Your license expires in {{days}} days. Please renew to avoid service interruption.",
+      "expired": "Your license has expired. Please renew to continue using all features."
+    },
+    "loading": "Loading license information...",
+    "failedToLoad": "Failed to load license information"
   }
 }
