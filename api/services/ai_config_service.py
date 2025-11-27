@@ -87,30 +87,28 @@ class AIConfigService:
         Returns:
             AI configuration dictionary or None if no configuration available
         """
+        # First, try to get configuration from database
+        db_config = None
         try:
-            # First, try to get configuration from database
             db_config = cls._get_database_config(db, require_ocr)
             if db_config:
                 logger.info(f"Using AI config from database for {component}: {db_config['provider_name']}/{db_config['model_name']}")
                 return db_config
+        except Exception as e:
+            logger.debug(f"Database AI config fetch failed for {component}: {e}")
+            # Continue to env fallback
 
-            # Fallback to environment variables
+        # Fallback to environment variables
+        try:
             env_config = cls._get_env_config(component)
             if env_config:
                 logger.info(f"Using AI config from environment variables for {component}: {env_config['provider_name']}/{env_config['model_name']}")
                 return env_config
-            
-            logger.warning(f"No AI configuration available for {component} from database or environment variables")
-            return None
-            
         except Exception as e:
-            logger.error(f"Failed to get AI config for {component}: {e}")
-            # Try environment fallback on database errors
-            env_config = cls._get_env_config(component)
-            if env_config:
-                logger.info(f"Using environment fallback for {component} due to database error: {env_config['provider_name']}/{env_config['model_name']}")
-                return env_config
-            return None
+            logger.error(f"Failed to get AI config from environment variables for {component}: {e}")
+        
+        logger.warning(f"No AI configuration available for {component} from database or environment variables")
+        return None
     
     @classmethod
     def _get_database_config(cls, db: Session, require_ocr: bool = False) -> Optional[Dict[str, Any]]:
@@ -147,6 +145,7 @@ class AIConfigService:
         """Get AI configuration from environment variables for specific component."""
         try:
             mapping = cls.ENV_VAR_MAPPINGS.get(component, cls.ENV_VAR_MAPPINGS["ocr"])
+            logger.debug(f"[DEBUG] _get_env_config for component '{component}', mapping keys: {mapping.keys()}")
             
             # Get environment variables with fallback priority
             env_api_base = cls._get_first_env_var(mapping.get("api_base", []))
@@ -155,12 +154,15 @@ class AIConfigService:
             env_provider = cls._get_first_env_var(mapping.get("provider", []))
             env_api_url = cls._get_first_env_var(mapping.get("api_url", []))
             
+            logger.debug(f"[DEBUG] Environment variables for {component}: api_base={env_api_base}, api_key={bool(env_api_key)}, model={env_model}, provider={env_provider}, api_url={env_api_url}")
+            
             # Use api_url as fallback for api_base
             if not env_api_base and env_api_url:
                 env_api_base = env_api_url
             
             # If no environment variables are set, return None
             if not any([env_api_base, env_api_key, env_model, env_provider]):
+                logger.debug(f"No environment variables found for {component}: api_base={env_api_base}, api_key={bool(env_api_key)}, model={env_model}, provider={env_provider}")
                 return None
             
             # Detect provider from environment variables
@@ -174,6 +176,8 @@ class AIConfigService:
             if not env_api_base:
                 env_api_base = cls.DEFAULT_API_BASES.get(provider_name)
             
+            logger.debug(f"Created AI config from environment for {component}: provider={provider_name}, model={env_model}, api_base={env_api_base}")
+            
             return {
                 "provider_name": provider_name,
                 "provider_url": env_api_base,
@@ -184,7 +188,7 @@ class AIConfigService:
             }
             
         except Exception as e:
-            logger.error(f"Failed to create AI config from environment variables for {component}: {e}")
+            logger.error(f"Failed to create AI config from environment variables for {component}: {e}", exc_info=True)
             return None
     
     @classmethod

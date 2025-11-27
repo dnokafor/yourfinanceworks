@@ -23,6 +23,7 @@ import { getErrorMessage } from '@/lib/api';
 import APIClientManagement from "@/components/APIClientManagement/APIClientManagement";
 import CookieSettings from "@/components/settings/CookieSettings";
 import ExportDestinationsTab from "@/components/settings/ExportDestinationsTab";
+import EmailIntegrationSettings from "@/components/settings/EmailIntegrationSettings";
 import { getCurrentUser } from "@/utils/auth";
 import { useTaxIntegration } from "@/hooks/useTaxIntegration";
 import LicenseManagement from "@/pages/LicenseManagement";
@@ -534,7 +535,11 @@ const Settings = () => {
     if (!testEmail) return;
 
     try {
-      const result = await api.post<{ success: boolean; message: string }>('/email/test', { test_email: testEmail });
+      // Send current email settings along with the test request
+      const result = await api.post<{ success: boolean; message: string }>('/email/test', {
+        test_email: testEmail,
+        config: emailSettings
+      });
       if (result.success) {
         toast.success(t('settings.test_email_sent_successfully'));
       } else {
@@ -1284,6 +1289,7 @@ const Settings = () => {
                 <TabsTrigger value="api-keys" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.api_keys')}</TabsTrigger>
                 <TabsTrigger value="search" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.search')}</TabsTrigger>
                 <TabsTrigger value="email-notifications" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.email_notifications')}</TabsTrigger>
+                <TabsTrigger value="email-integration" className="text-xs md:text-sm min-w-0 flex-shrink-0">Email Integration</TabsTrigger>
                 {isFeatureEnabled('tax_integration') && (
                   <TabsTrigger value="tax-integration" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.tax_integration')}</TabsTrigger>
                 )}
@@ -2445,6 +2451,12 @@ const Settings = () => {
                   </CardContent>
                 </Card>
               </div>
+            </TabsContent>
+          )}
+
+          {isAdmin && (
+            <TabsContent value="email-integration" className="mt-6">
+              <EmailIntegrationSettings />
             </TabsContent>
           )}
 

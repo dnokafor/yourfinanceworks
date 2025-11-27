@@ -8,6 +8,7 @@ from .tenant import *
 from .discount_rules import *
 from .crm import *
 from .email import *
+from .email_integration import *
 from .ai import *
 from .ai_config import *
 from .super_admin import *

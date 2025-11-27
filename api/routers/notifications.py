@@ -131,6 +131,8 @@ async def test_notification(
         email_config_data = email_settings.value
         config = EmailProviderConfig(
             provider=EmailProvider(email_config_data['provider']),
+            from_email=email_config_data.get('from_email'),
+            from_name=email_config_data.get('from_name'),
             aws_access_key_id=email_config_data.get('aws_access_key_id'),
             aws_secret_access_key=email_config_data.get('aws_secret_access_key'),
             aws_region=email_config_data.get('aws_region'),
@@ -139,10 +141,10 @@ async def test_notification(
             mailgun_domain=email_config_data.get('mailgun_domain')
         )
         email_service = EmailService(config)
-        
+
         # Create notification service
         notification_service = NotificationService(db, email_service)
-        
+
         # Look for existing tenant user by ID
         tenant_user = db.query(User).filter(User.id == current_user.id).first()
         if not tenant_user:
@@ -150,7 +152,7 @@ async def test_notification(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found in tenant database"
             )
-        
+
         # Send test notification
         success = notification_service.send_operation_notification(
             event_type="settings_updated",
@@ -163,7 +165,7 @@ async def test_notification(
                 "test_time": "now"
             }
         )
-        
+
         if success:
             return {"message": "Test notification sent successfully"}
         else:
@@ -171,7 +173,7 @@ async def test_notification(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to send test notification"
             )
-            
+
     except HTTPException:
         raise
     except Exception as e:
@@ -195,18 +197,18 @@ async def get_approval_notification_preferences(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found in tenant database"
             )
-        
+
         settings = db.query(EmailNotificationSettings).filter(
             EmailNotificationSettings.user_id == tenant_user.id
         ).first()
-        
+
         if not settings:
             # Create default settings
             settings = EmailNotificationSettings(user_id=tenant_user.id)
             db.add(settings)
             db.commit()
             db.refresh(settings)
-        
+
         # Return approval-specific preferences
         return {
             "approval_notification_frequency": settings.approval_notification_frequency,
@@ -356,6 +358,8 @@ async def send_approval_digest(
         email_config_data = email_settings.value
         config = EmailProviderConfig(
             provider=EmailProvider(email_config_data['provider']),
+            from_email=email_config_data.get('from_email'),
+            from_name=email_config_data.get('from_name'),
             aws_access_key_id=email_config_data.get('aws_access_key_id'),
             aws_secret_access_key=email_config_data.get('aws_secret_access_key'),
             aws_region=email_config_data.get('aws_region'),
@@ -364,10 +368,10 @@ async def send_approval_digest(
             mailgun_domain=email_config_data.get('mailgun_domain')
         )
         email_service = EmailService(config)
-        
+
         # Create notification service
         notification_service = NotificationService(db, email_service)
-        
+
         # Create sample digest data
         digest_data = {
             "total_events": 5,
@@ -412,7 +416,7 @@ async def send_approval_digest(
                 }
             ]
         }
-        
+
         # Look for existing tenant user by ID
         tenant_user = db.query(User).filter(User.id == current_user.id).first()
         if not tenant_user:
@@ -420,13 +424,13 @@ async def send_approval_digest(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found in tenant database"
             )
-        
+
         # Send digest
         success = notification_service.send_approval_daily_digest(
             user_id=tenant_user.id,
             digest_data=digest_data
         )
-        
+
         if success:
             return {"message": "Approval digest sent successfully"}
         else:
@@ -434,7 +438,7 @@ async def send_approval_digest(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to send approval digest"
             )
-            
+
     except HTTPException:
         raise
     except Exception as e:

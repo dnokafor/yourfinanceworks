@@ -44,6 +44,8 @@ def get_email_service(
         # Create email provider config
         config = EmailProviderConfig(
             provider=EmailProvider(email_config_data['provider']),
+            from_email=email_config_data.get('from_email'),
+            from_name=email_config_data.get('from_name'),
             aws_access_key_id=email_config_data.get('aws_access_key_id'),
             aws_secret_access_key=email_config_data.get('aws_secret_access_key'),
             aws_region=email_config_data.get('aws_region'),
@@ -191,10 +193,43 @@ async def send_invoice_email(
 @router.post("/test", response_model=EmailResponse)
 async def test_email_configuration(
     request: EmailTestRequest,
-    email_service: EmailService = Depends(get_email_service)
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
 ):
     """Test email configuration by sending a test email"""
     try:
+        # Use provided config or get from database
+        if request.config:
+            # Use the configuration provided in the request
+            email_config_data = request.config.dict()
+        else:
+            # Try to get email configuration from settings
+            email_settings = db.query(Settings).filter(
+                Settings.key == "email_config"
+            ).first()
+            
+            if not email_settings or not email_settings.value:
+                return EmailResponse(
+                    success=False,
+                    message="Email service not configured. Please configure email settings first."
+                )
+            
+            email_config_data = email_settings.value
+        
+        # Create email provider config
+        config = EmailProviderConfig(
+            provider=EmailProvider(email_config_data['provider']),
+            from_email=email_config_data.get('from_email'),
+            from_name=email_config_data.get('from_name'),
+            aws_access_key_id=email_config_data.get('aws_access_key_id'),
+            aws_secret_access_key=email_config_data.get('aws_secret_access_key'),
+            aws_region=email_config_data.get('aws_region'),
+            azure_connection_string=email_config_data.get('azure_connection_string'),
+            mailgun_api_key=email_config_data.get('mailgun_api_key'),
+            mailgun_domain=email_config_data.get('mailgun_domain')
+        )
+        
+        email_service = EmailService(config)
         success = email_service.test_email_connection(request.test_email)
         
         if success:
@@ -225,6 +260,8 @@ async def validate_email_configuration(
         # Create email provider config
         provider_config = EmailProviderConfig(
             provider=config.provider,
+            from_email=config.from_email,
+            from_name=config.from_name,
             aws_access_key_id=config.aws_access_key_id,
             aws_secret_access_key=config.aws_secret_access_key,
             aws_region=config.aws_region,
@@ -307,6 +344,8 @@ async def update_email_configuration(
         # Validate configuration first
         provider_config = EmailProviderConfig(
             provider=config.provider,
+            from_email=config.from_email,
+            from_name=config.from_name,
             aws_access_key_id=config.aws_access_key_id,
             aws_secret_access_key=config.aws_secret_access_key,
             aws_region=config.aws_region,

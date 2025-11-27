@@ -39,6 +39,8 @@ class EmailMessage:
 
 class EmailProviderConfig(BaseModel):
     provider: EmailProvider
+    from_email: Optional[str] = None
+    from_name: Optional[str] = None
     aws_access_key_id: Optional[str] = None
     aws_secret_access_key: Optional[str] = None
     aws_region: Optional[str] = None
@@ -317,6 +319,14 @@ class EmailService:
             return MailgunEmailProvider(self.config)
         else:
             raise ValueError(f"Unsupported email provider: {self.config.provider}")
+    
+    def send_email(self, message: EmailMessage) -> bool:
+        """Send a generic email message"""
+        try:
+            return self.provider.send_email(message)
+        except Exception as e:
+            logger.error(f"Failed to send email: {str(e)}")
+            return False
     
     def send_invoice_email(
         self,
@@ -795,8 +805,8 @@ Best regards,
                 subject="Email Configuration Test",
                 html_body="<p>This is a test email to verify your email configuration is working correctly.</p>",
                 text_body="This is a test email to verify your email configuration is working correctly.",
-                from_email=self.config.aws_access_key_id or "test@example.com",  # Placeholder
-                from_name="Invoice App Test"
+                from_email=self.config.from_email or "noreply@example.com",
+                from_name=self.config.from_name or "Invoice App Test"
             )
             
             return self.provider.send_email(test_message)

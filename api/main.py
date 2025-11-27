@@ -24,6 +24,7 @@ from routers import (
     discount_rules,
     crm,
     email,
+    email_integration,
     ai, # Add the new AI router
     ai_config, # Add the new AI config router
     super_admin, # Add the new super admin router
@@ -270,6 +271,7 @@ app.include_router(payments.router, prefix="/api/v1")
 app.include_router(expenses.router, prefix="/api/v1")
 app.include_router(settings.router, prefix="/api/v1")
 app.include_router(email.router, prefix="/api/v1")
+app.include_router(email_integration.router, prefix="/api/v1")
 app.include_router(currency.router, prefix="/api/v1")
 app.include_router(crm.router, prefix="/api/v1")
 app.include_router(discount_rules.router, prefix="/api/v1")

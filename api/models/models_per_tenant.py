@@ -441,6 +441,32 @@ class AIChatHistory(Base):
     sender = Column(String, nullable=False)  # 'user' or 'ai'
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
+class RawEmail(Base):
+    __tablename__ = "raw_emails"
+
+    id = Column(Integer, primary_key=True, index=True)
+    message_id = Column(String, index=True, nullable=True)  # IMAP Message-ID
+    subject = Column(String, nullable=True)  # Temporary staging, no encryption needed
+    sender = Column(String, nullable=True)  # Temporary staging, no encryption needed
+    recipient = Column(String, nullable=True)  # Temporary staging, no encryption needed
+    date = Column(DateTime(timezone=True), nullable=True)
+    
+    # Raw content storage
+    raw_content = Column(Text, nullable=True)  # Store full raw email content
+    content_type = Column(String, nullable=True)
+    
+    # Processing status
+    status = Column(String, default="pending", index=True, nullable=False)  # pending, processing, processed, failed, ignored
+    error_message = Column(Text, nullable=True)
+    retry_count = Column(Integer, default=0, nullable=False)
+    
+    # Links
+    expense_id = Column(Integer, ForeignKey("expenses.id"), nullable=True)
+    
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    processed_at = Column(DateTime(timezone=True), nullable=True)
+
 class EmailNotificationSettings(Base):
     __tablename__ = "email_notification_settings"
     

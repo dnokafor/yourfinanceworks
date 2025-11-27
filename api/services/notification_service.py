@@ -29,6 +29,17 @@ class NotificationService:
         self.db.refresh(settings)
         return settings
     
+    def _get_from_email_info(self, company_name: str) -> tuple[str, str]:
+        """Get from_email and from_name from email service config"""
+        from_email = "noreply@invoiceapp.com"
+        from_name = company_name
+        
+        if self.email_service and hasattr(self.email_service, 'config'):
+            from_email = self.email_service.config.from_email or from_email
+            from_name = self.email_service.config.from_name or from_name
+        
+        return from_email, from_name
+    
     def should_send_notification(self, user_id: int, event_type: str, channel: str = "email") -> bool:
         """Check if notification should be sent for a specific event and channel"""
         settings = self.get_user_notification_settings(user_id)
@@ -279,14 +290,17 @@ class NotificationService:
         html_body = html_template.render(**context)
         text_body = text_template.render(**context)
         
+        # Get from_email and from_name from email service config
+        from_email, from_name = self._get_from_email_info(company_name)
+        
         return EmailMessage(
             to_email=recipient_email,
             to_name=recipient_name,
             subject=subject,
             html_body=html_body,
             text_body=text_body,
-            from_email="noreply@invoiceapp.com",
-            from_name=company_name
+            from_email=from_email,
+            from_name=from_name
         )
     
     def _get_event_info(self, event_type: str, resource_type: str) -> Dict[str, str]:
@@ -869,14 +883,17 @@ class NotificationService:
         html_body = html_template.render(**context)
         text_body = text_template.render(**context)
         
+        # Get from_email and from_name from email service config
+        from_email, from_name = self._get_from_email_info(company_name)
+        
         return EmailMessage(
             to_email=recipient_email,
             to_name=recipient_name,
             subject=subject,
             html_body=html_body,
             text_body=text_body,
-            from_email="noreply@invoiceapp.com",
-            from_name=company_name
+            from_email=from_email,
+            from_name=from_name
         )
     
     def _create_approval_escalation_message(
@@ -1108,14 +1125,17 @@ class NotificationService:
         html_body = html_template.render(**context)
         text_body = text_template.render(**context)
         
+        # Get from_email and from_name from email service config
+        from_email, from_name = self._get_from_email_info(company_name)
+        
         return EmailMessage(
             to_email=recipient_email,
             to_name=recipient_name,
             subject=subject,
             html_body=html_body,
             text_body=text_body,
-            from_email="noreply@invoiceapp.com",
-            from_name=company_name
+            from_email=from_email,
+            from_name=from_name
         )
     
     def _create_approval_digest_message(
@@ -1404,12 +1424,15 @@ class NotificationService:
         html_body = html_template.render(**context)
         text_body = text_template.render(**context)
         
+        # Get from_email and from_name from email service config
+        from_email, from_name = self._get_from_email_info(company_name)
+        
         return EmailMessage(
             to_email=recipient_email,
             to_name=recipient_name,
             subject=subject,
             html_body=html_body,
             text_body=text_body,
-            from_email="noreply@invoiceapp.com",
-            from_name=company_name
+            from_email=from_email,
+            from_name=from_name
         )

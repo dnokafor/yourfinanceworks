@@ -82,6 +82,7 @@ class SendInvoiceEmailRequest(BaseModel):
 class EmailTestRequest(BaseModel):
     """Request to test email configuration"""
     test_email: EmailStr = Field(..., description="Email address to send test email to")
+    config: Optional[EmailConfig] = Field(None, description="Optional email configuration to test (if not provided, uses saved configuration)")
 
 class EmailResponse(BaseModel):
     """Email sending response"""

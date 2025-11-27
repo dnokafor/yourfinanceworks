@@ -169,6 +169,8 @@ def get_email_service_for_tenant(db: Session, tenant_id: int) -> Optional[EmailS
         # Create email provider config
         config = EmailProviderConfig(
             provider=EmailProvider(email_config_data['provider']),
+            from_email=email_config_data.get('from_email'),
+            from_name=email_config_data.get('from_name'),
             aws_access_key_id=email_config_data.get('aws_access_key_id'),
             aws_secret_access_key=email_config_data.get('aws_secret_access_key'),
             aws_region=email_config_data.get('aws_region'),

@@ -38,6 +38,7 @@ api/.mcp_token
 api/static/logos/*
 # But do not ignore the directory itself
 api/api/
+api/data/
 !api/static/logos/
 # Allow .gitkeep to ensure the directory is tracked
 !api/static/logos/.gitkeep
