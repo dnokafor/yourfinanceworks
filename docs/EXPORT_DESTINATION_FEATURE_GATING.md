@@ -1,17 +1,17 @@
 # Export Destination Feature Gating
 
 ## Overview
-Export destinations is now a commercial feature that requires a valid license to access.
+Export destinations is a commercial feature that requires the `cloud_storage` feature to be enabled. This is because export destinations are used to export data to cloud storage providers.
 
 ## Implementation
 
 ### Feature ID
-- **Feature ID:** `export_destinations`
+- **Feature ID:** `cloud_storage` (shared with cloud storage configuration)
 - **Type:** Commercial feature
 - **License Requirement:** Business license (trial or paid)
 
 ### Protected Endpoints
-All export destination endpoints now require the `export_destinations` feature to be enabled:
+All export destination endpoints now require the `cloud_storage` feature to be enabled:
 
 1. **POST /api/v1/export-destinations/** - Create export destination
 2. **GET /api/v1/export-destinations/** - List export destinations
@@ -29,7 +29,7 @@ Added feature check to all endpoints:
 from core.utils.feature_gate import check_feature
 
 # In each endpoint:
-check_feature("export_destinations", db)
+check_feature("cloud_storage", db)
 ```
 
 ### Error Response
@@ -38,8 +38,8 @@ When the feature is not licensed, endpoints return HTTP 402 (Payment Required):
 ```json
 {
   "error": "FEATURE_NOT_LICENSED",
-  "message": "The 'export_destinations' feature requires a valid license...",
-  "feature_id": "export_destinations",
+  "message": "The 'cloud_storage' feature requires a valid license...",
+  "feature_id": "cloud_storage",
   "license_status": "invalid|trial|expired|active",
   "trial_active": false,
   "in_grace_period": false,
@@ -69,8 +69,17 @@ The feature is controlled by the license service. To enable/disable for testing:
 2. **Via Environment:** Set feature flags in the license configuration
 3. **Via Database:** Update the installation_info table with appropriate license status
 
+## Relationship to Cloud Storage
+
+Export destinations share the `cloud_storage` feature gate because:
+1. Both features deal with cloud storage providers (S3, Azure, GCS)
+2. Export destinations are used to export data to cloud storage
+3. Simplifies licensing - one feature gate for all cloud storage functionality
+4. Consistent with the feature matrix where cloud storage is a business-only feature
+
 ## Related Files
 - `api/commercial/export/router.py` - Export destination endpoints
+- `api/commercial/cloud_storage/router.py` - Cloud storage configuration endpoints
 - `api/core/utils/feature_gate.py` - Feature gating utilities
 - `api/core/services/license_service.py` - License service
 - `api/core/constants/export_destination.py` - Export destination constants
