@@ -24,6 +24,7 @@ from core.schemas.export_destination import (
 )
 from core.exceptions.encryption_exceptions import EncryptionError, DecryptionError
 from core.utils.audit import log_audit_event
+from core.constants import EXPORT_DESTINATION_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -82,9 +83,8 @@ class ExportDestinationService:
         """
         try:
             # Validate destination type
-            allowed_types = ['s3', 'azure', 'gcs', 'google_drive']
-            if destination_type not in allowed_types:
-                raise ValueError(f"Invalid destination type. Must be one of: {', '.join(allowed_types)}")
+            if destination_type not in EXPORT_DESTINATION_TYPES:
+                raise ValueError(f"Invalid destination type. Must be one of: {', '.join(EXPORT_DESTINATION_TYPES)}")
             
             # SECURITY: Encrypt credentials using tenant-specific encryption key
             # Credentials are stored encrypted in the database and only decrypted when needed
@@ -552,6 +552,14 @@ class ExportDestinationService:
                 "export destination settings."
             )
 
+        elif destination_type == 'local':
+            # Local destination doesn't require credentials
+            logger.info("Local destination type - no credentials required")
+            return {
+                'type': 'local',
+                'path': os.getenv('LOCAL_EXPORT_PATH', 'exports')
+            }
+
         else:
             raise ValueError(f"Unknown destination type: {destination_type}")
 
@@ -631,6 +639,15 @@ class ExportDestinationService:
 
             if not destination:
                 return False, f"Destination {destination_id} not found"
+
+            # Local destinations don't need testing
+            if destination.destination_type == 'local':
+                logger.info(f"Local destination {destination_id} - skipping connection test")
+                destination.last_test_at = datetime.now(timezone.utc)
+                destination.last_test_success = True
+                destination.last_test_error = None
+                self.db.commit()
+                return True, None
 
             # Get decrypted credentials
             credentials = self.get_decrypted_credentials(destination_id)

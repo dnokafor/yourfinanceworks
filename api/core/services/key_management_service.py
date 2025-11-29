@@ -65,6 +65,9 @@ class KeyManagementService:
         self._master_key: Optional[bytes] = None
         self._key_cache: Dict[int, str] = {}  # Cache for decrypted key material
         self._cache_timestamps: Dict[int, float] = {}
+        self._storage_lock = Lock()  # Lock for thread-safe access to storage
+        self._key_storage: Dict[int, str] = {}  # Storage for encrypted keys (for external providers)
+        self._key_metadata: Dict[int, Dict[str, Any]] = {}  # Metadata for keys
 
         # Initialize key vault provider if not using local storage
         self._key_vault_provider = None

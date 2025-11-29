@@ -320,6 +320,7 @@ const ExportDestinationsTab: React.FC<ExportDestinationsTabProps> = ({ isAdmin }
       case 'azure': return 'Azure Blob Storage';
       case 'gcs': return 'Google Cloud Storage';
       case 'google_drive': return 'Google Drive';
+      case 'local': return 'Local File System';
       default: return type;
     }
   };
@@ -393,18 +394,20 @@ const ExportDestinationsTab: React.FC<ExportDestinationsTabProps> = ({ isAdmin }
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleTestConnection(destination.id)}
-                    disabled={testingId === destination.id}
-                  >
-                    {testingId === destination.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      t('settings.test')
-                    )}
-                  </Button>
+                  {destination.testable && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleTestConnection(destination.id)}
+                      disabled={testingId === destination.id}
+                    >
+                      {testingId === destination.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        t('settings.test')
+                      )}
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
@@ -502,6 +505,7 @@ const ExportDestinationsTab: React.FC<ExportDestinationsTabProps> = ({ isAdmin }
                   <SelectItem value="azure">Azure Blob Storage</SelectItem>
                   <SelectItem value="gcs">Google Cloud Storage</SelectItem>
                   <SelectItem value="google_drive">Google Drive</SelectItem>
+                  <SelectItem value="local">Local File System</SelectItem>
                 </SelectContent>
               </Select>
               {editingDestination && (

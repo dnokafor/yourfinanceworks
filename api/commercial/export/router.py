@@ -24,6 +24,7 @@ from core.schemas.export_destination import (
 )
 from core.utils.rbac import require_admin, require_non_viewer
 from core.utils.audit import log_audit_event
+from core.utils.feature_gate import check_feature
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +95,9 @@ async def create_export_destination(
     Requires admin or write permissions.
     Credentials are encrypted before storage.
     """
+    # Check if export_destinations feature is enabled
+    check_feature("export_destinations", db)
+    
     # Check permissions
     require_non_viewer(current_user, "create export destinations")
     
@@ -141,7 +145,8 @@ async def create_export_destination(
             last_test_error=destination_config.last_test_error,
             created_at=destination_config.created_at,
             updated_at=destination_config.updated_at,
-            created_by=destination_config.created_by
+            created_by=destination_config.created_by,
+            testable=destination_config.destination_type != 'local'
         )
         
     except ValueError as e:
@@ -182,6 +187,9 @@ async def list_export_destinations(
     Includes connection test status.
     Supports pagination.
     """
+    # Check if export_destinations feature is enabled
+    check_feature("export_destinations", db)
+    
     try:
         # Get destinations
         destinations = service.list_destinations(
@@ -219,7 +227,8 @@ async def list_export_destinations(
                     last_test_error=dest.last_test_error,
                     created_at=dest.created_at,
                     updated_at=dest.updated_at,
-                    created_by=dest.created_by
+                    created_by=dest.created_by,
+                    testable=dest.destination_type != 'local'
                 )
             )
         
@@ -253,6 +262,9 @@ async def get_export_destination(
     
     Returns masked credentials.
     """
+    # Check if export_destinations feature is enabled
+    check_feature("export_destinations", db)
+    
     try:
         # Get destination
         destination = service.get_destination(destination_id)
@@ -285,7 +297,8 @@ async def get_export_destination(
             last_test_error=destination.last_test_error,
             created_at=destination.created_at,
             updated_at=destination.updated_at,
-            created_by=destination.created_by
+            created_by=destination.created_by,
+            testable=destination.destination_type != 'local'
         )
         
     except HTTPException:
@@ -318,6 +331,9 @@ async def update_export_destination(
     Re-encrypts credentials after update.
     Requires admin or write permissions.
     """
+    # Check if export_destinations feature is enabled
+    check_feature("export_destinations", db)
+    
     # Check permissions
     require_non_viewer(current_user, "update export destinations")
     
@@ -366,7 +382,8 @@ async def update_export_destination(
             last_test_error=destination_config.last_test_error,
             created_at=destination_config.created_at,
             updated_at=destination_config.updated_at,
-            created_by=destination_config.created_by
+            created_by=destination_config.created_by,
+            testable=destination_config.destination_type != 'local'
         )
         
     except ValueError as e:
@@ -403,6 +420,9 @@ async def test_export_destination(
     Updates last_test_at and last_test_success fields.
     Returns test result with error details if failed.
     """
+    # Check if export_destinations feature is enabled
+    check_feature("export_destinations", db)
+    
     try:
         # Test connection
         success, error_message = await service.test_connection(destination_id)
@@ -459,6 +479,9 @@ async def delete_export_destination(
     Validates no active batch jobs are using this destination.
     Requires admin permissions.
     """
+    # Check if export_destinations feature is enabled
+    check_feature("export_destinations", db)
+    
     # Check permissions - require admin for deletion
     require_admin(current_user, "delete export destinations")
     

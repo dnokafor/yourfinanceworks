@@ -8,6 +8,7 @@ and export destination configuration.
 from typing import Optional, Dict, Any, Union
 from pydantic import BaseModel, Field, validator
 from datetime import datetime
+from core.constants import EXPORT_DESTINATION_TYPES
 
 
 # ============================================================================
@@ -154,9 +155,8 @@ class ExportDestinationCreate(BaseModel):
     @validator('destination_type')
     def validate_destination_type(cls, v):
         """Validate destination type"""
-        allowed_types = ['s3', 'azure', 'gcs', 'google_drive']
-        if v not in allowed_types:
-            raise ValueError(f"Destination type must be one of: {', '.join(allowed_types)}")
+        if v not in EXPORT_DESTINATION_TYPES:
+            raise ValueError(f"Destination type must be one of: {', '.join(EXPORT_DESTINATION_TYPES)}")
         return v
 
     @validator('name')
@@ -199,6 +199,7 @@ class ExportDestinationResponse(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime]
     created_by: Optional[int]
+    testable: bool = Field(default=True, description="Whether this destination supports connection testing")
 
     class Config:
         from_attributes = True

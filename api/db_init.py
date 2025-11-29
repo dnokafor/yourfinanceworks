@@ -367,6 +367,27 @@ def init_db(skip_migrations=True):
     # This ensures user data is encrypted properly
     os.environ['DB_INIT_PHASE'] = 'false'
 
+    # Generate encryption keys for all tenants
+    logger.info("Generating encryption keys for all tenants...")
+    try:
+        from core.services.key_management_service import KeyManagementService
+        key_management = KeyManagementService()
+        
+        for tenant in tenants:
+            try:
+                # Check if tenant key already exists
+                existing_keys = key_management.list_tenant_keys()
+                if tenant.id not in existing_keys:
+                    logger.info(f"Generating encryption key for tenant {tenant.id}...")
+                    key_management.generate_tenant_key(tenant.id)
+                    logger.info(f"Generated encryption key for tenant {tenant.id}")
+                else:
+                    logger.info(f"Encryption key already exists for tenant {tenant.id}")
+            except Exception as e:
+                logger.error(f"Failed to generate encryption key for tenant {tenant.id}: {str(e)}")
+    except Exception as e:
+        logger.error(f"Failed to initialize encryption keys: {str(e)}")
+
     # Re-sync users with encryption enabled to ensure proper encryption
     logger.info("Re-syncing users with encryption enabled...")
     for tenant in tenants:

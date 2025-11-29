@@ -3088,7 +3088,7 @@ export interface ExportDestination {
   id: number;
   tenant_id: number;
   name: string;
-  destination_type: 's3' | 'azure' | 'gcs' | 'google_drive';
+  destination_type: 's3' | 'azure' | 'gcs' | 'google_drive' | 'local';
   is_active: boolean;
   is_default: boolean;
   config?: Record<string, any>;
@@ -3099,11 +3099,12 @@ export interface ExportDestination {
   created_at: string;
   updated_at?: string;
   created_by?: number;
+  testable?: boolean;
 }
 
 export interface ExportDestinationCreate {
   name: string;
-  destination_type: 's3' | 'azure' | 'gcs' | 'google_drive';
+  destination_type: 's3' | 'azure' | 'gcs' | 'google_drive' | 'local';
   credentials: Record<string, any>;
   config?: Record<string, any>;
   is_default?: boolean;
