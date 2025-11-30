@@ -340,6 +340,46 @@ class SearchService:
         except Exception as e:
             logger.error(f"Error indexing inventory item {item.id}: {e}")
     
+    def index_expense(self, expense: Expense):
+        """Index an expense document"""
+        if not self.enabled:
+            return
+            
+        # Skip indexing if no tenant context
+        try:
+            tenant_id = get_tenant_context()
+            if tenant_id is None:
+                logger.debug("Skipping search indexing: no tenant context")
+                return
+        except Exception:
+            logger.debug("Skipping search indexing: failed to get tenant context")
+            return
+            
+        try:
+            doc = {
+                'id': str(expense.id),
+                'tenant_id': get_tenant_context(),
+                'vendor': expense.vendor or '',
+                'category': expense.category or '',
+                'amount': float(expense.amount or 0),
+                'currency': expense.currency or 'USD',
+                'description': expense.notes or '',
+                'receipt_filename': expense.receipt_filename or '',
+                'created_at': expense.created_at.isoformat() if expense.created_at else None,
+                'updated_at': expense.updated_at.isoformat() if expense.updated_at else None,
+                'searchable_text': f"{expense.vendor or ''} {expense.category or ''} {expense.notes or ''} {expense.receipt_filename or ''}"
+            }
+            
+            index_name = self._get_tenant_index('expenses')
+            self.client.index(
+                index=index_name,
+                id=str(expense.id),
+                body=doc
+            )
+            logger.debug(f"Indexed expense {expense.id}")
+        except Exception as e:
+            logger.error(f"Error indexing expense {expense.id}: {e}")
+    
     def index_reminder(self, reminder: Reminder):
         """Index a reminder document"""
         if not self.enabled:
@@ -457,7 +497,7 @@ class SearchService:
             results = []
             
             if not entity_types:
-                entity_types = ['invoices', 'clients', 'payments', 'expenses', 'inventory', 'reminders']
+                entity_types = ['invoices', 'clients', 'payments', 'expenses', 'statements', 'attachments', 'inventory', 'reminders']
             
             # Search invoices
             if 'invoices' in entity_types:
@@ -533,6 +573,33 @@ class SearchService:
                             'quantity': item.quantity or 0,
                             'unit_price': float(item.unit_price or 0),
                             'created_at': item.created_at.isoformat() if item.created_at else None
+                        },
+                        'highlights': {}
+                    })
+            
+            # Search expenses
+            if 'expenses' in entity_types:
+                expenses = db.query(Expense).filter(
+                    or_(
+                        Expense.vendor.ilike(f"%{query}%"),
+                        Expense.category.ilike(f"%{query}%"),
+                        Expense.notes.ilike(f"%{query}%"),
+                        Expense.receipt_filename.ilike(f"%{query}%")
+                    )
+                ).limit(limit // len(entity_types)).all()
+                
+                for expense in expenses:
+                    results.append({
+                        'id': str(expense.id),
+                        'type': 'expenses',
+                        'score': 1.0,
+                        'data': {
+                            'id': str(expense.id),
+                            'vendor': expense.vendor or '',
+                            'category': expense.category or '',
+                            'amount': float(expense.amount or 0),
+                            'currency': expense.currency or 'USD',
+                            'created_at': expense.created_at.isoformat() if expense.created_at else None
                         },
                         'highlights': {}
                     })
@@ -633,6 +700,11 @@ class SearchService:
             inventory_items = db.query(InventoryItem).all()
             for item in inventory_items:
                 self.index_inventory_item(item)
+            
+            # Index expenses
+            expenses = db.query(Expense).all()
+            for expense in expenses:
+                self.index_expense(expense)
             
             # Index reminders
             reminders = db.query(Reminder).all()
