@@ -40,7 +40,7 @@ export function ApprovalActionButtons({ approval, onAction }: ApprovalActionButt
     try {
       setLoading('reject');
       await onAction(approval.id, 'reject', { 
-        reason: rejectReason, 
+        rejection_reason: rejectReason, 
         notes: rejectNotes 
       });
       setRejectDialogOpen(false);

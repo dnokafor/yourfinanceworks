@@ -1534,7 +1534,10 @@
     "all_inventory_consumption_items_must_have_quantity_greater_than_0": "All inventory consumption items must have a quantity greater than 0",
     "consumption_expense_created_successfully": "Consumption expense created successfully",
     "expense_submitted_for_approval_successfully": "Expense submitted for approval successfully",
-    "failed_to_submit_expense_for_approval": "Failed to submit expense for approval"
+    "failed_to_submit_expense_for_approval": "Failed to submit expense for approval",
+    "approval_request_message": "Approval Request Message",
+    "viewing_inventory_consumption": "This expense consumed the following inventory items:",
+    "consumed_items_count": "{{count}} item(s) consumed"
   },
   "email": {
     "subject": "Subject",
@@ -2367,6 +2370,7 @@
     "due_today": "Due Today",
     "overdue": "Overdue",
     "snoozed": "Snoozed",
+    "snoozed_until": "Snoozed until",
     "completed": "Completed",
     "completed_on": "Completed on",
     "search_placeholder": "Search reminders...",
@@ -2438,7 +2442,6 @@
       "pending": "Pending",
       "completed": "Completed",
       "snoozed": "Snoozed",
-      "snoozed_until": "Snoozed until",
       "cancelled": "Cancelled"
     },
     "actions": {

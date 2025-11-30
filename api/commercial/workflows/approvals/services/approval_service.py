@@ -215,7 +215,10 @@ class ApprovalService:
         # Check approval state
         if approval.status != ApprovalStatus.PENDING:
             raise InvalidApprovalState(
-                f"Approval is in {approval.status} state, cannot approve"
+                approval_id=approval.id,
+                current_state=approval.status if isinstance(approval.status, str) else approval.status.value,
+                operation="approve",
+                valid_states=["pending"]
             )
         
         # Check if this is the current approval level
@@ -301,7 +304,10 @@ class ApprovalService:
         # Check approval state
         if approval.status != ApprovalStatus.PENDING:
             raise InvalidApprovalState(
-                f"Approval is in {approval.status} state, cannot reject"
+                approval_id=approval.id,
+                current_state=approval.status if isinstance(approval.status, str) else approval.status.value,
+                operation="reject",
+                valid_states=["pending"]
             )
         
         # Update approval record
@@ -663,7 +669,12 @@ class ApprovalService:
             raise ValidationError(f"Expense {expense_id} not found")
         
         if expense.status != "rejected":
-            raise InvalidApprovalState(f"Expense is in {expense.status} state, cannot resubmit")
+            raise InvalidApprovalState(
+                approval_id=expense_id,  # Using expense_id as identifier
+                current_state=expense.status,
+                operation="resubmit",
+                valid_states=["rejected"]
+            )
         
         # Mark expense as resubmitted
         expense.status = "resubmitted"

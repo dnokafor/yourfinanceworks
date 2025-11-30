@@ -2288,6 +2288,7 @@
     "due_today": "Fällig Heute",
     "overdue": "Überfällig",
     "snoozed": "Verschoben",
+    "snoozed_until": "Zurückgestellt bis",
     "completed": "Abgeschlossen",
     "completed_on": "Abgeschlossen am",
     "search_placeholder": "Erinnerungen suchen...",
@@ -2359,7 +2360,6 @@
       "pending": "Ausstehend",
       "completed": "Abgeschlossen",
       "snoozed": "Zurückgestellt",
-      "snoozed_until": "Zurückgestellt bis",
       "cancelled": "Abgebrochen"
     },
     "actions": {

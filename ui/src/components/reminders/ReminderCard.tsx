@@ -159,7 +159,7 @@ export function ReminderCard({
               </span>
             </div>
           )}
-          
+
           {reminder.recurrence_pattern !== 'none' && (
             <div className="flex items-center gap-1">
               <Clock className="h-4 w-4" />
@@ -243,7 +243,7 @@ export function ReminderCard({
               </Button>
             </>
           )}
-          
+
           {isCreatedByCurrentUser && (
             <Button
               size="sm"

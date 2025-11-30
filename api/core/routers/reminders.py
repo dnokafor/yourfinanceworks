@@ -849,7 +849,7 @@ def dismiss_notification(
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
-    """Dismiss (soft delete) a notification"""
+    """Dismiss (delete) a notification"""
 
     notification = db.query(ReminderNotification).filter(
         ReminderNotification.id == notification_id,
@@ -862,6 +862,8 @@ def dismiss_notification(
             detail="Notification not found"
         )
 
-    # Instead of hard deleting, we could add a dismissed field, but for now just return success
-    # The frontend will handle removing it from the UI
+    # Delete the notification from the database
+    db.delete(notification)
+    db.commit()
+
     return

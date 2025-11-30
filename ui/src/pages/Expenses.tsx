@@ -222,7 +222,7 @@ const Expenses = () => {
         unlinkedOnly,
         skip,
         limit: pageSize,
-        excludeStatus: 'pending_approval' // Exclude pending approval expenses from the API
+        // Don't exclude pending_approval - users should see their own submitted expenses
       });
 
       // Reset to page 1 if current page has no results but we're not on page 1
@@ -244,7 +244,6 @@ const Expenses = () => {
             unlinkedOnly,
             skip: skip + pageSize,
             limit: 1,
-            excludeStatus: 'pending_approval'
           });
           const hasMore = Array.isArray(probe) && probe.length > 0;
           setHasNextPage(hasMore);

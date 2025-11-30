@@ -7,7 +7,7 @@ It handles expense submission for approval, approval decisions, and approval his
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, desc
+from sqlalchemy import and_, desc, text
 from typing import List, Optional
 from datetime import datetime, timezone
 import logging
@@ -161,28 +161,62 @@ async def submit_expense_for_approval(
             approver_id=submission_data.approver_id
         )
         
-        # Create notification for approvers
-        from core.models.models_per_tenant import ReminderNotification, Expense
+        # Create notification and reminder for approvers
+        from core.models.models_per_tenant import ReminderNotification, Expense, Reminder, ReminderStatus, ReminderPriority, RecurrencePattern
+        from datetime import timedelta
         now = datetime.now(timezone.utc)
         expense = db.query(Expense).filter(Expense.id == expense_id).first()
         
         for approval in approvals:
             if approval.approver_id:
+                # Create in-app notification with expense_id in subject for navigation
                 notification = ReminderNotification(
                     reminder_id=None,
                     user_id=approval.approver_id,
                     notification_type="expense_approval",
                     channel="in_app",
                     scheduled_for=now,
-                    subject=f"Expense Approval Request",
-                    message=f"New expense approval request from {current_user.email}: ${expense.amount if expense else 'N/A'}",
+                    subject=f"Expense Approval Request #{expense_id}",  # Include expense_id for navigation
+                    message=f"New expense approval request from {current_user.email}: ${expense.amount if expense else 'N/A'} - {expense.vendor if expense and expense.vendor else 'Unknown Vendor'}",
                     is_sent=True,
                     sent_at=now
                 )
                 db.add(notification)
-        
+
+                # Create a reminder task for the approver
+                # Determine priority based on expense amount
+                priority = ReminderPriority.MEDIUM
+                if expense and expense.amount:
+                    if expense.amount >= 1000:
+                        priority = ReminderPriority.HIGH
+                    elif expense.amount >= 5000:
+                        priority = ReminderPriority.URGENT
+
+                # Set due date to 3 business days from now
+                due_date = now + timedelta(days=3)
+
+                reminder = Reminder(
+                    title=f"Approve Expense: ${expense.amount if expense else 'N/A'} - {expense.vendor if expense and expense.vendor else 'Unknown Vendor'}",
+                    description=f"Expense approval request from {current_user.email}\n\nAmount: ${expense.amount if expense else 'N/A'}\nCategory: {expense.category if expense and expense.category else 'N/A'}\nDate: {expense.expense_date if expense and expense.expense_date else 'N/A'}\n\nNotes: {submission_data.notes if submission_data.notes else 'No notes provided'}",
+                    due_date=due_date,
+                    priority=priority,
+                    status=ReminderStatus.PENDING,
+                    recurrence_pattern=RecurrencePattern.NONE,
+                    assigned_to_id=approval.approver_id,
+                    created_by_id=current_user.id,
+                    tags=["approval", "expense", f"expense-{expense_id}"],
+                    metadata={
+                        "expense_id": expense_id,
+                        "approval_id": approval.id,
+                        "approval_level": approval.approval_level,
+                        "submitter_id": current_user.id,
+                        "submitter_email": current_user.email
+                    }
+                )
+                db.add(reminder)
+
         db.commit()
-        
+
         # Log audit event
         log_audit_event(
             db=db,
@@ -197,11 +231,11 @@ async def submit_expense_for_approval(
                 "notes": submission_data.notes
             }
         )
-        
+
         logger.info(f"User {current_user.id} submitted expense {expense_id} for approval")
-        
+
         return approvals
-        
+
     except ExpenseValidationError as e:
         logger.warning(f"Expense validation error submitting expense {expense_id}: {str(e)}")
         raise HTTPException(
@@ -373,8 +407,8 @@ async def approve_expense(
             notes=decision_data.notes
         )
         
-        # Create notification for expense submitter
-        from core.models.models_per_tenant import ReminderNotification, Expense
+        # Create notification for expense submitter and complete the reminder
+        from core.models.models_per_tenant import ReminderNotification, Expense, Reminder, ReminderStatus
         now = datetime.now(timezone.utc)
         expense = db.query(Expense).filter(Expense.id == approval.expense_id).first()
         
@@ -385,14 +419,28 @@ async def approve_expense(
                 notification_type="expense_approved",
                 channel="in_app",
                 scheduled_for=now,
-                subject=f"Expense Approved",
+                subject=f"Expense Approved #{approval.expense_id}",  # Include expense_id for navigation
                 message=f"Your expense of ${expense.amount} has been approved by {current_user.email}",
                 is_sent=True,
                 sent_at=now
             )
             db.add(notification)
-            db.commit()
-        
+
+        # Complete the reminder task for this approval
+        reminder = db.query(Reminder).filter(
+            Reminder.assigned_to_id == current_user.id,
+            Reminder.status == ReminderStatus.PENDING,
+            text("extra_metadata::jsonb @> :metadata")
+        ).params(metadata=f'{{"approval_id": {approval_id}}}').first()
+
+        if reminder:
+            reminder.status = ReminderStatus.COMPLETED
+            reminder.completed_at = now
+            reminder.completed_by_id = current_user.id
+            db.add(reminder)
+
+        db.commit()
+
         # Log audit event
         log_audit_event(
             db=db,
@@ -412,11 +460,11 @@ async def approve_expense(
                 "date": expense.expense_date.isoformat() if expense and expense.expense_date else None
             }
         )
-        
+
         logger.info(f"User {current_user.id} approved expense approval {approval_id}")
-        
+
         return approval
-        
+
     except ValidationError as e:
         logger.warning(f"Validation error approving {approval_id}: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -488,8 +536,8 @@ async def reject_expense(
             notes=decision_data.notes
         )
         
-        # Create notification for expense submitter
-        from core.models.models_per_tenant import ReminderNotification, Expense
+        # Create notification for expense submitter and cancel the reminder
+        from core.models.models_per_tenant import ReminderNotification, Expense, Reminder, ReminderStatus
         now = datetime.now(timezone.utc)
         expense = db.query(Expense).filter(Expense.id == approval.expense_id).first()
         
@@ -500,14 +548,26 @@ async def reject_expense(
                 notification_type="expense_rejected",
                 channel="in_app",
                 scheduled_for=now,
-                subject=f"Expense Rejected",
+                subject=f"Expense Rejected #{approval.expense_id}",  # Include expense_id for navigation
                 message=f"Your expense of ${expense.amount} was rejected by {current_user.email}. Reason: {decision_data.rejection_reason}",
                 is_sent=True,
                 sent_at=now
             )
             db.add(notification)
-            db.commit()
-        
+
+        # Cancel the reminder task for this approval (since it's rejected)
+        reminder = db.query(Reminder).filter(
+            Reminder.assigned_to_id == current_user.id,
+            Reminder.status == ReminderStatus.PENDING,
+            text("extra_metadata::jsonb @> :metadata")
+        ).params(metadata=f'{{"approval_id": {approval_id}}}').first()
+
+        if reminder:
+            reminder.status = ReminderStatus.CANCELLED
+            db.add(reminder)
+
+        db.commit()
+
         # Log audit event
         log_audit_event(
             db=db,
@@ -523,11 +583,11 @@ async def reject_expense(
                 "notes": decision_data.notes
             }
         )
-        
+
         logger.info(f"User {current_user.id} rejected expense approval {approval_id}")
-        
+
         return approval
-        
+
     except ValidationError as e:
         logger.warning(f"Validation error rejecting {approval_id}: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -553,30 +613,30 @@ async def get_approval_history(
 ):
     """
     Get complete approval history for an expense.
-    
+
     This endpoint returns the complete audit trail of approval decisions
     for a specific expense, including all approval levels, decisions, and timestamps.
-    
+
     Args:
         expense_id: ID of the expense to get approval history for
         current_user: Currently authenticated user
         approval_service: Approval service instance
-        
+
     Returns:
         ExpenseApprovalHistory with complete approval audit trail
-        
+
     Raises:
         HTTPException: 404 if expense not found
     """
     try:
         require_non_viewer(current_user)
-        
+
         history = approval_service.get_approval_history(expense_id)
-        
+
         logger.info(f"Retrieved approval history for expense {expense_id} by user {current_user.id}")
-        
+
         return history
-        
+
     except ValidationError as e:
         logger.warning(f"Validation error getting history for expense {expense_id}: {str(e)}")
         raise HTTPException(status_code=404, detail=str(e))
@@ -593,30 +653,30 @@ async def get_approval_metrics(
 ):
     """
     Get approval workflow metrics.
-    
+
     This endpoint provides aggregated metrics about the approval workflow
     including approval rates, average approval times, and decision counts.
-    
+
     Args:
         approver_id: Optional filter by specific approver (defaults to current user)
         current_user: Currently authenticated user
         approval_service: Approval service instance
-        
+
     Returns:
         ApprovalMetrics with aggregated approval statistics
     """
     try:
         require_non_viewer(current_user)
-        
+
         # If no approver_id specified, use current user
         target_approver_id = approver_id if approver_id is not None else current_user.id
-        
+
         metrics = approval_service.get_approval_metrics(approver_id=target_approver_id)
-        
+
         logger.info(f"Retrieved approval metrics for approver {target_approver_id} by user {current_user.id}")
-        
+
         return metrics
-        
+
     except Exception as e:
         logger.error(f"Error retrieving approval metrics: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")

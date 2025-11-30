@@ -130,18 +130,23 @@ export function InAppNotifications({ className }: InAppNotificationsProps) {
   };
 
   const getNotificationMessage = (notification: InAppNotification) => {
-    const { reminder, notification_type, message } = notification;
+    const { reminder, notification_type, message, subject } = notification;
     
     // Handle join request notifications (no reminder linked)
     if (notification_type === 'join_request') {
       return message || 'New join request received';
     }
     
+    // Handle expense approval notifications
+    if (notification_type === 'expense_approval' || notification_type === 'expense_approved' || notification_type === 'expense_rejected') {
+      return message || subject || 'Expense notification';
+    }
+
     // Handle reminder notifications
     if (!reminder) return message || 'Notification';
-    
+
     const dueDate = new Date(reminder.due_date);
-    
+
     switch (notification_type) {
       case 'due':
         return `"${reminder.title}" is due ${isToday(dueDate) ? 'today' : format(dueDate, 'MMM d')}`;
@@ -163,6 +168,35 @@ export function InAppNotifications({ className }: InAppNotificationsProps) {
       case 'medium': return 'bg-yellow-100 border-yellow-200';
       case 'low': return 'bg-green-100 border-green-200';
       default: return 'bg-gray-100 border-gray-200';
+    }
+  };
+
+  const extractExpenseId = (subject?: string): number | null => {
+    if (!subject) return null;
+    const match = subject.match(/#(\d+)/);
+    return match ? parseInt(match[1]) : null;
+  };
+
+  const handleNotificationClick = (notification: InAppNotification) => {
+    const { notification_type, subject } = notification;
+
+    // Handle join request notifications
+    if (notification_type === 'join_request') {
+      markAsRead(notification.id);
+      setOpen(false);
+      window.location.href = '/organization-join-requests';
+      return;
+    }
+
+    // Handle expense approval notifications
+    if (notification_type === 'expense_approval' || notification_type === 'expense_approved' || notification_type === 'expense_rejected') {
+      const expenseId = extractExpenseId(subject);
+      if (expenseId) {
+        markAsRead(notification.id);
+        setOpen(false);
+        window.location.href = `/expenses/view/${expenseId}`;
+      }
+      return;
     }
   };
 
@@ -225,15 +259,12 @@ export function InAppNotifications({ className }: InAppNotificationsProps) {
                           "flex items-start gap-3 p-3 rounded-lg transition-colors hover:bg-muted/50",
                           !notification.is_read && "bg-blue-50 border border-blue-200",
                           notification.reminder && getPriorityColor(notification.reminder.priority),
-                          notification.notification_type === 'join_request' && "cursor-pointer"
+                          (notification.notification_type === 'join_request' || 
+                           notification.notification_type === 'expense_approval' || 
+                           notification.notification_type === 'expense_approved' || 
+                           notification.notification_type === 'expense_rejected') && "cursor-pointer"
                         )}
-                        onClick={() => {
-                          if (notification.notification_type === 'join_request') {
-                            markAsRead(notification.id);
-                            setOpen(false);
-                            window.location.href = '/organization-join-requests';
-                          }
-                        }}
+                        onClick={() => handleNotificationClick(notification)}
                       >
                         <div className="flex-shrink-0 mt-1">
                           {getNotificationIcon(notification.notification_type, notification.reminder?.priority || 'medium')}
@@ -278,9 +309,27 @@ export function InAppNotifications({ className }: InAppNotificationsProps) {
                                 Join Request
                               </Badge>
                             )}
+
+                            {notification.notification_type === 'expense_approval' && (
+                              <Badge variant="outline" className="text-xs border-orange-500 text-orange-700">
+                                Approval Needed
+                              </Badge>
+                            )}
+
+                            {notification.notification_type === 'expense_approved' && (
+                              <Badge variant="outline" className="text-xs border-green-500 text-green-700">
+                                Approved
+                              </Badge>
+                            )}
+
+                            {notification.notification_type === 'expense_rejected' && (
+                              <Badge variant="outline" className="text-xs border-red-500 text-red-700">
+                                Rejected
+                              </Badge>
+                            )}
                           </div>
                         </div>
-                        
+
                         <div className="flex flex-col gap-1">
                           {!notification.is_read && (
                             <Button
@@ -292,7 +341,7 @@ export function InAppNotifications({ className }: InAppNotificationsProps) {
                               <Check className="h-3 w-3" />
                             </Button>
                           )}
-                          
+
                           <Button
                             variant="ghost"
                             size="sm"
@@ -303,14 +352,14 @@ export function InAppNotifications({ className }: InAppNotificationsProps) {
                           </Button>
                         </div>
                       </div>
-                      
+
                       {index < notifications.length - 1 && <Separator className="my-1" />}
                     </div>
                   ))}
                 </div>
               </ScrollArea>
             )}
-            
+
             {notifications.length > 0 && (
               <div className="p-3 border-t">
                 <Button 

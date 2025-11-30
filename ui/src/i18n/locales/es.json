@@ -2327,6 +2327,7 @@
     "due_today": "Vence Hoy",
     "overdue": "Vencido",
     "snoozed": "Pospuesto",
+    "snoozed_until": "Pospuesto hasta",
     "completed": "Completado",
     "completed_on": "Completado el",
     "search_placeholder": "Buscar recordatorios...",
@@ -2404,7 +2405,6 @@
       "pending": "Pendiente",
       "completed": "Completado",
       "snoozed": "Pospuesto",
-      "snoozed_until": "Pospuesto hasta",
       "cancelled": "Cancelado"
     },
     "actions": {

@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { format, subDays, addDays } from 'date-fns';
-import { 
-  Plus, 
-  Filter, 
-  Search, 
-  Calendar, 
-  List, 
-  Clock, 
+import {
+  Plus,
+  Filter,
+  Search,
+  Calendar,
+  List,
+  Clock,
   AlertCircle,
   CheckCircle,
   Loader2,
@@ -96,6 +96,16 @@ export function ReminderList({ className }: ReminderListProps) {
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
+  // Tab counts
+  const [tabCounts, setTabCounts] = useState({
+    all: 0,
+    my: 0,
+    due_today: 0,
+    overdue: 0,
+    snoozed: 0,
+    completed: 0,
+  });
+
   const activeTab = searchParams.get('tab') || 'all';
 
   useEffect(() => {
@@ -103,6 +113,13 @@ export function ReminderList({ className }: ReminderListProps) {
     loadUsers();
     loadCurrentUser();
   }, [page, searchQuery, statusFilter, priorityFilter, assignedToFilter, dueDateFrom, dueDateTo, activeTab]);
+
+  // Fetch tab counts when currentUser is loaded or when reminders change
+  useEffect(() => {
+    if (currentUser) {
+      fetchTabCounts();
+    }
+  }, [currentUser, page, searchQuery, statusFilter, priorityFilter, assignedToFilter, dueDateFrom, dueDateTo, activeTab]);
 
   useEffect(() => {
     // Update URL params
@@ -118,6 +135,36 @@ export function ReminderList({ className }: ReminderListProps) {
     setSearchParams(params);
   }, [searchQuery, statusFilter, priorityFilter, assignedToFilter, dueDateFrom, dueDateTo, page, activeTab, setSearchParams]);
 
+  const fetchTabCounts = async () => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      // Fetch counts for each tab in parallel
+      const [allData, myData, dueTodayData, overdueData, snoozedData, completedData] = await Promise.all([
+        reminderApi.getReminders({ page: 1, per_page: 1 }), // all
+        currentUser ? reminderApi.getReminders({ page: 1, per_page: 1, assigned_to_id: currentUser.id }) : Promise.resolve({ total: 0 }), // my
+        reminderApi.getReminders({ page: 1, per_page: 1, due_date_from: today.toISOString(), due_date_to: tomorrow.toISOString(), status: ['pending', 'snoozed'] }), // due_today
+        reminderApi.getReminders({ page: 1, per_page: 1, due_date_to: new Date().toISOString(), status: ['pending'] }), // overdue
+        reminderApi.getReminders({ page: 1, per_page: 1, status: ['snoozed'] }), // snoozed
+        reminderApi.getReminders({ page: 1, per_page: 1, status: ['completed'] }), // completed
+      ]);
+
+      setTabCounts({
+        all: allData.total || 0,
+        my: myData.total || 0,
+        due_today: dueTodayData.total || 0,
+        overdue: overdueData.total || 0,
+        snoozed: snoozedData.total || 0,
+        completed: completedData.total || 0,
+      });
+    } catch (error) {
+      console.error('Failed to fetch tab counts:', error);
+    }
+  };
+
   const loadReminders = async () => {
     try {
       setLoading(true);
@@ -125,8 +172,8 @@ export function ReminderList({ className }: ReminderListProps) {
       const params: any = {
         page,
         per_page: 20,
-        sort_by: 'due_date',
-        sort_order: 'asc',
+        sort_by: 'created_at',
+        sort_order: 'desc',
       };
 
       if (searchQuery) params.search = searchQuery;
@@ -213,6 +260,7 @@ export function ReminderList({ className }: ReminderListProps) {
       toast.success('Reminder created successfully');
       setShowForm(false);
       loadReminders();
+      fetchTabCounts();
     } catch (error) {
       toast.error('Failed to create reminder');
     } finally {
@@ -236,6 +284,7 @@ export function ReminderList({ className }: ReminderListProps) {
       toast.success('Reminder updated successfully');
       setEditingReminder(null);
       loadReminders();
+      fetchTabCounts();
     } catch (error) {
       toast.error('Failed to update reminder');
     } finally {
@@ -252,6 +301,7 @@ export function ReminderList({ className }: ReminderListProps) {
 
       toast.success('Reminder marked as completed');
       loadReminders();
+      fetchTabCounts();
     } catch (error) {
       toast.error('Failed to complete reminder');
     }
@@ -266,6 +316,7 @@ export function ReminderList({ className }: ReminderListProps) {
 
       toast.success('Reminder snoozed');
       loadReminders();
+      fetchTabCounts();
     } catch (error) {
       toast.error('Failed to snooze reminder');
     }
@@ -277,6 +328,7 @@ export function ReminderList({ className }: ReminderListProps) {
 
       toast.success('Reminder unsnoozed');
       loadReminders();
+      fetchTabCounts();
     } catch (error) {
       toast.error('Failed to unsnooze reminder');
     }
@@ -288,29 +340,14 @@ export function ReminderList({ className }: ReminderListProps) {
 
       toast.success('Reminder deleted');
       loadReminders();
+      fetchTabCounts();
     } catch (error) {
       toast.error('Failed to delete reminder');
     }
   };
 
-  const getTabCounts = () => {
-    // This would ideally come from the API, but for now we'll calculate from current data
-    const today = new Date();
-    const todayStr = format(today, 'yyyy-MM-dd');
-    
-    const counts = {
-      all: totalCount,
-      my: reminders.filter(r => r.assigned_to.id === currentUser?.id).length,
-      due_today: reminders.filter(r => format(new Date(r.due_date), 'yyyy-MM-dd') === todayStr).length,
-      overdue: reminders.filter(r => new Date(r.due_date) < today && r.status === 'pending').length,
-      snoozed: reminders.filter(r => r.status === 'snoozed').length,
-      completed: reminders.filter(r => r.status === 'completed').length,
-    };
-    
-    return counts;
-  };
-
-  const counts = getTabCounts();
+  // Use the fetched tab counts from state
+  const counts = tabCounts;
 
   if (showForm || editingReminder) {
     return (
@@ -467,8 +504,8 @@ export function ReminderList({ className }: ReminderListProps) {
                     {dueDateFrom && dueDateTo
                       ? `${format(dueDateFrom, 'MMM d')} - ${format(dueDateTo, 'MMM d')}`
                       : dueDateFrom
-                      ? `From ${format(dueDateFrom, 'MMM d')}`
-                      : `Until ${format(dueDateTo!, 'MMM d')}`}
+                        ? `From ${format(dueDateFrom, 'MMM d')}`
+                        : `Until ${format(dueDateTo!, 'MMM d')}`}
                   </Badge>
                 )}
               </Button>
@@ -519,13 +556,13 @@ export function ReminderList({ className }: ReminderListProps) {
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <Clock className="h-12 w-12 text-muted-foreground mb-4" />
                 <h3 className="text-lg font-semibold mb-2">{t('reminders.no_reminders_found')}</h3>
-                <p className="text-muted-foreground text-center mb-4">
+                {/* <p className="text-muted-foreground text-center mb-4">
                   {activeTab === 'all' 
                     ? t('reminders.form.create_your_first_reminder_to_get_started')
                     : activeTab === 'snoozed'
                     ? t('reminders.no_snoozed_reminders_all_your_reminders_are_active')
                     : t('reminders.no_reminders', { tab: activeTab.replace('_', ' ') })}
-                </p>
+                </p> */}
                 <Button onClick={() => setShowForm(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   {t('reminders.form.create_reminder')}

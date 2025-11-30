@@ -134,6 +134,18 @@ export default function ExpensesView() {
           )}
         </div>
 
+        {/* Show approval request message if exists */}
+        {approval && approval.notes && (
+          <Card className="slide-in border-blue-200 bg-blue-50">
+            <CardHeader>
+              <CardTitle className="text-blue-900">{t('expenses.approval_request_message', { defaultValue: 'Approval Request Message' })}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-blue-800">{approval.notes}</p>
+            </CardContent>
+          </Card>
+        )}
+
         <Card className="slide-in">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -249,29 +261,29 @@ export default function ExpensesView() {
               </div>
             </div>
 
-            {/* Inventory Consumption Section */}
-            <div className="sm:col-span-2">
-              <div className="space-y-3 p-4 border rounded-lg bg-gray-50">
-                <div className="flex items-center gap-2">
-                  <Package className="h-4 w-4" />
-                  <span className="text-sm font-medium">{t('expenses.inventory_integration')}</span>
-                </div>
+            {/* Inventory Consumption Section - Only show if this is an inventory expense */}
+            {isInventoryConsumption && (
+              <div className="sm:col-span-2">
+                <div className="space-y-3 p-4 border rounded-lg bg-gray-50">
+                  <div className="flex items-center gap-2">
+                    <Package className="h-4 w-4" />
+                    <span className="text-sm font-medium">{t('expenses.inventory_integration')}</span>
+                  </div>
 
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="is-inventory-consumption"
-                    checked={isInventoryConsumption}
-                    disabled={true}
-                  />
-                  <label
-                    htmlFor="is-inventory-consumption"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    {t('expenses.this_expense_is_for_consuming_inventory_items')}
-                  </label>
-                </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="is-inventory-consumption"
+                      checked={isInventoryConsumption}
+                      disabled={true}
+                    />
+                    <label
+                      htmlFor="is-inventory-consumption"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      {t('expenses.this_expense_is_for_consuming_inventory_items')}
+                    </label>
+                  </div>
 
-                {isInventoryConsumption && (
                   <div className="space-y-4">
                     <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
                       <div className="flex items-center gap-2 text-orange-800 mb-3">
@@ -279,7 +291,7 @@ export default function ExpensesView() {
                         <span className="text-sm font-medium">{t('expenses.inventory_consumption_details')}</span>
                       </div>
                       <p className="text-sm text-orange-700 mb-4">
-                        {t('expenses.select_the_inventory_items_you_consumed')}
+                        {t('expenses.viewing_inventory_consumption', { defaultValue: 'This expense consumed the following inventory items:' })}
                       </p>
 
                       <InventoryConsumptionForm
@@ -294,15 +306,15 @@ export default function ExpensesView() {
                         <div className="flex items-center gap-2 text-green-800">
                           <Package className="h-4 w-4" />
                           <span className="text-sm font-medium">
-                            {t('expenses.ready_to_process', { count: consumptionItems.length })}
+                            {t('expenses.consumed_items_count', { count: consumptionItems.length, defaultValue: `${consumptionItems.length} item(s) consumed` })}
                           </span>
                         </div>
                       </div>
                     )}
                   </div>
-                )}
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="sm:col-span-2">
               <label className="text-sm">{t('expenses.labels.notes')}</label>

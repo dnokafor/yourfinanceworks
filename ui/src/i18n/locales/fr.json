@@ -2261,6 +2261,7 @@
     "due_today": "Échéance Aujourd'hui",
     "overdue": "En Retard",
     "snoozed": "Reporté",
+    "snoozed_until": "Reporté jusqu'au",
     "completed": "Terminé",
     "completed_on": "Terminé le",
     "search_placeholder": "Rechercher des rappels...",
@@ -2338,7 +2339,6 @@
       "pending": "En Attente",
       "completed": "Terminé",
       "snoozed": "Reporté",
-      "snoozed_until": "Reporté jusqu'au",
       "cancelled": "Annulé"
     },
     "actions": {
