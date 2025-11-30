@@ -19,6 +19,7 @@ from core.models.models import MasterUser
 from core.routers.auth import get_current_user
 from core.schemas.expense import ExpenseCreate, ExpenseUpdate, Expense as ExpenseSchema
 from core.services.currency_service import CurrencyService
+from core.services.search_service import search_service
 from core.utils.rbac import require_non_viewer
 from core.utils.audit import log_audit_event
 from core.utils.file_deletion import delete_file_from_storage
@@ -397,6 +398,12 @@ async def create_expense(
             details=expense.model_dump(),
             status="success",
         )
+
+        # Index the expense for global search
+        try:
+            search_service.index_expense(db_expense)
+        except Exception as e:
+            uvicorn_logger.warning(f"Failed to index expense {db_expense.id} for search: {e}")
 
         return db_expense
     except HTTPException:
@@ -814,6 +821,12 @@ async def update_expense(
             status="success",
         )
 
+        # Reindex the expense for global search
+        try:
+            search_service.index_expense(db_expense)
+        except Exception as e:
+            uvicorn_logger.warning(f"Failed to reindex expense {expense_id} for search: {e}")
+
         return db_expense
     except HTTPException as he:
         uvicorn_logger.error(f"HTTP error updating expense {expense_id}: {he.status_code} - {he.detail}")
@@ -907,6 +920,12 @@ async def delete_expense(
         # Delete the expense (unlinking should prevent FK constraint errors)
         db.delete(db_expense)
         db.commit()
+
+        # Remove from search index
+        try:
+            search_service.delete_document('expenses', str(expense_id))
+        except Exception as e:
+            logger.warning(f"Failed to remove expense {expense_id} from search index: {e}")
 
         log_audit_event(
             db=db,
