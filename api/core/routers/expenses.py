@@ -63,6 +63,7 @@ async def list_expenses(
     invoice_id: Optional[int] = None,
     unlinked_only: bool = False,
     exclude_status: Optional[str] = None,
+    search: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user),
 ):
@@ -72,7 +73,10 @@ async def list_expenses(
     
     try:
         # Build the base query with all filters
+        logger.info(f"list_expenses: current_user.id={current_user.id}, search={search}")
         query = db.query(Expense).filter(Expense.user_id == current_user.id)
+        base_count = query.count()
+        logger.info(f"list_expenses: base_count (before filters)={base_count}")
         if category and category != "all":
             query = query.filter(Expense.category == category)
         if label:
@@ -90,16 +94,42 @@ async def list_expenses(
             query = query.filter(Expense.invoice_id.is_(None))
         if exclude_status:
             query = query.filter(Expense.status != exclude_status)
-        
-        # Count total expenses with all filters applied
-        total_count = query.count()
-        
-        # If skip is beyond available data, return empty results
-        if skip >= total_count and total_count > 0:
-            logger.info(f"Pagination beyond available data: skip={skip} >= total={total_count}, returning empty results")
-            return []
+        # For search, we need to fetch all matching expenses and filter in Python
+        # because vendor and notes are encrypted and can't be searched at the DB level
+        if search:
+            logger.info(f"list_expenses: applying search filter with term={search}")
+            # First, get all expenses with non-search filters applied
+            all_expenses = query.order_by(Expense.id.desc()).all()
+            
+            # Filter in Python to search encrypted fields
+            search_lower = search.lower()
+            filtered_expenses = []
+            for expense in all_expenses:
+                # Search across all fields including encrypted ones
+                if (
+                    (expense.vendor and search_lower in (expense.vendor or "").lower()) or
+                    (expense.category and search_lower in (expense.category or "").lower()) or
+                    (expense.notes and search_lower in (expense.notes or "").lower()) or
+                    (expense.labels and any(search_lower in label.lower() for label in (expense.labels or [])))
+                ):
+                    filtered_expenses.append(expense)
 
-        expenses = query.order_by(Expense.id.desc()).offset(skip).limit(limit).all()
+            total_count = len(filtered_expenses)
+            logger.info(f"list_expenses: total_count (after search filter)={total_count}")
+
+            # Apply pagination to filtered results
+            expenses = filtered_expenses[skip:skip + limit]
+        else:
+            # Count total expenses with all filters applied
+            total_count = query.count()
+            logger.info(f"list_expenses: total_count (after all filters)={total_count}")
+
+            # If skip is beyond available data, return empty results
+            if skip >= total_count and total_count > 0:
+                logger.info(f"Pagination beyond available data: skip={skip} >= total={total_count}, returning empty results")
+                return []
+
+            expenses = query.order_by(Expense.id.desc()).offset(skip).limit(limit).all()
 
         # Log pagination info for debugging
         logger.info(f"Expenses query: total_count={total_count}, skip={skip}, limit={limit}, returned={len(expenses)}, exclude_status={exclude_status}")

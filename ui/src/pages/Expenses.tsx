@@ -222,6 +222,7 @@ const Expenses = () => {
         unlinkedOnly,
         skip,
         limit: pageSize,
+        search: searchQuery || undefined,
         // Don't exclude pending_approval - users should see their own submitted expenses
       });
 
@@ -244,6 +245,7 @@ const Expenses = () => {
             unlinkedOnly,
             skip: skip + pageSize,
             limit: 1,
+            search: searchQuery || undefined,
           });
           const hasMore = Array.isArray(probe) && probe.length > 0;
           setHasNextPage(hasMore);
@@ -269,7 +271,7 @@ const Expenses = () => {
 
   useEffect(() => {
     fetchExpenses();
-  }, [categoryFilter, labelFilter, unlinkedOnly, page, pageSize, currentTenantId]);
+  }, [categoryFilter, labelFilter, unlinkedOnly, page, pageSize, currentTenantId, searchQuery]);
 
   // Initialize from URL on first render
   useEffect(() => {
@@ -303,17 +305,10 @@ const Expenses = () => {
     setSearchParams(p, { replace: true });
   }, [categoryFilter, labelFilter, searchQuery, unlinkedOnly, page, pageSize, setSearchParams]);
 
+  // Search is now done server-side, so just use expenses directly
   const filteredExpenses = useMemo(() => {
-    return (expenses || []).filter(e => {
-      const s = searchQuery.toLowerCase();
-      return (
-        (e.vendor || '').toLowerCase().includes(s) ||
-        (e.category || '').toLowerCase().includes(s) ||
-        (e.notes || '').toLowerCase().includes(s) ||
-        ((e.labels || []).join(',').toLowerCase().includes(s))
-      );
-    });
-  }, [expenses, searchQuery]);
+    return expenses || [];
+  }, [expenses]);
 
   const openCreate = () => {
     setNewExpense(defaultNewExpense);
@@ -641,7 +636,7 @@ const Expenses = () => {
                     placeholder={t('expenses.search_placeholder')}
                     className="pl-8 w-full sm:w-[260px]"
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
                   />
                 </div>
                 <Select value={categoryFilter} onValueChange={setCategoryFilter}>
