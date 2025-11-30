@@ -18,7 +18,7 @@ from core.models.models_per_tenant import (
 from core.schemas.approval import (
     ApprovalStatus, ExpenseApprovalCreate, ExpenseApprovalDecision,
     ApprovalDelegateCreate, PendingApprovalSummary, ApprovalHistoryItem,
-    ExpenseApprovalHistory, ApprovalMetrics
+    ExpenseApprovalHistory, ApprovalMetrics, InvoiceApprovalHistory
 )
 from commercial.workflows.approvals.services.approval_rule_engine import ApprovalRuleEngine
 from core.services.notification_service import NotificationService
@@ -683,6 +683,318 @@ class ApprovalService:
         # Submit for approval again
         return self.submit_for_approval(expense_id, submitter_id, notes)
     
+    # Invoice Approval Methods
+    
+    def submit_invoice_for_approval(
+        self,
+        invoice_id: int,
+        submitter_id: int,
+        approver_id: int,
+        notes: Optional[str] = None
+    ) -> List['InvoiceApproval']:
+        """
+        Submit an invoice for approval.
+
+        Args:
+            invoice_id: ID of the invoice to submit
+            submitter_id: ID of the user submitting the invoice
+            approver_id: Specific approver ID to assign this approval to
+            notes: Optional notes for the submission
+
+        Returns:
+            List of created InvoiceApproval records
+
+        Raises:
+            ValidationError: If invoice data is invalid or approver is invalid
+            InvalidApprovalState: If invoice is already in approval workflow
+        """
+        try:
+            from core.models.models_per_tenant import Invoice, InvoiceApproval
+            
+            # Get and validate invoice
+            invoice = self.db.query(Invoice).filter(Invoice.id == invoice_id).first()
+            if not invoice:
+                raise ValidationError(f"Invoice {invoice_id} not found")
+            
+            # Check if invoice is already in approval workflow
+            existing_approvals = self.db.query(InvoiceApproval).filter(
+                InvoiceApproval.invoice_id == invoice_id
+            ).all()
+            
+            if existing_approvals:
+                pending_approvals = [a for a in existing_approvals if a.status == ApprovalStatus.PENDING]
+                if pending_approvals:
+                    raise InvalidApprovalState(
+                        approval_id=pending_approvals[0].id,
+                        current_state="pending",
+                        operation="submit for approval",
+                        details={"message": "Invoice is already in approval workflow"}
+                    )
+            
+            # Validate approver
+            approver = self.db.query(User).filter(User.id == approver_id).first()
+            if not approver:
+                raise ValidationError(f"Approver with ID {approver_id} not found")
+            if approver_id == submitter_id:
+                raise ValidationError("You cannot submit an invoice for approval to yourself")
+            
+            # Create approval record
+            created_approvals = []
+            now = datetime.now(timezone.utc)
+            
+            approval = InvoiceApproval(
+                invoice_id=invoice_id,
+                approver_id=approver_id,
+                approval_rule_id=None,
+                status=ApprovalStatus.PENDING,
+                notes=notes,
+                submitted_at=now,
+                approval_level=1,
+                is_current_level=True
+            )
+            
+            self.db.add(approval)
+            created_approvals.append(approval)
+            
+            # Update invoice status
+            invoice.status = "pending_approval"
+            
+            # Commit changes
+            self.db.commit()
+            
+            # Refresh objects to get IDs
+            for approval in created_approvals:
+                self.db.refresh(approval)
+            
+            # Send notifications
+            for approval in created_approvals:
+                self._send_invoice_approval_notification(approval, "invoice_submitted_for_approval")
+            
+            return created_approvals
+            
+        except Exception as e:
+            self.db.rollback()
+            
+            if isinstance(e, (ValidationError, InvalidApprovalState)):
+                raise
+            else:
+                raise ApprovalWorkflowError(
+                    workflow_step="submit_invoice_for_approval",
+                    expense_id=invoice_id,
+                    reason=str(e)
+                )
+    
+    def approve_invoice(
+        self, 
+        approval_id: int, 
+        approver_id: int, 
+        notes: Optional[str] = None
+    ) -> 'InvoiceApproval':
+        """
+        Approve an invoice at a specific approval level.
+        
+        Args:
+            approval_id: ID of the approval record
+            approver_id: ID of the user making the approval
+            notes: Optional notes for the approval
+            
+        Returns:
+            Updated InvoiceApproval record
+        """
+        from core.models.models_per_tenant import InvoiceApproval, Invoice
+        
+        # Get the approval record
+        approval = self.db.query(InvoiceApproval).filter(
+            InvoiceApproval.id == approval_id
+        ).first()
+        
+        if not approval:
+            raise ValidationError(f"Approval {approval_id} not found")
+        
+        # Verify approver permissions
+        if approval.approver_id != approver_id:
+            raise InsufficientApprovalPermissions(
+                user_id=approver_id, required_permission="approve_invoice", expense_id=approval.invoice_id, approval_level=approval.approval_level
+            )
+        
+        # Check approval state
+        if approval.status != ApprovalStatus.PENDING:
+            raise InvalidApprovalState(
+                approval_id=approval.id,
+                current_state=approval.status if isinstance(approval.status, str) else approval.status.value,
+                operation="approve",
+                valid_states=["pending"]
+            )
+        
+        # Update approval record
+        now = datetime.now(timezone.utc)
+        approval.status = ApprovalStatus.APPROVED
+        approval.decided_at = now
+        approval.notes = notes
+        approval.is_current_level = False
+        
+        # Update invoice status
+        invoice = approval.invoice
+        invoice.status = "approved"
+        
+        # Commit changes
+        self.db.commit()
+        self.db.refresh(approval)
+        
+        # Send notification
+        self._send_invoice_approval_notification(approval, "invoice_fully_approved")
+        
+        return approval
+    
+    def reject_invoice(
+        self, 
+        approval_id: int, 
+        approver_id: int, 
+        rejection_reason: str, 
+        notes: Optional[str] = None
+    ) -> 'InvoiceApproval':
+        """
+        Reject an invoice at a specific approval level.
+        
+        Args:
+            approval_id: ID of the approval record
+            approver_id: ID of the user making the rejection
+            rejection_reason: Reason for rejection (required)
+            notes: Optional additional notes
+            
+        Returns:
+            Updated InvoiceApproval record
+        """
+        from core.models.models_per_tenant import InvoiceApproval, Invoice
+        
+        if not rejection_reason or not rejection_reason.strip():
+            raise ValidationError("Rejection reason is required")
+        
+        # Get the approval record
+        approval = self.db.query(InvoiceApproval).filter(
+            InvoiceApproval.id == approval_id
+        ).first()
+        
+        if not approval:
+            raise ValidationError(f"Approval {approval_id} not found")
+        
+        # Verify approver permissions
+        if approval.approver_id != approver_id:
+            raise InsufficientApprovalPermissions(
+                user_id=approver_id, required_permission="approve_invoice", expense_id=approval.invoice_id, approval_level=approval.approval_level
+            )
+        
+        # Check approval state
+        if approval.status != ApprovalStatus.PENDING:
+            raise InvalidApprovalState(
+                approval_id=approval.id,
+                current_state=approval.status if isinstance(approval.status, str) else approval.status.value,
+                operation="reject",
+                valid_states=["pending"]
+            )
+        
+        # Update approval record
+        now = datetime.now(timezone.utc)
+        approval.status = ApprovalStatus.REJECTED
+        approval.decided_at = now
+        approval.rejection_reason = rejection_reason.strip()
+        approval.notes = notes
+        approval.is_current_level = False
+        
+        # Update invoice status
+        invoice = approval.invoice
+        invoice.status = "rejected"
+        
+        # Commit changes
+        self.db.commit()
+        self.db.refresh(approval)
+        
+        # Send notification
+        self._send_invoice_approval_notification(approval, "invoice_rejected")
+        
+        return approval
+    
+    def get_pending_invoice_approvals(
+        self, 
+        approver_id: int, 
+        limit: Optional[int] = None,
+        offset: Optional[int] = None
+    ) -> List['InvoiceApproval']:
+        """
+        Get pending invoice approvals for a specific approver.
+        
+        Args:
+            approver_id: ID of the approver
+            limit: Optional limit for pagination
+            offset: Optional offset for pagination
+            
+        Returns:
+            List of pending InvoiceApproval records
+        """
+        from core.models.models_per_tenant import InvoiceApproval
+        
+        query = self.db.query(InvoiceApproval).filter(
+            and_(
+                InvoiceApproval.approver_id == approver_id,
+                InvoiceApproval.status == ApprovalStatus.PENDING,
+                InvoiceApproval.is_current_level == True
+            )
+        ).order_by(InvoiceApproval.submitted_at.asc())
+        
+        if offset:
+            query = query.offset(offset)
+        if limit:
+            query = query.limit(limit)
+        
+        return query.all()
+    
+    def get_invoice_approval_history(self, invoice_id: int) -> 'InvoiceApprovalHistory':
+        """
+        Get complete approval history for an invoice.
+        
+        Args:
+            invoice_id: ID of the invoice
+            
+        Returns:
+            InvoiceApprovalHistory with complete audit trail
+        """
+        from core.models.models_per_tenant import Invoice, InvoiceApproval
+        from core.schemas.approval import InvoiceApprovalHistory
+        
+        invoice = self.db.query(Invoice).filter(Invoice.id == invoice_id).first()
+        if not invoice:
+            raise ValidationError(f"Invoice {invoice_id} not found")
+        
+        # Get all approvals for this invoice
+        approvals = self.db.query(InvoiceApproval).filter(
+            InvoiceApproval.invoice_id == invoice_id
+        ).order_by(
+            InvoiceApproval.approval_level.asc(),
+            InvoiceApproval.submitted_at.asc()
+        ).all()
+        
+        # Convert to history items
+        history_items = []
+        for approval in approvals:
+            approver = approval.approver
+            history_items.append(ApprovalHistoryItem(
+                id=approval.id,
+                approver_name=f"{approver.first_name or ''} {approver.last_name or ''}".strip() or approver.email,
+                approver_email=approver.email,
+                status=ApprovalStatus(approval.status),
+                approval_level=approval.approval_level,
+                submitted_at=approval.submitted_at,
+                decided_at=approval.decided_at,
+                rejection_reason=approval.rejection_reason,
+                notes=approval.notes
+            ))
+        
+        return InvoiceApprovalHistory(
+            invoice_id=invoice_id,
+            current_status=invoice.status,
+            approval_history=history_items
+        )
+    
     # Private helper methods
     
     def _check_expense_concurrency(self, expense: Expense) -> None:
@@ -890,3 +1202,51 @@ class ApprovalService:
         """Send notification for approval events (legacy method)."""
         # Delegate to the new retry-enabled method
         self._send_approval_notification_with_retry(approval, event_type)
+    
+    def _send_invoice_approval_notification(self, approval: 'InvoiceApproval', event_type: str) -> None:
+        """Send notification for invoice approval events."""
+        if not self.notification_service:
+            return
+        
+        try:
+            invoice = approval.invoice
+            approver = approval.approver
+            
+            # Determine recipient based on event type
+            if event_type in ["invoice_submitted_for_approval"]:
+                recipient_id = approver.id
+                resource_name = f"Invoice #{invoice.number}"
+            else:
+                # For approval/rejection notifications, notify invoice creator
+                # For now, we'll notify the approver
+                recipient_id = approver.id
+                resource_name = f"Invoice #{invoice.number}"
+            
+            if not recipient_id:
+                return
+            
+            details = {
+                "invoice_id": invoice.id,
+                "invoice_number": invoice.number,
+                "amount": f"{invoice.currency} {invoice.amount:.2f}",
+                "due_date": invoice.due_date.strftime("%Y-%m-%d") if invoice.due_date else "N/A",
+                "approver": f"{approver.first_name or ''} {approver.last_name or ''}".strip() or approver.email,
+                "approval_level": approval.approval_level,
+                "notes": approval.notes or "No notes provided"
+            }
+            
+            if approval.rejection_reason:
+                details["rejection_reason"] = approval.rejection_reason
+            
+            # Attempt to send notification
+            self.notification_service.send_operation_notification(
+                event_type=event_type,
+                user_id=recipient_id,
+                resource_type="invoice_approval",
+                resource_id=str(approval.id),
+                resource_name=resource_name,
+                details=details
+            )
+                
+        except Exception as e:
+            logger.error(f"Error sending invoice approval notification: {str(e)}")

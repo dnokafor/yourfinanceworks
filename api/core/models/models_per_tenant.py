@@ -116,6 +116,7 @@ class Invoice(Base):
     deleted_by_user = relationship("User", foreign_keys=[deleted_by])
     expenses = relationship("Expense", back_populates="invoice")
     attachments = relationship("InvoiceAttachment", back_populates="invoice", cascade="all, delete-orphan")
+    approvals = relationship("InvoiceApproval", back_populates="invoice", cascade="all, delete-orphan")
 
 class Payment(Base):
     __tablename__ = "payments"
@@ -929,6 +930,30 @@ class ExpenseApproval(Base):
 
     # Relationships
     expense = relationship("Expense")
+    approver = relationship("User", foreign_keys=[approver_id])
+    approval_rule = relationship("ApprovalRule")
+
+
+class InvoiceApproval(Base):
+    __tablename__ = "invoice_approvals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_id = Column(Integer, ForeignKey("invoices.id", ondelete="CASCADE"), nullable=False)
+    approver_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    approval_rule_id = Column(Integer, ForeignKey("approval_rules.id"), nullable=True)
+    status = Column(String, nullable=False, default="pending")  # pending, approved, rejected
+    rejection_reason = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)
+    submitted_at = Column(DateTime(timezone=True), nullable=False)
+    decided_at = Column(DateTime(timezone=True), nullable=True)
+    approval_level = Column(Integer, nullable=False, default=1)
+    is_current_level = Column(Boolean, nullable=False, default=True)
+
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    invoice = relationship("Invoice")
     approver = relationship("User", foreign_keys=[approver_id])
     approval_rule = relationship("ApprovalRule")
 

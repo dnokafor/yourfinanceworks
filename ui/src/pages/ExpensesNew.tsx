@@ -59,6 +59,7 @@ export default function ExpensesNew() {
   const [createdExpenseId, setCreatedExpenseId] = useState<number | null>(null);
   const [selectedApproverId, setSelectedApproverId] = useState<string>('');
   const [availableApprovers, setAvailableApprovers] = useState<Array<{ id: number; name: string; email: string }>>([]);
+  const [approvalsNotLicensed, setApprovalsNotLicensed] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -71,8 +72,17 @@ export default function ExpensesNew() {
       try {
         const response = await approvalApi.getApprovers();
         setAvailableApprovers(response);
+        setApprovalsNotLicensed(false);
       } catch (error) {
-        console.error('Failed to fetch approvers:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        // Check if it's a license error (402 Payment Required)
+        if (errorMessage.includes('not included in your current license') || errorMessage.includes('requires a valid license')) {
+          setApprovalsNotLicensed(true);
+          setAvailableApprovers([]);
+        } else {
+          console.error('Failed to fetch approvers:', error);
+          setAvailableApprovers([]);
+        }
       }
     };
     fetchApprovers();
@@ -555,30 +565,43 @@ export default function ExpensesNew() {
             </div>
             {submitForApproval && (
               <div className="mt-3 space-y-3">
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-sm text-blue-700">
-                    {t('expenses.this_expense_will_be_submitted_for_approval')}
-                  </p>
-                </div>
+                {approvalsNotLicensed ? (
+                  <Alert className="border-amber-200 bg-amber-50">
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="text-amber-800">
+                      {t('common.feature_not_licensed', { 
+                        defaultValue: 'Approval workflows require a commercial license. Please upgrade your license to use this feature.' 
+                      })}
+                    </AlertDescription>
+                  </Alert>
+                ) : (
+                  <>
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm text-blue-700">
+                        {t('expenses.this_expense_will_be_submitted_for_approval')}
+                      </p>
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="approver-select" className="flex items-center gap-2 text-sm font-medium">
-                    <Users className="h-4 w-4" />
-                    {t('expenses.select_approver')} *
-                  </Label>
-                  <Select value={selectedApproverId} onValueChange={setSelectedApproverId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder={t('expenses.choose_an_approver')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableApprovers.map((approver) => (
-                        <SelectItem key={approver.id} value={approver.id.toString()}>
-                          {approver.name} ({approver.email})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="approver-select" className="flex items-center gap-2 text-sm font-medium">
+                        <Users className="h-4 w-4" />
+                        {t('expenses.select_approver')} *
+                      </Label>
+                      <Select value={selectedApproverId} onValueChange={setSelectedApproverId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder={t('expenses.choose_an_approver')} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableApprovers.map((approver) => (
+                            <SelectItem key={approver.id} value={approver.id.toString()}>
+                              {approver.name} ({approver.email})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </CardContent>

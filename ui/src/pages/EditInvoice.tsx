@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { InvoiceForm } from "@/components/invoices/InvoiceForm";
+import { InvoiceFormWithApproval } from "@/components/invoices/InvoiceFormWithApproval";
 import { InvoiceStockImpact } from "@/components/invoices/InvoiceStockImpact";
 import { invoiceApi, Invoice, getErrorMessage, expenseApi, Expense, inventoryApi } from "@/lib/api";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -115,7 +115,7 @@ const EditInvoice = () => {
           <p className="text-muted-foreground">{t('editInvoice.updateInvoiceDetails')}</p>
         </div>
 
-        <InvoiceForm
+        <InvoiceFormWithApproval
           invoice={invoice}
           isEdit={true}
           key={`${invoice.id}-${invoice.has_attachment}-${invoice.attachment_filename}`}

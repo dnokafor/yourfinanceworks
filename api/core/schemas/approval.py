@@ -145,6 +145,60 @@ class ApprovalMetrics(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# Invoice Approval Schemas
+class InvoiceApprovalBase(BaseModel):
+    """Base schema for invoice approvals"""
+    invoice_id: int = Field(..., description="ID of the invoice being approved")
+    approver_id: int = Field(..., description="ID of the approver")
+    approval_rule_id: Optional[int] = Field(None, description="ID of the approval rule that triggered this")
+    status: ApprovalStatus = Field(ApprovalStatus.PENDING, description="Approval status")
+    rejection_reason: Optional[str] = Field(None, description="Reason for rejection")
+    notes: Optional[str] = Field(None, description="Additional notes from approver")
+    approval_level: int = Field(1, ge=1, description="Approval level")
+    is_current_level: bool = Field(True, description="Whether this is the current approval level")
+
+
+class InvoiceApprovalCreate(BaseModel):
+    """Schema for creating invoice approvals (submission)"""
+    invoice_id: int = Field(..., description="ID of the invoice to submit for approval")
+    approver_id: int = Field(..., description="Specific approver ID to assign this approval to")
+    notes: Optional[str] = Field(None, description="Optional notes for the submission")
+
+
+class InvoiceApprovalDecision(BaseModel):
+    """Schema for invoice approval decisions"""
+    status: ApprovalStatus = Field(..., description="Approval decision")
+    rejection_reason: Optional[str] = Field(None, description="Required if status is rejected")
+    notes: Optional[str] = Field(None, description="Optional notes from approver")
+
+    @field_validator('rejection_reason')
+    @classmethod
+    def validate_rejection_reason(cls, v, info):
+        if info.data.get('status') == ApprovalStatus.REJECTED and not v:
+            raise ValueError('rejection_reason is required when rejecting an invoice')
+        return v
+
+
+class InvoiceApproval(InvoiceApprovalBase):
+    """Schema for invoice approval responses"""
+    id: int
+    submitted_at: datetime
+    decided_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InvoiceApprovalHistory(BaseModel):
+    """Complete approval history for an invoice"""
+    invoice_id: int
+    current_status: str = Field(..., description="Current invoice status")
+    approval_history: List[ApprovalHistoryItem] = Field(default_factory=list)
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
 # Extended expense schemas with approval information
 class ExpenseWithApprovalStatus(BaseModel):
     """Expense with approval status information"""
@@ -154,6 +208,23 @@ class ExpenseWithApprovalStatus(BaseModel):
     expense_date: date
     category: str
     vendor: Optional[str] = None
+    status: str
+    current_approval_status: Optional[ApprovalStatus] = None
+    current_approver_name: Optional[str] = None
+    submitted_for_approval_at: Optional[datetime] = None
+    approval_level: Optional[int] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Extended invoice schemas with approval information
+class InvoiceWithApprovalStatus(BaseModel):
+    """Invoice with approval status information"""
+    id: int
+    number: str
+    amount: float
+    currency: str
+    due_date: datetime
     status: str
     current_approval_status: Optional[ApprovalStatus] = None
     current_approver_name: Optional[str] = None

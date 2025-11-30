@@ -1254,3 +1254,340 @@ async def deactivate_approval_delegation(
     except Exception as e:
         logger.error(f"Error deactivating delegation {delegation_id}: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# Invoice Approval Endpoints
+
+@router.post("/invoices/{invoice_id}/submit-approval", response_model=List[dict])
+async def submit_invoice_for_approval(
+    invoice_id: int,
+    submission_data: dict,
+    current_user: MasterUser = Depends(get_current_user),
+    approval_service: ApprovalService = Depends(get_approval_service),
+    db: Session = Depends(get_db)
+):
+    """
+    Submit an invoice for approval.
+    
+    This endpoint allows users to submit invoices for approval according to
+    configured approval rules.
+    
+    Args:
+        invoice_id: ID of the invoice to submit for approval
+        submission_data: Submission details including approver_id and optional notes
+        current_user: Currently authenticated user
+        approval_service: Approval service instance
+        db: Database session
+        
+    Returns:
+        List of created InvoiceApproval records
+        
+    Raises:
+        HTTPException: 400 if invoice is invalid or already in approval workflow
+        HTTPException: 403 if user lacks permission to submit this invoice
+        HTTPException: 404 if invoice not found
+    """
+    try:
+        require_non_viewer(current_user)
+        
+        # Extract approver_id and notes from submission_data
+        approver_id = submission_data.get("approver_id")
+        notes = submission_data.get("notes")
+        
+        if not approver_id:
+            raise HTTPException(
+                status_code=400,
+                detail="approver_id is required"
+            )
+        
+        # Submit invoice for approval
+        approvals = approval_service.submit_invoice_for_approval(
+            invoice_id=invoice_id,
+            submitter_id=current_user.id,
+            approver_id=approver_id,
+            notes=notes
+        )
+        
+        # Log audit event
+        log_audit_event(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="invoice_submitted_for_approval",
+            resource_type="invoice",
+            resource_id=str(invoice_id),
+            details={
+                "invoice_id": invoice_id,
+                "approval_count": len(approvals),
+                "notes": notes
+            }
+        )
+        
+        logger.info(f"User {current_user.id} submitted invoice {invoice_id} for approval")
+        
+        return [{"id": a.id, "status": a.status, "approval_level": a.approval_level} for a in approvals]
+        
+    except ValidationError as e:
+        logger.warning(f"Validation error submitting invoice {invoice_id}: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except InvalidApprovalState as e:
+        logger.warning(f"Invalid approval state for invoice {invoice_id}: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except ApprovalWorkflowError as e:
+        logger.error(f"Workflow error for invoice {invoice_id}: {str(e)}")
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error submitting invoice {invoice_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/invoices/pending")
+async def get_pending_invoice_approvals(
+    limit: Optional[int] = Query(None, ge=1, le=100, description="Maximum number of results"),
+    offset: Optional[int] = Query(None, ge=0, description="Number of results to skip"),
+    current_user: MasterUser = Depends(get_current_user),
+    approval_service: ApprovalService = Depends(get_approval_service),
+    db: Session = Depends(get_db)
+):
+    """
+    Get pending invoice approvals for the current user.
+
+    This endpoint returns all invoices that are currently pending approval
+    by the authenticated user.
+
+    Args:
+        limit: Maximum number of results to return (default: no limit)
+        offset: Number of results to skip for pagination (default: 0)
+        current_user: Currently authenticated user
+        approval_service: Approval service instance
+
+    Returns:
+        Object containing approvals list and total count
+    """
+    try:
+        require_non_viewer(current_user)
+
+        pending_approvals = approval_service.get_pending_invoice_approvals(
+            approver_id=current_user.id,
+            limit=limit,
+            offset=offset
+        )
+
+        # Get total count for pagination
+        from core.models.models_per_tenant import InvoiceApproval
+        from core.schemas.approval import ApprovalStatus
+        total = db.query(InvoiceApproval).filter(
+            and_(
+                InvoiceApproval.approver_id == current_user.id,
+                InvoiceApproval.status == ApprovalStatus.PENDING,
+                InvoiceApproval.is_current_level == True
+            )
+        ).count()
+
+        logger.info(f"Retrieved {len(pending_approvals)} pending invoice approvals (total: {total}) for user {current_user.id}")
+
+        return {
+            "approvals": pending_approvals,
+            "total": total
+        }
+
+    except Exception as e:
+        logger.error(f"Error retrieving pending invoice approvals for user {current_user.id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/invoices/{approval_id}/approve")
+async def approve_invoice(
+    approval_id: int,
+    decision_data: dict,
+    current_user: MasterUser = Depends(get_current_user),
+    approval_service: ApprovalService = Depends(get_approval_service),
+    db: Session = Depends(get_db)
+):
+    """
+    Approve an invoice.
+    
+    This endpoint allows authorized approvers to approve invoices assigned to them.
+    
+    Args:
+        approval_id: ID of the approval record to approve
+        decision_data: Approval decision details including optional notes
+        current_user: Currently authenticated user
+        approval_service: Approval service instance
+        db: Database session
+        
+    Returns:
+        Updated InvoiceApproval record
+        
+    Raises:
+        HTTPException: 400 if approval is not in pending state
+        HTTPException: 403 if user lacks permission to approve this invoice
+        HTTPException: 404 if approval not found
+    """
+    try:
+        require_non_viewer(current_user)
+        
+        notes = decision_data.get("notes")
+        
+        # Approve the invoice
+        approval = approval_service.approve_invoice(
+            approval_id=approval_id,
+            approver_id=current_user.id,
+            notes=notes
+        )
+        
+        # Log audit event
+        log_audit_event(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="invoice_approved",
+            resource_type="invoice_approval",
+            resource_id=str(approval_id),
+            details={
+                "invoice_id": approval.invoice_id,
+                "approval_level": approval.approval_level,
+                "notes": notes
+            }
+        )
+        
+        logger.info(f"User {current_user.id} approved invoice approval {approval_id}")
+        
+        return {"id": approval.id, "status": approval.status, "invoice_id": approval.invoice_id}
+        
+    except ValidationError as e:
+        logger.warning(f"Validation error approving invoice {approval_id}: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except InsufficientApprovalPermissions as e:
+        logger.warning(f"Permission denied approving invoice {approval_id} by user {current_user.id}: {str(e)}")
+        raise HTTPException(status_code=403, detail=str(e))
+    except InvalidApprovalState as e:
+        logger.warning(f"Invalid state approving invoice {approval_id}: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error approving invoice {approval_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/invoices/{approval_id}/reject")
+async def reject_invoice(
+    approval_id: int,
+    decision_data: dict,
+    current_user: MasterUser = Depends(get_current_user),
+    approval_service: ApprovalService = Depends(get_approval_service),
+    db: Session = Depends(get_db)
+):
+    """
+    Reject an invoice.
+    
+    This endpoint allows authorized approvers to reject invoices assigned to them.
+    A rejection reason is required and will be communicated to the invoice submitter.
+    
+    Args:
+        approval_id: ID of the approval record to reject
+        decision_data: Rejection decision details including required rejection reason
+        current_user: Currently authenticated user
+        approval_service: Approval service instance
+        db: Database session
+        
+    Returns:
+        Updated InvoiceApproval record
+        
+    Raises:
+        HTTPException: 400 if approval is not in pending state or rejection reason missing
+        HTTPException: 403 if user lacks permission to approve this invoice
+        HTTPException: 404 if approval not found
+    """
+    try:
+        require_non_viewer(current_user)
+        
+        rejection_reason = decision_data.get("rejection_reason")
+        notes = decision_data.get("notes")
+        
+        # Validate rejection reason is provided
+        if not rejection_reason or not rejection_reason.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Rejection reason is required when rejecting an invoice"
+            )
+        
+        # Reject the invoice
+        approval = approval_service.reject_invoice(
+            approval_id=approval_id,
+            approver_id=current_user.id,
+            rejection_reason=rejection_reason,
+            notes=notes
+        )
+        
+        # Log audit event
+        log_audit_event(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="invoice_rejected",
+            resource_type="invoice_approval",
+            resource_id=str(approval_id),
+            details={
+                "invoice_id": approval.invoice_id,
+                "approval_level": approval.approval_level,
+                "rejection_reason": rejection_reason,
+                "notes": notes
+            }
+        )
+        
+        logger.info(f"User {current_user.id} rejected invoice approval {approval_id}")
+        
+        return {"id": approval.id, "status": approval.status, "invoice_id": approval.invoice_id}
+        
+    except ValidationError as e:
+        logger.warning(f"Validation error rejecting invoice {approval_id}: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except InsufficientApprovalPermissions as e:
+        logger.warning(f"Permission denied rejecting invoice {approval_id} by user {current_user.id}: {str(e)}")
+        raise HTTPException(status_code=403, detail=str(e))
+    except InvalidApprovalState as e:
+        logger.warning(f"Invalid state rejecting invoice {approval_id}: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error rejecting invoice {approval_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/invoices/history/{invoice_id}")
+async def get_invoice_approval_history(
+    invoice_id: int,
+    current_user: MasterUser = Depends(get_current_user),
+    approval_service: ApprovalService = Depends(get_approval_service)
+):
+    """
+    Get complete approval history for an invoice.
+
+    This endpoint returns the complete audit trail of approval decisions
+    for a specific invoice.
+
+    Args:
+        invoice_id: ID of the invoice to get approval history for
+        current_user: Currently authenticated user
+        approval_service: Approval service instance
+
+    Returns:
+        InvoiceApprovalHistory with complete approval audit trail
+
+    Raises:
+        HTTPException: 404 if invoice not found
+    """
+    try:
+        require_non_viewer(current_user)
+
+        history = approval_service.get_invoice_approval_history(invoice_id)
+
+        logger.info(f"Retrieved approval history for invoice {invoice_id} by user {current_user.id}")
+
+        return history
+
+    except ValidationError as e:
+        logger.warning(f"Validation error getting history for invoice {invoice_id}: {str(e)}")
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error retrieving approval history for invoice {invoice_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")

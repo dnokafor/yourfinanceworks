@@ -1,6 +1,6 @@
 import React from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { InvoiceForm } from "@/components/invoices/InvoiceForm";
+import { InvoiceFormWithApproval } from "@/components/invoices/InvoiceFormWithApproval";
 import { useTranslation } from "react-i18next";
 
 const NewInvoiceManual = () => {
@@ -15,7 +15,7 @@ const NewInvoiceManual = () => {
         </div>
         
         <div className="slide-in">
-          <InvoiceForm />
+          <InvoiceFormWithApproval />
         </div>
       </div>
     </AppLayout>

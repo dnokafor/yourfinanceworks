@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { InvoiceForm } from "@/components/invoices/InvoiceForm";
+import { InvoiceFormWithApproval } from "@/components/invoices/InvoiceFormWithApproval";
 import { InvoiceCreationChoice } from "@/components/invoices/InvoiceCreationChoice";
 import { InventoryInvoiceForm } from "@/components/inventory/InventoryInvoiceForm";
 import { useTranslation } from "react-i18next";
@@ -135,7 +135,7 @@ const NewInvoice = () => {
           </div>
 
           <div className="slide-in">
-            <InvoiceForm
+            <InvoiceFormWithApproval
               initialData={initialData}
               attachment={attachment}
               prefillNewClient={prefillNewClient}

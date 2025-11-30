@@ -1226,6 +1226,36 @@ export const approvalApi = {
   // Get list of available approvers
   getApprovers: () => apiRequest<Array<{ id: number; name: string; email: string }>>(`/approvals/approvers`),
 
+  // Invoice Approval Methods
+  submitInvoiceForApproval: (invoiceId: number, data: { approver_id: number; notes?: string }) =>
+    apiRequest<Array<{ id: number; status: string; approval_level: number }>>(`/approvals/invoices/${invoiceId}/submit-approval`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getPendingInvoiceApprovals: (filters?: { limit?: number; offset?: number }) => {
+    const params = new URLSearchParams();
+    if (filters?.limit) params.append('limit', filters.limit.toString());
+    if (filters?.offset) params.append('offset', filters.offset.toString());
+    
+    const queryString = params.toString();
+    return apiRequest<{ approvals: any[]; total: number; }>(`/approvals/invoices/pending${queryString ? `?${queryString}` : ''}`);
+  },
+
+  approveInvoice: (approvalId: number, notes?: string) =>
+    apiRequest<{ id: number; status: string; invoice_id: number }>(`/approvals/invoices/${approvalId}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ notes }),
+    }),
+
+  rejectInvoice: (approvalId: number, reason: string, notes?: string) =>
+    apiRequest<{ id: number; status: string; invoice_id: number }>(`/approvals/invoices/${approvalId}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ rejection_reason: reason, notes }),
+    }),
+
+  getInvoiceApprovalHistory: (invoiceId: number) => 
+    apiRequest<{ invoice_id: number; current_status: string; approval_history: ApprovalHistoryEntry[] }>(`/approvals/invoices/history/${invoiceId}`),
 
   // Approval Delegation Management
   getDelegations: (filters?: { 

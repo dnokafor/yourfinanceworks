@@ -71,13 +71,6 @@ def check_feature(feature_id: str, db: Session, error_message: Optional[str] = N
         if error_message:
             message = error_message
         
-        # Check if feature is enabled via config service (fallback to env/default)
-        # This handles the case where license status is "invalid" (fresh install)
-        from core.services.feature_config_service import FeatureConfigService
-        if FeatureConfigService.is_enabled(feature_id, db, check_license=False):
-            # Feature enabled via config/env, allow access
-            return
-        
         raise HTTPException(
             status_code=402,
             detail={
@@ -146,7 +139,6 @@ def require_feature(feature_id: str, error_message: Optional[str] = None):
                 check_feature(feature_id, db, error_message)
                 # Feature is enabled, execute the function
                 return await func(*args, **kwargs)
-                
             finally:
                 if close_db:
                     db.close()
