@@ -426,6 +426,9 @@
     "status": {
       "draft": "Borrador",
       "pending": "Pendiente",
+      "pending_approval": "Pendiente de aprobación",
+      "approved": "Aprobada",
+      "rejected": "Rechazada",
       "paid": "Pagada",
       "overdue": "Vencida",
       "partially_paid": "Parcialmente Pagada",
@@ -512,6 +515,7 @@
     "add_client": "Agregar Cliente",
     "cancel": "Cancelar",
     "pending": "Pendiente",
+    "pending_approval": "Pendiente de aprobación",
     "paid": "Pagada",
     "partially_paid": "Parcialmente Pagada",
     "overdue": "Vencida",
@@ -2144,6 +2148,7 @@
   },
   "approvalDashboard": {
     "title": "Panel de Aprobaciones",
+    "description": "Revisa y gestiona flujos de trabajo de aprobación para gastos e facturas",
     "pending_approvals": "Aprobaciones Pendientes",
     "processed_expenses": "Gastos Procesados",
     "awaiting_review": "Esperando tu revisión",

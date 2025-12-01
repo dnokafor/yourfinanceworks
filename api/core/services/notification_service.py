@@ -441,6 +441,23 @@ class NotificationService:
                 'title': 'Approval Escalation',
                 'description': 'An expense approval is overdue and requires immediate attention.',
                 'color': '#dc3545'
+            },
+            
+            # Invoice Approval events
+            'invoice_submitted_for_approval': {
+                'title': 'Invoice Submitted for Approval',
+                'description': 'An invoice has been submitted and requires your approval.',
+                'color': '#ffc107'
+            },
+            'invoice_fully_approved': {
+                'title': 'Invoice Fully Approved',
+                'description': 'Your invoice has been fully approved.',
+                'color': '#28a745'
+            },
+            'invoice_rejected': {
+                'title': 'Invoice Rejected',
+                'description': 'Your invoice has been rejected and requires attention.',
+                'color': '#dc3545'
             }
         }
         

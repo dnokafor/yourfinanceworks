@@ -50,6 +50,11 @@ class EmailNotificationSettings(Base):
     reminder_advance_days = Column(Integer, default=1)  # How many days in advance to send upcoming notifications
     reminder_notification_frequency = Column(String, default="immediate")  # immediate, daily_digest
     
+    # Invoice Approval notifications
+    invoice_submitted_for_approval = Column(Boolean, default=True)  # Invoice submitted for approval
+    invoice_fully_approved = Column(Boolean, default=True)  # Invoice fully approved
+    invoice_rejected = Column(Boolean, default=True)  # Invoice rejected
+    
     # Additional notification preferences
     notification_email = Column(String, nullable=True)  # Override email for notifications
     daily_summary = Column(Boolean, default=False)

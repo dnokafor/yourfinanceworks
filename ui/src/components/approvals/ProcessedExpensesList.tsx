@@ -63,9 +63,10 @@ export function ProcessedExpensesList({ onViewDetails }: ProcessedExpensesListPr
       const data = response.expenses || [];
       setExpenses(data);
       setTotal(response.total || 0);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch processed expenses:', error);
-      toast.error('Failed to load processed expenses');
+      const errorMessage = error?.message || 'Failed to load processed expenses';
+      toast.error(errorMessage);
       setExpenses([]);
       setTotal(0);
     } finally {

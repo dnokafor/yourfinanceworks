@@ -446,6 +446,7 @@ class ApprovalService:
             approver = approval.approver
             history_items.append(ApprovalHistoryItem(
                 id=approval.id,
+                approver_id=approver.id,
                 approver_name=f"{approver.first_name or ''} {approver.last_name or ''}".strip() or approver.email,
                 approver_email=approver.email,
                 status=ApprovalStatus(approval.status),
@@ -979,6 +980,7 @@ class ApprovalService:
             approver = approval.approver
             history_items.append(ApprovalHistoryItem(
                 id=approval.id,
+                approver_id=approver.id,
                 approver_name=f"{approver.first_name or ''} {approver.last_name or ''}".strip() or approver.email,
                 approver_email=approver.email,
                 status=ApprovalStatus(approval.status),
@@ -1215,12 +1217,12 @@ class ApprovalService:
             # Determine recipient based on event type
             if event_type in ["invoice_submitted_for_approval"]:
                 recipient_id = approver.id
-                resource_name = f"Invoice #{invoice.number}"
+                resource_name = f"Invoice #{invoice.id} - {invoice.number}"
             else:
                 # For approval/rejection notifications, notify invoice creator
                 # For now, we'll notify the approver
                 recipient_id = approver.id
-                resource_name = f"Invoice #{invoice.number}"
+                resource_name = f"Invoice #{invoice.id} - {invoice.number}"
             
             if not recipient_id:
                 return

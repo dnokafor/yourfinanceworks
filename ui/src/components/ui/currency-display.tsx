@@ -29,23 +29,24 @@ const fallbackCurrencySymbols: { [key: string]: { symbol: string; decimals: numb
   'BRL': { symbol: 'R$', decimals: 2 }
 };
 
-export function CurrencyDisplay({ 
-  amount, 
-  currency, 
-  className = "", 
-  showCode = false 
+export function CurrencyDisplay({
+  amount = 0,
+  currency = 'USD',
+  className = "",
+  showCode = false
 }: CurrencyDisplayProps) {
   const [currencyInfo, setCurrencyInfo] = useState<CurrencyInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [isInactive, setIsInactive] = useState(false);
+  const safeCurrency = (currency && typeof currency === 'string') ? currency : 'USD';
 
   useEffect(() => {
     const fetchCurrencyInfo = async () => {
       try {
         const response = await currencyApi.getSupportedCurrencies();
         const currencies = response.currencies || [];
-        const foundCurrency = currencies.find(c => c.code === currency.toUpperCase());
-        
+        const foundCurrency = currencies.find(c => c.code === safeCurrency.toUpperCase());
+
         if (foundCurrency) {
           setCurrencyInfo({
             symbol: foundCurrency.symbol,
@@ -55,15 +56,15 @@ export function CurrencyDisplay({
           setIsInactive(!foundCurrency.is_active);
         } else {
           // Use fallback for traditional currencies
-          const fallback = fallbackCurrencySymbols[currency.toUpperCase()];
-          setCurrencyInfo(fallback || { symbol: currency, decimals: 2, is_active: true });
+          const fallback = fallbackCurrencySymbols[safeCurrency.toUpperCase()];
+          setCurrencyInfo(fallback || { symbol: safeCurrency, decimals: 2, is_active: true });
           setIsInactive(false);
         }
       } catch (error) {
         console.error('Failed to fetch currency info:', error);
         // Use fallback
-        const fallback = fallbackCurrencySymbols[currency.toUpperCase()];
-        setCurrencyInfo(fallback || { symbol: currency, decimals: 2, is_active: true });
+        const fallback = fallbackCurrencySymbols[safeCurrency.toUpperCase()];
+        setCurrencyInfo(fallback || { symbol: safeCurrency, decimals: 2, is_active: true });
         setIsInactive(false);
       } finally {
         setLoading(false);
@@ -71,31 +72,36 @@ export function CurrencyDisplay({
     };
 
     fetchCurrencyInfo();
-  }, [currency]);
+  }, [safeCurrency]);
 
-  const formatCurrency = (amount: number, currencyCode: string) => {
+  const formatCurrency = (amount: number = 0, currencyCode: string = 'USD') => {
+    // Ensure we have a valid string
+    const safeCurrencyCode = (currencyCode && typeof currencyCode === 'string') ? currencyCode : 'USD';
+
     if (loading || !currencyInfo) {
       // Show loading state or fallback
-      const fallback = fallbackCurrencySymbols[currencyCode.toUpperCase()];
-      const info = fallback || { symbol: currencyCode, decimals: 2 };
+      const fallback = fallbackCurrencySymbols[safeCurrencyCode.toUpperCase()];
+      const info = fallback || { symbol: safeCurrencyCode, decimals: 2 };
       const formattedAmount = amount.toFixed(info.decimals);
       return `${info.symbol}${formattedAmount}`;
     }
-    
+
     const formattedAmount = amount.toFixed(currencyInfo.decimals);
     const symbol = currencyInfo.symbol;
-    
+
     if (showCode) {
-      return `${symbol}${formattedAmount} ${currencyCode}`;
+      return `${symbol}${formattedAmount} ${safeCurrencyCode}`;
     }
     return `${symbol}${formattedAmount}`;
   };
 
   return (
     <span className={`${className} ${isInactive ? 'text-orange-600' : ''}`}>
-      {formatCurrency(amount, currency)}
+      {formatCurrency(amount, safeCurrency)}
       {isInactive && (
-        <AlertTriangle className="inline h-3 w-3 ml-1 text-orange-500" title="This currency is inactive" />
+        <span title="This currency is inactive">
+          <AlertTriangle className="inline h-3 w-3 ml-1 text-orange-500" />
+        </span>
       )}
     </span>
   );

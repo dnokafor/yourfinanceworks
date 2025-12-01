@@ -59,7 +59,19 @@ export interface InvoiceItem {
   };
 }
 
-export type InvoiceStatus = "draft" | "pending" | "paid" | "overdue" | "partially_paid" | "cancelled";
+export const INVOICE_STATUSES = ["draft", "pending", "paid", "overdue", "partially_paid", "cancelled", "pending_approval", "approved", "rejected"] as const;
+export type InvoiceStatus = typeof INVOICE_STATUSES[number];
+
+export const isValidInvoiceStatus = (status: string): status is InvoiceStatus => {
+  return (INVOICE_STATUSES as readonly string[]).includes(status);
+};
+
+export const formatStatus = (status?: string | null) => {
+  if (!status) return '';
+  return status.split('_').map(word =>
+    word.charAt(0).toUpperCase() + word.slice(1)
+  ).join(' ');
+};
 
 export interface Invoice {
   id: number;
@@ -770,7 +782,7 @@ export async function apiRequest<T>(
     } catch (e) {
       console.error('Error parsing user for tenantId:', e);
     }
-    
+
     const requestUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
     let extraHeaders: Record<string, string> = {};
     if (options.headers) {
@@ -787,7 +799,7 @@ export async function apiRequest<T>(
       ...(token && { 'Authorization': `Bearer ${token}` }),
       ...extraHeaders,
     };
-    
+
     // Only set Content-Type for non-FormData requests
     // FormData requests need the browser to set Content-Type with boundary
     if (!(options.body instanceof FormData)) {
@@ -804,7 +816,7 @@ export async function apiRequest<T>(
       }
     } else if (!config.skipTenant) {
       console.warn(`⚠️ No tenant ID available for request to ${requestUrl}`);
-      console.log('Debug info:', { 
+      console.log('Debug info:', {
         selectedTenantId: localStorage.getItem('selected_tenant_id'),
         userTenantId: (() => {
           try {
@@ -821,11 +833,11 @@ export async function apiRequest<T>(
 
     console.log('API Response status:', response.status);
     console.log('API Response headers:', Object.fromEntries(response.headers.entries()));
-    
+
     // Log the raw response text for debugging
     const responseText = await response.text();
     // console.log('API Raw response text:', responseText);
-    
+
     if (!response.ok) {
       // Try to parse error response
       let errorData;
@@ -852,7 +864,7 @@ export async function apiRequest<T>(
         }
         throw new Error('Authentication failed. Please log in again.');
       }
-      
+
       // Handle 403 (forbidden) errors - could be permission or tenant context issues
       if (response.status === 403) {
         // Check if it's a tenant context error
@@ -891,7 +903,7 @@ export async function apiRequest<T>(
             const field = err.loc.slice(1).join('.');
             return `${field}: ${err.msg}`;
           }).join('; ');
-          
+
           console.error('Validation error:', errorMessages);
           throw new Error(`Validation error: ${errorMessages}`);
         } else if (typeof errorData.detail === 'object' && errorData.detail !== null) {
@@ -937,7 +949,7 @@ export async function apiRequest<T>(
       console.log('API Success response is not valid JSON:', e);
       throw new Error('Invalid JSON response from server');
     }
-    
+
     console.log('API Success response:', responseData);
     console.log('API Response type:', typeof responseData);
     console.log('API Response keys:', Object.keys(responseData || {}));
@@ -1072,14 +1084,14 @@ export interface ReportResult {
   data?: ReportData;
   file_path?: string;
   download_url?: string;
-  
+
   // Enhanced error handling fields
   error_message?: string;
   error_code?: string;
   error_details?: Record<string, any>;
   suggestions?: string[];
   retryable?: boolean;
-  
+
   // Retry and performance information
   retry_attempts?: number;
   generation_time?: number;
@@ -1147,11 +1159,11 @@ export interface ReportType {
 // Approval API methods
 export const approvalApi = {
   // Get pending approvals for current user
-  getPendingApprovals: (filters?: { 
-    limit?: number; 
-    offset?: number; 
-    category?: string; 
-    min_amount?: number; 
+  getPendingApprovals: (filters?: {
+    limit?: number;
+    offset?: number;
+    category?: string;
+    min_amount?: number;
     max_amount?: number;
     sort_by?: string;
     sort_order?: 'asc' | 'desc';
@@ -1164,7 +1176,7 @@ export const approvalApi = {
     if (filters?.max_amount) params.append('max_amount', filters.max_amount.toString());
     if (filters?.sort_by) params.append('sort_by', filters.sort_by);
     if (filters?.sort_order) params.append('sort_order', filters.sort_order);
-    
+
     const queryString = params.toString();
     return apiRequest<{ approvals: ExpenseApproval[]; total: number; }>(`/approvals/pending${queryString ? `?${queryString}` : ''}`);
   },
@@ -1213,7 +1225,7 @@ export const approvalApi = {
     }),
 
   // Get approval history for an expense
-  getApprovalHistory: (expenseId: number) => 
+  getApprovalHistory: (expenseId: number) =>
     apiRequest<{ history: ApprovalHistoryEntry[]; }>(`/approvals/history/${expenseId}`),
 
   // Submit expense for approval
@@ -1237,7 +1249,7 @@ export const approvalApi = {
     const params = new URLSearchParams();
     if (filters?.limit) params.append('limit', filters.limit.toString());
     if (filters?.offset) params.append('offset', filters.offset.toString());
-    
+
     const queryString = params.toString();
     return apiRequest<{ approvals: any[]; total: number; }>(`/approvals/invoices/pending${queryString ? `?${queryString}` : ''}`);
   },
@@ -1248,22 +1260,24 @@ export const approvalApi = {
       body: JSON.stringify({ notes }),
     }),
 
+  getInvoiceApprovalHistory: (invoiceId: number) =>
+    apiRequest<{ invoice_id: number; current_status: string; approval_history: ApprovalHistoryEntry[]; }>(`/approvals/invoices/history/${invoiceId}`),
+
   rejectInvoice: (approvalId: number, reason: string, notes?: string) =>
     apiRequest<{ id: number; status: string; invoice_id: number }>(`/approvals/invoices/${approvalId}/reject`, {
       method: 'POST',
       body: JSON.stringify({ rejection_reason: reason, notes }),
     }),
 
-  getInvoiceApprovalHistory: (invoiceId: number) => 
-    apiRequest<{ invoice_id: number; current_status: string; approval_history: ApprovalHistoryEntry[] }>(`/approvals/invoices/history/${invoiceId}`),
+
 
   // Approval Delegation Management
-  getDelegations: (filters?: { 
-    approver_id?: number; 
-    delegate_id?: number; 
+  getDelegations: (filters?: {
+    approver_id?: number;
+    delegate_id?: number;
     is_active?: boolean;
-    limit?: number; 
-    offset?: number; 
+    limit?: number;
+    offset?: number;
   }) => {
     const params = new URLSearchParams();
     if (filters?.approver_id) params.append('approver_id', filters.approver_id.toString());
@@ -1271,24 +1285,24 @@ export const approvalApi = {
     if (filters?.is_active !== undefined) params.append('is_active', filters.is_active.toString());
     if (filters?.limit) params.append('limit', filters.limit.toString());
     if (filters?.offset) params.append('offset', filters.offset.toString());
-    
+
     const queryString = params.toString();
     return apiRequest<ApprovalDelegate[]>(`/approvals/delegates${queryString ? `?${queryString}` : ''}`);
   },
 
-  createDelegation: (delegationData: ApprovalDelegateCreate) => 
+  createDelegation: (delegationData: ApprovalDelegateCreate) =>
     apiRequest<ApprovalDelegate>('/approvals/delegate', {
       method: 'POST',
       body: JSON.stringify(delegationData),
     }),
 
-  updateDelegation: (delegationId: number, delegationData: ApprovalDelegateUpdate) => 
+  updateDelegation: (delegationId: number, delegationData: ApprovalDelegateUpdate) =>
     apiRequest<ApprovalDelegate>(`/approvals/delegates/${delegationId}`, {
       method: 'PUT',
       body: JSON.stringify(delegationData),
     }),
 
-  deleteDelegation: (delegationId: number) => 
+  deleteDelegation: (delegationId: number) =>
     apiRequest<{ message: string }>(`/approvals/delegates/${delegationId}`, {
       method: 'DELETE',
     }),
@@ -1298,17 +1312,17 @@ export const approvalApi = {
 export const clientApi = {
   getClients: () => apiRequest<Client[]>("/clients/"),
   getClient: (id: number) => apiRequest<Client>(`/clients/${id}`),
-  createClient: (client: Omit<Client, 'id' | 'created_at' | 'updated_at'>) => 
+  createClient: (client: Omit<Client, 'id' | 'created_at' | 'updated_at'>) =>
     apiRequest<Client>("/clients/", {
       method: 'POST',
       body: JSON.stringify(client),
     }),
-  updateClient: (id: number, client: Partial<Client>) => 
+  updateClient: (id: number, client: Partial<Client>) =>
     apiRequest<Client>(`/clients/${id}`, {
       method: 'PUT',
       body: JSON.stringify(client),
     }),
-  deleteClient: (id: number) => 
+  deleteClient: (id: number) =>
     apiRequest(`/clients/${id}`, {
       method: 'DELETE',
     }),
@@ -1316,38 +1330,38 @@ export const clientApi = {
 
 // CRM API methods
 export const crmApi = {
-    getNotesForClient: (clientId: number) =>
-        apiRequest<ClientNote[]>(`/crm/clients/${clientId}/notes`),
-    createNoteForClient: (clientId: number, note: { note: string }) =>
-        apiRequest<ClientNote>(`/crm/clients/${clientId}/notes`, {
-            method: 'POST',
-            body: JSON.stringify(note),
-        }),
-    updateNoteForClient: (clientId: number, noteId: number, note: { note: string }) =>
-        apiRequest<ClientNote>(`/crm/clients/${clientId}/notes/${noteId}`, {
-            method: 'PUT',
-            body: JSON.stringify(note),
-        }),
-    deleteNoteForClient: (clientId: number, noteId: number) =>
-        apiRequest(`/crm/clients/${clientId}/notes/${noteId}`, {
-            method: 'DELETE',
-        }),
+  getNotesForClient: (clientId: number) =>
+    apiRequest<ClientNote[]>(`/crm/clients/${clientId}/notes`),
+  createNoteForClient: (clientId: number, note: { note: string }) =>
+    apiRequest<ClientNote>(`/crm/clients/${clientId}/notes`, {
+      method: 'POST',
+      body: JSON.stringify(note),
+    }),
+  updateNoteForClient: (clientId: number, noteId: number, note: { note: string }) =>
+    apiRequest<ClientNote>(`/crm/clients/${clientId}/notes/${noteId}`, {
+      method: 'PUT',
+      body: JSON.stringify(note),
+    }),
+  deleteNoteForClient: (clientId: number, noteId: number) =>
+    apiRequest(`/crm/clients/${clientId}/notes/${noteId}`, {
+      method: 'DELETE',
+    }),
 };
 
 // Currency API methods
 export const currencyApi = {
-    getSupportedCurrencies: () => apiRequest<any>("/currency/supported?active_only=false"),
-    createCustomCurrency: (data: any) => apiRequest<any>("/currency/custom", {
-        method: 'POST',
-        body: JSON.stringify(data),
-    }),
-    updateCustomCurrency: (id: number, data: any) => apiRequest<any>(`/currency/custom/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(data),
-    }),
-    deleteCustomCurrency: (id: number) => apiRequest<any>(`/currency/custom/${id}`, {
-        method: 'DELETE',
-    }),
+  getSupportedCurrencies: () => apiRequest<any>("/currency/supported?active_only=false"),
+  createCustomCurrency: (data: any) => apiRequest<any>("/currency/custom", {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  updateCustomCurrency: (id: number, data: any) => apiRequest<any>(`/currency/custom/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  deleteCustomCurrency: (id: number) => apiRequest<any>(`/currency/custom/${id}`, {
+    method: 'DELETE',
+  }),
 };
 
 // Auth API methods
@@ -1370,31 +1384,31 @@ export const authApi = {
     apiRequest<{ available: boolean; email: string }>(`/auth/check-email-availability?email=${encodeURIComponent(email)}`, {
       method: 'GET',
     }),
-  
+
   // Organization join request functions
   lookupOrganization: (organizationName: string) =>
     apiRequest<{ exists: boolean; tenant_id?: number; organization_name?: string; message: string }>('/organization-join/lookup', {
       method: 'POST',
       body: JSON.stringify({ organization_name: organizationName }),
     }),
-  
+
   submitJoinRequest: (requestData: any) =>
     apiRequest<{ success: boolean; message: string; request_id?: number }>('/organization-join/request', {
       method: 'POST',
       body: JSON.stringify(requestData),
     }),
-  
+
   // Admin functions for managing join requests
   getPendingJoinRequests: () =>
     apiRequest<any[]>('/organization-join/pending', {
       method: 'GET',
     }),
-  
+
   getJoinRequestDetails: (requestId: number) =>
     apiRequest<any>(`/organization-join/${requestId}`, {
       method: 'GET',
     }),
-  
+
   processJoinRequest: (requestId: number, approvalData: any) =>
     apiRequest<{ success: boolean; message: string }>(`/organization-join/${requestId}/approve`, {
       method: 'POST',
@@ -1473,7 +1487,7 @@ export const invoiceApi = {
   getInvoices: async (status?: string): Promise<Invoice[]> => {
     try {
       const response = await apiRequest<any[]>(`/invoices/${status ? `?status_filter=${status}` : ''}`);
-      
+
       // Map API response to frontend Invoice interface
       const mappedInvoices: Invoice[] = response.map(apiInvoice => ({
         id: apiInvoice.id,
@@ -1497,7 +1511,7 @@ export const invoiceApi = {
         attachment_filename: apiInvoice.attachment_filename || undefined,
         payer: apiInvoice.payer || 'Client',
       }));
-      
+
       console.log("Mapped invoices with paid amounts:", mappedInvoices);
       return mappedInvoices;
     } catch (error) {
@@ -1509,9 +1523,9 @@ export const invoiceApi = {
     try {
       // Get invoice data from API
       const apiResponse = await apiRequest<any>(`/invoices/${id}`);
-      
+
       console.log("API response for invoice:", apiResponse);
-      
+
       // Map API response to frontend Invoice interface
       const invoice: Invoice = {
         id: apiResponse.id,
@@ -1554,7 +1568,7 @@ export const invoiceApi = {
         'raw apiResponse.payer': apiResponse.payer,
         'mapped payer': invoice.payer
       });
-      
+
       console.log("🔍 API CLIENT - Raw apiResponse keys:", Object.keys(apiResponse));
       console.log("🔍 API CLIENT - Raw apiResponse:", JSON.stringify(apiResponse, null, 2));
       console.log("🔍 API RESPONSE ATTACHMENT DEBUG:", {
@@ -1566,7 +1580,7 @@ export const invoiceApi = {
         'mapped attachment_filename': invoice.attachment_filename
       });
       console.log("Mapped invoice object:", invoice);
-      
+
       return invoice;
     } catch (error) {
       console.error("Error fetching invoice:", error);
@@ -1604,59 +1618,59 @@ export const invoiceApi = {
     }),
   cloneInvoice: (id: number) =>
     apiRequest<Invoice>(`/invoices/${id}/clone`, { method: 'POST' }),
-  deleteInvoice: (id: number) => 
+  deleteInvoice: (id: number) =>
     apiRequest(`/invoices/${id}`, { method: 'DELETE' }),
-  
+
   // Recycle bin methods
-  getDeletedInvoices: () => 
+  getDeletedInvoices: () =>
     apiRequest<any[]>('/invoices/recycle-bin'),
-  restoreInvoice: (id: number, newStatus: string = 'draft') => 
+  restoreInvoice: (id: number, newStatus: string = 'draft') =>
     apiRequest(`/invoices/${id}/restore`, {
       method: 'POST',
       body: JSON.stringify({ new_status: newStatus }),
     }),
-  permanentlyDeleteInvoice: (id: number) => 
+  permanentlyDeleteInvoice: (id: number) =>
     apiRequest(`/invoices/${id}/permanent`, { method: 'DELETE' }),
-  emptyRecycleBin: () => 
+  emptyRecycleBin: () =>
     apiRequest('/invoices/recycle-bin/empty', { method: 'POST' }),
-  
+
   // Attachment methods
   uploadAttachment: async (invoiceId: number, file: File) => {
     const token = localStorage.getItem('token');
-    const tenantId = localStorage.getItem('selected_tenant_id') || 
+    const tenantId = localStorage.getItem('selected_tenant_id') ||
       (() => {
         try {
           const user = JSON.parse(localStorage.getItem('user') || '{}');
           return user.tenant_id?.toString();
         } catch { return undefined; }
       })();
-    
+
     const formData = new FormData();
     formData.append('file', file);
-    
+
     const headers: Record<string, string> = {
       'Authorization': `Bearer ${token}`,
     };
     if (tenantId) {
       headers['X-Tenant-ID'] = tenantId;
     }
-    
+
     const uploadUrl = `${API_BASE_URL}/invoices/${invoiceId}/upload-attachment`;
     console.log("🔍 UPLOAD API DEBUG - API_BASE_URL:", API_BASE_URL);
     console.log("🔍 UPLOAD API DEBUG - Calling URL:", uploadUrl);
     console.log("🔍 UPLOAD API DEBUG - Full URL:", uploadUrl);
     console.log("🔍 UPLOAD API DEBUG - Headers:", headers);
     console.log("🔍 UPLOAD API DEBUG - FormData keys:", Array.from(formData.keys()));
-    
+
     const response = await fetch(uploadUrl, {
       method: 'POST',
       headers,
       body: formData,
     });
-    
+
     console.log("🔍 UPLOAD API DEBUG - Response status:", response.status);
     console.log("🔍 UPLOAD API DEBUG - Response ok:", response.ok);
-    
+
     if (!response.ok) {
       const errorText = await response.text();
       let errorMessage = 'Failed to upload attachment';
@@ -1668,7 +1682,7 @@ export const invoiceApi = {
       }
       throw new Error(errorMessage);
     }
-    
+
     const responseText = await response.text();
     try {
       return JSON.parse(responseText);
@@ -1679,20 +1693,20 @@ export const invoiceApi = {
   },
   downloadAttachment: (invoiceId: number) => {
     const token = localStorage.getItem('token');
-    const tenantId = localStorage.getItem('selected_tenant_id') || 
+    const tenantId = localStorage.getItem('selected_tenant_id') ||
       (() => {
         try {
           const user = JSON.parse(localStorage.getItem('user') || '{}');
           return user.tenant_id?.toString();
         } catch { return undefined; }
       })();
-    
+
     // Create a form to submit with proper headers
     const form = document.createElement('form');
     form.method = 'GET';
     form.action = `${API_BASE_URL}/invoices/${invoiceId}/download-attachment`;
     form.target = '_blank';
-    
+
     // Add token as query parameter since we can't set headers on form submission
     const url = new URL(form.action);
     url.searchParams.set('token', token || '');
@@ -1700,7 +1714,7 @@ export const invoiceApi = {
       url.searchParams.set('tenant_id', tenantId);
     }
     form.action = url.toString();
-    
+
     document.body.appendChild(form);
     form.submit();
     document.body.removeChild(form);
@@ -1729,12 +1743,12 @@ export const invoiceApi = {
     }
     return await resp.blob();
   },
-  
+
   // Invoice history methods
-  getInvoiceHistory: (invoiceId: number) => 
+  getInvoiceHistory: (invoiceId: number) =>
     apiRequest<InvoiceHistory[]>(`/invoices/${invoiceId}/history`),
-  
-  createInvoiceHistoryEntry: (invoiceId: number, historyEntry: InvoiceHistoryCreate) => 
+
+  createInvoiceHistoryEntry: (invoiceId: number, historyEntry: InvoiceHistoryCreate) =>
     apiRequest<InvoiceHistory>(`/invoices/${invoiceId}/history`, {
       method: 'POST',
       body: JSON.stringify(historyEntry),
@@ -1755,17 +1769,17 @@ export const paymentApi = {
     payment_method: string;
     reference_number?: string;
     notes?: string;
-  }) => 
+  }) =>
     apiRequest<Payment>("/payments/", {
       method: 'POST',
       body: JSON.stringify(payment),
     }),
-  updatePayment: (id: number, payment: Partial<Payment>) => 
+  updatePayment: (id: number, payment: Partial<Payment>) =>
     apiRequest<Payment>(`/payments/${id}`, {
       method: 'PUT',
       body: JSON.stringify(payment),
     }),
-  deletePayment: (id: number) => 
+  deletePayment: (id: number) =>
     apiRequest(`/payments/${id}`, {
       method: 'DELETE',
     }),
@@ -1953,7 +1967,7 @@ export const dashboardApi = {
         invoiceApi.getInvoices(),
         paymentApi.getPayments(),
       ]);
-      
+
       const totalClients = clients.length;
       // Group totals by currency
       const totalIncome: Record<string, number> = {};
@@ -2015,9 +2029,9 @@ export const dashboardApi = {
         return (invoices || [])
           .filter(invoice => {
             const invoiceDate = new Date(invoice.created_at);
-            return invoiceDate.getMonth() === targetMonth && 
-                   invoiceDate.getFullYear() === targetYear &&
-                   (invoice.status === 'paid' || invoice.status === 'partially_paid');
+            return invoiceDate.getMonth() === targetMonth &&
+              invoiceDate.getFullYear() === targetYear &&
+              (invoice.status === 'paid' || invoice.status === 'partially_paid');
           })
           .reduce((sum, invoice) => sum + (invoice.paid_amount || 0), 0);
       };
@@ -2027,9 +2041,9 @@ export const dashboardApi = {
         return (invoices || [])
           .filter(invoice => {
             const invoiceDate = new Date(invoice.created_at);
-            return invoiceDate.getMonth() === targetMonth && 
-                   invoiceDate.getFullYear() === targetYear &&
-                   (invoice.status === 'pending' || invoice.status === 'overdue' || invoice.status === 'partially_paid');
+            return invoiceDate.getMonth() === targetMonth &&
+              invoiceDate.getFullYear() === targetYear &&
+              (invoice.status === 'pending' || invoice.status === 'overdue' || invoice.status === 'partially_paid');
           })
           .reduce((sum, invoice) => {
             const outstandingAmount = invoice.amount - (invoice.paid_amount || 0);
@@ -2043,8 +2057,8 @@ export const dashboardApi = {
         (invoices || [])
           .filter(invoice => {
             const invoiceDate = new Date(invoice.created_at);
-            return invoiceDate.getMonth() === targetMonth && 
-                   invoiceDate.getFullYear() === targetYear;
+            return invoiceDate.getMonth() === targetMonth &&
+              invoiceDate.getFullYear() === targetYear;
           })
           .forEach(invoice => clientIds.add(invoice.client_id));
         return clientIds.size;
@@ -2055,9 +2069,9 @@ export const dashboardApi = {
         return (invoices || [])
           .filter(invoice => {
             const invoiceDate = new Date(invoice.created_at);
-            return invoiceDate.getMonth() === targetMonth && 
-                   invoiceDate.getFullYear() === targetYear &&
-                   invoice.status === 'overdue';
+            return invoiceDate.getMonth() === targetMonth &&
+              invoiceDate.getFullYear() === targetYear &&
+              invoice.status === 'overdue';
           }).length;
       };
 
@@ -2136,7 +2150,7 @@ export const dashboardApi = {
 // Settings API methods
 export const settingsApi = {
   getSettings: () => apiRequest<Settings>("/settings/"),
-  updateSettings: (settings: Partial<Settings>) => 
+  updateSettings: (settings: Partial<Settings>) =>
     apiRequest<Settings>("/settings/", {
       method: 'PUT',
       body: JSON.stringify(settings),
@@ -2201,17 +2215,17 @@ export const settingsApi = {
 export const discountRulesApi = {
   getDiscountRules: () => apiRequest<DiscountRule[]>("/discount-rules/"),
   getDiscountRule: (id: number) => apiRequest<DiscountRule>(`/discount-rules/${id}`),
-  createDiscountRule: (discountRule: DiscountRuleCreate) => 
+  createDiscountRule: (discountRule: DiscountRuleCreate) =>
     apiRequest<DiscountRule>("/discount-rules/", {
       method: 'POST',
       body: JSON.stringify(discountRule),
     }),
-  updateDiscountRule: (id: number, discountRule: DiscountRuleUpdate) => 
+  updateDiscountRule: (id: number, discountRule: DiscountRuleUpdate) =>
     apiRequest<DiscountRule>(`/discount-rules/${id}`, {
       method: 'PUT',
       body: JSON.stringify(discountRule),
     }),
-  deleteDiscountRule: (id: number) => 
+  deleteDiscountRule: (id: number) =>
     apiRequest(`/discount-rules/${id}`, {
       method: 'DELETE',
     }),
@@ -2255,7 +2269,7 @@ export const aiConfigApi = {
       method: 'POST',
       body: JSON.stringify(testRequest),
     }),
-  getSupportedProviders: () => apiRequest<{providers: Record<string, AIProviderInfo>, count: number}>("/ai-config/providers"),
+  getSupportedProviders: () => apiRequest<{ providers: Record<string, AIProviderInfo>, count: number }>("/ai-config/providers"),
   getConfigUsage: (id: number) => apiRequest<{
     config_id: number,
     usage_count: number,
@@ -2264,17 +2278,17 @@ export const aiConfigApi = {
     updated_at: string
   }>(`/ai-config/${id}/usage`),
   markAsTested: (id: number) =>
-    apiRequest<{message: string}>(`/ai-config/mark-tested/${id}`, {
+    apiRequest<{ message: string }>(`/ai-config/mark-tested/${id}`, {
       method: 'POST',
     }),
 };
 
 // AI Assistant API methods
 export const aiApi = {
-  analyzePatterns: () => apiRequest<{success: boolean, data: any}>("/ai/analyze-patterns"),
-  suggestActions: () => apiRequest<{success: boolean, data: any}>("/ai/suggest-actions"),
-  chat: (message: string, configId: number) => 
-    apiRequest<{success: boolean, data: any}>("/ai/chat", {
+  analyzePatterns: () => apiRequest<{ success: boolean, data: any }>("/ai/analyze-patterns"),
+  suggestActions: () => apiRequest<{ success: boolean, data: any }>("/ai/suggest-actions"),
+  chat: (message: string, configId: number) =>
+    apiRequest<{ success: boolean, data: any }>("/ai/chat", {
       method: 'POST',
       body: JSON.stringify({ message, config_id: configId }),
     }),
@@ -2307,7 +2321,7 @@ export const api = {
 };
 
 // Export apiClient as alias for api for compatibility
-export const apiClient = api; 
+export const apiClient = api;
 
 export const superAdminApi = {
   demoteSuperAdmin: async (email: string) => {
@@ -2336,7 +2350,7 @@ export const superAdminApi = {
 // Report error handling utilities
 export const handleReportError = (error: any): ReportApiError => {
   const reportError = new Error() as ReportApiError;
-  
+
   if (error.detail && typeof error.detail === 'object') {
     // Handle structured error response from backend
     reportError.message = error.detail.message || 'An error occurred';

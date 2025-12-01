@@ -706,6 +706,41 @@ const NewInvoiceScreen: React.FC<NewInvoiceScreenProps> = ({
     </View>
   );
 
+  // Show no clients message if there are no clients
+  if (clients.length === 0) {
+    return (
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <StatusBar style="dark" />
+        <View style={styles.header}>
+          <TouchableOpacity onPress={onNavigateBack} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#374151" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{t('invoices.new_invoice')}</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        <View style={styles.noClientsContainer}>
+          <Ionicons name="people-outline" size={64} color="#D1D5DB" />
+          <Text style={styles.noClientsTitle}>{t('invoices.no_clients_found')}</Text>
+          <Text style={styles.noClientsSubtext}>{t('invoices.add_client_to_get_started')}</Text>
+          
+          <TouchableOpacity
+            style={styles.addClientButtonLarge}
+            onPress={() => setShowAddClientModal(true)}
+          >
+            <Ionicons name="add" size={20} color="#FFFFFF" />
+            <Text style={styles.addClientButtonText}>{t('clients.add_new_client')}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {renderAddClientModal()}
+      </KeyboardAvoidingView>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -1707,6 +1742,50 @@ const styles = StyleSheet.create({
   currencyDisplay: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  headerSpacer: {
+    width: 60,
+  },
+  noClientsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  noClientsTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#374151',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  noClientsSubtext: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 24,
+  },
+  addClientButtonLarge: {
+    backgroundColor: '#3B82F6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  addClientButtonText: {
+    marginLeft: 8,
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
 
 });

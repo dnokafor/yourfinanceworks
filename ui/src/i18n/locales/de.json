@@ -424,6 +424,9 @@
     "status": {
       "draft": "Entwurf",
       "pending": "Ausstehend",
+      "pending_approval": "Genehmigung ausstehend",
+      "approved": "Genehmigt",
+      "rejected": "Abgelehnt",
       "paid": "Bezahlt",
       "overdue": "Überfällig",
       "partially_paid": "Teilweise bezahlt",
@@ -516,6 +519,7 @@
     "add_client": "Kunden hinzufügen",
     "cancel": "Abbrechen",
     "pending": "Ausstehend",
+    "pending_approval": "Genehmigung ausstehend",
     "paid": "Bezahlt",
     "partially_paid": "Teilweise bezahlt",
     "overdue": "Überfällig",
@@ -2066,6 +2070,7 @@
   },
   "approvalDashboard": {
     "title": "Genehmigungs-Dashboard",
+    "description": "Überprüfen und verwalten Sie Genehmigungsworkflows für Ausgaben und Rechnungen",
     "pending_approvals": "Ausstehende Genehmigungen",
     "processed_expenses": "Verarbeitete Ausgaben",
     "awaiting_review": "Warten auf Ihre Überprüfung",

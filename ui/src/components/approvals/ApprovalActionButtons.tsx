@@ -79,9 +79,9 @@ export function ApprovalActionButtons({ approval, onAction }: ApprovalActionButt
             <div className="p-4 bg-muted rounded-lg">
               <div className="text-sm space-y-1">
                 <div><strong>Amount:</strong> {approval.expense?.currency || 'USD'} {approval.expense?.amount?.toFixed(2)}</div>
-                <div><strong>Category:</strong> {approval.expense?.category}</div>
+                <div><strong>Category:</strong> {approval.expense?.category || 'General'}</div>
                 {approval.expense?.vendor && <div><strong>Vendor:</strong> {approval.expense.vendor}</div>}
-                <div><strong>Date:</strong> {approval.expense?.expense_date ? new Date(approval.expense.expense_date).toLocaleDateString() : 'N/A'}</div>
+                <div><strong>Date:</strong> {approval.expense?.expense_date ? new Date(approval.expense.expense_date).toLocaleDateString() : new Date().toLocaleDateString()}</div>
               </div>
             </div>
             
@@ -150,9 +150,9 @@ export function ApprovalActionButtons({ approval, onAction }: ApprovalActionButt
             <div className="p-4 bg-muted rounded-lg">
               <div className="text-sm space-y-1">
                 <div><strong>Amount:</strong> {approval.expense?.currency || 'USD'} {approval.expense?.amount?.toFixed(2)}</div>
-                <div><strong>Category:</strong> {approval.expense?.category}</div>
+                <div><strong>Category:</strong> {approval.expense?.category || 'General'}</div>
                 {approval.expense?.vendor && <div><strong>Vendor:</strong> {approval.expense.vendor}</div>}
-                <div><strong>Date:</strong> {approval.expense?.expense_date ? new Date(approval.expense.expense_date).toLocaleDateString() : 'N/A'}</div>
+                <div><strong>Date:</strong> {approval.expense?.expense_date ? new Date(approval.expense.expense_date).toLocaleDateString() : new Date().toLocaleDateString()}</div>
               </div>
             </div>
             

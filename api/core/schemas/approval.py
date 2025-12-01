@@ -112,6 +112,7 @@ class PendingApprovalSummary(BaseModel):
 class ApprovalHistoryItem(BaseModel):
     """Individual approval history item"""
     id: int
+    approver_id: int = Field(..., description="ID of the approver")
     approver_name: str = Field(..., description="Name of the approver")
     approver_email: str = Field(..., description="Email of the approver")
     status: ApprovalStatus
@@ -230,5 +231,21 @@ class InvoiceWithApprovalStatus(BaseModel):
     current_approver_name: Optional[str] = None
     submitted_for_approval_at: Optional[datetime] = None
     approval_level: Optional[int] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PendingInvoiceApprovalDetail(BaseModel):
+    """Detailed pending invoice approval with invoice and client information"""
+    id: int
+    invoice_id: int
+    invoice_number: str
+    client_name: str
+    amount: float
+    currency: str
+    status: ApprovalStatus
+    submitted_at: datetime
+    approver_id: int
+    approval_level: int
     
     model_config = ConfigDict(from_attributes=True)

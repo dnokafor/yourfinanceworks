@@ -119,7 +119,7 @@ export interface User {
 
 export interface ApprovalHistoryEntry {
   id: number;
-  expense_id: number;
+  expense_id?: number;
   approver_id: number;
   action: 'submitted' | 'approved' | 'rejected' | 'delegated';
   status: 'pending' | 'approved' | 'rejected';

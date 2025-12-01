@@ -11,7 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Link } from "react-router-dom";
-import { invoiceApi, Invoice, api } from "@/lib/api";
+import { invoiceApi, Invoice, api, INVOICE_STATUSES, formatStatus } from "@/lib/api";
 import { useNavigate } from 'react-router-dom';
 import { toast } from "sonner";
 import { CurrencyDisplay } from "@/components/ui/currency-display";
@@ -20,14 +20,6 @@ import { canPerformActions } from "@/utils/auth";
 import { useTranslation } from 'react-i18next';
 import { InvoiceCard } from "@/components/invoices/InvoiceCard";
 import { FeatureGate } from "@/components/FeatureGate";
-
-
-
-const formatStatus = (status: string) => {
-  return status.split('_').map(word =>
-    word.charAt(0).toUpperCase() + word.slice(1)
-  ).join(' ');
-};
 
 interface DeletedInvoice {
   id: number;
@@ -437,11 +429,11 @@ const Invoices = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">{t('invoices.all_statuses')}</SelectItem>
-                      <SelectItem value="draft">{t('invoices.status.draft')}</SelectItem>
-                      <SelectItem value="pending">{t('invoices.status.pending')}</SelectItem>
-                      <SelectItem value="paid">{t('invoices.status.paid')}</SelectItem>
-                      <SelectItem value="overdue">{t('invoices.status.overdue')}</SelectItem>
-                      <SelectItem value="partially_paid">{t('invoices.status.partially_paid')}</SelectItem>
+                      {INVOICE_STATUSES.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {t(`invoices.status.${status}`)}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <div className="flex border rounded-md">

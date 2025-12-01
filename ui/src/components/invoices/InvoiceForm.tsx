@@ -24,7 +24,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { isAdmin } from "@/utils/auth";
-import { clientApi, Client, invoiceApi, paymentApi, Invoice, InvoiceItem, InvoiceStatus, settingsApi, discountRulesApi, DiscountCalculation, DiscountRule, tenantApi, API_BASE_URL, expenseApi, Expense, Settings, inventoryApi } from "@/lib/api";
+import { clientApi, Client, invoiceApi, paymentApi, Invoice, InvoiceItem, InvoiceStatus, INVOICE_STATUSES, isValidInvoiceStatus, formatStatus, settingsApi, discountRulesApi, DiscountCalculation, DiscountRule, tenantApi, API_BASE_URL, expenseApi, Expense, Settings, inventoryApi } from "@/lib/api";
 import { Label } from "@/components/ui/label";
 import { InvoicePDF } from "./InvoicePDF";
 import { TemplateSelector } from "./TemplateSelector";
@@ -47,16 +47,6 @@ const invoiceItemSchema = z.object({
   unit_of_measure: z.string().optional().nullable(),
 });
 
-const isValidInvoiceStatus = (status: string): status is InvoiceStatus => {
-  return ["draft", "pending", "paid", "overdue", "partially_paid", "cancelled"].includes(status);
-};
-
-const formatStatus = (status: string) => {
-  return status.split('_').map(word =>
-    word.charAt(0).toUpperCase() + word.slice(1)
-  ).join(' ');
-};
-
 const customFieldSchema = z.object({
   key: z.string().min(1, "Field name is required"),
   value: z.string().optional(),
@@ -68,7 +58,7 @@ const formSchema = z.object({
   currency: z.string().min(1, "Currency is required"),
   date: z.date(),
   dueDate: z.date(),
-  status: z.enum(["draft", "pending", "paid", "overdue", "partially_paid", "cancelled"] as const),
+  status: z.enum(INVOICE_STATUSES as unknown as [string, ...string[]]),
   paidAmount: z.number().min(0, "Paid amount cannot be negative").optional(),
   items: z.array(invoiceItemSchema).min(1, "At least one item is required"),
   notes: z.string().optional(),
@@ -105,9 +95,16 @@ interface InvoiceFormProps {
   attachment?: File | null;
   prefillNewClient?: { name?: string; email?: string; address?: string; phone?: string } | null;
   openNewClientOnInit?: boolean;
+  renderButtons?: boolean; // If false, buttons won't be rendered (for external button control)
+  onFormSubmit?: () => Promise<void>; // Callback for external submit button
+  onFormCancel?: () => void; // Callback for external cancel button
+  onClientCreated?: () => void; // Callback when a new client is created
+  submitForApproval?: boolean; // Whether to submit for approval after creation
+  approverIdForApproval?: number; // Approver ID for approval submission
+  submitButtonRef?: React.MutableRefObject<HTMLButtonElement | null>; // Ref to the submit button for external triggering
 }
 
-export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialData, attachment, prefillNewClient, openNewClientOnInit }: InvoiceFormProps) {
+export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialData, attachment, prefillNewClient, openNewClientOnInit, renderButtons = true, onFormSubmit, onFormCancel, onClientCreated, submitForApproval = false, approverIdForApproval, submitButtonRef }: InvoiceFormProps) {
   console.log('📄 INVOICE FORM - Received props:', {
     hasAttachment: !!attachment,
     attachmentName: attachment?.name,
@@ -115,7 +112,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
     hasInitialData: !!initialData,
     isEdit
   });
-  
+
   const navigate = useNavigate();
 
   const [clients, setClients] = useState<Client[]>([]);
@@ -531,6 +528,11 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
       setShowNewClientDialog(false);
       resetNewClientForm();
       toast.success("Client created successfully!");
+
+      // Call the callback to notify parent component
+      if (onClientCreated) {
+        onClientCreated();
+      }
     } catch (error) {
       console.error("Failed to create client:", error);
       if (error instanceof Error && error.message.includes('Authentication failed')) {
@@ -582,7 +584,10 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
       currency: invoice?.currency || "USD",
       date: invoice ? safeParseDateString(invoice.date || invoice.created_at) : new Date(),
       dueDate: invoice ? safeParseDateString(invoice.due_date) : new Date(new Date().setDate(new Date().getDate() + 30)),
-      status: invoice ? (isValidInvoiceStatus(invoice.status) ? invoice.status : "pending") : "pending",
+      status: invoice ? (isValidInvoiceStatus(invoice.status) ? (invoice.status as InvoiceStatus) : (() => {
+        console.warn("⚠️ Invalid invoice status:", invoice.status);
+        return "pending" as InvoiceStatus;
+      })()) : "pending",
       paidAmount: invoice?.paid_amount || 0,
       items: safeItems,
       notes: invoice?.notes || settings?.invoice_settings?.notes || "",
@@ -867,7 +872,10 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
           currency: invoice.currency || "USD",
           date: safeParseDateString(invoice.date || invoice.created_at),
           dueDate: safeParseDateString(invoice.due_date),
-          status: isValidInvoiceStatus(invoice.status) ? invoice.status : "pending",
+          status: isValidInvoiceStatus(invoice.status) ? (invoice.status as InvoiceStatus) : (() => {
+            console.warn("⚠️ Invalid invoice status in reset:", invoice.status);
+            return "pending" as InvoiceStatus;
+          })(),
           paidAmount: invoice.paid_amount || 0,
           items: safeItems,
           notes: invoice.notes || "",
@@ -990,7 +998,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
           client_company: selectedClient?.company || '',
           date: value.date ? format(value.date, 'yyyy-MM-dd') : previewInvoice?.date || '',
           due_date: value.dueDate ? format(value.dueDate, 'yyyy-MM-dd') : previewInvoice?.due_date || '',
-          status: value.status || previewInvoice?.status || 'pending',
+          status: (value.status || previewInvoice?.status || 'pending') as InvoiceStatus,
           notes: value.notes || previewInvoice?.notes || '',
           currency: value.currency || previewInvoice?.currency || 'USD',
           items: itemsWithAmount,
@@ -1384,8 +1392,12 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
 
   const onSubmit = async (data: FormValues) => {
     console.log("🔥 onSubmit called", { isEdit, data });
-    console.log("🔥 Form data validation:", form.formState.errors);
+    console.log("🔥 Form data validation errors:", JSON.stringify(form.formState.errors, null, 2));
     console.log("🔥 Form is valid:", form.formState.isValid);
+    console.log("🔥 Form isDirty:", form.formState.isDirty);
+
+    // Note: We don't check isValid here because React Hook Form handles validation
+    // If there are validation errors, the form won't call onSubmit
 
     // Additional validation check for client
     if (!data.client || data.client.trim() === "") {
@@ -1428,7 +1440,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
         client_email: clients.find(c => c.id.toString() === data.client)?.email || '',
         date: data.date ? format(data.date, 'yyyy-MM-dd') : invoice?.date || '',
         due_date: data.dueDate ? format(data.dueDate, 'yyyy-MM-dd') : invoice?.due_date || '',
-        status: data.status || invoice?.status || 'pending',
+        status: (data.status || invoice?.status || 'pending') as InvoiceStatus,
         notes: data.notes || invoice?.notes || '',
         items: (data.items || invoice?.items || []).map(item => ({
           description: item.description || '',
@@ -1528,7 +1540,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
             currency: data.currency,
             due_date: data.dueDate ? format(data.dueDate, 'yyyy-MM-dd') : '',
             notes: data.notes || "",
-            status: data.status,
+            status: data.status as InvoiceStatus,
             client_id: Number(data.client),
             items: data.items.map(item => ({
               description: item.description || '',
@@ -1750,7 +1762,29 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
             }
           }
 
-          toast.success("Invoice updated successfully!");
+          // Submit for approval if requested
+          if (submitForApproval && approverIdForApproval && invoice) {
+            try {
+              const { approvalApi } = await import('@/lib/api');
+              console.log('🔵 Submitting invoice for approval (edit):', {
+                invoiceId: invoice.id,
+                approverId: approverIdForApproval,
+                submitForApproval
+              });
+              const approvalResult = await approvalApi.submitInvoiceForApproval(invoice.id, {
+                approver_id: approverIdForApproval,
+                notes: undefined
+              });
+              console.log('✅ Invoice submitted for approval:', invoice.id, 'Result:', approvalResult);
+              toast.success('Invoice updated and submitted for approval');
+            } catch (approvalError) {
+              console.error('Failed to submit invoice for approval:', approvalError);
+              toast.error('Invoice updated but failed to submit for approval');
+            }
+          } else {
+            console.log('⚠️ Skipping approval submission (edit):', { submitForApproval, approverIdForApproval });
+            toast.success("Invoice updated successfully!");
+          }
 
           // Redirect to invoices list after successful update
           navigate('/invoices');
@@ -1881,7 +1915,41 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
         // Set preview invoice with complete data including client information
         setPreviewInvoice(newInvoice);
 
-        navigate("/invoices"); // Only navigate back for new invoices
+        // Submit for approval if requested
+        if (submitForApproval && approverIdForApproval) {
+          try {
+            const { approvalApi } = await import('@/lib/api');
+            console.log('🔵 Submitting invoice for approval:', {
+              invoiceId: newInvoice.id,
+              approverId: approverIdForApproval,
+              submitForApproval
+            });
+            const approvalResult = await approvalApi.submitInvoiceForApproval(newInvoice.id, {
+              approver_id: approverIdForApproval,
+              notes: undefined
+            });
+            console.log('✅ Invoice submitted for approval:', newInvoice.id, 'Result:', approvalResult);
+            const { toast } = await import('sonner');
+            toast.success('Invoice created and submitted for approval');
+          } catch (approvalError) {
+            console.error('Failed to submit invoice for approval:', approvalError);
+            const { toast } = await import('sonner');
+            toast.error('Invoice created but failed to submit for approval');
+          }
+        } else {
+          console.log('⚠️ Skipping approval submission:', { submitForApproval, approverIdForApproval });
+        }
+
+        // Call onInvoiceUpdate to trigger any other callbacks
+        if (onInvoiceUpdate) {
+          console.log('🔵 Calling onInvoiceUpdate for new invoice:', newInvoice.id);
+          onInvoiceUpdate(newInvoice);
+        }
+
+        // Small delay to allow approval workflow to process before navigation
+        setTimeout(() => {
+          navigate("/invoices");
+        }, 100);
       }
     } catch (err) {
       console.error("Failed to submit invoice:", err);
@@ -2634,6 +2702,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="pending">{t('invoices.pending')}</SelectItem>
+                        <SelectItem value="pending_approval">{t('invoices.status.pending_approval')}</SelectItem>
                         {(isEdit || (initialData && (initialData as any).bank_transaction_id)) && <SelectItem value="paid">{t('invoices.paid')}</SelectItem>}
                         <SelectItem value="partially_paid">{t('invoices.partially_paid')}</SelectItem>
                         <SelectItem value="overdue">{t('invoices.overdue')}</SelectItem>
@@ -2705,7 +2774,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                     {t('invoices.supported_formats')}: PDF, DOC, DOCX, JPG, PNG
                   </p>
                 </div>
-                
+
                 {/* Show selected attachment */}
                 {invoiceAttachment && (
                   <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -2741,7 +2810,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
 
   return (
     <div className="w-full px-6 py-6 space-y-6">
-      
+
       {/* Global attachment indicator */}
       {invoiceAttachment && !isEdit && (
         <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-green-50 border border-blue-200 rounded-lg shadow-sm">
@@ -3040,11 +3109,16 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="draft">{t('invoices.draft')}</SelectItem>
-                            <SelectItem value="pending">{t('invoices.pending')}</SelectItem>
-                            {(isEdit || (initialData && (initialData as any).bank_transaction_id)) && <SelectItem value="paid">{t('invoices.paid')}</SelectItem>}
-                            <SelectItem value="partially_paid">{t('invoices.partially_paid')}</SelectItem>
-                            <SelectItem value="overdue">{t('invoices.overdue')}</SelectItem>
+                            {INVOICE_STATUSES.map((status) => {
+                              if (status === 'paid' && !(isEdit || (initialData && (initialData as any).bank_transaction_id))) {
+                                return null;
+                              }
+                              return (
+                                <SelectItem key={status} value={status}>
+                                  {t(`invoices.status.${status}`)}
+                                </SelectItem>
+                              );
+                            })}
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -3395,28 +3469,33 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-4">
-                  <Button type="button" variant="outline" onClick={() => navigate('/invoices')}>
-                    {t('invoices.cancel')}
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={submitting}
-                    onClick={async () => {
-                      console.log("🔥 Create Invoice button clicked");
-                      // Trigger validation before submit
-                      const isValid = await form.trigger();
-                      console.log("🔥 Form validation result:", isValid);
-                      console.log("🔥 Form errors:", form.formState.errors);
-                      if (!isValid) {
-                        console.log("🔥 Form validation failed, preventing submit");
-                      }
-                    }}
-                  >
-                    {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {t('invoices.create_invoice')}
-                  </Button>
-                </div>
+                {/* Hidden submit button - always present for external triggering */}
+                <button type="submit" style={{ display: 'none' }} aria-hidden="true" ref={submitButtonRef} />
+
+                {renderButtons && (
+                  <div className="flex justify-end gap-4">
+                    <Button type="button" variant="outline" onClick={() => onFormCancel ? onFormCancel() : navigate('/invoices')}>
+                      {t('invoices.cancel')}
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={submitting}
+                      onClick={async () => {
+                        console.log("🔥 Create Invoice button clicked");
+                        // Trigger validation before submit
+                        const isValid = await form.trigger();
+                        console.log("🔥 Form validation result:", isValid);
+                        console.log("🔥 Form errors:", form.formState.errors);
+                        if (!isValid) {
+                          console.log("🔥 Form validation failed, preventing submit");
+                        }
+                      }}
+                    >
+                      {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {t('invoices.create_invoice')}
+                    </Button>
+                  </div>
+                )}
               </form>
             </Form>
           </CardContent>
@@ -3742,12 +3821,16 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="draft">{t('invoices.draft')}</SelectItem>
-                                <SelectItem value="pending">{t('invoices.pending')}</SelectItem>
-                                {(isEdit || (initialData && (initialData as any).bank_transaction_id)) && <SelectItem value="paid">{t('invoices.paid')}</SelectItem>}
-                                <SelectItem value="partially_paid">{t('invoices.partially_paid')}</SelectItem>
-                                <SelectItem value="overdue">{t('invoices.overdue')}</SelectItem>
-                                <SelectItem value="cancelled">{t('invoices.cancelled')}</SelectItem>
+                                {INVOICE_STATUSES.map((status) => {
+                                  if (status === 'paid' && !(isEdit || (initialData && (initialData as any).bank_transaction_id))) {
+                                    return null;
+                                  }
+                                  return (
+                                    <SelectItem key={status} value={status}>
+                                      {t(`invoices.status.${status}`)}
+                                    </SelectItem>
+                                  );
+                                })}
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -4369,7 +4452,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                             {t('invoices.supported_formats')}: PDF, DOC, DOCX, JPG, PNG
                           </p>
                         </div>
-                        
+
                         {/* Show selected attachment for new invoices */}
                         {invoiceAttachment && (
                           <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -4622,15 +4705,20 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                       )}
                     </div>
 
-                    <div className="flex justify-end gap-4">
-                      <Button
-                        type="submit"
-                        disabled={submitting}
-                      >
-                        {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {t('invoices.update_invoice')}
-                      </Button>
-                    </div>
+                    {/* Hidden submit button - always present for external triggering */}
+                    <button type="submit" style={{ display: 'none' }} aria-hidden="true" ref={submitButtonRef} />
+
+                    {renderButtons && (
+                      <div className="flex justify-end gap-4">
+                        <Button
+                          type="submit"
+                          disabled={submitting}
+                        >
+                          {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          {t('invoices.update_invoice')}
+                        </Button>
+                      </div>
+                    )}
                   </form>
                 </Form>
               </div>

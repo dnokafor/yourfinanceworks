@@ -424,6 +424,9 @@
     "status": {
       "draft": "Draft",
       "pending": "Pending",
+      "pending_approval": "Pending Approval",
+      "approved": "Approved",
+      "rejected": "Rejected",
       "paid": "Paid",
       "overdue": "Overdue",
       "partially_paid": "Partially Paid",
@@ -2186,6 +2189,7 @@
   },
   "approvalDashboard": {
     "title": "Approval Dashboard",
+    "description": "Review and manage approval workflows for expenses and invoices",
     "pending_approvals": "Pending Approvals",
     "processed_expenses": "Processed Expenses",
     "awaiting_review": "Awaiting your review",

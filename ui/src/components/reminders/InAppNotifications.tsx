@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { format, isToday, isPast } from 'date-fns';
+import { useState, useEffect } from 'react';
+import { format, isToday } from 'date-fns';
 import { Bell, Clock, AlertCircle, Check, X, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -142,6 +142,17 @@ export function InAppNotifications({ className }: InAppNotificationsProps) {
       return message || subject || 'Expense notification';
     }
 
+    // Handle invoice approval notifications
+    if (notification_type === 'invoice_submitted_for_approval') {
+      return message || subject || 'Invoice submitted for approval';
+    }
+    if (notification_type === 'invoice_fully_approved') {
+      return message || subject || 'Invoice approved';
+    }
+    if (notification_type === 'invoice_rejected') {
+      return message || subject || 'Invoice rejected';
+    }
+
     // Handle reminder notifications
     if (!reminder) return message || 'Notification';
 
@@ -171,7 +182,7 @@ export function InAppNotifications({ className }: InAppNotificationsProps) {
     }
   };
 
-  const extractExpenseId = (subject?: string): number | null => {
+  const extractResourceId = (subject?: string): number | null => {
     if (!subject) return null;
     const match = subject.match(/#(\d+)/);
     return match ? parseInt(match[1]) : null;
@@ -190,11 +201,22 @@ export function InAppNotifications({ className }: InAppNotificationsProps) {
 
     // Handle expense approval notifications
     if (notification_type === 'expense_approval' || notification_type === 'expense_approved' || notification_type === 'expense_rejected') {
-      const expenseId = extractExpenseId(subject);
+      const expenseId = extractResourceId(subject);
       if (expenseId) {
         markAsRead(notification.id);
         setOpen(false);
         window.location.href = `/expenses/view/${expenseId}`;
+      }
+      return;
+    }
+
+    // Handle invoice approval notifications
+    if (notification_type === 'invoice_approval' || notification_type === 'invoice_submitted_for_approval' || notification_type === 'invoice_fully_approved' || notification_type === 'invoice_rejected') {
+      const invoiceId = extractResourceId(subject);
+      if (invoiceId) {
+        markAsRead(notification.id);
+        setOpen(false);
+        window.location.href = `/invoices/view/${invoiceId}`;
       }
       return;
     }
@@ -262,7 +284,11 @@ export function InAppNotifications({ className }: InAppNotificationsProps) {
                           (notification.notification_type === 'join_request' || 
                            notification.notification_type === 'expense_approval' || 
                            notification.notification_type === 'expense_approved' || 
-                           notification.notification_type === 'expense_rejected') && "cursor-pointer"
+                           notification.notification_type === 'expense_rejected' ||
+                           notification.notification_type === 'invoice_approval' ||
+                           notification.notification_type === 'invoice_submitted_for_approval' ||
+                           notification.notification_type === 'invoice_fully_approved' ||
+                           notification.notification_type === 'invoice_rejected') && "cursor-pointer"
                         )}
                         onClick={() => handleNotificationClick(notification)}
                       >
@@ -325,6 +351,30 @@ export function InAppNotifications({ className }: InAppNotificationsProps) {
                             {notification.notification_type === 'expense_rejected' && (
                               <Badge variant="outline" className="text-xs border-red-500 text-red-700">
                                 Rejected
+                              </Badge>
+                            )}
+
+                            {notification.notification_type === 'invoice_approval' && (
+                              <Badge variant="outline" className="text-xs border-orange-500 text-orange-700">
+                                Invoice Approval
+                              </Badge>
+                            )}
+
+                            {notification.notification_type === 'invoice_submitted_for_approval' && (
+                              <Badge variant="outline" className="text-xs border-orange-500 text-orange-700">
+                                Invoice Approval
+                              </Badge>
+                            )}
+
+                            {notification.notification_type === 'invoice_fully_approved' && (
+                              <Badge variant="outline" className="text-xs border-green-500 text-green-700">
+                                Invoice Approved
+                              </Badge>
+                            )}
+
+                            {notification.notification_type === 'invoice_rejected' && (
+                              <Badge variant="outline" className="text-xs border-red-500 text-red-700">
+                                Invoice Rejected
                               </Badge>
                             )}
                           </div>

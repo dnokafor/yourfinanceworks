@@ -16,7 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { CalendarIcon, Upload, ArrowLeft, Eye, Download, ExternalLink, Trash2, FileText, Plus, Copy, X, Edit, MoreHorizontal } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
-import { bankStatementApi, BankTransactionEntry, BankStatementDetail, BankStatementSummary, expenseApi, invoiceApi, clientApi } from '@/lib/api';
+import { bankStatementApi, BankTransactionEntry, BankStatementDetail, BankStatementSummary, expenseApi, invoiceApi, clientApi, formatStatus } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { InvoiceForm } from '@/components/invoices/InvoiceForm';
@@ -82,7 +82,7 @@ const formatDateToISO = (date: Date): string => {
 // Helper function to safely parse date strings without timezone issues
 const safeParseDateString = (dateString?: string): Date => {
   if (!dateString) return new Date();
-  
+
   try {
     const parsedDate = parseISO(dateString);
     return isValid(parsedDate) ? parsedDate : new Date();
@@ -120,11 +120,6 @@ export default function Statements() {
   const [statementToDelete, setStatementToDelete] = useState<number | null>(null);
   const [reprocessingLocks, setReprocessingLocks] = useState<Set<number>>(new Set());
   const readOnly = detail?.status === 'processing';
-
-  const formatStatus = (value?: string | null) => {
-    if (!value) return '';
-    return value.charAt(0).toUpperCase() + value.slice(1);
-  };
 
   useEffect(() => {
     const loadClients = async () => {
@@ -194,9 +189,9 @@ export default function Statements() {
         'Travel': 'Travel',
         'Other': 'General'
       };
-      
+
       const expenseCategory = categoryMap[transaction.category || 'Other'] || 'General';
-      
+
       const expenseData = {
         amount: Math.abs(transaction.amount),
         expense_date: transaction.date,
@@ -345,22 +340,22 @@ export default function Statements() {
     const iso = formatDateToISO(today);
     setRows(prev => {
       // Add new row at the top, then reassign all IDs to start from 1
-      const newRowsWithoutIds = [{ 
-        date: iso, 
-        description: '', 
-        amount: 0, 
-        transaction_type: 'debit' as 'debit', 
-        balance: null, 
+      const newRowsWithoutIds = [{
+        date: iso,
+        description: '',
+        amount: 0,
+        transaction_type: 'debit' as 'debit',
+        balance: null,
         category: 'Other',
         backend_id: null // New row, no backend ID yet
       }, ...prev];
-      
+
       // Reassign all IDs to start from 1
       const newRowsWithIds = newRowsWithoutIds.map((row, index) => ({
         ...row,
         id: index + 1
       }));
-      
+
       // Set the newly added row (now at index 0) as editing
       setEditingRow(0);
       return newRowsWithIds;
@@ -631,13 +626,13 @@ export default function Statements() {
                   </Button>
                 </div>
               </div>
-              
+
               <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
                 <p className="text-sm text-blue-800">
                   <strong>Note:</strong> Transaction information should match the uploaded bank statement file. Only edit if corrections are needed.
                 </p>
               </div>
-              
+
               {readOnly && (
                 <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
                   <p className="text-sm text-amber-800">
@@ -645,7 +640,7 @@ export default function Statements() {
                   </p>
                 </div>
               )}
-              
+
               <div className="flex items-center justify-between">
                 <div className="text-sm text-muted-foreground">
                   Edit transactions and save
@@ -662,12 +657,12 @@ export default function Statements() {
                           toast.warning('This statement is already being processed. Please wait for the current processing to complete.');
                           return;
                         }
-                        
+
                         const addNotification = (window as any).addAINotification;
                         try {
                           // Add to processing locks to prevent multiple clicks
                           setReprocessingLocks(prev => new Set([...prev, selected]));
-                          
+
                           addNotification?.('processing', 'Reprocessing Statement', `Re-analyzing ${detail?.original_filename} with AI...`);
 
                           await bankStatementApi.reprocess(selected);
@@ -868,9 +863,9 @@ export default function Statements() {
                         <TableCell>
                           {editingRow === idx ? (
                             <div className="space-y-1">
-                              <Textarea 
-                                value={r.description} 
-                                onChange={(e) => setRows(prev => prev.map((x, i) => i === idx ? { ...x, description: e.target.value } : x))} 
+                              <Textarea
+                                value={r.description}
+                                onChange={(e) => setRows(prev => prev.map((x, i) => i === idx ? { ...x, description: e.target.value } : x))}
                                 rows={3}
                                 maxLength={500}
                                 className="min-w-[200px]"
@@ -952,9 +947,9 @@ export default function Statements() {
                                     <Edit className="w-4 h-4 mr-2" />
                                     Edit
                                   </DropdownMenuItem>
-                                  
+
                                   <DropdownMenuSeparator />
-                                  
+
                                   {r.transaction_type === 'debit' && (
                                     <>
                                       <DropdownMenuItem
@@ -987,13 +982,13 @@ export default function Statements() {
                                                 // Delete the expense
                                                 await expenseApi.deleteExpense(expenseId);
                                                 toast.success(`Expense #${expenseId} deleted successfully`);
-                                                
+
                                                 // Unlink the expense from the transaction
-                                                const updatedRows: BankRow[] = rows.map((row, i) => 
+                                                const updatedRows: BankRow[] = rows.map((row, i) =>
                                                   i === idx ? { ...row, expense_id: null } : row
                                                 );
                                                 setRows(updatedRows);
-                                                
+
                                                 // Persist the unlink to backend
                                                 if (selected) {
                                                   try {
@@ -1024,7 +1019,7 @@ export default function Statements() {
                                       )}
                                     </>
                                   )}
-                                  
+
                                   {r.transaction_type === 'credit' && (
                                     <>
                                       <DropdownMenuItem
@@ -1060,13 +1055,13 @@ export default function Statements() {
                                                 // Delete the invoice
                                                 await invoiceApi.deleteInvoice(invoiceId);
                                                 toast.success(`Invoice #${invoiceId} deleted successfully`);
-                                                
+
                                                 // Unlink the invoice from the transaction
-                                                const updatedRows: BankRow[] = rows.map((row, i) => 
+                                                const updatedRows: BankRow[] = rows.map((row, i) =>
                                                   i === idx ? { ...row, invoice_id: null } : row
                                                 );
                                                 setRows(updatedRows);
-                                                
+
                                                 // Persist the unlink to backend
                                                 if (selected) {
                                                   try {
@@ -1135,7 +1130,7 @@ export default function Statements() {
               </div>
             </CardHeader>
             <CardContent>
-              <InvoiceForm 
+              <InvoiceForm
                 initialData={invoiceInitialData}
                 onInvoiceUpdate={async () => {
                   setShowInvoiceForm(false);

@@ -3,7 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { InvoiceFormWithApproval } from "@/components/invoices/InvoiceFormWithApproval";
 import { InvoiceStockImpact } from "@/components/invoices/InvoiceStockImpact";
-import { invoiceApi, Invoice, getErrorMessage, expenseApi, Expense, inventoryApi } from "@/lib/api";
+import { invoiceApi, Invoice, getErrorMessage, expenseApi, Expense, inventoryApi, approvalApi } from "@/lib/api";
+import { canEditInvoice } from "@/utils/auth";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ const EditInvoice = () => {
   const [availableExpenses, setAvailableExpenses] = useState<Expense[]>([]);
   const [linkSelect, setLinkSelect] = useState<string | undefined>(undefined);
   const [stockMovements, setStockMovements] = useState<any[]>([]);
+  const [existingApproval, setExistingApproval] = useState<{ approver_id: number } | undefined>(undefined);
 
   useEffect(() => {
     const fetchInvoice = async () => {
@@ -43,6 +45,13 @@ const EditInvoice = () => {
           attachment_filename: data.attachment_filename,
           // attachment_path is not part of Invoice; use filename/has_attachment
         });
+
+        // Check if user can edit this invoice
+        if (!canEditInvoice(data)) {
+          toast.error('This invoice cannot be edited while it is in the approval workflow');
+          navigate('/invoices');
+          return;
+        }
 
         // Check if items exists and has content
         if (!data.items || !Array.isArray(data.items) || data.items.length === 0) {
@@ -64,6 +73,31 @@ const EditInvoice = () => {
           } catch (stockError) {
             console.warn("Failed to fetch stock movements:", stockError);
             setStockMovements([]);
+          }
+
+          // Fetch pending approvals to check if this invoice is under approval
+          if (data.status === 'pending_approval') {
+            console.log("🔍 EDIT INVOICE - Invoice is pending approval, fetching approval details...");
+            try {
+              const historyResponse = await approvalApi.getInvoiceApprovalHistory(data.id);
+              console.log("🔍 EDIT INVOICE - Approval history response:", historyResponse);
+
+              // Find the latest pending approval
+              const pendingApproval = historyResponse.approval_history
+                .filter((a: any) => a.status === 'pending')
+                .sort((a: any, b: any) => new Date(b.submitted_at || b.timestamp).getTime() - new Date(a.submitted_at || a.timestamp).getTime())[0];
+
+              if (pendingApproval) {
+                console.log("🔍 EDIT INVOICE - Found pending approval:", pendingApproval);
+                setExistingApproval({ approver_id: pendingApproval.approver_id });
+              } else {
+                console.warn("🔍 EDIT INVOICE - Status is pending_approval but no pending approval found in history");
+              }
+            } catch (approvalError) {
+              console.warn("🔍 EDIT INVOICE - Failed to fetch approval history:", approvalError);
+            }
+          } else {
+            console.log("🔍 EDIT INVOICE - Invoice status is not pending_approval:", data.status);
           }
         } catch { }
       } catch (error) {
@@ -118,6 +152,7 @@ const EditInvoice = () => {
         <InvoiceFormWithApproval
           invoice={invoice}
           isEdit={true}
+          existingApproval={existingApproval}
           key={`${invoice.id}-${invoice.has_attachment}-${invoice.attachment_filename}`}
           onInvoiceUpdate={async (updatedInvoice) => {
             console.log("🔍 EDIT INVOICE - Invoice updated via callback:", updatedInvoice);

@@ -148,9 +148,29 @@ export const canEditExpense = (expense: { status: string }): boolean => {
     return false;
   }
 
-  // Prevent editing expenses that are in approval workflow
-  const approvalStatuses = ['pending_approval', 'approved', 'rejected', 'resubmitted'];
+  // Prevent editing expenses that are in approval workflow (except rejected - users should be able to fix and resubmit)
+  const approvalStatuses = ['pending_approval', 'approved', 'resubmitted'];
   if (approvalStatuses.includes(expense.status)) {
+    return false;
+  }
+
+  return true;
+};
+
+/**
+ * Check if an invoice can be edited by the current user
+ * @param invoice The invoice to check
+ * @returns boolean - true if the invoice can be edited
+ */
+export const canEditInvoice = (invoice: { status: string }): boolean => {
+  // First check if user has general action permissions
+  if (!canPerformActions()) {
+    return false;
+  }
+
+  // Prevent editing invoices that are in approval workflow (except rejected - users should be able to fix and resubmit)
+  const approvalStatuses = ['pending_approval', 'approved', 'resubmitted'];
+  if (approvalStatuses.includes(invoice.status)) {
     return false;
   }
 

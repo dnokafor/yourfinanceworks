@@ -634,8 +634,8 @@ export default function ExpensesEdit() {
           </CardContent>
         </Card>
 
-        {/* Approval Submission Section - Only show if expense is not already in approval workflow */}
-        {form.status !== 'pending_approval' && form.status !== 'approved' && form.status !== 'rejected' && (
+        {/* Approval Submission Section - Only show if expense is not already in approval workflow (allow rejected to be resubmitted) */}
+        {form.status !== 'pending_approval' && form.status !== 'approved' && form.status !== 'resubmitted' && (
           <Card>
             <CardHeader>
               <CardTitle>{t('expenses.approval_workflow')}</CardTitle>

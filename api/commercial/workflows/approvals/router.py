@@ -42,8 +42,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/approvals",
-    tags=["approvals"],
-    dependencies=[Depends(lambda db=Depends(get_db): require_feature("approvals")(lambda: None)())]
+    tags=["approvals"]
 )
 
 
@@ -205,7 +204,7 @@ async def submit_expense_for_approval(
                     assigned_to_id=approval.approver_id,
                     created_by_id=current_user.id,
                     tags=["approval", "expense", f"expense-{expense_id}"],
-                    metadata={
+                    extra_metadata={
                         "expense_id": expense_id,
                         "approval_id": approval.id,
                         "approval_level": approval.approval_level,
@@ -305,7 +304,7 @@ async def get_pending_approvals(
         )
 
         # Get total count for pagination
-        from core.models.models_per_tenant import ExpenseApproval
+        from core.models.models_per_tenant import ExpenseApproval, Expense
         from core.schemas.approval import ApprovalStatus
         total = db.query(ExpenseApproval).filter(
             and_(
@@ -315,10 +314,39 @@ async def get_pending_approvals(
             )
         ).count()
 
+        # Enrich approvals with expense data
+        enriched_approvals = []
+        for approval in pending_approvals:
+            expense = db.query(Expense).filter(Expense.id == approval.expense_id).first()
+            approval_dict = {
+                "id": approval.id,
+                "expense_id": approval.expense_id,
+                "approver_id": approval.approver_id,
+                "approval_rule_id": approval.approval_rule_id,
+                "status": approval.status,
+                "rejection_reason": approval.rejection_reason,
+                "notes": approval.notes,
+                "submitted_at": approval.submitted_at.isoformat(),
+                "decided_at": approval.decided_at.isoformat() if approval.decided_at else None,
+                "approval_level": approval.approval_level,
+                "is_current_level": approval.is_current_level,
+                "expense": {
+                    "id": expense.id,
+                    "amount": float(expense.amount),
+                    "currency": expense.currency,
+                    "expense_date": expense.expense_date,
+                    "category": expense.category or "General",
+                    "vendor": expense.vendor,
+                    "status": expense.status,
+                    "notes": expense.notes
+                } if expense else None
+            }
+            enriched_approvals.append(approval_dict)
+
         logger.info(f"Retrieved {len(pending_approvals)} pending approvals (total: {total}) for user {current_user.id}")
 
         return {
-            "approvals": pending_approvals,
+            "approvals": enriched_approvals,
             "total": total
         }
 
@@ -691,7 +719,7 @@ async def get_dashboard_stats(
     Get approval dashboard statistics for the current user.
 
     This endpoint provides aggregated statistics about the approval workflow
-    for display on the approval dashboard.
+    for display on the approval dashboard, including both expense and invoice approvals.
 
     Args:
         current_user: Currently authenticated user
@@ -704,7 +732,7 @@ async def get_dashboard_stats(
         require_non_viewer(current_user)
 
         # Import here to avoid circular imports
-        from core.models.models_per_tenant import ExpenseApproval, Expense
+        from core.models.models_per_tenant import ExpenseApproval, Expense, InvoiceApproval, Invoice
         from sqlalchemy import func, and_, or_
         from datetime import datetime, timedelta
 
@@ -712,64 +740,112 @@ async def get_dashboard_stats(
         today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         today_end = today_start + timedelta(days=1)
 
-        # Base query for approvals assigned to current user
-        base_query = db.query(ExpenseApproval).filter(
+        # Get expense approvals for current user
+        expense_base_query = db.query(ExpenseApproval).filter(
             ExpenseApproval.approver_id == current_user.id
         )
 
-        # Pending approvals count
-        pending_count = base_query.filter(
+        # Get invoice approvals for current user
+        invoice_base_query = db.query(InvoiceApproval).filter(
+            InvoiceApproval.approver_id == current_user.id
+        )
+
+        # Pending approvals count (expenses + invoices)
+        pending_expense_count = expense_base_query.filter(
             ExpenseApproval.status == "pending"
         ).count()
+        pending_invoice_count = invoice_base_query.filter(
+            InvoiceApproval.status == "pending"
+        ).count()
+        pending_count = pending_expense_count + pending_invoice_count
 
-        # Approved today count
-        approved_today = base_query.filter(
+        # Approved today count (expenses + invoices)
+        approved_expense_today = expense_base_query.filter(
             and_(
                 ExpenseApproval.status == "approved",
                 ExpenseApproval.decided_at >= today_start,
                 ExpenseApproval.decided_at < today_end
             )
         ).count()
+        approved_invoice_today = invoice_base_query.filter(
+            and_(
+                InvoiceApproval.status == "approved",
+                InvoiceApproval.decided_at >= today_start,
+                InvoiceApproval.decided_at < today_end
+            )
+        ).count()
+        approved_today = approved_expense_today + approved_invoice_today
 
-        # Rejected today count
-        rejected_today = base_query.filter(
+        # Rejected today count (expenses + invoices)
+        rejected_expense_today = expense_base_query.filter(
             and_(
                 ExpenseApproval.status == "rejected",
                 ExpenseApproval.decided_at >= today_start,
                 ExpenseApproval.decided_at < today_end
             )
         ).count()
+        rejected_invoice_today = invoice_base_query.filter(
+            and_(
+                InvoiceApproval.status == "rejected",
+                InvoiceApproval.decided_at >= today_start,
+                InvoiceApproval.decided_at < today_end
+            )
+        ).count()
+        rejected_today = rejected_expense_today + rejected_invoice_today
 
-        # Overdue count (pending for more than 3 days)
+        # Overdue count (pending for more than 3 days) - expenses + invoices
         three_days_ago = datetime.now() - timedelta(days=3)
-        overdue_count = base_query.filter(
+        overdue_expense_count = expense_base_query.filter(
             and_(
                 ExpenseApproval.status == "pending",
                 ExpenseApproval.created_at < three_days_ago
             )
         ).count()
+        overdue_invoice_count = invoice_base_query.filter(
+            and_(
+                InvoiceApproval.status == "pending",
+                InvoiceApproval.created_at < three_days_ago
+            )
+        ).count()
+        overdue_count = overdue_expense_count + overdue_invoice_count
 
-        # Average approval time in hours
-        # Get all completed approvals for this user
-        completed_approvals = base_query.filter(
+        # Average approval time in hours (expenses + invoices)
+        # Get all completed expense approvals for this user
+        completed_expense_approvals = expense_base_query.filter(
             or_(
                 ExpenseApproval.status == "approved",
                 ExpenseApproval.status == "rejected"
             )
         ).all()
 
-        average_approval_time_hours = 0.0
-        if completed_approvals:
-            total_hours = 0
-            count = 0
-            for approval in completed_approvals:
-                if approval.decided_at and approval.created_at:
-                    time_diff = approval.decided_at - approval.created_at
-                    total_hours += time_diff.total_seconds() / 3600  # Convert to hours
-                    count += 1
+        # Get all completed invoice approvals for this user
+        completed_invoice_approvals = invoice_base_query.filter(
+            or_(
+                InvoiceApproval.status == "approved",
+                InvoiceApproval.status == "rejected"
+            )
+        ).all()
 
-            if count > 0:
-                average_approval_time_hours = total_hours / count
+        average_approval_time_hours = 0.0
+        total_hours = 0
+        count = 0
+
+        # Process expense approvals
+        for approval in completed_expense_approvals:
+            if approval.decided_at and approval.created_at:
+                time_diff = approval.decided_at - approval.created_at
+                total_hours += time_diff.total_seconds() / 3600  # Convert to hours
+                count += 1
+
+        # Process invoice approvals
+        for approval in completed_invoice_approvals:
+            if approval.decided_at and approval.created_at:
+                time_diff = approval.decided_at - approval.created_at
+                total_hours += time_diff.total_seconds() / 3600  # Convert to hours
+                count += 1
+
+        if count > 0:
+            average_approval_time_hours = total_hours / count
 
         stats = {
             "pending_count": pending_count,
@@ -1308,6 +1384,63 @@ async def submit_invoice_for_approval(
             notes=notes
         )
         
+        # Create notification and reminder for approvers
+        from core.models.models_per_tenant import ReminderNotification, Invoice, Reminder, ReminderStatus, ReminderPriority, RecurrencePattern
+        from datetime import timedelta as td
+        now = datetime.now(timezone.utc)
+        invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+        
+        for approval in approvals:
+            if approval.approver_id:
+                # Create in-app notification with invoice_id in subject for navigation
+                notification = ReminderNotification(
+                    reminder_id=None,
+                    user_id=approval.approver_id,
+                    notification_type="invoice_approval",
+                    channel="in_app",
+                    scheduled_for=now,
+                    subject=f"Invoice Approval Request #{invoice_id}",  # Include invoice_id for navigation
+                    message=f"New invoice approval request from {current_user.email}: Invoice #{invoice.number if invoice else 'N/A'} - ${invoice.amount if invoice else 'N/A'}",
+                    is_sent=True,
+                    sent_at=now
+                )
+                db.add(notification)
+
+                # Create a reminder task for the approver
+                # Determine priority based on invoice amount
+                priority = ReminderPriority.MEDIUM
+                if invoice and invoice.amount:
+                    if invoice.amount >= 5000:
+                        priority = ReminderPriority.HIGH
+                    elif invoice.amount >= 10000:
+                        priority = ReminderPriority.URGENT
+
+                # Set due date to 3 business days from now
+                due_date = now + td(days=3)
+
+                reminder = Reminder(
+                    title=f"Approve Invoice: #{invoice.number if invoice else 'N/A'} - ${invoice.amount if invoice else 'N/A'}",
+                    description=f"Invoice approval request from {current_user.email}\n\nInvoice Number: {invoice.number if invoice else 'N/A'}\nAmount: ${invoice.amount if invoice else 'N/A'}\nClient: {invoice.client.name if invoice and invoice.client else 'N/A'}\nDue Date: {invoice.due_date if invoice and invoice.due_date else 'N/A'}\n\nNotes: {notes if notes else 'No notes provided'}",
+                    due_date=due_date,
+                    priority=priority,
+                    status=ReminderStatus.PENDING,
+                    recurrence_pattern=RecurrencePattern.NONE,
+                    assigned_to_id=approval.approver_id,
+                    created_by_id=current_user.id,
+                    tags=["approval", "invoice", f"invoice-{invoice_id}"],
+                    extra_metadata={
+                        "invoice_id": invoice_id,
+                        "approval_id": approval.id,
+                        "approval_level": approval.approval_level,
+                        "submitter_id": current_user.id,
+                        "submitter_email": current_user.email
+                    }
+                )
+                db.add(reminder)
+
+        # Commit the notifications and reminders
+        db.commit()
+        
         # Log audit event
         log_audit_event(
             db=db,
@@ -1325,7 +1458,7 @@ async def submit_invoice_for_approval(
         
         logger.info(f"User {current_user.id} submitted invoice {invoice_id} for approval")
         
-        return [{"id": a.id, "status": a.status, "approval_level": a.approval_level} for a in approvals]
+        return [{"id": a.id, "status": a.status, "approval_level": a.approval_level, "approver_id": a.approver_id} for a in approvals]
         
     except ValidationError as e:
         logger.warning(f"Validation error submitting invoice {invoice_id}: {str(e)}")
@@ -1367,27 +1500,64 @@ async def get_pending_invoice_approvals(
     try:
         require_non_viewer(current_user)
 
-        pending_approvals = approval_service.get_pending_invoice_approvals(
-            approver_id=current_user.id,
-            limit=limit,
-            offset=offset
-        )
+        from core.models.models_per_tenant import InvoiceApproval, Invoice, Client
+        from core.schemas.approval import ApprovalStatus, PendingInvoiceApprovalDetail
 
-        # Get total count for pagination
-        from core.models.models_per_tenant import InvoiceApproval
-        from core.schemas.approval import ApprovalStatus
-        total = db.query(InvoiceApproval).filter(
+        # Build query with joins to get invoice and client details
+        query = db.query(
+            InvoiceApproval.id,
+            InvoiceApproval.invoice_id,
+            Invoice.number.label('invoice_number'),
+            Client.name.label('client_name'),
+            Invoice.amount,
+            Invoice.currency,
+            InvoiceApproval.status,
+            InvoiceApproval.submitted_at,
+            InvoiceApproval.approver_id,
+            InvoiceApproval.approval_level
+        ).join(
+            Invoice, InvoiceApproval.invoice_id == Invoice.id
+        ).join(
+            Client, Invoice.client_id == Client.id
+        ).filter(
             and_(
                 InvoiceApproval.approver_id == current_user.id,
                 InvoiceApproval.status == ApprovalStatus.PENDING,
                 InvoiceApproval.is_current_level == True
             )
-        ).count()
+        ).order_by(InvoiceApproval.submitted_at.asc())
 
-        logger.info(f"Retrieved {len(pending_approvals)} pending invoice approvals (total: {total}) for user {current_user.id}")
+        # Get total count
+        total = query.count()
+
+        # Apply pagination
+        if offset:
+            query = query.offset(offset)
+        if limit:
+            query = query.limit(limit)
+
+        # Execute query and convert to schema
+        results = query.all()
+        approvals = [
+            PendingInvoiceApprovalDetail(
+                id=row.id,
+                invoice_id=row.invoice_id,
+                invoice_number=row.invoice_number,
+                client_name=row.client_name,
+                amount=row.amount,
+                currency=row.currency or 'USD',
+                status=row.status,
+                submitted_at=row.submitted_at,
+                approver_id=row.approver_id,
+                approval_level=row.approval_level
+            )
+            for row in results
+        ]
+
+        logger.info(f"Retrieved {len(approvals)} pending invoice approvals (total: {total}) for user {current_user.id}")
 
         return {
-            "approvals": pending_approvals,
+            "approvals": approvals,
             "total": total
         }
 
@@ -1435,6 +1605,50 @@ async def approve_invoice(
             approver_id=current_user.id,
             notes=notes
         )
+        
+        # Create notification for invoice submitter and complete the reminder
+        from core.models.models_per_tenant import ReminderNotification, Invoice, Reminder, ReminderStatus
+        now = datetime.now(timezone.utc)
+        invoice = db.query(Invoice).filter(Invoice.id == approval.invoice_id).first()
+        
+        # Get the submitter from the reminder metadata
+        reminder_for_approval = db.query(Reminder).filter(
+            Reminder.status == ReminderStatus.PENDING,
+            text("extra_metadata::jsonb @> :metadata")
+        ).params(metadata=f'{{"approval_id": {approval.id}}}').first()
+        
+        submitter_id = None
+        if reminder_for_approval and reminder_for_approval.extra_metadata:
+            submitter_id = reminder_for_approval.extra_metadata.get("submitter_id")
+        
+        if submitter_id and invoice:
+            notification = ReminderNotification(
+                reminder_id=None,
+                user_id=submitter_id,
+                notification_type="invoice_approved",
+                channel="in_app",
+                scheduled_for=now,
+                subject=f"Invoice Approved #{approval.invoice_id}",
+                message=f"Your invoice #{invoice.number} has been approved by {current_user.email}",
+                is_sent=True,
+                sent_at=now
+            )
+            db.add(notification)
+
+        # Complete the reminder task for this approval
+        reminder = db.query(Reminder).filter(
+            Reminder.assigned_to_id == current_user.id,
+            Reminder.status == ReminderStatus.PENDING,
+            text("extra_metadata::jsonb @> :metadata")
+        ).params(metadata=f'{{"approval_id": {approval_id}}}').first()
+
+        if reminder:
+            reminder.status = ReminderStatus.COMPLETED
+            reminder.completed_at = now
+            reminder.completed_by_id = current_user.id
+            db.add(reminder)
+
+        db.commit()
         
         # Log audit event
         log_audit_event(
@@ -1518,6 +1732,48 @@ async def reject_invoice(
             rejection_reason=rejection_reason,
             notes=notes
         )
+        
+        # Create notification for invoice submitter and cancel the reminder
+        from core.models.models_per_tenant import ReminderNotification, Invoice, Reminder, ReminderStatus
+        now = datetime.now(timezone.utc)
+        invoice = db.query(Invoice).filter(Invoice.id == approval.invoice_id).first()
+        
+        # Get the submitter from the reminder metadata
+        reminder_for_approval = db.query(Reminder).filter(
+            Reminder.status == ReminderStatus.PENDING,
+            text("extra_metadata::jsonb @> :metadata")
+        ).params(metadata=f'{{"approval_id": {approval.id}}}').first()
+        
+        submitter_id = None
+        if reminder_for_approval and reminder_for_approval.extra_metadata:
+            submitter_id = reminder_for_approval.extra_metadata.get("submitter_id")
+        
+        if submitter_id and invoice:
+            notification = ReminderNotification(
+                reminder_id=None,
+                user_id=submitter_id,
+                notification_type="invoice_rejected",
+                channel="in_app",
+                scheduled_for=now,
+                subject=f"Invoice Rejected #{approval.invoice_id}",
+                message=f"Your invoice #{invoice.number} was rejected by {current_user.email}. Reason: {rejection_reason}",
+                is_sent=True,
+                sent_at=now
+            )
+            db.add(notification)
+
+        # Cancel the reminder task for this approval (since it's rejected)
+        reminder = db.query(Reminder).filter(
+            Reminder.assigned_to_id == current_user.id,
+            Reminder.status == ReminderStatus.PENDING,
+            text("extra_metadata::jsonb @> :metadata")
+        ).params(metadata=f'{{"approval_id": {approval_id}}}').first()
+
+        if reminder:
+            reminder.status = ReminderStatus.CANCELLED
+            db.add(reminder)
+
+        db.commit()
         
         # Log audit event
         log_audit_event(

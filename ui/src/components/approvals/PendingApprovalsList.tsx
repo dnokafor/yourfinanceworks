@@ -64,9 +64,10 @@ export function PendingApprovalsList({ onApprovalAction }: PendingApprovalsListP
       });
       setApprovals(data.approvals || []);
       setTotal(data.total || 0);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch pending approvals:', error);
-      toast.error('Failed to load pending approvals');
+      const errorMessage = error?.message || 'Failed to load pending approvals';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

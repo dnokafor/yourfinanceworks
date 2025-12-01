@@ -5,7 +5,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, Trash, Loader2, DollarSign, FileText, Edit, Mail, User, Calculator, Settings as SettingsIcon, Package } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 import { useNavigate } from "react-router-dom";
-import { PDFDownloadLink } from '@react-pdf/renderer';
 import { useTranslation } from "react-i18next";
 
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
@@ -16,22 +15,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { cn, formatDateTime } from "@/lib/utils";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { isAdmin } from "@/utils/auth";
-import { clientApi, invoiceApi, paymentApi, Invoice, InvoiceItem, InvoiceStatus, settingsApi, discountRulesApi, DiscountCalculation, DiscountRule, tenantApi, API_BASE_URL, expenseApi, Expense, Settings } from "@/lib/api";
-import { Label } from "@/components/ui/label";
-import { InvoicePDF } from "../invoices/InvoicePDF";
-import { TemplateSelector } from "../invoices/TemplateSelector";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { clientApi, invoiceApi, paymentApi, Invoice, InvoiceItem, InvoiceStatus, INVOICE_STATUSES, isValidInvoiceStatus, formatStatus, settingsApi, discountRulesApi, DiscountCalculation, DiscountRule, tenantApi, API_BASE_URL, expenseApi, Expense, Settings } from "@/lib/api";
 import { CurrencySelector } from "@/components/ui/currency-selector";
 import { apiRequest } from "@/lib/api";
 import { CurrencyDisplay } from "@/components/ui/currency-display";
-import { InvoiceHistoryDetailsModal } from "../invoices/InvoiceHistoryDetailsModal";
 import { getErrorMessage } from '@/lib/api';
-import { Checkbox } from "@/components/ui/checkbox";
-import { HelpTooltip } from "@/components/onboarding/HelpTooltip";
 import { InventoryInvoiceItem } from "./InventoryInvoiceItem";
 
 const invoiceItemSchema = z.object({
@@ -42,16 +31,6 @@ const invoiceItemSchema = z.object({
   inventory_item_id: z.number().optional(),
   unit_of_measure: z.string().optional(),
 });
-
-const isValidInvoiceStatus = (status: string): status is InvoiceStatus => {
-  return ["draft", "pending", "paid", "overdue", "partially_paid"].includes(status);
-};
-
-const formatStatus = (status: string) => {
-  return status.split('_').map(word =>
-    word.charAt(0).toUpperCase() + word.slice(1)
-  ).join(' ');
-};
 
 const customFieldSchema = z.object({
   key: z.string().min(1, "Field name is required"),
@@ -64,7 +43,7 @@ const formSchema = z.object({
   currency: z.string().min(1, "Currency is required"),
   date: z.date(),
   dueDate: z.date(),
-  status: z.enum(["draft", "pending", "paid", "overdue", "partially_paid", "cancelled"] as const),
+  status: z.enum(INVOICE_STATUSES as unknown as [string, ...string[]]),
   paidAmount: z.number().min(0, "Paid amount cannot be negative").optional(),
   items: z.array(invoiceItemSchema).min(1, "At least one item is required"),
   notes: z.string().optional(),
@@ -379,7 +358,7 @@ export const InventoryInvoiceForm: React.FC<InventoryInvoiceFormProps> = ({
         currency: data.currency,
         date: format(data.date, "yyyy-MM-dd"),
         due_date: format(data.dueDate, "yyyy-MM-dd"),
-        status: data.status,
+        status: data.status as InvoiceStatus,
         paid_amount: data.paidAmount || 0,
         items: data.items.map(item => ({
           id: item.id,
@@ -686,39 +665,39 @@ export const InventoryInvoiceForm: React.FC<InventoryInvoiceFormProps> = ({
             >
               {t('common.cancel', 'Cancel')}
             </Button>
-                  {(() => {
-                    const errors = form.formState.errors;
-                    const values = form.getValues();
-                    console.log("🔥 Inventory InvoiceForm rendering submit button", {
-                      saving,
-                      isEdit,
-                      formIsValid: form.formState.isValid,
-                      formErrors: errors,
-                      formValues: values,
-                      validationDetails: {
-                        client: { value: values.client, error: errors.client?.message },
-                        invoiceNumber: { value: values.invoiceNumber, error: errors.invoiceNumber?.message },
-                        currency: { value: values.currency, error: errors.currency?.message },
-                        status: { value: values.status, error: errors.status?.message },
-                        items: { count: values.items?.length, error: errors.items?.message },
-                        customFields: {
-                          count: values.customFields?.length,
-                          error: errors.customFields?.message,
-                          fields: values.customFields?.map(f => ({ key: f.key, hasKey: f.key.trim().length > 0 }))
-                        }
-                      }
-                    });
-                    return null;
-                  })()}
-                  <Button
-                    type="submit"
-                    disabled={saving} // Temporarily disable validation check
-                    onClick={() => console.log("🔥 Inventory Create Invoice button clicked", {
-                      formData: form.getValues(),
-                      formErrors: form.formState.errors,
-                      formIsValid: form.formState.isValid
-                    })}
-                  >
+            {(() => {
+              const errors = form.formState.errors;
+              const values = form.getValues();
+              console.log("🔥 Inventory InvoiceForm rendering submit button", {
+                saving,
+                isEdit,
+                formIsValid: form.formState.isValid,
+                formErrors: errors,
+                formValues: values,
+                validationDetails: {
+                  client: { value: values.client, error: errors.client?.message },
+                  invoiceNumber: { value: values.invoiceNumber, error: errors.invoiceNumber?.message },
+                  currency: { value: values.currency, error: errors.currency?.message },
+                  status: { value: values.status, error: errors.status?.message },
+                  items: { count: values.items?.length, error: errors.items?.message },
+                  customFields: {
+                    count: values.customFields?.length,
+                    error: errors.customFields?.message,
+                    fields: values.customFields?.map(f => ({ key: f.key, hasKey: f.key.trim().length > 0 }))
+                  }
+                }
+              });
+              return null;
+            })()}
+            <Button
+              type="submit"
+              disabled={saving} // Temporarily disable validation check
+              onClick={() => console.log("🔥 Inventory Create Invoice button clicked", {
+                formData: form.getValues(),
+                formErrors: form.formState.errors,
+                formIsValid: form.formState.isValid
+              })}
+            >
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {saving
                 ? (isEdit ? t('invoices.updating', 'Updating...') : t('invoices.creating', 'Creating...'))

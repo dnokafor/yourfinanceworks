@@ -425,6 +425,9 @@
     "status": {
       "draft": "Brouillon",
       "pending": "En attente",
+      "pending_approval": "En attente d'approbation",
+      "approved": "Approuvée",
+      "rejected": "Rejetée",
       "paid": "Payée",
       "overdue": "En retard",
       "partially_paid": "Partiellement payée",
@@ -510,6 +513,7 @@
     "add_client": "Ajouter le client",
     "cancel": "Annuler",
     "pending": "En attente",
+    "pending_approval": "En attente d'approbation",
     "paid": "Payée",
     "partially_paid": "Partiellement payée",
     "overdue": "En retard",
@@ -2078,6 +2082,7 @@
   },
   "approvalDashboard": {
     "title": "Tableau de Bord des Approbations",
+    "description": "Examinez et gérez les flux de travail d'approbation pour les dépenses et les factures",
     "pending_approvals": "Approbations en Attente",
     "processed_expenses": "Dépenses Traitées",
     "awaiting_review": "En attente de votre examen",
