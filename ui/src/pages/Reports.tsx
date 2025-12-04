@@ -1,6 +1,7 @@
 import React from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ReportGenerator } from '@/components/reports/ReportGenerator';
+import { FeatureGate } from '@/components/FeatureGate';
 import { BarChart3 } from 'lucide-react';
 
 const Reports: React.FC = () => {
@@ -20,7 +21,13 @@ const Reports: React.FC = () => {
         </div>
 
         <div className="slide-in">
-          <ReportGenerator />
+          <FeatureGate
+            feature="reporting"
+            showUpgradePrompt={true}
+            upgradeMessage="Advanced Reporting requires a commercial license. Upgrade to access comprehensive reports and analytics."
+          >
+            <ReportGenerator />
+          </FeatureGate>
         </div>
       </div>
     </AppLayout>

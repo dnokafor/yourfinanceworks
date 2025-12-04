@@ -212,6 +212,7 @@ def handle_generic_exception(e: Exception, operation: str) -> HTTPException:
 
 
 @router.get("/types", response_model=ReportTypesResponse)
+@require_feature("reporting")
 async def get_report_types(
     current_user: MasterUser = Depends(get_current_user)
 ):
@@ -343,6 +344,7 @@ async def get_report_types(
 
 
 @router.post("/generate", response_model=ReportResult)
+@require_feature("reporting")
 async def generate_report(
     request: ReportGenerateRequest,
     background_tasks: BackgroundTasks,
@@ -585,6 +587,7 @@ async def generate_report(
 
 
 @router.post("/preview", response_model=ReportData)
+@require_feature("reporting")
 async def preview_report(
     request: ReportPreviewRequest,
     db: Session = Depends(get_db),
@@ -628,6 +631,7 @@ async def preview_report(
 # Template Management Endpoints
 
 @router.get("/templates", response_model=ReportTemplateListResponse)
+@require_feature("reporting")
 async def get_report_templates(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
@@ -668,6 +672,7 @@ async def get_report_templates(
 
 
 @router.post("/templates", response_model=ReportTemplateSchema)
+@require_feature("reporting")
 async def create_report_template(
     template: ReportTemplateCreate,
     db: Session = Depends(get_db),
@@ -723,6 +728,7 @@ async def create_report_template(
 
 
 @router.put("/templates/{template_id}", response_model=ReportTemplateSchema)
+@require_feature("reporting")
 async def update_report_template(
     template_id: int,
     template: ReportTemplateUpdate,
@@ -789,6 +795,7 @@ async def update_report_template(
 
 
 @router.delete("/templates/{template_id}")
+@require_feature("reporting")
 async def delete_report_template(
     template_id: int,
     db: Session = Depends(get_db),
@@ -846,6 +853,7 @@ async def delete_report_template(
 # Scheduled Reports Endpoints
 
 @router.get("/scheduled", response_model=ScheduledReportListResponse)
+@require_feature("reporting")
 async def get_scheduled_reports(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
@@ -881,6 +889,7 @@ async def get_scheduled_reports(
 
 
 @router.post("/scheduled", response_model=ScheduledReportSchema)
+@require_feature("reporting")
 async def create_scheduled_report(
     scheduled_report: ScheduledReportCreate,
     db: Session = Depends(get_db),
@@ -937,6 +946,7 @@ async def create_scheduled_report(
 
 
 @router.put("/scheduled/{schedule_id}", response_model=ScheduledReportSchema)
+@require_feature("reporting")
 async def update_scheduled_report(
     schedule_id: int,
     scheduled_report: ScheduledReportUpdate,
@@ -985,6 +995,7 @@ async def update_scheduled_report(
 
 
 @router.delete("/scheduled/{schedule_id}")
+@require_feature("reporting")
 async def delete_scheduled_report(
     schedule_id: int,
     db: Session = Depends(get_db),
@@ -1030,6 +1041,7 @@ async def delete_scheduled_report(
 # Report History and Download Endpoints
 
 @router.get("/history", response_model=ReportHistoryListResponse)
+@require_feature("reporting")
 async def get_report_history(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
@@ -1077,6 +1089,7 @@ async def get_report_history(
 
 
 @router.get("/download/{report_id}")
+@require_feature("reporting")
 async def download_report(
     report_id: int,
     http_request: Request,
@@ -1240,6 +1253,7 @@ async def download_report(
 
 
 @router.post("/regenerate/{report_id}", response_model=ReportResult)
+@require_feature("reporting")
 async def regenerate_report(
     report_id: int,
     background_tasks: BackgroundTasks,
@@ -1287,6 +1301,7 @@ async def regenerate_report(
 
 
 @router.delete("/history/{report_id}")
+@require_feature("reporting")
 async def delete_report_file(
     report_id: int,
     db: Session = Depends(get_db),
@@ -1333,6 +1348,7 @@ async def delete_report_file(
 
 
 @router.get("/storage/stats")
+@require_feature("reporting")
 async def get_storage_stats(
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(require_admin)
@@ -1358,6 +1374,7 @@ async def get_storage_stats(
 
 
 @router.post("/cleanup/expired")
+@require_feature("reporting")
 async def cleanup_expired_reports(
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(require_admin)
@@ -1399,6 +1416,7 @@ async def cleanup_expired_reports(
 
 
 @router.post("/cleanup/orphaned")
+@require_feature("reporting")
 async def cleanup_orphaned_files(
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(require_admin)
@@ -1600,6 +1618,7 @@ async def _generate_report_background(
 # Performance Monitoring and Cache Management Endpoints
 
 @router.get("/performance/cache/stats")
+@require_feature("reporting")
 async def get_cache_stats(
     current_user: MasterUser = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -1627,6 +1646,7 @@ async def get_cache_stats(
 
 
 @router.delete("/performance/cache")
+@require_feature("reporting")
 async def clear_cache(
     pattern: Optional[str] = Query(None, description="Pattern to match for selective clearing"),
     report_type: Optional[str] = Query(None, description="Report type to clear cache for"),
@@ -1666,6 +1686,7 @@ async def clear_cache(
 
 
 @router.get("/performance/query/stats")
+@require_feature("reporting")
 async def get_query_performance_stats(
     current_user: MasterUser = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -1693,6 +1714,7 @@ async def get_query_performance_stats(
 
 
 @router.get("/performance/progress/stats")
+@require_feature("reporting")
 async def get_progress_stats(
     current_user: MasterUser = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -1720,6 +1742,7 @@ async def get_progress_stats(
 
 
 @router.get("/tasks")
+@require_feature("reporting")
 async def get_user_tasks(
     active_only: bool = Query(False, description="Return only active tasks"),
     current_user: MasterUser = Depends(get_current_user),
@@ -1750,6 +1773,7 @@ async def get_user_tasks(
 
 
 @router.get("/tasks/{task_id}")
+@require_feature("reporting")
 async def get_task_progress(
     task_id: str,
     current_user: MasterUser = Depends(get_current_user),

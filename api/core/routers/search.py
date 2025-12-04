@@ -7,12 +7,14 @@ from core.models.database import get_db
 from core.models.models import MasterUser
 from core.routers.auth import get_current_user
 from core.services.search_service import search_service
+from core.utils.feature_gate import require_feature
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/search", tags=["search"])
 
 @router.get("")
+@require_feature("advanced_search")
 async def global_search(
     q: str = Query(..., min_length=1, description="Search query"),
     types: Optional[str] = Query(None, description="Comma-separated entity types to search (invoices,clients,payments,expenses,statements,attachments,inventory,reminders)"),
@@ -108,6 +110,7 @@ async def global_search(
         )
 
 @router.post("/reindex")
+@require_feature("advanced_search")
 async def reindex_all_data(
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
@@ -137,6 +140,7 @@ async def reindex_all_data(
         )
 
 @router.get("/suggestions")
+@require_feature("advanced_search")
 async def search_suggestions(
     q: str = Query(..., min_length=1, description="Partial search query"),
     limit: int = Query(10, ge=1, le=20, description="Maximum number of suggestions"),
@@ -193,6 +197,7 @@ async def search_suggestions(
         }
 
 @router.get("/status")
+@require_feature("advanced_search")
 async def search_status(
     current_user: MasterUser = Depends(get_current_user)
 ):

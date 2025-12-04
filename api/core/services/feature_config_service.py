@@ -125,16 +125,16 @@ class FeatureConfigService:
             'description': 'Custom reports and analytics dashboards',
             'category': 'advanced',
             'env_var': 'FEATURE_REPORTING_ENABLED',
-            'default': True,
-            'license_tier': 'core'
+            'default': False,
+            'license_tier': 'commercial'
         },
         'advanced_search': {
             'name': 'Advanced Search',
             'description': 'Full-text search across all entities',
             'category': 'advanced',
             'env_var': 'FEATURE_ADVANCED_SEARCH_ENABLED',
-            'default': True,
-            'license_tier': 'core'
+            'default': False,
+            'license_tier': 'commercial'
         },
     }
     

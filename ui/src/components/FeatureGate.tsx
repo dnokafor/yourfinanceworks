@@ -52,17 +52,12 @@ export const FeatureGate: React.FC<FeatureGateProps> = ({
               <Button asChild size="sm" variant="default">
                 <Link to="/settings?tab=license">Manage License</Link>
               </Button>
-              <Button asChild size="sm" variant="outline">
-                <a href="https://your-pricing-page.com" target="_blank" rel="noopener noreferrer">
-                  View Pricing
-                </a>
-              </Button>
             </div>
           </AlertDescription>
         </Alert>
       );
     }
-    
+
     return fallback ? <>{fallback}</> : null;
   }
 
@@ -81,7 +76,7 @@ export const FeatureAlert: React.FC<FeatureAlertProps> = ({
   message,
 }) => {
   const { licenseStatus } = useFeatures();
-  
+
   const defaultMessage = message || `The ${feature} feature is not available in your current plan.`;
   const isTrialExpired = licenseStatus && licenseStatus.is_trial && (licenseStatus.trial_days_remaining || 0) <= 0;
   const isLicenseExpired = licenseStatus && licenseStatus.is_licensed && (licenseStatus.license_days_remaining || 0) <= 0;
@@ -101,11 +96,6 @@ export const FeatureAlert: React.FC<FeatureAlertProps> = ({
         <div className="flex gap-2">
           <Button asChild size="sm" variant="default">
             <Link to="/settings?tab=license">Manage License</Link>
-          </Button>
-          <Button asChild size="sm" variant="outline">
-            <a href="https://your-pricing-page.com" target="_blank" rel="noopener noreferrer">
-              Learn More
-            </a>
           </Button>
         </div>
       </AlertDescription>

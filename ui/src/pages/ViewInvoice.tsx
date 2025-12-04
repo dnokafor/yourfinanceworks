@@ -12,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { CalendarIcon, ArrowLeft, Edit } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import { invoiceApi, Invoice, approvalApi } from '@/lib/api';
+import { invoiceApi, Invoice, approvalApi, INVOICE_STATUSES } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ApprovalActionButtons } from '@/components/approvals/ApprovalActionButtons';
@@ -215,18 +215,17 @@ export default function ViewInvoice() {
               </Popover>
             </div>
             <div>
-              <label className="text-sm font-medium">{t('invoices.status')}</label>
+              <label className="text-sm font-medium">{t('invoices.status_label')}</label>
               <Select value={invoice.status || 'draft'} disabled={true}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="draft">{t('invoices.status.draft')}</SelectItem>
-                  <SelectItem value="sent">{t('invoices.status.sent')}</SelectItem>
-                  <SelectItem value="paid">{t('invoices.status.paid')}</SelectItem>
-                  <SelectItem value="pending_approval">{t('invoices.status.pending_approval')}</SelectItem>
-                  <SelectItem value="approved">{t('invoices.status.approved')}</SelectItem>
-                  <SelectItem value="rejected">{t('invoices.status.rejected')}</SelectItem>
+                  {INVOICE_STATUSES.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {t(`invoices.status.${status}`)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -258,7 +257,7 @@ export default function ViewInvoice() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>{t('invoices.description')}</TableHead>
+                      <TableHead>{t('invoices.item_description')}</TableHead>
                       <TableHead className="text-right">{t('invoices.quantity')}</TableHead>
                       <TableHead className="text-right">{t('invoices.price')}</TableHead>
                       <TableHead className="text-right">{t('invoices.amount')}</TableHead>

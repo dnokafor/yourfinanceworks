@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Search, Download, Eye, FileText, Receipt, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { FeatureGate } from '@/components/FeatureGate';
 
 interface AttachmentResult {
   id: number;
@@ -56,7 +57,7 @@ const AttachmentSearch = () => {
       const response = await api.get<SearchResponse>(`/attachments/search?${params}`);
       setResults(response.results);
       setTotalResults(response.total_results);
-      
+
       if (response.total_results === 0) {
         toast.info('No attachments found matching your search');
       }
@@ -80,9 +81,9 @@ const AttachmentSearch = () => {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-      
+
       if (!response.ok) throw new Error('Download failed');
-      
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -125,119 +126,125 @@ const AttachmentSearch = () => {
           </div>
         </div>
 
-        <Card className="slide-in">
-          <CardHeader>
-            <CardTitle>Search Attachments</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col sm:flex-row gap-4 mb-4">
-              <div className="flex-1">
-                <Input
-                  placeholder="Search by filename..."
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                />
+        <FeatureGate
+          feature="advanced_search"
+          showUpgradePrompt={true}
+          upgradeMessage="Attachment Search requires a commercial license. Upgrade to search across all your files and documents."
+        >
+          <Card className="slide-in">
+            <CardHeader>
+              <CardTitle>Search Attachments</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col sm:flex-row gap-4 mb-4">
+                <div className="flex-1">
+                  <Input
+                    placeholder="Search by filename..."
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  />
+                </div>
+                <Select value={entityType} onValueChange={setEntityType}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <SelectValue placeholder="All types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="invoice">Invoices</SelectItem>
+                    <SelectItem value="expense">Expenses</SelectItem>
+                    <SelectItem value="statement">Statements</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button onClick={handleSearch} disabled={loading}>
+                  <Search className="w-4 h-4 mr-2" />
+                  {loading ? 'Searching...' : 'Search'}
+                </Button>
               </div>
-              <Select value={entityType} onValueChange={setEntityType}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                  <SelectValue placeholder="All types" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="invoice">Invoices</SelectItem>
-                  <SelectItem value="expense">Expenses</SelectItem>
-                  <SelectItem value="statement">Statements</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button onClick={handleSearch} disabled={loading}>
-                <Search className="w-4 h-4 mr-2" />
-                {loading ? 'Searching...' : 'Search'}
-              </Button>
-            </div>
 
-            {totalResults > 0 && (
-              <div className="mb-4">
-                <p className="text-sm text-muted-foreground">
-                  Found {totalResults} attachment{totalResults !== 1 ? 's' : ''} matching "{query}"
-                </p>
-              </div>
-            )}
+              {totalResults > 0 && (
+                <div className="mb-4">
+                  <p className="text-sm text-muted-foreground">
+                    Found {totalResults} attachment{totalResults !== 1 ? 's' : ''} matching "{query}"
+                  </p>
+                </div>
+              )}
 
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Entity</TableHead>
-                    <TableHead>Client/Vendor</TableHead>
-                    <TableHead>Filename</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {results.length > 0 ? (
-                    results.map((result) => (
-                      <TableRow key={`${result.entity_type}-${result.id}`}>
-                        <TableCell>
-                          <Badge className={getEntityColor(result.entity_type)}>
-                            {getEntityIcon(result.entity_type)}
-                            <span className="ml-1 capitalize">{result.entity_type}</span>
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {result.entity_name}
-                        </TableCell>
-                        <TableCell>{result.client_name}</TableCell>
-                        <TableCell className="max-w-[200px] truncate" title={result.filename}>
-                          {result.filename}
-                        </TableCell>
-                        <TableCell>
-                          {result.created_at ? new Date(result.created_at).toLocaleDateString() : 'N/A'}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={result.file_exists ? 'default' : 'destructive'}>
-                            {result.file_exists ? 'Available' : 'Missing'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handlePreview(result)}
-                              disabled={!result.file_exists}
-                            >
-                              <Eye className="w-4 h-4 mr-1" />
-                              Preview
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleDownload(result)}
-                              disabled={!result.file_exists}
-                            >
-                              <Download className="w-4 h-4 mr-1" />
-                              Download
-                            </Button>
-                          </div>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Entity</TableHead>
+                      <TableHead>Client/Vendor</TableHead>
+                      <TableHead>Filename</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {results.length > 0 ? (
+                      results.map((result) => (
+                        <TableRow key={`${result.entity_type}-${result.id}`}>
+                          <TableCell>
+                            <Badge className={getEntityColor(result.entity_type)}>
+                              {getEntityIcon(result.entity_type)}
+                              <span className="ml-1 capitalize">{result.entity_type}</span>
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {result.entity_name}
+                          </TableCell>
+                          <TableCell>{result.client_name}</TableCell>
+                          <TableCell className="max-w-[200px] truncate" title={result.filename}>
+                            {result.filename}
+                          </TableCell>
+                          <TableCell>
+                            {result.created_at ? new Date(result.created_at).toLocaleDateString() : 'N/A'}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={result.file_exists ? 'default' : 'destructive'}>
+                              {result.file_exists ? 'Available' : 'Missing'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handlePreview(result)}
+                                disabled={!result.file_exists}
+                              >
+                                <Eye className="w-4 h-4 mr-1" />
+                                Preview
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleDownload(result)}
+                                disabled={!result.file_exists}
+                              >
+                                <Download className="w-4 h-4 mr-1" />
+                                Download
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                          {loading ? 'Searching...' : 'No attachments found. Try searching for a filename.'}
                         </TableCell>
                       </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                        {loading ? 'Searching...' : 'No attachments found. Try searching for a filename.'}
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </FeatureGate>
       </div>
     </AppLayout>
   );

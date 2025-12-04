@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useSearch } from './SearchProvider';
 import { apiClient } from '@/lib/api';
+import { FeatureGate } from '@/components/FeatureGate';
 
 interface SearchResult {
   id: string;
@@ -118,84 +119,90 @@ export function SearchDialog() {
   };
 
   return (
-    <Command.Dialog 
-      open={isOpen} 
+    <Command.Dialog
+      open={isOpen}
       onOpenChange={handleOpenChange}
       className="fixed inset-0 z-50"
     >
       <div className="fixed inset-0 bg-black/50" onClick={() => handleOpenChange(false)} />
       <div className="fixed left-1/2 top-1/2 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-2xl border">
-        <Command className="rounded-lg">
-          <div className="flex items-center border-b px-3">
-            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-            <Command.Input 
-              value={query} 
-              onValueChange={setQuery}
-              placeholder={t('search.placeholder')}
-              className="flex h-12 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            />
-            {loading && (
-              <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
-            )}
-          </div>
-          
-          <Command.List className="max-h-96 overflow-y-auto p-2">
-            {query.trim().length === 0 && (
-              <div className="py-6 text-center text-sm text-muted-foreground">
-                <Search className="mx-auto h-8 w-8 mb-2 opacity-50" />
-                <p>{t('search.type_to_search')}</p>
-                <p className="text-xs mt-1">{t('search.keyboard_shortcut')}</p>
-              </div>
-            )}
-            
-            {error && (
-              <div className="py-6 text-center text-sm text-red-600">
-                <p>{error}</p>
-              </div>
-            )}
-            
-            {query.trim().length > 0 && !loading && results.length === 0 && !error && (
-              <div className="py-6 text-center text-sm text-muted-foreground">
-                <p>{t('search.no_results', { query })}</p>
-                <p className="text-xs mt-1">{t('search.try_different_keywords')}</p>
-              </div>
-            )}
-            
-            {results.map((result) => {
-              const Icon = getEntityIcon(result.type);
-              const colorClass = getEntityColor(result.type);
-              
-              return (
-                <Command.Item 
-                  key={`${result.type}-${result.id}`}
-                  value={`${result.title} ${result.subtitle || ''}`}
-                  onSelect={() => handleSelect(result)}
-                  onClick={() => handleSelect(result)}
-                  className="flex items-center gap-3 rounded-md px-3 py-2 text-sm cursor-pointer hover:bg-gray-100 aria-selected:bg-gray-100"
-                >
-                  <Icon className={`h-4 w-4 ${colorClass}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{result.title}</div>
-                    {result.subtitle && (
-                      <div className="text-xs text-muted-foreground truncate">
-                        {result.subtitle}
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {t(`search.entity_types.${result.type}`, result.type.replace('_', ' '))}
-                  </div>
-                </Command.Item>
-              );
-            })}
-          </Command.List>
-          
-          {results.length > 0 && (
-            <div className="border-t px-3 py-2 text-xs text-muted-foreground">
-              {t('search.results_footer', { count: results.length })}
+        <FeatureGate
+          feature="advanced_search"
+          showUpgradePrompt={true}
+          upgradeMessage="Advanced Search requires a commercial license. Upgrade to search across all your data with powerful filters."
+        >
+          <Command className="rounded-lg">
+            <div className="flex items-center border-b px-3">
+              <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+              <Command.Input
+                value={query}
+                onValueChange={setQuery}
+                placeholder={t('search.placeholder')}
+                className="flex h-12 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              {loading && (
+                <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
+              )}
             </div>
-          )}
-        </Command>
+
+            <Command.List className="max-h-96 overflow-y-auto p-2">
+              {query.trim().length === 0 && (
+                <div className="py-6 text-center text-sm text-muted-foreground">
+                  <Search className="mx-auto h-8 w-8 mb-2 opacity-50" />
+                  <p>{t('search.type_to_search')}</p>
+                  <p className="text-xs mt-1">{t('search.keyboard_shortcut')}</p>
+                </div>
+              )}
+
+              {error && (
+                <div className="py-6 text-center text-sm text-red-600">
+                  <p>{error}</p>
+                </div>
+              )}
+
+              {query.trim().length > 0 && !loading && results.length === 0 && !error && (
+                <div className="py-6 text-center text-sm text-muted-foreground">
+                  <p>{t('search.no_results', { query })}</p>
+                  <p className="text-xs mt-1">{t('search.try_different_keywords')}</p>
+                </div>
+              )}
+
+              {results.map((result) => {
+                const Icon = getEntityIcon(result.type);
+                const colorClass = getEntityColor(result.type);
+
+                return (
+                  <Command.Item
+                    key={`${result.type}-${result.id}`}
+                    value={`${result.title} ${result.subtitle || ''}`}
+                    onSelect={() => handleSelect(result)}
+                    onClick={() => handleSelect(result)}
+                    className="flex items-center gap-3 rounded-md px-3 py-2 text-sm cursor-pointer hover:bg-gray-100 aria-selected:bg-gray-100"
+                  >
+                    <Icon className={`h-4 w-4 ${colorClass}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{result.title}</div>
+                      {result.subtitle && (
+                        <div className="text-xs text-muted-foreground truncate">
+                          {result.subtitle}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {t(`search.entity_types.${result.type}`, result.type.replace('_', ' '))}
+                    </div>
+                  </Command.Item>
+                );
+              })}
+            </Command.List>
+
+            {results.length > 0 && (
+              <div className="border-t px-3 py-2 text-xs text-muted-foreground">
+                {t('search.results_footer', { count: results.length })}
+              </div>
+            )}
+          </Command>
+        </FeatureGate>
       </div>
     </Command.Dialog>
   );
