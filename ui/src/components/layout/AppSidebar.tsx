@@ -298,6 +298,8 @@ export function AppSidebar() {
 
     const selectedOrg = userOrganizations.find(org => org.id.toString() === orgId);
     const orgName = selectedOrg?.name || `Organization ${orgId}`;
+    const userHomeTenantId = user?.tenant_id?.toString();
+    const isSwitchingAwayFromHome = currentOrgId === userHomeTenantId && orgId !== userHomeTenantId;
 
     console.log(`🔄 Switching organization from ${currentOrgId} to ${orgId} (${orgName})`);
     setIsSwitchingOrg(true);
@@ -310,10 +312,8 @@ export function AppSidebar() {
       localStorage.setItem('selected_tenant_id', orgId);
       console.log(`✅ Stored selected_tenant_id: ${orgId}`);
 
-      // Store the selected organization
-      localStorage.setItem('selected_tenant_id', orgId);
+      // Clear offline cache
       localStorage.removeItem('react-query-offline-cache');
-      console.log(`✅ Stored selected_tenant_id: ${orgId}`);
 
       // Clear all cached data and force reload
       queryClient.clear();
@@ -324,10 +324,23 @@ export function AppSidebar() {
       // Show success toast
       toast.success(`Switched to ${orgName}`, { id: 'org-switch' });
 
-      // Reload page
-      setTimeout(() => {
-        window.location.reload();
-      }, 100);
+      // If switching away from home org and on a restricted route, navigate to dashboard first
+      // This prevents the "Access restricted to home organization" error from showing
+      const restrictedRoutes = ['/super-admin'];
+      const currentPath = location.pathname;
+      if (isSwitchingAwayFromHome && restrictedRoutes.some(route => currentPath.startsWith(route))) {
+        console.log('🚦 Redirecting from restricted route before org switch');
+        // Navigate to dashboard without reload, then reload
+        navigate('/', { replace: true });
+        setTimeout(() => {
+          window.location.reload();
+        }, 50);
+      } else {
+        // Reload page immediately
+        setTimeout(() => {
+          window.location.reload();
+        }, 100);
+      }
     } catch (error) {
       console.error('❌ Error during organization switch:', error);
       toast.error('Failed to switch organization', { id: 'org-switch' });
@@ -631,8 +644,8 @@ export function AppSidebar() {
                 <SidebarMenuItem key={item.path}>
                   <SidebarMenuButton
                     className={`mx-2 rounded-xl transition-all duration-200 group relative overflow-hidden ${isActive(item.path)
-                        ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg ring-2 ring-blue-500/20"
-                        : "text-slate-300 hover:text-white hover:bg-slate-700/30 hover:shadow-sm"
+                      ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg ring-2 ring-blue-500/20"
+                      : "text-slate-300 hover:text-white hover:bg-slate-700/30 hover:shadow-sm"
                       }`}
                     isActive={isActive(item.path)}
                   >
@@ -642,8 +655,8 @@ export function AppSidebar() {
                       data-tour={item.tourId}
                     >
                       <div className={`p-2 rounded-lg transition-all duration-200 ${isActive(item.path)
-                          ? "bg-white/20 shadow-sm"
-                          : "bg-slate-700/30 group-hover:bg-slate-600/30"
+                        ? "bg-white/20 shadow-sm"
+                        : "bg-slate-700/30 group-hover:bg-slate-600/30"
                         }`}>
                         {item.icon}
                       </div>
@@ -670,8 +683,8 @@ export function AppSidebar() {
                 <SidebarMenuItem key={item.path}>
                   <SidebarMenuButton
                     className={`mx-2 rounded-xl transition-all duration-200 group relative overflow-hidden ${isActive(item.path)
-                        ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg ring-2 ring-blue-500/20"
-                        : "text-slate-300 hover:text-white hover:bg-slate-700/30 hover:shadow-sm"
+                      ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg ring-2 ring-blue-500/20"
+                      : "text-slate-300 hover:text-white hover:bg-slate-700/30 hover:shadow-sm"
                       }`}
                     isActive={isActive(item.path)}
                   >
@@ -681,8 +694,8 @@ export function AppSidebar() {
                       data-tour={item.tourId}
                     >
                       <div className={`p-2 rounded-lg transition-all duration-200 ${isActive(item.path)
-                          ? "bg-white/20 shadow-sm"
-                          : "bg-slate-700/30 group-hover:bg-slate-600/30"
+                        ? "bg-white/20 shadow-sm"
+                        : "bg-slate-700/30 group-hover:bg-slate-600/30"
                         }`}>
                         {item.icon}
                       </div>

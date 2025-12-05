@@ -74,10 +74,17 @@ async def get_tenants(
         if 'company_logo_url' in tenant_dict:
             tenant_dict['logo_url'] = tenant_dict.pop('company_logo_url')
         
-        # Add user count
-        user_count = master_db.query(MasterUser).filter(
+        # Add user count - include users from both primary tenant and memberships
+        # Get users with primary tenant
+        primary_users = master_db.query(MasterUser.id).filter(
             MasterUser.tenant_id == tenant.id
-        ).count()
+        )
+        # Get users with membership in this tenant
+        member_users = master_db.query(user_tenant_association.c.user_id).filter(
+            user_tenant_association.c.tenant_id == tenant.id
+        )
+        # Union and count unique users
+        user_count = primary_users.union(member_users).count()
         tenant_dict['user_count'] = user_count
         
         enriched_tenants.append(tenant_dict)
