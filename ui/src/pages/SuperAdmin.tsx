@@ -73,7 +73,7 @@ const SuperAdminDashboard: React.FC = () => {
 };
 
 // Separate component for the main dashboard content
-const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => string }> = ({ user, t }) => {
+const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options?: any) => string }> = ({ user, t }) => {
   // All hooks at the top!
   const { user: currentUser } = useAuth();
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -1070,7 +1070,7 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
             <DialogTitle>{t('superAdmin.delete_tenant_title')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <p>{t('superAdmin.delete_tenant_confirmation_text', { tenantName: tenantToDelete?.name || '' })}</p>
+            <p>{t('superAdmin.delete_tenant_confirmation_text', { tenantName: tenantToDelete?.name || '' } as any)}</p>
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setTenantToDelete(null)}>{t('superAdmin.cancel_button')}</Button>
               <Button variant="destructive" onClick={confirmDeleteTenant}>{t('superAdmin.delete_button')}</Button>
@@ -1086,7 +1086,7 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
             <DialogTitle>{t('superAdmin.delete_user_title')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <p>{t('superAdmin.delete_user_confirmation_text', { userEmail: userToDelete?.email || '' })}</p>
+            <p>{t('superAdmin.delete_user_confirmation_text', { userEmail: userToDelete?.email || '' } as any)}</p>
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setUserToDelete(null)}>{t('superAdmin.cancel_button')}</Button>
               <Button variant="destructive" onClick={confirmDeleteUser}>{t('superAdmin.delete_button')}</Button>
@@ -1102,7 +1102,7 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string) => stri
             <DialogTitle>{t('superAdmin.recreate_database_title')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <p>{t('superAdmin.recreate_database_confirmation_text', { tenantName: dbToRecreate?.tenant_name || '' })}</p>
+            <p>{t('superAdmin.recreate_database_confirmation_text', { tenantName: dbToRecreate?.tenant_name || '' } as any)}</p>
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setDbToRecreate(null)}>{t('superAdmin.cancel_button')}</Button>
               <Button variant="destructive" onClick={confirmRecreateDatabase}>{t('superAdmin.recreate_button')}</Button>
