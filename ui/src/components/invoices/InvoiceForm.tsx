@@ -3578,7 +3578,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
             <div className="flex flex-col lg:flex-row gap-8">
               {/* Update History Section - Left Side */}
               <div className="w-full lg:w-80 order-2 lg:order-1">
-                <div className="mb-4">
+                <div className="mb-4 p-4">
                   <h3 className="text-lg font-semibold mb-3">{t('invoices.update_history')}</h3>
                   <div className="space-y-3 max-h-96 overflow-y-auto bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
                     {loadingHistory ? (
@@ -3662,7 +3662,7 @@ export function InvoiceForm({ invoice, isEdit = false, onInvoiceUpdate, initialD
                   <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                     <InlineValidation messages={validationMessages} className="mb-4" />
 
-                    <div className="grid grid-cols-1 gap-6">
+                    <div className="grid grid-cols-1 gap-6 pt-8">
                       <FormField
                         control={form.control}
                         name="client"

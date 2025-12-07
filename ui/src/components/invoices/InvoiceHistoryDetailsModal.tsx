@@ -176,8 +176,8 @@ export function InvoiceHistoryDetailsModal({ open, onClose, historyEntry, client
                     const previousValue = previous_values?.[field];
                     const currentValue = current_values?.[field];
                     
-                    // Skip if both values are the same
-                    if (previousValue === currentValue) {
+                    // Skip if both values are the same or both are empty
+                    if (previousValue === currentValue || (!previousValue && !currentValue)) {
                       return null;
                     }
                     
