@@ -11,8 +11,40 @@ from core.models.models_per_tenant import Invoice, Client, Payment, Expense, Ban
 from core.models.database import get_tenant_context
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
+import re
 
 logger = logging.getLogger(__name__)
+
+def _looks_like_encrypted_data(value: str) -> bool:
+    """
+    Check if a value looks like encrypted data (base64 encoded).
+    This is used to detect when decryption failed and we're showing raw encrypted data.
+    """
+    if not isinstance(value, str) or len(value) < 30:
+        return False
+    
+    # Base64 pattern check
+    base64_pattern = re.compile(r'^[A-Za-z0-9+/]*={0,2}$')
+    
+    # If it contains common plain text patterns, it's probably not encrypted
+    if '@' in value and '.' in value:  # Looks like email
+        return False
+    if ' ' in value:  # Has spaces - likely plain text
+        return False
+    
+    return base64_pattern.match(value) is not None and len(value) > 30
+
+def _sanitize_value(value: str, fallback: str = '') -> str:
+    """
+    Sanitize a value for search display.
+    If the value looks like encrypted data, return the fallback instead.
+    """
+    if value is None:
+        return fallback
+    if _looks_like_encrypted_data(value):
+        logger.warning(f"Detected encrypted data in search results, replacing with fallback")
+        return fallback
+    return value
 
 class SearchService:
     def __init__(self):
@@ -208,7 +240,7 @@ class SearchService:
                 'tenant_id': get_tenant_context(),
                 'number': invoice.number,
                 'client_id': str(invoice.client_id),
-                'client_name': client.name if client else '',
+                'client_name': _sanitize_value(client.name, 'Unknown') if client else '',
                 'status': invoice.status,
                 'amount': float(invoice.amount or 0),
                 'currency': invoice.currency or 'USD',
@@ -216,7 +248,7 @@ class SearchService:
                 'attachment_filename': invoice.attachment_filename or '',
                 'created_at': invoice.created_at.isoformat() if invoice.created_at else None,
                 'updated_at': invoice.updated_at.isoformat() if invoice.updated_at else None,
-                'searchable_text': f"{invoice.number} {client.name if client else ''} {invoice.notes or ''} {invoice.attachment_filename or ''}"
+                'searchable_text': f"{invoice.number} {_sanitize_value(client.name, 'Unknown') if client else ''} {invoice.notes or ''} {invoice.attachment_filename or ''}"
             }
             
             index_name = self._get_tenant_index('invoices')
@@ -289,14 +321,14 @@ class SearchService:
                 'tenant_id': get_tenant_context(),
                 'invoice_id': str(payment.invoice_id),
                 'invoice_number': invoice.number if invoice else '',
-                'client_name': client.name if client else '',
+                'client_name': _sanitize_value(client.name, 'Unknown') if client else '',
                 'amount': float(payment.amount or 0),
                 'currency': payment.currency or 'USD',
                 'payment_method': payment.payment_method or '',
                 'notes': payment.notes or '',
                 'created_at': payment.created_at.isoformat() if payment.created_at else None,
                 'updated_at': payment.updated_at.isoformat() if payment.updated_at else None,
-                'searchable_text': f"{invoice.number if invoice else ''} {client.name if client else ''} {payment.payment_method or ''} {payment.notes or ''}"
+                'searchable_text': f"{invoice.number if invoice else ''} {_sanitize_value(client.name, 'Unknown') if client else ''} {payment.payment_method or ''} {payment.notes or ''}"
             }
             
             index_name = self._get_tenant_index('payments')
@@ -518,7 +550,7 @@ class SearchService:
                         'data': {
                             'id': str(inv.id),
                             'number': inv.number,
-                            'client_name': inv.client.name if inv.client else '',
+                            'client_name': _sanitize_value(inv.client.name, 'Unknown') if inv.client else '',
                             'amount': float(inv.amount or 0),
                             'status': inv.status,
                             'created_at': inv.created_at.isoformat() if inv.created_at else None

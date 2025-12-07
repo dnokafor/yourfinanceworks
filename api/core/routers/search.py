@@ -49,7 +49,7 @@ async def global_search(
             if entity_type == 'invoices':
                 url = f"/invoices/edit/{entity_id}"
                 title = f"Invoice {result['data'].get('number', entity_id)}"
-                subtitle = f"Client: {result['data'].get('client_name', 'Unknown')} • ${result['data'].get('total_amount', 0)}"
+                subtitle = f"Client: {result['data'].get('client_name', 'Unknown')} • ${result['data'].get('amount', 0)}"
             elif entity_type == 'clients':
                 url = f"/clients/edit/{entity_id}"
                 title = result['data'].get('name', f'Client {entity_id}')
