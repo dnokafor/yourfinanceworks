@@ -141,6 +141,9 @@ export interface Invoice {
   has_attachment?: boolean;
   attachment_filename?: string;
   attachment_path?: string;
+  created_by_user_id?: number;
+  created_by_username?: string;
+  created_by_email?: string;
 }
 
 export interface Payment {
@@ -1200,6 +1203,18 @@ export interface Expense {
   created_at: string;
   updated_at: string;
   attachments_count?: number;
+  created_by_user_id?: number;
+  created_by_username?: string;
+  created_by_email?: string;
+  approval?: {
+    status: string;
+    approved_by_user_id?: number;
+    approved_by_username?: string;
+    approved_at?: string;
+    rejected_by_user_id?: number;
+    rejected_by_username?: string;
+    rejected_at?: string;
+  };
 }
 
 export interface BankStatement {
@@ -1209,6 +1224,9 @@ export interface BankStatement {
   extracted_count: number;
   created_at: string;
   labels?: string[];
+  created_by_user_id?: number;
+  created_by_username?: string;
+  created_by_email?: string;
 }
 
 export interface BankTransaction {
@@ -1232,6 +1250,9 @@ export interface BankStatementDetail {
   notes?: string;
   labels?: string[];
   transactions: BankTransaction[];
+  created_by_user_id?: number;
+  created_by_username?: string;
+  created_by_email?: string;
 }
 
 const apiService = new ApiService();

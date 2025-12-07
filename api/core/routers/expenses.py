@@ -65,6 +65,7 @@ async def list_expenses(
     unlinked_only: bool = False,
     exclude_status: Optional[str] = None,
     search: Optional[str] = None,
+    created_by_user_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user),
 ):
@@ -76,7 +77,8 @@ async def list_expenses(
         # Build the base query with all filters
         # Note: No user_id filter needed - tenant isolation is provided by the per-tenant database
         logger.info(f"list_expenses: current_user.id={current_user.id}, tenant_id={current_user.tenant_id}, search={search}")
-        query = db.query(Expense)
+        from sqlalchemy.orm import joinedload
+        query = db.query(Expense).options(joinedload(Expense.created_by))
         base_count = query.count()
         logger.info(f"list_expenses: base_count (before filters)={base_count}")
         if category and category != "all":
@@ -96,6 +98,8 @@ async def list_expenses(
             query = query.filter(Expense.invoice_id.is_(None))
         if exclude_status:
             query = query.filter(Expense.status != exclude_status)
+        if created_by_user_id is not None:
+            query = query.filter(Expense.created_by_user_id == created_by_user_id)
         # For search, we need to fetch all matching expenses and filter in Python
         # because vendor and notes are encrypted and can't be searched at the DB level
         if search:
@@ -158,13 +162,28 @@ async def get_expense(
     from core.models.database import set_tenant_context
     set_tenant_context(current_user.tenant_id)
 
-    expense = db.query(Expense).filter(Expense.id == expense_id).first()
+    from sqlalchemy.orm import joinedload
+    expense = db.query(Expense).options(joinedload(Expense.created_by)).filter(Expense.id == expense_id).first()
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
     try:
         expense.attachments_count = db.query(ExpenseAttachment).filter(ExpenseAttachment.expense_id == expense_id).count()
     except Exception as e:
         logger.warning(f"Failed to get attachment count for expense {expense_id}: {e}")
+
+    # Ensure creator info is populated even if relationship loading fails
+    if not expense.created_by and expense.created_by_user_id:
+        try:
+            creator = db.query(User).filter(User.id == expense.created_by_user_id).first()
+            if creator:
+                # We can't easily attach it to the object if it's not in the session in the right way,
+                # but we can try to set it if it's None. 
+                # However, since we return the object and Pydantic reads properties,
+                # we need to make sure the property works.
+                # The property reads self.created_by.
+                expense.created_by = creator
+        except Exception as e:
+            logger.warning(f"Failed to load creator for expense {expense_id}: {e}")
 
     return expense
 
@@ -342,6 +361,7 @@ async def create_expense(
             manual_override=bool(getattr(expense, "manual_override", False)),
             receipt_timestamp=getattr(expense, "receipt_timestamp", None),
             receipt_time_extracted=bool(getattr(expense, "receipt_time_extracted", False)),
+            created_by_user_id=current_user.id,  # User attribution
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
         )
@@ -549,6 +569,7 @@ async def bulk_create_expenses(
                 manual_override=bool(getattr(expense, "manual_override", False)),
                 receipt_timestamp=getattr(expense, "receipt_timestamp", None),
                 receipt_time_extracted=bool(getattr(expense, "receipt_time_extracted", False)),
+                created_by_user_id=current_user.id,  # User attribution
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc),
             )

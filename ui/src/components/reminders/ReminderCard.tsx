@@ -160,6 +160,15 @@ export function ReminderCard({
             </div>
           )}
 
+          {reminder.created_by && (
+            <div className="flex items-center gap-1">
+              <User className="h-4 w-4" />
+              <span className="text-xs">
+                {t('common.created_by')}: {isCreatedByCurrentUser ? t('reminders.you') : getUserDisplayName(reminder.created_by)}
+              </span>
+            </div>
+          )}
+
           {reminder.recurrence_pattern !== 'none' && (
             <div className="flex items-center gap-1">
               <Clock className="h-4 w-4" />

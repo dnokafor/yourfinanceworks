@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from pathlib import Path
 import os
 import shutil
@@ -20,6 +20,8 @@ from datetime import datetime
 from fastapi.responses import FileResponse
 from core.services.ocr_service import publish_bank_statement_task
 from core.utils.audit import log_audit_event
+from sqlalchemy.orm import joinedload
+from core.services.attribution_service import AttributionService
 
 
 router = APIRouter(prefix="/statements", tags=["statements"])
@@ -127,6 +129,7 @@ async def upload_statements(
                 file_path=str(out_path),
                 status="processing",
                 extracted_count=0,
+                created_by_user_id=current_user.id,  # User attribution
             )
             db.add(statement)
             db.flush()
@@ -180,6 +183,7 @@ async def upload_statements(
 @router.get("/", response_model=Dict[str, Any])
 @router.get("", response_model=Dict[str, Any])
 async def list_statements(
+    created_by_user_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user),
 ):
@@ -192,12 +196,17 @@ async def list_statements(
     if tenant_id is None:
         raise HTTPException(status_code=401, detail="Tenant context required")
 
-    rows = (
+    query = (
         db.query(BankStatement)
+        .options(joinedload(BankStatement.created_by))
         .filter(BankStatement.tenant_id == tenant_id)
-        .order_by(BankStatement.created_at.desc())
-        .all()
     )
+
+    # Apply creator filter if provided
+    if created_by_user_id is not None:
+        query = query.filter(BankStatement.created_by_user_id == created_by_user_id)
+
+    rows = query.order_by(BankStatement.created_at.desc()).all()
     return {
         "success": True,
         "statements": [
@@ -211,6 +220,9 @@ async def list_statements(
                 "labels": getattr(s, 'labels', None),
                 "notes": getattr(s, 'notes', None),
                 "created_at": s.created_at.isoformat() if s.created_at else None,
+                "created_by_user_id": s.created_by_user_id,
+                "created_by_username": s.created_by.email if s.created_by else None,
+                "created_by_email": s.created_by.email if s.created_by else None,
             }
             for s in rows
         ],
@@ -234,6 +246,7 @@ async def get_statement(
 
     s = (
         db.query(BankStatement)
+        .options(joinedload(BankStatement.created_by))
         .filter(BankStatement.id == statement_id, BankStatement.tenant_id == tenant_id)
         .first()
     )
@@ -258,6 +271,9 @@ async def get_statement(
             "labels": getattr(s, 'labels', None),
             "notes": getattr(s, 'notes', None),
             "created_at": s.created_at.isoformat() if s.created_at else None,
+            "created_by_user_id": s.created_by_user_id,
+            "created_by_username": s.created_by.email if s.created_by else None,
+            "created_by_email": s.created_by.email if s.created_by else None,
             "transactions": [
                 {
                     "id": t.id,
@@ -297,6 +313,7 @@ async def reprocess_statement(
 
     s = (
         db.query(BankStatement)
+        .options(joinedload(BankStatement.created_by))
         .filter(BankStatement.id == statement_id, BankStatement.tenant_id == tenant_id)
         .first()
     )
@@ -383,6 +400,7 @@ async def update_statement_meta(
 
     s = (
         db.query(BankStatement)
+        .options(joinedload(BankStatement.created_by))
         .filter(BankStatement.id == statement_id, BankStatement.tenant_id == tenant_id)
         .first()
     )
@@ -448,6 +466,9 @@ async def update_statement_meta(
                 "labels": getattr(s, 'labels', None),
                 "notes": getattr(s, 'notes', None),
                 "created_at": s.created_at.isoformat() if s.created_at else None,
+                "created_by_user_id": s.created_by_user_id,
+                "created_by_username": s.created_by.email if s.created_by else None,
+                "created_by_email": s.created_by.email if s.created_by else None,
             },
         }
     except Exception as e:
@@ -473,6 +494,7 @@ async def replace_statement_transactions(
 
     s = (
         db.query(BankStatement)
+        .options(joinedload(BankStatement.created_by))
         .filter(BankStatement.id == statement_id, BankStatement.tenant_id == tenant_id)
         .first()
     )
@@ -575,6 +597,7 @@ async def download_statement_file(
 
     s = (
         db.query(BankStatement)
+        .options(joinedload(BankStatement.created_by))
         .filter(BankStatement.id == statement_id, BankStatement.tenant_id == tenant_id)
         .first()
     )
@@ -622,6 +645,7 @@ async def delete_statement(
 
     s = (
         db.query(BankStatement)
+        .options(joinedload(BankStatement.created_by))
         .filter(BankStatement.id == statement_id, BankStatement.tenant_id == tenant_id)
         .first()
     )

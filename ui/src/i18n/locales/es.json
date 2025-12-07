@@ -1,5 +1,7 @@
 {
   "common": {
+    "created_by": "Creado por",
+    "unknown": "Desconocido",
     "loading": "Cargando...",
     "save": "Guardar",
     "cancel": "Cancelar",
@@ -60,7 +62,8 @@
     "update": "Actualizar",
     "hide": "Ocultar",
     "show": "Mostrar",
-    "view": "Ver"
+    "view": "Ver",
+    "back_to_invoices": "Volver a facturas"
   },
   "taxIntegration": {
     "title": "Integración del Servicio Fiscal",
@@ -505,6 +508,7 @@
       "actions": "Acciones"
     },
     "errors": {
+      "not_found": "Factura no encontrada",
       "load_failed": "Error al cargar facturas",
       "invoiceItemsMissing": "Los ítems de la factura no se pudieron cargar correctamente",
       "invoiceLoadFailed": "No se pudieron cargar los datos de la factura"

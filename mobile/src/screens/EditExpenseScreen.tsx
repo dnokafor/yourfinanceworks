@@ -456,6 +456,36 @@ const EditExpenseScreen: React.FC<EditExpenseScreenProps> = ({
             />
           </View>
 
+          {/* Attribution Information */}
+          <View style={styles.attributionSection}>
+            <Text style={styles.attributionTitle}>Record Information</Text>
+            <View style={styles.attributionItem}>
+              <Ionicons name="person-outline" size={16} color="#6B7280" />
+              <Text style={styles.attributionLabel}>Created by:</Text>
+              <Text style={styles.attributionValue}>
+                {expense.created_by_username || expense.created_by_email || 'Unknown'}
+              </Text>
+            </View>
+            {expense.approval?.status === 'approved' && (
+              <View style={styles.attributionItem}>
+                <Ionicons name="checkmark-circle-outline" size={16} color="#10B981" />
+                <Text style={styles.attributionLabel}>Approved by:</Text>
+                <Text style={[styles.attributionValue, { color: '#10B981' }]}>
+                  {expense.approval.approved_by_username || 'Unknown'}
+                </Text>
+              </View>
+            )}
+            {expense.approval?.status === 'rejected' && (
+              <View style={styles.attributionItem}>
+                <Ionicons name="close-circle-outline" size={16} color="#EF4444" />
+                <Text style={styles.attributionLabel}>Rejected by:</Text>
+                <Text style={[styles.attributionValue, { color: '#EF4444' }]}>
+                  {expense.approval.rejected_by_username || 'Unknown'}
+                </Text>
+              </View>
+            )}
+          </View>
+
           {/* Receipt Upload */}
           <EnhancedFileUpload
             title="Receipt"
@@ -612,6 +642,35 @@ const styles = StyleSheet.create({
     color: '#374151',
     fontWeight: '600',
     textAlign: 'center',
+  },
+  attributionSection: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  attributionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 12,
+  },
+  attributionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  attributionLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  attributionValue: {
+    fontSize: 14,
+    color: '#111827',
+    fontWeight: '500',
   },
 });
 

@@ -505,7 +505,7 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
       logger.debug('Sending update to API', {
         invoiceId: invoice.id,
         updateData: updateData,
-        paidAmount: updateData.paid_amount, // Specifically log paid_amount
+        paidAmount: updateData.paidAmount, // Specifically log paidAmount
         formPaidAmount: formData.paidAmount, // Log original form value
         itemsInUpdate: updateData.items?.map(item => ({
           id: item.id,
@@ -1100,6 +1100,20 @@ const EditInvoiceScreen: React.FC<EditInvoiceScreenProps> = ({
           </View>
         </View>
 
+        {/* Attribution Information */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Record Information</Text>
+          <View style={styles.attributionContainer}>
+            <View style={styles.attributionItem}>
+              <Ionicons name="person-outline" size={16} color="#6B7280" />
+              <Text style={styles.attributionLabel}>Created by:</Text>
+              <Text style={styles.attributionValue}>
+                {invoice.created_by_username || invoice.created_by_email || 'Unknown'}
+              </Text>
+            </View>
+          </View>
+        </View>
+
         {/* Attachments */}
         <EnhancedFileUpload
           title="Attachment"
@@ -1640,6 +1654,27 @@ const styles = StyleSheet.create({
     color: '#92400E',
     marginLeft: 8,
     lineHeight: 20,
+  },
+  attributionContainer: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  attributionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  attributionLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  attributionValue: {
+    fontSize: 14,
+    color: '#111827',
+    fontWeight: '500',
   },
 });
 

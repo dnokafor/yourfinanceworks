@@ -227,55 +227,74 @@ const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
           </View>
         ) : (
           <View style={styles.expensesList}>
-            {filteredExpenses.map((expense) => (
-              <View key={expense.id} style={styles.expenseCard}>
-                <View style={styles.expenseHeader}>
-                  <View style={styles.expenseInfo}>
-                    <Text style={styles.expenseVendor}>
-                      {expense.vendor || 'Unknown Vendor'}
-                    </Text>
-                    <Text style={styles.expenseCategory}>{expense.category}</Text>
+            {filteredExpenses.map((expense) => {
+              const creatorName = expense.created_by_username || expense.created_by_email || 'Unknown';
+              const approverName = expense.approval?.approved_by_username || 'Unknown';
+              const rejectorName = expense.approval?.rejected_by_username || 'Unknown';
+              
+              return (
+                <View key={expense.id} style={styles.expenseCard}>
+                  <View style={styles.expenseHeader}>
+                    <View style={styles.expenseInfo}>
+                      <Text style={styles.expenseVendor}>
+                        {expense.vendor || 'Unknown Vendor'}
+                      </Text>
+                      <Text style={styles.expenseCategory}>{expense.category}</Text>
+                    </View>
+                    <View style={styles.expenseAmount}>
+                      <Text style={styles.expenseAmountText}>
+                        {formatCurrency(expense.amount, expense.currency)}
+                      </Text>
+                      <StatusIndicator
+                        status={expense.status as any}
+                        size="small"
+                      />
+                    </View>
                   </View>
-                  <View style={styles.expenseAmount}>
-                    <Text style={styles.expenseAmountText}>
-                      {formatCurrency(expense.amount, expense.currency)}
+                  
+                  <View style={styles.expenseDetails}>
+                    <Text style={styles.expenseDate}>
+                      {formatDate(expense.expense_date)}
                     </Text>
-                    <StatusIndicator
-                      status={expense.status as any}
-                      size="small"
-                    />
+                    <Text style={styles.expenseCreator}>
+                      Created by: {creatorName}
+                    </Text>
+                    {expense.approval?.status === 'approved' && (
+                      <Text style={styles.expenseApprover}>
+                        Approved by: {approverName}
+                      </Text>
+                    )}
+                    {expense.approval?.status === 'rejected' && (
+                      <Text style={styles.expenseRejector}>
+                        Rejected by: {rejectorName}
+                      </Text>
+                    )}
+                    {expense.notes && (
+                      <Text style={styles.expenseNotes} numberOfLines={2}>
+                        {expense.notes}
+                      </Text>
+                    )}
                   </View>
-                </View>
-                
-                <View style={styles.expenseDetails}>
-                  <Text style={styles.expenseDate}>
-                    {formatDate(expense.expense_date)}
-                  </Text>
-                  {expense.notes && (
-                    <Text style={styles.expenseNotes} numberOfLines={2}>
-                      {expense.notes}
-                    </Text>
-                  )}
-                </View>
 
-                <View style={styles.expenseActions}>
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => onNavigateToEditExpense(expense)}
-                  >
-                    <Ionicons name="create-outline" size={16} color="#3B82F6" />
-                    <Text style={styles.actionButtonText}>Edit</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.deleteButton]}
-                    onPress={() => handleDeleteExpense(expense.id)}
-                  >
-                    <Ionicons name="trash-outline" size={16} color="#EF4444" />
-                    <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete</Text>
-                  </TouchableOpacity>
+                  <View style={styles.expenseActions}>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => onNavigateToEditExpense(expense)}
+                    >
+                      <Ionicons name="create-outline" size={16} color="#3B82F6" />
+                      <Text style={styles.actionButtonText}>Edit</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.deleteButton]}
+                      onPress={() => handleDeleteExpense(expense.id)}
+                    >
+                      <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                      <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         )}
       </ScrollView>
@@ -433,6 +452,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     marginBottom: 4,
+  },
+  expenseCreator: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginBottom: 4,
+    fontStyle: 'italic',
+  },
+  expenseApprover: {
+    fontSize: 13,
+    color: '#10B981',
+    marginBottom: 4,
+    fontStyle: 'italic',
+  },
+  expenseRejector: {
+    fontSize: 13,
+    color: '#EF4444',
+    marginBottom: 4,
+    fontStyle: 'italic',
   },
   expenseNotes: {
     fontSize: 14,

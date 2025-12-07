@@ -495,6 +495,7 @@ export default function Statements() {
                       <TableHead>{t('statements.labels')}</TableHead>
                       <TableHead>{t('statements.status')}</TableHead>
                       <TableHead>{t('statements.transactions')}</TableHead>
+                      <TableHead className="hidden lg:table-cell">{t('common.created_by')}</TableHead>
                       <TableHead>{t('statements.uploaded')}</TableHead>
                       <TableHead></TableHead>
                     </TableRow>
@@ -508,6 +509,9 @@ export default function Statements() {
                         </TableCell>
                         <TableCell>{formatStatus(s.status)}</TableCell>
                         <TableCell>{s.extracted_count}</TableCell>
+                        <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
+                          {s.created_by_username || s.created_by_email || t('common.unknown')}
+                        </TableCell>
                         <TableCell>{s.created_at ? format(new Date(s.created_at), 'PP p') : ''}</TableCell>
                         <TableCell className="text-right flex gap-2 justify-end">
                           <Button size="sm" variant="outline" onClick={() => openStatement(s.id)}>
@@ -603,7 +607,14 @@ export default function Statements() {
                   </Button>
                   <div>
                     <CardTitle>{t('statements.transactions_title', { filename: detail?.original_filename || '' })}</CardTitle>
-                    <p className="text-muted-foreground text-sm mt-1">{t('statements.transactions_description')}</p>
+                    <div className="flex flex-col gap-1 mt-1">
+                      <p className="text-muted-foreground text-sm">{t('statements.transactions_description')}</p>
+                      {((detail as any)?.created_by_username || (detail as any)?.created_by_email) && (
+                        <p className="text-muted-foreground text-sm">
+                          {t('common.created_by')}: {(detail as any).created_by_username || (detail as any).created_by_email}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

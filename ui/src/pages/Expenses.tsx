@@ -776,6 +776,7 @@ const Expenses = () => {
                     <TableHead>{t('expenses.table.total')}</TableHead>
                     <TableHead>{t('expenses.table.invoice')}</TableHead>
                     <TableHead>{t('expenses.table.approval_status', { defaultValue: 'Approval Status' })}</TableHead>
+                    <TableHead className="hidden xl:table-cell">{t('common.created_by')}</TableHead>
                     <TableHead>{t('expenses.table.analyzed')}</TableHead>
                     <TableHead>{t('expenses.table.receipt')}</TableHead>
                     <TableHead>{t('expenses.table.actions')}</TableHead>
@@ -887,6 +888,9 @@ const Expenses = () => {
                             }}
                             approvals={[]} // TODO: Fetch approvals data
                           />
+                        </TableCell>
+                        <TableCell className="hidden xl:table-cell text-sm text-muted-foreground">
+                          {e.created_by_username || e.created_by_email || t('common.unknown')}
                         </TableCell>
                         <TableCell>
                           {e.analysis_status === 'done' ? (

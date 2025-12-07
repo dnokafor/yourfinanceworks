@@ -9,7 +9,7 @@ import json
 import logging
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, timezone
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_, desc
 
 from core.models.models_per_tenant import (
@@ -233,6 +233,7 @@ class ApprovalService:
         now = datetime.now(timezone.utc)
         approval.status = ApprovalStatus.APPROVED
         approval.decided_at = now
+        approval.approved_by_user_id = approver_id  # Capture who approved
         approval.notes = notes
         approval.is_current_level = False
         
@@ -314,6 +315,7 @@ class ApprovalService:
         now = datetime.now(timezone.utc)
         approval.status = ApprovalStatus.REJECTED
         approval.decided_at = now
+        approval.rejected_by_user_id = approver_id  # Capture who rejected
         approval.rejection_reason = rejection_reason.strip()
         approval.notes = notes
         approval.is_current_level = False
@@ -351,7 +353,10 @@ class ApprovalService:
         Returns:
             List of pending ExpenseApproval records
         """
-        query = self.db.query(ExpenseApproval).filter(
+        query = self.db.query(ExpenseApproval).options(
+            joinedload(ExpenseApproval.approved_by),
+            joinedload(ExpenseApproval.rejected_by)
+        ).filter(
             and_(
                 ExpenseApproval.approver_id == approver_id,
                 ExpenseApproval.status == ApprovalStatus.PENDING,
@@ -433,7 +438,10 @@ class ApprovalService:
             raise ValidationError(f"Expense {expense_id} not found")
         
         # Get all approvals for this expense
-        approvals = self.db.query(ExpenseApproval).filter(
+        approvals = self.db.query(ExpenseApproval).options(
+            joinedload(ExpenseApproval.approved_by),
+            joinedload(ExpenseApproval.rejected_by)
+        ).filter(
             ExpenseApproval.expense_id == expense_id
         ).order_by(
             ExpenseApproval.approval_level.asc(),
@@ -831,6 +839,7 @@ class ApprovalService:
         now = datetime.now(timezone.utc)
         approval.status = ApprovalStatus.APPROVED
         approval.decided_at = now
+        approval.approved_by_user_id = approver_id  # Capture who approved
         approval.notes = notes
         approval.is_current_level = False
         
@@ -898,6 +907,7 @@ class ApprovalService:
         now = datetime.now(timezone.utc)
         approval.status = ApprovalStatus.REJECTED
         approval.decided_at = now
+        approval.rejected_by_user_id = approver_id  # Capture who rejected
         approval.rejection_reason = rejection_reason.strip()
         approval.notes = notes
         approval.is_current_level = False
@@ -934,7 +944,10 @@ class ApprovalService:
         """
         from core.models.models_per_tenant import InvoiceApproval
         
-        query = self.db.query(InvoiceApproval).filter(
+        query = self.db.query(InvoiceApproval).options(
+            joinedload(InvoiceApproval.approved_by),
+            joinedload(InvoiceApproval.rejected_by)
+        ).filter(
             and_(
                 InvoiceApproval.approver_id == approver_id,
                 InvoiceApproval.status == ApprovalStatus.PENDING,
@@ -967,7 +980,10 @@ class ApprovalService:
             raise ValidationError(f"Invoice {invoice_id} not found")
         
         # Get all approvals for this invoice
-        approvals = self.db.query(InvoiceApproval).filter(
+        approvals = self.db.query(InvoiceApproval).options(
+            joinedload(InvoiceApproval.approved_by),
+            joinedload(InvoiceApproval.rejected_by)
+        ).filter(
             InvoiceApproval.invoice_id == invoice_id
         ).order_by(
             InvoiceApproval.approval_level.asc(),

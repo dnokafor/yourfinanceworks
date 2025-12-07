@@ -64,9 +64,28 @@ export default function ExpensesView() {
 
         // Try to fetch approval data for this expense
         try {
+          // First try to get pending approvals
           const pendingApprovals = await approvalApi.getPendingApprovals();
           const expenseApproval = pendingApprovals.approvals?.find((a: ExpenseApproval) => a.expense_id === Number(id));
-          setApproval(expenseApproval || null);
+          
+          if (expenseApproval) {
+            setApproval(expenseApproval);
+          } else {
+            // If not pending, try to get approval history to show completed approvals
+            try {
+              const historyResponse = await approvalApi.getExpenseApprovalHistory(Number(id));
+              // Get the most recent approval (approved or rejected)
+              const completedApproval = historyResponse.approval_history
+                ?.filter((a: any) => a.status === 'approved' || a.status === 'rejected')
+                .sort((a: any, b: any) => new Date(b.decided_at || b.timestamp).getTime() - new Date(a.decided_at || a.timestamp).getTime())[0];
+              
+              if (completedApproval) {
+                setApproval(completedApproval as any);
+              }
+            } catch {
+              // No approval history available
+            }
+          }
         } catch {
           setApproval(null);
         }
@@ -142,6 +161,65 @@ export default function ExpensesView() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-blue-800">{approval.notes}</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Show approval/rejection information if expense has been processed */}
+        {approval && approval.status === 'approved' && approval.approved_by_username && (
+          <Card className="slide-in border-green-200 bg-green-50">
+            <CardHeader>
+              <CardTitle className="text-green-900">{t('expenses.approval_information', { defaultValue: 'Approval Information' })}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div>
+                <span className="text-sm font-medium text-green-800">{t('expenses.approved_by', { defaultValue: 'Approved by' })}: </span>
+                <span className="text-sm text-green-700">{approval.approved_by_username}</span>
+              </div>
+              {approval.decided_at && (
+                <div>
+                  <span className="text-sm font-medium text-green-800">{t('expenses.approved_at', { defaultValue: 'Approved at' })}: </span>
+                  <span className="text-sm text-green-700">{new Date(approval.decided_at).toLocaleString()}</span>
+                </div>
+              )}
+              {approval.notes && (
+                <div>
+                  <span className="text-sm font-medium text-green-800">{t('expenses.approval_notes', { defaultValue: 'Notes' })}: </span>
+                  <span className="text-sm text-green-700">{approval.notes}</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {approval && approval.status === 'rejected' && approval.rejected_by_username && (
+          <Card className="slide-in border-red-200 bg-red-50">
+            <CardHeader>
+              <CardTitle className="text-red-900">{t('expenses.rejection_information', { defaultValue: 'Rejection Information' })}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div>
+                <span className="text-sm font-medium text-red-800">{t('expenses.rejected_by', { defaultValue: 'Rejected by' })}: </span>
+                <span className="text-sm text-red-700">{approval.rejected_by_username}</span>
+              </div>
+              {approval.decided_at && (
+                <div>
+                  <span className="text-sm font-medium text-red-800">{t('expenses.rejected_at', { defaultValue: 'Rejected at' })}: </span>
+                  <span className="text-sm text-red-700">{new Date(approval.decided_at).toLocaleString()}</span>
+                </div>
+              )}
+              {approval.rejection_reason && (
+                <div>
+                  <span className="text-sm font-medium text-red-800">{t('expenses.rejection_reason', { defaultValue: 'Reason' })}: </span>
+                  <span className="text-sm text-red-700">{approval.rejection_reason}</span>
+                </div>
+              )}
+              {approval.notes && (
+                <div>
+                  <span className="text-sm font-medium text-red-800">{t('expenses.rejection_notes', { defaultValue: 'Notes' })}: </span>
+                  <span className="text-sm text-red-700">{approval.notes}</span>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -247,6 +325,12 @@ export default function ExpensesView() {
               <label className="text-sm">{t('expenses.labels.reference_number')}</label>
               <Input value={form.reference_number || ''} disabled={true} />
             </div>
+            {((form as any).created_by_username || (form as any).created_by_email) && (
+              <div>
+                <label className="text-sm">{t('common.created_by')}</label>
+                <Input value={(form as any).created_by_username || (form as any).created_by_email || t('common.unknown')} disabled={true} />
+              </div>
+            )}
             <div className="sm:col-span-2">
               <label className="text-sm">{t('common.labels')}</label>
               <div className="flex flex-wrap items-center gap-2 mt-1">

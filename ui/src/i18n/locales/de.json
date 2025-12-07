@@ -1,5 +1,7 @@
 {
   "common": {
+    "created_by": "Erstellt von",
+    "unknown": "Unbekannt",
     "loading": "Lädt...",
     "save": "Speichern",
     "cancel": "Abbrechen",
@@ -52,7 +54,8 @@
     "update": "Aktualisieren",
     "hide": "Verbergen",
     "show": "Anzeigen",
-    "view": "Ansehen"
+    "view": "Ansicht",
+    "back_to_invoices": "Zurück zu Rechnungen"
   },
   "taxIntegration": {
     "title": "Steuerservice-Integration",
@@ -508,6 +511,7 @@
       "actions": "Aktionen"
     },
     "errors": {
+      "not_found": "Rechnung nicht gefunden",
       "load_failed": "Rechnungen konnten nicht geladen werden",
       "invoiceItemsMissing": "Rechnungsartikel konnten nicht richtig geladen werden",
       "invoiceLoadFailed": "Rechnungsdaten konnten nicht geladen werden"

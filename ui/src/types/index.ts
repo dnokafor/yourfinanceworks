@@ -83,6 +83,11 @@ export interface ExpenseApproval {
   decided_at?: string;
   approval_level: number;
   is_current_level: boolean;
+  // User attribution fields for approval/rejection
+  approved_by_user_id?: number;
+  approved_by_username?: string;
+  rejected_by_user_id?: number;
+  rejected_by_username?: string;
   expense?: {
     id: number;
     amount: number;
@@ -120,6 +125,7 @@ export interface User {
 export interface ApprovalHistoryEntry {
   id: number;
   expense_id?: number;
+  invoice_id?: number;
   approver_id: number;
   action: 'submitted' | 'approved' | 'rejected' | 'delegated';
   status: 'pending' | 'approved' | 'rejected';
@@ -127,6 +133,13 @@ export interface ApprovalHistoryEntry {
   rejection_reason?: string;
   approval_level: number;
   timestamp: string;
+  submitted_at?: string;
+  decided_at?: string;
+  // User attribution fields for approval/rejection
+  approved_by_user_id?: number;
+  approved_by_username?: string;
+  rejected_by_user_id?: number;
+  rejected_by_username?: string;
   approver?: {
     id: number;
     name: string;

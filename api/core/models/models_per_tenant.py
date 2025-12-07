@@ -100,12 +100,15 @@ class Invoice(Base):
     payer = Column(String, default="Client", nullable=False)  # Who is paying the invoice: 'You' or 'Client'
     attachment_path = Column(String, nullable=True)  # Path to uploaded attachment file
     attachment_filename = Column(EncryptedColumn(), nullable=True)  # Encrypted for privacy
-    
+
     # Soft delete fields for recycle bin functionality
     is_deleted = Column(Boolean, default=False, nullable=False)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     deleted_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # Track who deleted it
-    
+
+    # User attribution
+    created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -114,16 +117,36 @@ class Invoice(Base):
     payments = relationship("Payment", back_populates="invoice", cascade="all, delete-orphan")
     items = relationship("InvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
     deleted_by_user = relationship("User", foreign_keys=[deleted_by])
+    created_by = relationship("User", foreign_keys=[created_by_user_id])
     expenses = relationship("Expense", back_populates="invoice")
     attachments = relationship("InvoiceAttachment", back_populates="invoice", cascade="all, delete-orphan")
     approvals = relationship("InvoiceApproval", back_populates="invoice", cascade="all, delete-orphan")
+
+    @property
+    def created_by_username(self):
+        """Get creator username for API responses"""
+        # User model implies email is the identifier as there is no username column
+        if self.created_by:
+            if self.created_by.first_name and self.created_by.last_name:
+                return f"{self.created_by.first_name} {self.created_by.last_name}"
+            if self.created_by.first_name:
+                return self.created_by.first_name
+            return self.created_by.email
+        return None
+
+    @property
+    def created_by_email(self):
+        """Get creator email for API responses"""
+        if self.created_by:
+            return self.created_by.email
+        return None
 
 class Payment(Base):
     __tablename__ = "payments"
 
     id = Column(Integer, primary_key=True, index=True)
     # No tenant_id needed since each tenant has its own database
-    
+
     invoice_id = Column(Integer, ForeignKey("invoices.id"))
     amount = Column(Float, nullable=False)
     currency = Column(String, default="USD", nullable=False)
@@ -138,6 +161,25 @@ class Payment(Base):
     # Relationships (no tenant relationship needed)
     invoice = relationship("Invoice", back_populates="payments")
     user = relationship("User")  # NEW: Relationship to User
+
+    @property
+    def created_by_username(self):
+        """Get creator username for API responses"""
+        # User model implies email is the identifier
+        if self.user:
+            if self.user.first_name and self.user.last_name:
+                return f"{self.user.first_name} {self.user.last_name}"
+            if self.user.first_name:
+                return self.user.first_name
+            return self.user.email
+        return None
+
+    @property
+    def created_by_email(self):
+        """Get creator email for API responses"""
+        if self.user:
+            return self.user.email
+        return None
 
 class Expense(Base):
     __tablename__ = "expenses"
@@ -165,6 +207,7 @@ class Expense(Base):
     receipt_filename = Column(EncryptedColumn(), nullable=True)  # Encrypted for privacy
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=True)
+    created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # User attribution
 
     # Inventory purchase fields
     is_inventory_purchase = Column(Boolean, default=False, nullable=False)
@@ -190,9 +233,29 @@ class Expense(Base):
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])
     invoice = relationship("Invoice", back_populates="expenses")
     approvals = relationship("ExpenseApproval", back_populates="expense", cascade="all, delete-orphan")
+    created_by = relationship("User", foreign_keys=[created_by_user_id])
+
+    @property
+    def created_by_username(self):
+        """Get creator username for API responses"""
+        # User model implies email is the identifier
+        if self.created_by:
+            if self.created_by.first_name and self.created_by.last_name:
+                return f"{self.created_by.first_name} {self.created_by.last_name}"
+            if self.created_by.first_name:
+                return self.created_by.first_name
+            return self.created_by.email
+        return None
+
+    @property
+    def created_by_email(self):
+        """Get creator email for API responses"""
+        if self.created_by:
+            return self.created_by.email
+        return None
 
 class ExpenseAttachment(Base):
     __tablename__ = "expense_attachments"
@@ -230,7 +293,7 @@ class DiscountRule(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     # No tenant_id needed since each tenant has its own database
-    
+
     name = Column(String, nullable=False)  # e.g., "High Value Discount", "Bulk Order Discount"
     min_amount = Column(Float, nullable=False)  # Minimum amount to trigger the rule
     discount_type = Column(String, default="percentage", nullable=False)  # percentage or fixed
@@ -238,7 +301,7 @@ class DiscountRule(Base):
     currency = Column(String, default="USD", nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     priority = Column(Integer, default=0, nullable=False)  # Higher priority rules are applied first
-    
+
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -291,14 +354,14 @@ class InvoiceHistory(Base):
     invoice_id = Column(Integer, ForeignKey("invoices.id", ondelete="CASCADE"), nullable=False)
     # No tenant_id needed since each tenant has its own database
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
+
     action = Column(String, nullable=False)  # 'creation', 'update', 'payment', 'currency_change', 'discount_change'
     details = Column(String, nullable=True)
     previous_values = Column(JSON, nullable=True)  # Store previous values for comparison
     current_values = Column(JSON, nullable=True)   # Store current values
-    
+
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    
+
     # Relationships
     invoice = relationship("Invoice")
     user = relationship("User") 
@@ -362,6 +425,7 @@ class BankStatement(Base):
     extracted_count = Column(Integer, default=0, nullable=False)
     notes = Column(Text, nullable=True)
     labels = Column(JSON, nullable=True)
+    created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # User attribution
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
@@ -369,6 +433,7 @@ class BankStatement(Base):
     # Relationships
     transactions = relationship("BankStatementTransaction", back_populates="statement", cascade="all, delete-orphan")
     attachments = relationship("BankStatementAttachment", back_populates="statement", cascade="all, delete-orphan")
+    created_by = relationship("User", foreign_keys=[created_by_user_id])
 
 
 class BankStatementTransaction(Base):
@@ -924,6 +989,8 @@ class ExpenseApproval(Base):
     decided_at = Column(DateTime(timezone=True), nullable=True)
     approval_level = Column(Integer, nullable=False, default=1)
     is_current_level = Column(Boolean, nullable=False, default=True)
+    approved_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # User who approved
+    rejected_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # User who rejected
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
@@ -932,6 +999,8 @@ class ExpenseApproval(Base):
     expense = relationship("Expense")
     approver = relationship("User", foreign_keys=[approver_id])
     approval_rule = relationship("ApprovalRule")
+    approved_by = relationship("User", foreign_keys=[approved_by_user_id])
+    rejected_by = relationship("User", foreign_keys=[rejected_by_user_id])
 
 
 class InvoiceApproval(Base):
@@ -948,6 +1017,8 @@ class InvoiceApproval(Base):
     decided_at = Column(DateTime(timezone=True), nullable=True)
     approval_level = Column(Integer, nullable=False, default=1)
     is_current_level = Column(Boolean, nullable=False, default=True)
+    approved_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # User who approved
+    rejected_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # User who rejected
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
@@ -956,6 +1027,8 @@ class InvoiceApproval(Base):
     invoice = relationship("Invoice")
     approver = relationship("User", foreign_keys=[approver_id])
     approval_rule = relationship("ApprovalRule")
+    approved_by = relationship("User", foreign_keys=[approved_by_user_id])
+    rejected_by = relationship("User", foreign_keys=[rejected_by_user_id])
 
 
 class ApprovalRule(Base):

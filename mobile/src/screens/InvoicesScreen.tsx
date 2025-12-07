@@ -110,6 +110,7 @@ const InvoicesScreen: React.FC<InvoicesScreenProps> = ({
 
   const renderInvoiceItem = ({ item }: { item: any }) => {
     const outstandingBalance = item.amount - (item.total_paid || 0);
+    const creatorName = item.created_by_username || item.created_by_email || 'Unknown';
     
     return (
       <TouchableOpacity
@@ -138,6 +139,10 @@ const InvoicesScreen: React.FC<InvoicesScreenProps> = ({
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Due Date:</Text>
             <Text style={styles.detailValue}>{item.due_date}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Created by:</Text>
+            <Text style={styles.detailValue}>{creatorName}</Text>
           </View>
         </View>
         

@@ -48,6 +48,8 @@
     "current_language": "Current Language",
     "available_languages": "Available Languages",
     "expense": "Expense",
+    "created_by": "Created by",
+    "unknown": "Unknown",
     "expenses": "Expenses",
     "invoice": "Invoice",
     "invoices": "Invoices",
@@ -60,7 +62,8 @@
     "update": "Update",
     "hide": "Hide",
     "show": "Show",
-    "view": "View"
+    "view": "View",
+    "back_to_invoices": "Back to Invoices"
   },
   "taxIntegration": {
     "title": "Tax Service Integration",
@@ -508,6 +511,7 @@
       "actions": "Actions"
     },
     "errors": {
+      "not_found": "Invoice not found",
       "load_failed": "Failed to load invoices",
       "invoiceItemsMissing": "Invoice items could not be loaded properly",
       "invoiceLoadFailed": "Failed to load invoice data"
@@ -596,6 +600,15 @@
     "client_created_successfully": "Client created successfully!",
     "invoice_created_successfully": "Invoice created successfully!",
     "currency": "Currency",
+    "approval_information": "Approval Information",
+    "approved_by": "Approved by",
+    "approved_at": "Approved at",
+    "approval_notes": "Notes",
+    "rejection_information": "Rejection Information",
+    "rejected_by": "Rejected by",
+    "rejected_at": "Rejected at",
+    "rejection_reason": "Reason",
+    "rejection_notes": "Notes",
     "pick_a_date": "Pick a date",
     "status_label": "Status",
     "select_status": "Select status",
@@ -1496,6 +1509,15 @@
     "calculated_from_items": "Calculated from items",
     "this_expense_is_for_consuming_inventory_items": "This expense is for consuming inventory items",
     "this_expense_is_for_purchasing_inventory_items": "This expense is for purchasing inventory items",
+    "approval_information": "Approval Information",
+    "approved_by": "Approved by",
+    "approved_at": "Approved at",
+    "approval_notes": "Notes",
+    "rejection_information": "Rejection Information",
+    "rejected_by": "Rejected by",
+    "rejected_at": "Rejected at",
+    "rejection_reason": "Reason",
+    "rejection_notes": "Notes",
     "inventory_consumption_details": "Inventory Consumption Details",
     "select_the_inventory_items_you_consumed": "Select the inventory items you consumed",
     "ready_to_process": "Ready to process {{count}} item(s)",

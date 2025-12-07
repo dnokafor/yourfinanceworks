@@ -85,7 +85,7 @@ export function RecentActivity({ refreshKey }: RecentActivityProps) {
     } catch (error) {
       console.error("Failed to fetch recent activities:", error);
       toast.error(t('activity.failed_to_load'));
-      
+
       // Fallback to empty array on error
       setActivities([]);
     } finally {
@@ -118,50 +118,50 @@ export function RecentActivity({ refreshKey }: RecentActivityProps) {
           ) : activities.length > 0 ? (
             <div className="h-full overflow-y-auto space-y-3 pr-2">
               {activities.map((activity) => (
-            <div key={activity.id} className="flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
-              <div className="p-2 rounded-lg bg-muted/50 flex-shrink-0">
-                {getActivityIcon(activity.type)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1">
-                    <div className="font-medium text-sm leading-tight">
-                      {activity.link ? (
-                        <Link to={activity.link} className="hover:underline">
-                          {activity.title}
-                        </Link>
-                      ) : (
-                        activity.title
-                      )}
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      {activity.description}
-                    </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-xs text-muted-foreground">
-                        {formatDate(activity.timestamp)}
-                      </span>
-                      {activity.amount && (
-                        <span className="text-xs font-medium">
-                          {formatCurrencySync(activity.amount, activity.currency)}
-                        </span>
-                      )}
-                    </div>
+                <div key={activity.id} className="flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
+                  <div className="p-2 rounded-lg bg-muted/50 flex-shrink-0">
+                    {getActivityIcon(activity.type)}
                   </div>
-                  <div className="flex-shrink-0">
-                    {getActivityBadge(activity.type, activity.status)}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1">
+                        <div className="font-medium text-sm leading-tight">
+                          {activity.link ? (
+                            <Link to={activity.link} className="hover:underline">
+                              {activity.title}
+                            </Link>
+                          ) : (
+                            activity.title
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {activity.description}
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-xs text-muted-foreground">
+                            {formatDate(activity.timestamp)}
+                          </span>
+                          {activity.amount && (
+                            <span className="text-xs font-medium">
+                              {formatCurrencySync(activity.amount, activity.currency)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex-shrink-0">
+                        {getActivityBadge(activity.type, activity.status)}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
+              ))}
             </div>
-          ))}
-        </div>
-      ) : (
+          ) : (
             <div className="flex flex-col items-center justify-center h-full text-center">
               <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">{t('activity.no_recent_activity')}</p>
+              <p className="text-muted-foreground">{t('dashboard.activity.no_recent_activity')}</p>
               <p className="text-sm text-muted-foreground mt-1">
-                {t('activity.activity_will_appear')}
+                {t('dashboard.activity.activity_will_appear')}
               </p>
             </div>
           )}

@@ -100,6 +100,10 @@ class InvoiceWithClient(Invoice):
     has_attachment: Optional[bool] = False
     attachment_filename: Optional[str] = None
     description: Optional[str] = None
+    # User attribution fields
+    created_by_user_id: Optional[int] = None
+    created_by_username: Optional[str] = None
+    created_by_email: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

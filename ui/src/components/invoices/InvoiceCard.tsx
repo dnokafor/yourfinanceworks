@@ -191,11 +191,16 @@ export function InvoiceCard({ invoice, onClone, onDelete, canPerformActions = tr
         </div>
 
         <div className="flex items-center justify-between pt-4 border-t">
-          <div className="text-right">
-            <div className="text-sm text-muted-foreground">{t('invoices.total_amount')}</div>
+          <div className="flex-1">
+            <div className="text-sm text-muted-foreground mb-1">{t('invoices.total_amount')}</div>
             <div className="text-2xl font-bold text-primary">
               <CurrencyDisplay amount={invoice.amount} currency={invoice.currency} />
             </div>
+            {(invoice.created_by_username || invoice.created_by_email) && (
+              <div className="text-xs text-muted-foreground mt-2">
+                {t('common.created_by')}: {invoice.created_by_username || invoice.created_by_email}
+              </div>
+            )}
           </div>
 
           {canPerformActions && (

@@ -1,0 +1,52 @@
+from pydantic import BaseModel, Field, ConfigDict
+from typing import Optional, List
+from datetime import datetime
+
+
+class BankStatementTransactionBase(BaseModel):
+    """Base schema for bank statement transactions"""
+    date: datetime = Field(..., description="Transaction date")
+    description: str = Field(..., description="Transaction description")
+    amount: float = Field(..., description="Transaction amount")
+    transaction_type: Optional[str] = Field(None, description="Type of transaction (debit/credit)")
+    balance: Optional[float] = Field(None, description="Account balance after transaction")
+    category: Optional[str] = Field(None, description="Transaction category")
+    invoice_id: Optional[int] = Field(None, description="Linked invoice ID")
+    expense_id: Optional[int] = Field(None, description="Linked expense ID")
+
+
+class BankStatementTransactionResponse(BankStatementTransactionBase):
+    """Response schema for bank statement transactions"""
+    id: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BankStatementBase(BaseModel):
+    """Base schema for bank statements"""
+    original_filename: str = Field(..., description="Original filename of the uploaded statement")
+    stored_filename: Optional[str] = Field(None, description="Stored filename on the server")
+    file_path: Optional[str] = Field(None, description="File path on the server")
+    status: str = Field("pending", description="Processing status")
+    extracted_count: Optional[int] = Field(0, description="Number of transactions extracted")
+    labels: Optional[List[str]] = Field(None, description="Labels for categorization")
+    notes: Optional[str] = Field(None, description="Additional notes")
+
+
+class BankStatementResponse(BankStatementBase):
+    """Response schema for bank statements with attribution"""
+    id: int
+    created_at: Optional[datetime] = None
+    # User attribution fields
+    created_by_user_id: Optional[int] = None
+    created_by_username: Optional[str] = None
+    created_by_email: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BankStatementWithTransactions(BankStatementResponse):
+    """Bank statement response with transactions"""
+    transactions: List[BankStatementTransactionResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)

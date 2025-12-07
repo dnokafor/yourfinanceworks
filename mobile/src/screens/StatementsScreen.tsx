@@ -187,68 +187,75 @@ const BankStatementsScreen: React.FC<BankStatementsScreenProps> = ({
           </View>
         ) : (
           <View style={styles.statementsList}>
-            {statements.map((statement) => (
-              <View key={statement.id} style={styles.statementCard}>
-                <TouchableOpacity
-                  style={styles.statementContent}
-                  onPress={() => onNavigateToStatement(statement)}
-                >
-                  <View style={styles.statementHeader}>
-                    <View style={styles.statementInfo}>
-                      <Text style={styles.statementFilename} numberOfLines={2}>
-                        {statement.original_filename}
-                      </Text>
-                      <View style={styles.statementMeta}>
-                        <StatusIndicator
-                          status={statement.status as any}
-                          size="small"
-                          customText={formatStatus(statement.status)}
-                        />
-                        <Text style={styles.transactionCount}>
-                          {statement.extracted_count} transactions
-                        </Text>
-                      </View>
-                    </View>
-                    <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-                  </View>
-                  
-                  <View style={styles.statementDetails}>
-                    <Text style={styles.statementDate}>
-                      Uploaded: {formatDate(statement.created_at)}
-                    </Text>
-                    {statement.labels && statement.labels.length > 0 && (
-                      <View style={styles.labelsContainer}>
-                        {statement.labels.slice(0, 3).map((label, index) => (
-                          <View key={index} style={styles.labelBadge}>
-                            <Text style={styles.labelText}>{label}</Text>
-                          </View>
-                        ))}
-                        {statement.labels.length > 3 && (
-                          <Text style={styles.moreLabels}>+{statement.labels.length - 3} more</Text>
-                        )}
-                      </View>
-                    )}
-                  </View>
-                </TouchableOpacity>
-
-                <View style={styles.statementActions}>
+            {statements.map((statement) => {
+              const creatorName = statement.created_by_username || statement.created_by_email || 'Unknown';
+              
+              return (
+                <View key={statement.id} style={styles.statementCard}>
                   <TouchableOpacity
-                    style={styles.actionButton}
+                    style={styles.statementContent}
                     onPress={() => onNavigateToStatement(statement)}
                   >
-                    <Ionicons name="eye-outline" size={16} color="#3B82F6" />
-                    <Text style={styles.actionButtonText}>View</Text>
+                    <View style={styles.statementHeader}>
+                      <View style={styles.statementInfo}>
+                        <Text style={styles.statementFilename} numberOfLines={2}>
+                          {statement.original_filename}
+                        </Text>
+                        <View style={styles.statementMeta}>
+                          <StatusIndicator
+                            status={statement.status as any}
+                            size="small"
+                            customText={formatStatus(statement.status)}
+                          />
+                          <Text style={styles.transactionCount}>
+                            {statement.extracted_count} transactions
+                          </Text>
+                        </View>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+                    </View>
+                    
+                    <View style={styles.statementDetails}>
+                      <Text style={styles.statementDate}>
+                        Uploaded: {formatDate(statement.created_at)}
+                      </Text>
+                      <Text style={styles.statementCreator}>
+                        Created by: {creatorName}
+                      </Text>
+                      {statement.labels && statement.labels.length > 0 && (
+                        <View style={styles.labelsContainer}>
+                          {statement.labels.slice(0, 3).map((label, index) => (
+                            <View key={index} style={styles.labelBadge}>
+                              <Text style={styles.labelText}>{label}</Text>
+                            </View>
+                          ))}
+                          {statement.labels.length > 3 && (
+                            <Text style={styles.moreLabels}>+{statement.labels.length - 3} more</Text>
+                          )}
+                        </View>
+                      )}
+                    </View>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.deleteButton]}
-                    onPress={() => handleDeleteStatement(statement.id)}
-                  >
-                    <Ionicons name="trash-outline" size={16} color="#EF4444" />
-                    <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete</Text>
-                  </TouchableOpacity>
+
+                  <View style={styles.statementActions}>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => onNavigateToStatement(statement)}
+                    >
+                      <Ionicons name="eye-outline" size={16} color="#3B82F6" />
+                      <Text style={styles.actionButtonText}>View</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.deleteButton]}
+                      onPress={() => handleDeleteStatement(statement.id)}
+                    >
+                      <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                      <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         )}
       </ScrollView>
@@ -365,6 +372,12 @@ const styles = StyleSheet.create({
   statementDate: {
     fontSize: 14,
     color: '#6B7280',
+  },
+  statementCreator: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   labelsContainer: {
     flexDirection: 'row',

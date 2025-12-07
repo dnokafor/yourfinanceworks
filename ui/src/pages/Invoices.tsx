@@ -482,6 +482,7 @@ const Invoices = () => {
                       <TableHead className="text-right">{t('invoices.table.total_paid')}</TableHead>
                       <TableHead className="text-right">{t('invoices.table.outstanding_balance')}</TableHead>
                       <TableHead>{t('invoices.table.status')}</TableHead>
+                      <TableHead className="hidden lg:table-cell">{t('common.created_by')}</TableHead>
                       <TableHead className="w-[100px]">{t('invoices.table.actions')}</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -515,6 +516,9 @@ const Invoices = () => {
                           }>
                             {formatStatus(invoice.status)}
                           </Badge>
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
+                          {invoice.created_by_username || invoice.created_by_email || t('common.unknown')}
                         </TableCell>
                         <TableCell>
                           {canPerformAction && (

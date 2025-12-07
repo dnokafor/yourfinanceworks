@@ -77,7 +77,7 @@ class ReminderStatusUpdate(BaseModel):
 class ReminderResponse(ReminderBase):
     """Schema for reminder responses"""
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: int
     status: ReminderStatus
     created_by_id: int
@@ -90,6 +90,26 @@ class ReminderResponse(ReminderBase):
     is_deleted: bool = False
     created_at: datetime
     updated_at: datetime
+    # User attribution fields (for consistency with other entities)
+    created_by_username: Optional[str] = None
+    created_by_email: Optional[str] = None
+
+    @classmethod
+    def model_validate(cls, obj, **kwargs):
+        """Override model_validate to populate attribution fields from relationship"""
+        instance = super().model_validate(obj, **kwargs)
+
+        # Populate flat attribution fields from relationship if available
+        if hasattr(obj, 'created_by') and obj.created_by:
+            from core.services.attribution_service import AttributionService
+            instance.created_by_username = AttributionService.get_display_name(obj.created_by)
+            instance.created_by_email = obj.created_by.email if hasattr(obj.created_by, 'email') else None
+        else:
+            # Handle missing attribution gracefully
+            instance.created_by_username = "Unknown"
+            instance.created_by_email = None
+
+        return instance
 
 class ReminderWithUsers(ReminderResponse):
     """Schema for reminder responses with user information"""
@@ -100,7 +120,7 @@ class ReminderWithUsers(ReminderResponse):
 # User schema for relationship
 class UserBasic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: int
     email: str
     first_name: Optional[str] = None
@@ -126,7 +146,7 @@ class ReminderNotificationCreate(ReminderNotificationBase):
 
 class ReminderNotificationResponse(ReminderNotificationBase):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: int
     reminder_id: int
     user_id: int

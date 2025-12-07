@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import func
 from typing import List, Optional
 import logging
@@ -151,7 +151,8 @@ async def create_invoice(
             recurring_frequency=invoice.recurring_frequency,
             custom_fields=invoice.custom_fields,
             show_discount_in_pdf=invoice.show_discount_in_pdf,
-            payer=invoice.payer
+            payer=invoice.payer,
+            created_by_user_id=current_user.id  # User attribution
         )
         
         # Calculate subtotal and amount
@@ -354,6 +355,8 @@ async def create_invoice(
             Client, Invoice.client_id == Client.id
         ).outerjoin(
             Payment, Invoice.id == Payment.invoice_id
+        ).options(
+            selectinload(Invoice.created_by)
         ).filter(
             Invoice.id == db_invoice.id,
             Invoice.is_deleted == False
@@ -417,6 +420,23 @@ async def create_invoice(
         ).all()
 
         logger.info(f"Invoice created successfully with ID: {invoice.id}")
+
+        # Get creator information
+        from core.services.attribution_service import AttributionService
+        created_by_username = None
+        created_by_email = None
+
+        def format_user_name(user):
+            if user.first_name and user.last_name:
+                return f"{user.first_name} {user.last_name}"
+            elif user.first_name:
+                return user.first_name
+            return user.email
+
+        if invoice.created_by:
+            created_by_username = format_user_name(invoice.created_by)
+            created_by_email = invoice.created_by.email
+
         return {
             "id": invoice.id,
             "number": invoice.number,
@@ -450,7 +470,10 @@ async def create_invoice(
                 "attachment_type": att.attachment_type,
                 "created_at": att.created_at.isoformat()
             } for att in new_attachments],
-            "attachment_count": len(new_attachments)
+            "attachment_count": len(new_attachments),
+            "created_by_user_id": invoice.created_by_user_id,
+            "created_by_username": created_by_username,
+            "created_by_email": created_by_email
         }
     except HTTPException as he:
         logger.error(f"HTTPException in create_invoice: {he.status_code} - {he.detail}")
@@ -647,9 +670,14 @@ async def read_invoices(
     skip: int = 0,
     limit: int = 100,
     status_filter: Optional[str] = None,
+    created_by_user_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
+    # Set tenant context for encryption operations
+    from core.models.database import set_tenant_context
+    set_tenant_context(current_user.tenant_id)
+
     try:
         # Build base query (exclude soft-deleted invoices)
         # No tenant_id filtering needed since we're in the tenant's database
@@ -661,12 +689,18 @@ async def read_invoices(
             Client, Invoice.client_id == Client.id
         ).outerjoin(
             Payment, Invoice.id == Payment.invoice_id
+        ).options(
+            selectinload(Invoice.created_by)
         ).filter(Invoice.is_deleted == False)
-        
+
         # Apply status filter if provided
         if status_filter and status_filter != "all":
             query = query.filter(Invoice.status == status_filter)
-        
+
+        # Apply creator filter if provided
+        if created_by_user_id is not None:
+            query = query.filter(Invoice.created_by_user_id == created_by_user_id)
+
         # Get invoices with client information and payment status
         invoices = query.group_by(
             Invoice.id, Client.name
@@ -681,6 +715,20 @@ async def read_invoices(
                 InvoiceAttachment.invoice_id == invoice.id,
                 InvoiceAttachment.is_active == True
             ).all()
+
+            # Get creator information - explicitly load since selectinload doesn't work with tuple queries
+            created_by_username = None
+            created_by_email = None
+            if invoice.created_by_user_id:
+                creator = db.query(User).filter(User.id == invoice.created_by_user_id).first()
+                if creator:
+                    if creator.first_name and creator.last_name:
+                        created_by_username = f"{creator.first_name} {creator.last_name}"
+                    elif creator.first_name:
+                        created_by_username = creator.first_name
+                    else:
+                        created_by_username = creator.email
+                    created_by_email = creator.email
 
             invoice_dict = {
                 "id": invoice.id,
@@ -704,7 +752,10 @@ async def read_invoices(
                 "show_discount_in_pdf": invoice.show_discount_in_pdf,
                 "payer": invoice.payer,
                 "has_attachment": get_attachment_info(invoice, new_attachments)[0],
-                "attachment_filename": get_attachment_info(invoice, new_attachments)[1]
+                "attachment_filename": get_attachment_info(invoice, new_attachments)[1],
+                "created_by_user_id": invoice.created_by_user_id,
+                "created_by_username": created_by_username,
+                "created_by_email": created_by_email
             }
             result.append(invoice_dict)
 
@@ -1070,10 +1121,17 @@ async def read_invoice(
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
 ):
+    # Set tenant context for encryption operations
+    from core.models.database import set_tenant_context
+    set_tenant_context(current_user.tenant_id)
+
     logger.info(f"🔍 READ_INVOICE ENDPOINT CALLED - invoice_id: {invoice_id}, user: {current_user.email}")
     try:
         # Get invoice with client information and payment status
         # No tenant_id filtering needed since we're in the tenant's database
+        # Note: We don't load Invoice.created_by relationship here because it points to
+        # the tenant DB User model which has encrypted fields. Instead, we fetch user
+        # info from the master DB later.
         invoice_tuple = db.query(
             Invoice,
             Client.name.label('client_name'),
@@ -1098,10 +1156,10 @@ async def read_invoice(
             )
 
         invoice, client_name, client_company, total_paid = invoice_tuple
-        
+
         logger.info(f"[DEBUG] Invoice from DB - custom_fields: {invoice.custom_fields}")
         logger.info(f"[DEBUG] Invoice from DB - type of custom_fields: {type(invoice.custom_fields)}")
-        
+
         # Force refresh of database session to ensure we get latest data
         db.expire_all()
 
@@ -1109,7 +1167,7 @@ async def read_invoice(
         items_query = db.query(InvoiceItem).options(
             joinedload(InvoiceItem.inventory_item)
         ).filter(InvoiceItem.invoice_id == invoice_id).all()
-        
+
         logger.info(f"Raw items from database query: {[(item.id, item.description) for item in items_query]}")
 
         items_data = []
@@ -1124,7 +1182,7 @@ async def read_invoice(
                 "inventory_item_id": item.inventory_item_id,
                 "unit_of_measure": item.unit_of_measure
             }
-            
+
             # Add inventory item details if linked
             if item.inventory_item_id and item.inventory_item:
                 item_data["inventory_item"] = {
@@ -1146,17 +1204,33 @@ async def read_invoice(
                 }
             else:
                 item_data["inventory_item"] = None
-                
+
             items_data.append(item_data)
 
         logger.info(f"Returning {len(items_data)} items for invoice {invoice_id}: {[{'id': item['id'], 'description': item['description'], 'description_length': len(item['description']) if item['description'] else 0} for item in items_data]}")
-        
+
         # Get new-style attachments for read endpoint
         from core.models.models_per_tenant import InvoiceAttachment
         new_attachments = db.query(InvoiceAttachment).filter(
             InvoiceAttachment.invoice_id == invoice_id,
             InvoiceAttachment.is_active == True
         ).all()
+
+        # Get creator information - explicitly load since selectinload doesn't work with tuple queries
+        created_by_username = None
+        created_by_email = None
+        if invoice.created_by_user_id:
+            creator = db.query(User).filter(User.id == invoice.created_by_user_id).first()
+            if creator:
+                if creator.first_name and creator.last_name:
+                    created_by_username = f"{creator.first_name} {creator.last_name}"
+                elif creator.first_name:
+                    created_by_username = creator.first_name
+                else:
+                    created_by_username = creator.email
+                created_by_email = creator.email
+
+        logger.info(f"🔍 CREATOR DEBUG - invoice_id: {invoice_id}, created_by_user_id: {invoice.created_by_user_id}, created_by_username: {created_by_username}, created_by_email: {created_by_email}")
 
         invoice_dict = {
             "date": invoice.created_at.isoformat() if invoice.created_at else None,
@@ -1191,9 +1265,11 @@ async def read_invoice(
                 "attachment_type": att.attachment_type,
                 "created_at": att.created_at.isoformat()
             } for att in new_attachments],
-            "attachment_count": len(new_attachments)
+            "attachment_count": len(new_attachments),
+            "created_by_user_id": invoice.created_by_user_id,
+            "created_by_username": created_by_username,
+            "created_by_email": created_by_email
         }
-        
 
         logger.info(f"[DEBUG] Final invoice_dict response - custom_fields: {invoice_dict.get('custom_fields')}")
         logger.info(f"[DEBUG] Final invoice_dict response - custom_fields type: {type(invoice_dict.get('custom_fields'))}")
@@ -1205,7 +1281,7 @@ async def read_invoice(
         logger.info(f"🔍 ATTACHMENT DEBUG - Response values: has_attachment={invoice_dict['has_attachment']}, attachment_filename={invoice_dict['attachment_filename']}")
         logger.info(f"🔍 ATTACHMENT DEBUG - Response attachment_filename type: {type(invoice_dict['attachment_filename'])}")
         logger.info(f"🔍 ATTACHMENT DEBUG - Response attachment_filename repr: {repr(invoice_dict['attachment_filename'])}")
-        
+
         # Check the actual invoice object attributes
         logger.info(f"🔍 INVOICE OBJECT DEBUG - hasattr attachment_filename: {hasattr(invoice, 'attachment_filename')}")
         logger.info(f"🔍 INVOICE OBJECT DEBUG - hasattr attachment_path: {hasattr(invoice, 'attachment_path')}")
@@ -1213,7 +1289,7 @@ async def read_invoice(
             logger.info(f"🔍 INVOICE OBJECT DEBUG - invoice.attachment_filename: {invoice.attachment_filename}")
         if hasattr(invoice, 'attachment_path'):
             logger.info(f"🔍 INVOICE OBJECT DEBUG - invoice.attachment_path: {invoice.attachment_path}")
-        
+
         return invoice_dict
     except HTTPException:
         raise
@@ -1238,7 +1314,7 @@ async def update_invoice(
     logger.debug(f"[DEBUG] Received custom_fields in update: {invoice.custom_fields}")
     # Check if user has permission to update invoices
     require_non_viewer(current_user, "update invoices")
-    
+
     try:
         # Query invoice in current tenant's database (exclude soft-deleted)
         db_invoice = db.query(Invoice).filter(
@@ -1251,7 +1327,7 @@ async def update_invoice(
                 status_code=404,
                 detail="Invoice not found"
             )
-        
+
         # Check if invoice is paid and prevent updates except status and payment-related changes
         update_data = invoice.model_dump(exclude_unset=True)
         if db_invoice.status == "paid" and "status" in update_data:
@@ -1267,10 +1343,10 @@ async def update_invoice(
                     status_code=400,
                     detail="Paid invoices can only be modified for status and payment updates"
                 )
-        
+
         # Initialize currency service for validation
         currency_service = CurrencyService(db)
-        
+
         # Capture old values before updating
         old_currency = db_invoice.currency
         old_discount_value = db_invoice.discount_value
@@ -1323,7 +1399,7 @@ async def update_invoice(
                         InvoiceAttachment.invoice_id == invoice_id,
                         InvoiceAttachment.is_active == True
                     ).all()
-                    
+
                     deleted_attachments = []
                     for attachment in existing_new_attachments:
                         deleted_attachments.append({
@@ -1380,9 +1456,9 @@ async def update_invoice(
                         logger.warning("Failed to create payment from paid_amount update", exc_info=True)
                     continue
                 setattr(db_invoice, key, value)
-        
+
         logger.info(f"[DEBUG] After setting fields, custom_fields in DB: {db_invoice.custom_fields}")
-        
+
         # Handle items update if provided
         if invoice.items is not None:
             logger.info(f"Processing {len(invoice.items)} items for invoice {invoice_id}")
@@ -1394,19 +1470,19 @@ async def update_invoice(
                 }
                 for item in invoice.items
             ]))
-            
+
             # Get existing items
             existing_items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice_id).all()
             existing_items_dict = {item.id: item for item in existing_items}
             logger.info(f"Found {len(existing_items)} existing items: {[item.id for item in existing_items]}")
-            
+
             # Track which items are being updated
             updated_item_ids = set()
-            
+
             # Process each item in the update request
             for item_data in invoice.items:
                 logger.info(f"Processing item: id={getattr(item_data, 'id', None)}, description='{getattr(item_data, 'description', None)}', description_length={len(getattr(item_data, 'description', '') or '')}")
-                
+
                 if item_data.id and item_data.id in existing_items_dict:
                     # Update existing item
                     existing_item = existing_items_dict[item_data.id]
@@ -1428,7 +1504,7 @@ async def update_invoice(
                         amount=float(item_data.quantity) * float(item_data.price)
                     )
                     db.add(db_item)
-            
+
             # Remove items that are no longer in the list
             for item_id, item in existing_items_dict.items():
                 if item_id not in updated_item_ids:
@@ -1480,7 +1556,7 @@ async def update_invoice(
             try:
                 old_client = db.query(Client).filter(Client.id == old_client_id).first()
                 new_client = db.query(Client).filter(Client.id == invoice.client_id).first()
-                
+
                 # Format client info as "Name (email)" or fallback to ID
                 if old_client:
                     old_client_info = f"{old_client.name}"
@@ -1495,13 +1571,13 @@ async def update_invoice(
                         new_client_info += f" ({new_client.email})"
                 else:
                     new_client_info = f"Client ID {invoice.client_id}"
-                
+
                 changes.append(f"Client changed from {old_client_info} to {new_client_info}")
             except Exception as e:
                 # Fallback to IDs if names cannot be resolved
                 print(f"Error resolving client names: {e}")
                 changes.append(f"Client changed from Client ID {old_client_id} to Client ID {invoice.client_id}")
-        
+
         # Handle inventory stock movements for status changes
         if "status" in update_data and old_status != invoice.status:
             from core.services.inventory_integration_service import InventoryIntegrationService

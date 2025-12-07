@@ -215,6 +215,7 @@ class Invoice(Base):
     subtotal = Column(Float, nullable=False)  # Amount before discount
     custom_fields = Column(JSON, nullable=True)
     payer = Column(String, default="Client", nullable=False)  # "You" or "Client"
+    created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # User attribution
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -223,6 +224,7 @@ class Invoice(Base):
     client = relationship("Client", back_populates="invoices")
     payments = relationship("Payment", back_populates="invoice", cascade="all, delete-orphan")
     items = relationship("InvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
+    created_by = relationship("User", foreign_keys=[created_by_user_id])
 
 class Payment(Base):
     __tablename__ = "payments"

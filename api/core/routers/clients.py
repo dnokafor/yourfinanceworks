@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, and_
 from typing import List
 import logging
 import traceback
@@ -39,7 +39,7 @@ async def read_clients(
             func.coalesce(func.sum(Payment.amount), 0).label('total_paid'),
             func.coalesce(func.sum(Invoice.amount), 0).label('total_invoiced')
         ).outerjoin(
-            Invoice, Invoice.client_id == Client.id
+            Invoice, and_(Invoice.client_id == Client.id, Invoice.is_deleted == False)
         ).outerjoin(
             Payment, Payment.invoice_id == Invoice.id
         ).group_by(
@@ -54,7 +54,8 @@ async def read_clients(
                 func.coalesce(func.sum(Invoice.amount), 0)
             ).filter(
                 Invoice.client_id == client.id,
-                Invoice.status.in_(['pending', 'overdue', 'partially_paid'])
+                Invoice.status.in_(['pending', 'overdue', 'partially_paid']),
+                Invoice.is_deleted == False
             ).scalar()
             
             pending_payments = db.query(
@@ -63,7 +64,8 @@ async def read_clients(
                 Payment.invoice_id.in_(
                     db.query(Invoice.id).filter(
                         Invoice.client_id == client.id,
-                        Invoice.status.in_(['pending', 'overdue', 'partially_paid'])
+                        Invoice.status.in_(['pending', 'overdue', 'partially_paid']),
+                        Invoice.is_deleted == False
                     )
                 )
             ).scalar()
@@ -108,7 +110,7 @@ async def read_client(
             Client,
             func.coalesce(func.sum(Payment.amount), 0).label('total_paid')
         ).outerjoin(
-            Invoice, Invoice.client_id == Client.id
+            Invoice, and_(Invoice.client_id == Client.id, Invoice.is_deleted == False)
         ).outerjoin(
             Payment, Payment.invoice_id == Invoice.id
         ).filter(
@@ -130,7 +132,8 @@ async def read_client(
             func.coalesce(func.sum(Invoice.amount), 0)
         ).filter(
             Invoice.client_id == client.id,
-            Invoice.status.in_(['pending', 'overdue', 'partially_paid'])
+            Invoice.status.in_(['pending', 'overdue', 'partially_paid']),
+            Invoice.is_deleted == False
         ).scalar()
         
         pending_payments = db.query(
@@ -139,7 +142,8 @@ async def read_client(
             Payment.invoice_id.in_(
                 db.query(Invoice.id).filter(
                     Invoice.client_id == client.id,
-                    Invoice.status.in_(['pending', 'overdue', 'partially_paid'])
+                    Invoice.status.in_(['pending', 'overdue', 'partially_paid']),
+                    Invoice.is_deleted == False
                 )
             )
         ).scalar()

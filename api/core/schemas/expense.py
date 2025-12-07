@@ -199,6 +199,10 @@ class Expense(ExpenseBase):
     analysis_updated_at: Optional[datetime] = None
     receipt_timestamp: Optional[datetime] = None
     receipt_time_extracted: Optional[bool] = None
+    # User attribution fields
+    created_by_user_id: Optional[int] = None
+    created_by_username: Optional[str] = None
+    created_by_email: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
     

@@ -52,6 +52,11 @@ class ExpenseApproval(ExpenseApprovalBase):
     decided_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+    # User attribution fields for approval/rejection
+    approved_by_user_id: Optional[int] = None
+    approved_by_username: Optional[str] = None
+    rejected_by_user_id: Optional[int] = None
+    rejected_by_username: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -187,6 +192,11 @@ class InvoiceApproval(InvoiceApprovalBase):
     decided_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+    # User attribution fields for approval/rejection
+    approved_by_user_id: Optional[int] = None
+    approved_by_username: Optional[str] = None
+    rejected_by_user_id: Optional[int] = None
+    rejected_by_username: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

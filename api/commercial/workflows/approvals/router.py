@@ -362,24 +362,24 @@ async def get_pending_approvals_summary(
 ):
     """
     Get summary of pending approvals for dashboard display.
-    
+
     This endpoint provides aggregated information about pending approvals
     including total count, total amount, and breakdown by category.
-    
+
     Args:
         current_user: Currently authenticated user
         approval_service: Approval service instance
-        
+
     Returns:
         PendingApprovalSummary with aggregated approval information
     """
     try:
         require_non_viewer(current_user)
-        
+
         summary = approval_service.get_pending_approvals_summary(current_user.id)
-        
+
         logger.info(f"Retrieved approval summary for user {current_user.id}: {summary.total_pending} pending")
-        
+
         return summary
         
     except Exception as e:
@@ -397,21 +397,21 @@ async def approve_expense(
 ):
     """
     Approve an expense.
-    
+
     This endpoint allows authorized approvers to approve expenses assigned to them.
     The approval will advance the expense through the approval workflow according
     to configured rules.
-    
+
     Args:
         approval_id: ID of the approval record to approve
         decision_data: Approval decision details including optional notes
         current_user: Currently authenticated user
         approval_service: Approval service instance
         db: Database session
-        
+
     Returns:
         Updated ExpenseApproval record
-        
+
     Raises:
         HTTPException: 400 if approval is not in pending state
         HTTPException: 403 if user lacks permission to approve this expense
@@ -420,21 +420,30 @@ async def approve_expense(
     try:
         # Verify user has approval permissions
         require_approval_permission(current_user, "approve expenses")
-        
+
         # Validate decision status
         if decision_data.status.value != "approved":
             raise HTTPException(
                 status_code=400,
                 detail="Use the approve endpoint only for approvals. Use reject endpoint for rejections."
             )
-        
+
         # Approve the expense
         approval = approval_service.approve_expense(
             approval_id=approval_id,
             approver_id=current_user.id,
             notes=decision_data.notes
         )
-        
+
+        # Refresh approval to load relationships
+        from sqlalchemy.orm import joinedload
+        from core.models.models_per_tenant import ExpenseApproval as ExpenseApprovalModel
+        db.refresh(approval)
+        approval = db.query(ExpenseApprovalModel).options(
+            joinedload(ExpenseApprovalModel.approved_by),
+            joinedload(ExpenseApprovalModel.rejected_by)
+        ).filter(ExpenseApprovalModel.id == approval_id).first()
+
         # Create notification for expense submitter and complete the reminder
         from core.models.models_per_tenant import ReminderNotification, Expense, Reminder, ReminderStatus
         now = datetime.now(timezone.utc)
@@ -491,7 +500,29 @@ async def approve_expense(
 
         logger.info(f"User {current_user.id} approved expense approval {approval_id}")
 
-        return approval
+        # Enrich response with approver/rejector information
+        from core.services.attribution_service import AttributionService
+        response_dict = {
+            "id": approval.id,
+            "expense_id": approval.expense_id,
+            "approver_id": approval.approver_id,
+            "approval_rule_id": approval.approval_rule_id,
+            "status": approval.status,
+            "rejection_reason": approval.rejection_reason,
+            "notes": approval.notes,
+            "submitted_at": approval.submitted_at,
+            "decided_at": approval.decided_at,
+            "approval_level": approval.approval_level,
+            "is_current_level": approval.is_current_level,
+            "created_at": approval.created_at,
+            "updated_at": approval.updated_at,
+            "approved_by_user_id": approval.approved_by_user_id,
+            "approved_by_username": AttributionService.get_display_name(approval.approved_by) if approval.approved_by else None,
+            "rejected_by_user_id": approval.rejected_by_user_id,
+            "rejected_by_username": AttributionService.get_display_name(approval.rejected_by) if approval.rejected_by else None,
+        }
+
+        return response_dict
 
     except ValidationError as e:
         logger.warning(f"Validation error approving {approval_id}: {str(e)}")
@@ -520,20 +551,20 @@ async def reject_expense(
 ):
     """
     Reject an expense.
-    
+
     This endpoint allows authorized approvers to reject expenses assigned to them.
     A rejection reason is required and will be communicated to the expense submitter.
-    
+
     Args:
         approval_id: ID of the approval record to reject
         decision_data: Rejection decision details including required rejection reason
         current_user: Currently authenticated user
         approval_service: Approval service instance
         db: Database session
-        
+
     Returns:
         Updated ExpenseApproval record
-        
+
     Raises:
         HTTPException: 400 if approval is not in pending state or rejection reason missing
         HTTPException: 403 if user lacks permission to approve this expense
@@ -555,7 +586,7 @@ async def reject_expense(
                 status_code=400,
                 detail="Rejection reason is required when rejecting an expense"
             )
-        
+
         # Reject the expense
         approval = approval_service.reject_expense(
             approval_id=approval_id,
@@ -563,12 +594,21 @@ async def reject_expense(
             rejection_reason=decision_data.rejection_reason,
             notes=decision_data.notes
         )
-        
+
+        # Refresh approval to load relationships
+        from sqlalchemy.orm import joinedload
+        from core.models.models_per_tenant import ExpenseApproval as ExpenseApprovalModel
+        db.refresh(approval)
+        approval = db.query(ExpenseApprovalModel).options(
+            joinedload(ExpenseApprovalModel.approved_by),
+            joinedload(ExpenseApprovalModel.rejected_by)
+        ).filter(ExpenseApprovalModel.id == approval_id).first()
+
         # Create notification for expense submitter and cancel the reminder
         from core.models.models_per_tenant import ReminderNotification, Expense, Reminder, ReminderStatus
         now = datetime.now(timezone.utc)
         expense = db.query(Expense).filter(Expense.id == approval.expense_id).first()
-        
+
         if expense and expense.user_id:
             notification = ReminderNotification(
                 reminder_id=None,
@@ -614,7 +654,29 @@ async def reject_expense(
 
         logger.info(f"User {current_user.id} rejected expense approval {approval_id}")
 
-        return approval
+        # Enrich response with approver/rejector information
+        from core.services.attribution_service import AttributionService
+        response_dict = {
+            "id": approval.id,
+            "expense_id": approval.expense_id,
+            "approver_id": approval.approver_id,
+            "approval_rule_id": approval.approval_rule_id,
+            "status": approval.status,
+            "rejection_reason": approval.rejection_reason,
+            "notes": approval.notes,
+            "submitted_at": approval.submitted_at,
+            "decided_at": approval.decided_at,
+            "approval_level": approval.approval_level,
+            "is_current_level": approval.is_current_level,
+            "created_at": approval.created_at,
+            "updated_at": approval.updated_at,
+            "approved_by_user_id": approval.approved_by_user_id,
+            "approved_by_username": AttributionService.get_display_name(approval.approved_by) if approval.approved_by else None,
+            "rejected_by_user_id": approval.rejected_by_user_id,
+            "rejected_by_username": AttributionService.get_display_name(approval.rejected_by) if approval.rejected_by else None,
+        }
+
+        return response_dict
 
     except ValidationError as e:
         logger.warning(f"Validation error rejecting {approval_id}: {str(e)}")

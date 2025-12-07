@@ -100,6 +100,10 @@ export interface Invoice {
   has_attachment?: boolean;
   attachment_filename?: string;
   payer?: string;
+  // User attribution fields
+  created_by_user_id?: number;
+  created_by_username?: string;
+  created_by_email?: string;
 }
 
 export const linkApi = {
@@ -415,6 +419,10 @@ export interface Expense {
   manual_override?: boolean;
   receipt_timestamp?: string | null;
   receipt_time_extracted?: boolean;
+  // User attribution fields
+  created_by_user_id?: number;
+  created_by_username?: string;
+  created_by_email?: string;
 }
 
 export interface ExpenseAttachmentMeta {
@@ -447,6 +455,10 @@ export interface BankStatementSummary {
   labels?: string[] | null;
   notes?: string | null;
   created_at?: string;
+  // User attribution fields
+  created_by_user_id?: number;
+  created_by_username?: string;
+  created_by_email?: string;
 }
 
 export interface BankStatementDetail extends BankStatementSummary {
@@ -1562,6 +1574,10 @@ export const invoiceApi = {
         has_attachment: apiResponse.has_attachment || false,
         attachment_filename: apiResponse.attachment_filename || undefined,
         payer: apiResponse.payer || 'Client',
+        // User attribution fields
+        created_by_user_id: apiResponse.created_by_user_id,
+        created_by_username: apiResponse.created_by_username,
+        created_by_email: apiResponse.created_by_email,
       };
 
       console.log("🔍 API RESPONSE PAYER DEBUG:", {
