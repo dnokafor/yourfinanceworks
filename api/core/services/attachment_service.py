@@ -15,6 +15,9 @@ from pathlib import Path
 
 from core.models.models_per_tenant import ItemAttachment, InventoryItem, User
 from core.services.file_storage_service import file_storage_service, FileStorageResult
+from core.services.image_processing_service import image_processing_service
+from core.services.file_security_service import file_security_service, ValidationResult
+from core.utils.file_validation import validate_file_path
 # from commercial.cloud_storage.service import CloudStorageService  # Moved to conditional import
 # from commercial.cloud_storage.config import get_cloud_storage_config  # Moved to conditional import
 

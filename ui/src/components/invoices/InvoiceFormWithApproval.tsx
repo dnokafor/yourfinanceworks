@@ -106,21 +106,8 @@ export function InvoiceFormWithApproval({
   };
 
   const handleFormSubmit = async () => {
-    // Trigger form submission by clicking the submit button
-    console.log('🔵 handleFormSubmit called');
-    console.log('🔵 submitButtonRef.current:', submitButtonRef.current);
-    
     if (submitButtonRef.current) {
-      console.log('🔵 Clicking submit button via ref');
-      setIsSubmitting(true);
-      try {
-        submitButtonRef.current.click();
-      } finally {
-        // The form will handle the actual submission, so we'll let it reset isSubmitting
-        // This is just to show the loading state immediately
-      }
-    } else {
-      console.warn('⚠️ Submit button ref not available');
+      submitButtonRef.current.click();
     }
   };
 
@@ -145,6 +132,7 @@ export function InvoiceFormWithApproval({
           submitForApproval={submitForApproval && !approvalsNotLicensed}
           approverIdForApproval={selectedApproverId ? parseInt(selectedApproverId) : undefined}
           submitButtonRef={submitButtonRef}
+          onSubmitStateChange={setIsSubmitting}
         />
       </div>
 

@@ -11,8 +11,22 @@ import { isAdmin } from "@/utils/auth";
 
 const invoiceItemSchema = z.object({
   description: z.string().min(1, "Description is required"),
-  quantity: z.number().min(0.01, "Quantity must be greater than 0"),
-  price: z.number().min(0.01, "Price must be greater than 0"),
+  quantity: z.preprocess(
+    (val) => {
+      if (val === "" || val === null || val === undefined) return undefined;
+      const num = Number(val);
+      return isNaN(num) ? undefined : num;
+    },
+    z.number().min(0.01, "Quantity must be greater than 0")
+  ),
+  price: z.preprocess(
+    (val) => {
+      if (val === "" || val === null || val === undefined) return undefined;
+      const num = Number(val);
+      return isNaN(num) ? undefined : num;
+    },
+    z.number().min(0.01, "Price must be greater than 0")
+  ),
   id: z.number().optional(),
   inventory_item_id: z.number().optional().nullable(),
   unit_of_measure: z.string().optional().nullable(),
@@ -115,29 +129,54 @@ export function useInvoiceForm({
   }, [invoice]);
 
   const formDefaultValues = {
-    client: invoice ? invoice.client_id.toString() : "",
-    invoiceNumber: invoice ? invoice.number : "",
-    currency: invoice?.currency || "USD",
-    date: invoice ? safeParseDateString(invoice.date || invoice.created_at) : new Date(),
-    dueDate: invoice ? safeParseDateString(invoice.due_date) : new Date(new Date().setDate(new Date().getDate() + 30)),
-    status: invoice ? (invoice.status as any) : "pending",
-    paidAmount: invoice?.paid_amount || 0,
-    items: safeItems,
-    notes: invoice?.notes || "",
-    isRecurring: invoice?.is_recurring || false,
-    recurringFrequency: invoice?.recurring_frequency || "monthly",
-    discountType: "percentage" as const,
-    discountValue: invoice?.discount_value || 0,
-    customFields: [],
-    showDiscountInPdf: invoice?.show_discount_in_pdf || false,
-    payer: (invoice as any)?.payer || "Client",
+    client: initialData?.client || (invoice ? invoice.client_id.toString() : ""),
+    invoiceNumber: initialData?.invoiceNumber || (invoice ? invoice.number : ""),
+    currency: initialData?.currency || invoice?.currency || tenantInfo?.default_currency || "USD",
+    date: initialData?.date || (invoice ? safeParseDateString(invoice.date || invoice.created_at) : new Date()),
+    dueDate: initialData?.dueDate || (invoice ? safeParseDateString(invoice.due_date) : new Date(new Date().setDate(new Date().getDate() + 30))),
+    status: initialData?.status || (invoice ? (invoice.status as any) : "pending"),
+    paidAmount: initialData?.paidAmount ?? (invoice?.paid_amount || 0),
+    items: initialData?.items || safeItems,
+    notes: initialData?.notes || invoice?.notes || "",
+    isRecurring: initialData?.isRecurring ?? (invoice?.is_recurring || false),
+    recurringFrequency: initialData?.recurringFrequency || invoice?.recurring_frequency || "monthly",
+    discountType: initialData?.discountType || "percentage" as const,
+    discountValue: initialData?.discountValue ?? (invoice?.discount_value || 0),
+    customFields: initialData?.customFields || [],
+    showDiscountInPdf: initialData?.showDiscountInPdf ?? (invoice?.show_discount_in_pdf || false),
+    payer: initialData?.payer || (invoice as any)?.payer || "Client",
   };
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: formDefaultValues,
-    mode: "onSubmit"
+    mode: "onChange"
   });
+
+  // Reset form when initialData changes (e.g., PDF upload)
+  useEffect(() => {
+    if (initialData && !invoice) {
+      const mergedValues = {
+        client: initialData.client || "",
+        invoiceNumber: initialData.invoiceNumber || "",
+        currency: initialData.currency || tenantInfo?.default_currency || "USD",
+        date: initialData.date || new Date(),
+        dueDate: initialData.dueDate || new Date(new Date().setDate(new Date().getDate() + 30)),
+        status: initialData.status || "pending",
+        paidAmount: initialData.paidAmount ?? 0,
+        items: initialData.items || [{ ...defaultItem }],
+        notes: initialData.notes || "",
+        isRecurring: initialData.isRecurring ?? false,
+        recurringFrequency: initialData.recurringFrequency || "monthly",
+        discountType: initialData.discountType || "percentage" as const,
+        discountValue: initialData.discountValue ?? 0,
+        customFields: initialData.customFields || [],
+        showDiscountInPdf: initialData.showDiscountInPdf ?? false,
+        payer: initialData.payer || "Client",
+      };
+      form.reset(mergedValues);
+    }
+  }, [initialData, invoice, form, tenantInfo]);
 
   // Data fetching
   useEffect(() => {

@@ -52,8 +52,17 @@ export function InvoiceItemsSection({
   const removeItem = (index: number) => {
     if (items.length > 1) {
       const newItems = items.filter((_, i) => i !== index);
-      form.setValue("items", newItems);
+
+      // Clear all errors for the items array first
       form.clearErrors("items");
+
+      // Update the items with validation disabled initially
+      form.setValue("items", newItems, { shouldValidate: false });
+
+      // Force re-render and re-validation after state update
+      requestAnimationFrame(() => {
+        form.trigger("items");
+      });
     }
   };
 
@@ -231,7 +240,11 @@ export function InvoiceItemsSection({
                       step="any"
                       placeholder={t('invoices.qty')}
                       {...field}
-                      value={field.value || ''}
+                      value={field.value ?? ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        field.onChange(value === '' ? '' : parseFloat(value) || '');
+                      }}
                       disabled={isInvoicePaid}
                     />
                   </FormControl>
@@ -253,7 +266,11 @@ export function InvoiceItemsSection({
                       step="0.01"
                       placeholder={t('invoices.price')}
                       {...field}
-                      value={field.value || ''}
+                      value={field.value ?? ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        field.onChange(value === '' ? '' : parseFloat(value) || '');
+                      }}
                       disabled={isInvoicePaid}
                     />
                   </FormControl>

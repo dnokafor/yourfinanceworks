@@ -43,6 +43,7 @@ interface InvoiceFormProps {
   submitForApproval?: boolean;
   approverIdForApproval?: number;
   submitButtonRef?: React.RefObject<HTMLButtonElement | null>;
+  onSubmitStateChange?: (isSubmitting: boolean) => void;
 }
 
 export function InvoiceForm({
@@ -59,7 +60,8 @@ export function InvoiceForm({
   onClientCreated,
   submitForApproval = false,
   approverIdForApproval,
-  submitButtonRef
+  submitButtonRef,
+  onSubmitStateChange
 }: InvoiceFormProps) {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -97,7 +99,22 @@ export function InvoiceForm({
 
   // Form submission
   const onSubmit = async (data: any) => {
+    // Prevent double submission
+    if (invoiceForm.submitting) {
+      return;
+    }
+
     invoiceForm.setSubmitting(true);
+    onSubmitStateChange?.(true);
+
+    // Validate after setting submitting state
+    const isValid = await invoiceForm.form.trigger();
+    if (!isValid) {
+      toast.error("Please fix validation errors before submitting");
+      invoiceForm.setSubmitting(false);
+      onSubmitStateChange?.(false);
+      return;
+    }
     try {
       if (isEdit && invoice) {
         // Update existing invoice
@@ -206,6 +223,7 @@ export function InvoiceForm({
       console.error(`Failed to ${isEdit ? 'update' : 'create'} invoice:`, error);
       toast.error(`Failed to ${isEdit ? 'update' : 'save'} invoice`);
       invoiceForm.setSubmitting(false);
+      onSubmitStateChange?.(false);
     }
   };
 
@@ -287,7 +305,11 @@ export function InvoiceForm({
         </CardHeader>
         <CardContent>
           <Form {...invoiceForm.form}>
-            <form onSubmit={invoiceForm.form.handleSubmit(onSubmit)} className="space-y-8">
+            <form onSubmit={invoiceForm.form.handleSubmit(onSubmit, (errors) => {
+              console.error("Form validation errors:", errors);
+              toast.error("Please fix validation errors before submitting");
+              invoiceForm.setSubmitting(false);
+            })} className="space-y-8">
 
               {/* Client Section */}
               <InvoiceClientSection

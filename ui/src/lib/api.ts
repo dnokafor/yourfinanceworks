@@ -1524,7 +1524,6 @@ export const invoiceApi = {
         payer: apiInvoice.payer || 'Client',
       }));
 
-      console.log("Mapped invoices with paid amounts:", mappedInvoices);
       return mappedInvoices;
     } catch (error) {
       console.error('Failed to fetch invoices:', error);
@@ -1535,8 +1534,6 @@ export const invoiceApi = {
     try {
       // Get invoice data from API
       const apiResponse = await apiRequest<any>(`/invoices/${id}`);
-
-      console.log("API response for invoice:", apiResponse);
 
       // Map API response to frontend Invoice interface
       const invoice: Invoice = {
@@ -1579,23 +1576,6 @@ export const invoiceApi = {
         created_by_username: apiResponse.created_by_username,
         created_by_email: apiResponse.created_by_email,
       };
-
-      console.log("🔍 API RESPONSE PAYER DEBUG:", {
-        'raw apiResponse.payer': apiResponse.payer,
-        'mapped payer': invoice.payer
-      });
-
-      console.log("🔍 API CLIENT - Raw apiResponse keys:", Object.keys(apiResponse));
-      console.log("🔍 API CLIENT - Raw apiResponse:", JSON.stringify(apiResponse, null, 2));
-      console.log("🔍 API RESPONSE ATTACHMENT DEBUG:", {
-        'raw apiResponse.has_attachment': apiResponse.has_attachment,
-        'raw apiResponse.attachment_filename': apiResponse.attachment_filename,
-        'typeof has_attachment': typeof apiResponse.has_attachment,
-        'typeof attachment_filename': typeof apiResponse.attachment_filename,
-        'mapped has_attachment': invoice.has_attachment,
-        'mapped attachment_filename': invoice.attachment_filename
-      });
-      console.log("Mapped invoice object:", invoice);
 
       return invoice;
     } catch (error) {
@@ -1672,20 +1652,12 @@ export const invoiceApi = {
     }
 
     const uploadUrl = `${API_BASE_URL}/invoices/${invoiceId}/upload-attachment`;
-    console.log("🔍 UPLOAD API DEBUG - API_BASE_URL:", API_BASE_URL);
-    console.log("🔍 UPLOAD API DEBUG - Calling URL:", uploadUrl);
-    console.log("🔍 UPLOAD API DEBUG - Full URL:", uploadUrl);
-    console.log("🔍 UPLOAD API DEBUG - Headers:", headers);
-    console.log("🔍 UPLOAD API DEBUG - FormData keys:", Array.from(formData.keys()));
 
     const response = await fetch(uploadUrl, {
       method: 'POST',
       headers,
       body: formData,
     });
-
-    console.log("🔍 UPLOAD API DEBUG - Response status:", response.status);
-    console.log("🔍 UPLOAD API DEBUG - Response ok:", response.ok);
 
     if (!response.ok) {
       const errorText = await response.text();
