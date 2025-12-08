@@ -1,6 +1,6 @@
-import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { render } from '../../test/test-utils';
 import ApprovalReportsPage from '../../pages/ApprovalReportsPage';
 
 // Mock the UI components
@@ -94,36 +94,36 @@ vi.mock('@/components/ui/alert', () => ({
   ),
 }));
 
-// Mock recharts
+// Mock recharts - improved to prevent DOM prop warnings
 vi.mock('recharts', () => ({
   BarChart: ({ children, data, ...props }: any) => (
-    <div data-testid="bar-chart" data-length={data?.length} {...props}>
+    <div data-testid="bar-chart" data-length={data?.length}>
       {children}
     </div>
   ),
-  Bar: ({ dataKey, ...props }: any) => <div data-testid="bar" data-key={dataKey} {...props} />,
-  XAxis: ({ dataKey, ...props }: any) => <div data-testid="x-axis" data-key={dataKey} {...props} />,
-  YAxis: (props: any) => <div data-testid="y-axis" {...props} />,
-  CartesianGrid: (props: any) => <div data-testid="cartesian-grid" {...props} />,
-  Tooltip: (props: any) => <div data-testid="tooltip" {...props} />,
+  Bar: ({ dataKey, ...props }: any) => <div data-testid="bar" data-key={dataKey} />,
+  XAxis: ({ dataKey, ...props }: any) => <div data-testid="x-axis" data-key={dataKey} />,
+  YAxis: (props: any) => <div data-testid="y-axis" />,
+  CartesianGrid: (props: any) => <div data-testid="cartesian-grid" />,
+  Tooltip: (props: any) => <div data-testid="tooltip" />,
   ResponsiveContainer: ({ children, ...props }: any) => (
-    <div data-testid="responsive-container" {...props}>
+    <div data-testid="responsive-container">
       {children}
     </div>
   ),
   LineChart: ({ children, data, ...props }: any) => (
-    <div data-testid="line-chart" data-length={data?.length} {...props}>
+    <div data-testid="line-chart" data-length={data?.length}>
       {children}
     </div>
   ),
-  Line: ({ dataKey, ...props }: any) => <div data-testid="line" data-key={dataKey} {...props} />,
+  Line: ({ dataKey, ...props }: any) => <div data-testid="line" data-key={dataKey} />,
   PieChart: ({ children, data, ...props }: any) => (
-    <div data-testid="pie-chart" data-length={data?.length} {...props}>
+    <div data-testid="pie-chart" data-length={data?.length}>
       {children}
     </div>
   ),
-  Pie: ({ dataKey, ...props }: any) => <div data-testid="pie" data-key={dataKey} {...props} />,
-  Cell: (props: any) => <div data-testid="cell" {...props} />,
+  Pie: ({ dataKey, ...props }: any) => <div data-testid="pie" data-key={dataKey} />,
+  Cell: (props: any) => <div data-testid="cell" />,
 }));
 
 // Mock lucide-react icons
@@ -325,8 +325,13 @@ describe('ApprovalReportsPage', () => {
     });
   });
 
-  it('renders the page title and description', async () => {
+  it('renders the page title and description after loading', async () => {
     render(<ApprovalReportsPage />);
+
+    // Wait for loading to complete and content to appear
+    await waitFor(() => {
+      expect(screen.queryByText('Loading approval reports...')).not.toBeInTheDocument();
+    });
 
     expect(screen.getByText('Approval Reports & Analytics')).toBeInTheDocument();
     expect(
@@ -337,14 +342,25 @@ describe('ApprovalReportsPage', () => {
   it('renders filter controls', async () => {
     render(<ApprovalReportsPage />);
 
+    // Wait for loading to complete
+    await waitFor(() => {
+      expect(screen.queryByText('Loading approval reports...')).not.toBeInTheDocument();
+    });
+
     expect(screen.getByText('Report Filters')).toBeInTheDocument();
     expect(screen.getByText('Date Range')).toBeInTheDocument();
-    expect(screen.getByText('Approver')).toBeInTheDocument();
-    expect(screen.getByText('Category')).toBeInTheDocument();
+    // Use getByLabelText for form labels to avoid duplicates
+    expect(screen.getByLabelText('Approver')).toBeInTheDocument();
+    expect(screen.getByLabelText('Category')).toBeInTheDocument();
   });
 
   it('renders export buttons', async () => {
     render(<ApprovalReportsPage />);
+
+    // Wait for loading to complete
+    await waitFor(() => {
+      expect(screen.queryByText('Loading approval reports...')).not.toBeInTheDocument();
+    });
 
     expect(screen.getByText('Export PDF')).toBeInTheDocument();
     expect(screen.getByText('Export Excel')).toBeInTheDocument();
@@ -353,6 +369,11 @@ describe('ApprovalReportsPage', () => {
 
   it('renders tab navigation', async () => {
     render(<ApprovalReportsPage />);
+
+    // Wait for loading to complete
+    await waitFor(() => {
+      expect(screen.queryByText('Loading approval reports...')).not.toBeInTheDocument();
+    });
 
     expect(screen.getByText('Overview')).toBeInTheDocument();
     expect(screen.getByText('Performance')).toBeInTheDocument();
@@ -400,12 +421,18 @@ describe('ApprovalReportsPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Approval Breakdown by Category')).toBeInTheDocument();
-      expect(screen.getByText('travel')).toBeInTheDocument();
+      // Look for travel in the table cell specifically
+      expect(screen.getByRole('cell', { name: 'travel' })).toBeInTheDocument();
     });
   });
 
   it('handles refresh button click', async () => {
     render(<ApprovalReportsPage />);
+
+    // Wait for initial load to complete
+    await waitFor(() => {
+      expect(screen.queryByText('Loading approval reports...')).not.toBeInTheDocument();
+    });
 
     const refreshButton = screen.getByText('Refresh');
     fireEvent.click(refreshButton);
@@ -417,6 +444,11 @@ describe('ApprovalReportsPage', () => {
 
   it('handles date range change', async () => {
     render(<ApprovalReportsPage />);
+
+    // Wait for initial load to complete
+    await waitFor(() => {
+      expect(screen.queryByText('Loading approval reports...')).not.toBeInTheDocument();
+    });
 
     const dateRangePicker = screen.getByTestId('date-range-picker');
     const selectButton = dateRangePicker.querySelector('button');
@@ -484,7 +516,9 @@ describe('ApprovalReportsPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Approval Bottlenecks')).toBeInTheDocument();
-      expect(screen.getByText('John Doe')).toBeInTheDocument();
+      // Look for John Doe in the bottlenecks section - should be unique in this context
+      const bottlenecksSection = screen.getByText('Approval Bottlenecks').closest('div');
+      expect(bottlenecksSection).toHaveTextContent('John Doe');
     });
   });
 
@@ -603,11 +637,12 @@ describe('ApprovalReportsPage', () => {
       click: mockClick,
     };
 
+    const originalCreateElement = document.createElement;
     vi.spyOn(document, 'createElement').mockImplementation((tagName) => {
       if (tagName === 'a') {
         return mockAnchor as any;
       }
-      return document.createElement(tagName);
+      return originalCreateElement.call(document, tagName);
     });
 
     vi.spyOn(document.body, 'appendChild').mockImplementation(mockAppendChild);

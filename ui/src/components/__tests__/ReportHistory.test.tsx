@@ -83,8 +83,13 @@ describe('ReportHistory', () => {
   });
 
   it('renders report history with loading state', async () => {
-    render(<ReportHistory />);
-    
+    render(<ApprovalReportsPage />);
+
+    // Wait for loading to complete
+    await waitFor(() => {
+      expect(screen.queryByText(/loading|Loading/i)).not.toBeInTheDocument();
+    });
+
     expect(screen.getByText('Loading reports...')).toBeInTheDocument();
     
     await waitFor(() => {

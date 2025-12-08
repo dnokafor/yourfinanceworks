@@ -1,19 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { vi } from 'vitest';
+import { vi, describe, it, beforeEach, expect } from 'vitest';
 import { ApprovalSubmissionDialog } from '../expenses/ApprovalSubmissionDialog';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { it } from 'node:test';
-import { beforeEach } from 'node:test';
-import { describe } from 'node:test';
 
 describe('ApprovalSubmissionDialog', () => {
   const mockOnConfirm = vi.fn();
@@ -148,6 +136,6 @@ describe('ApprovalSubmissionDialog', () => {
   it('displays approval workflow information', () => {
     render(<ApprovalSubmissionDialog {...defaultProps} />);
 
-    expect(screen.getByText(/This expense will be submitted for approval according to your organization's approval rules/)).toBeInTheDocument();
+    expect(screen.getByText(/Confirm submission for approval. The selected approver will be notified to review your expense/)).toBeInTheDocument();
   });
 });

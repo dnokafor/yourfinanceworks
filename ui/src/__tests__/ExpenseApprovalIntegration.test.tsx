@@ -1,7 +1,7 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, expect, it, beforeEach, describe } from 'vitest';
-import { BrowserRouter } from 'react-router-dom';
+import { render } from '../test/test-utils';
 import ExpensesNew from '../pages/ExpensesNew';
 import ExpensesEdit from '../pages/ExpensesEdit';
 import * as api from '../lib/api';
@@ -17,6 +17,7 @@ vi.mock('../lib/api', () => ({
   },
   approvalApi: {
     submitForApproval: vi.fn(),
+    getApprovers: vi.fn(),
   },
   linkApi: {
     getInvoicesBasic: vi.fn(),
@@ -41,16 +42,41 @@ vi.mock('sonner', () => ({
   },
 }));
 
-// Mock react-i18next
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string, options?: any) => options?.defaultValue || key,
+// Mock feature context
+vi.mock('../contexts/FeatureContext', () => ({
+  useFeatures: () => ({
+    isFeatureEnabled: vi.fn(() => true),
   }),
+  FeatureProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+// Mock AI notification
+vi.mock('../lib/ai-notification', () => ({
+  addAINotification: vi.fn(),
+}));
+
+// Mock components that might be complex
+vi.mock('../components/inventory/InventoryPurchaseForm', () => ({
+  InventoryPurchaseForm: ({ onPurchaseItemsChange }: any) => (
+    <div data-testid="inventory-purchase-form">
+      <button onClick={() => onPurchaseItemsChange([])}>Mock Purchase Form</button>
+    </div>
+  ),
+}));
+
+vi.mock('../components/inventory/InventoryConsumptionForm', () => ({
+  InventoryConsumptionForm: ({ onConsumptionItemsChange }: any) => (
+    <div data-testid="inventory-consumption-form">
+      <button onClick={() => onConsumptionItemsChange([])}>Mock Consumption Form</button>
+    </div>
+  ),
 }));
 
 const renderWithRouter = (component: React.ReactElement) => {
-  return render(<BrowserRouter>{component}</BrowserRouter>);
+  return render(component);
 };
+
+// Also remove the BrowserRouter import since it's now handled by renderWithProviders
 
 describe('Expense Approval Integration', () => {
   beforeEach(() => {
@@ -69,6 +95,10 @@ describe('Expense Approval Integration', () => {
     (api.expenseApi.listAttachments as any).mockResolvedValue([]);
     (api.approvalApi.submitForApproval as any).mockResolvedValue([
       { id: 1, expense_id: 123, status: 'pending', approval_level: 1 }
+    ]);
+    (api.approvalApi.getApprovers as any).mockResolvedValue([
+      { id: 456, name: 'John Doe', email: 'john@example.com' },
+      { id: 789, name: 'Jane Smith', email: 'jane@example.com' }
     ]);
   });
 

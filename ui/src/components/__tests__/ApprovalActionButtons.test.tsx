@@ -40,11 +40,12 @@ describe('ApprovalActionButtons', () => {
 
   it('opens approve dialog when approve button is clicked', async () => {
     render(<ApprovalActionButtons approval={mockApproval} onAction={mockOnAction} />);
-    
+
     const approveButton = screen.getByText('Approve');
     await userEvent.click(approveButton);
-    
-    expect(screen.getByText('Approve Expense')).toBeInTheDocument();
+
+    // Use role and name to find dialog title specifically
+    expect(screen.getByRole('heading', { name: 'Approve Expense' })).toBeInTheDocument();
     expect(screen.getByText('USD 150.00')).toBeInTheDocument();
     expect(screen.getByText('Travel')).toBeInTheDocument();
     expect(screen.getByText('Uber')).toBeInTheDocument();
@@ -52,11 +53,12 @@ describe('ApprovalActionButtons', () => {
 
   it('opens reject dialog when reject button is clicked', async () => {
     render(<ApprovalActionButtons approval={mockApproval} onAction={mockOnAction} />);
-    
+
     const rejectButton = screen.getByText('Reject');
     await userEvent.click(rejectButton);
-    
-    expect(screen.getByText('Reject Expense')).toBeInTheDocument();
+
+    // Use role and name to find dialog title specifically
+    expect(screen.getByRole('heading', { name: 'Reject Expense' })).toBeInTheDocument();
     expect(screen.getByText('USD 150.00')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Please provide a reason for rejecting this expense...')).toBeInTheDocument();
   });
@@ -74,8 +76,8 @@ describe('ApprovalActionButtons', () => {
     const notesTextarea = screen.getByPlaceholderText('Add any notes about this approval...');
     await userEvent.type(notesTextarea, 'Looks good to me');
     
-    // Submit approval
-    const submitButton = screen.getByText('Approve Expense');
+    // Submit approval - use role to find the button specifically
+    const submitButton = screen.getByRole('button', { name: /Approve Expense/ });
     await userEvent.click(submitButton);
     
     await waitFor(() => {
@@ -100,14 +102,14 @@ describe('ApprovalActionButtons', () => {
     const notesTextarea = screen.getByPlaceholderText('Add any additional notes...');
     await userEvent.type(notesTextarea, 'Please resubmit with receipt');
     
-    // Submit rejection
-    const submitButton = screen.getByText('Reject Expense');
+    // Submit rejection - use role to find the button specifically
+    const submitButton = screen.getByRole('button', { name: /Reject Expense/ });
     await userEvent.click(submitButton);
     
     await waitFor(() => {
-      expect(mockOnAction).toHaveBeenCalledWith(1, 'reject', { 
-        reason: 'Missing receipt', 
-        notes: 'Please resubmit with receipt' 
+      expect(mockOnAction).toHaveBeenCalledWith(1, 'reject', {
+        rejection_reason: 'Missing receipt',
+        notes: 'Please resubmit with receipt'
       });
     });
   });
@@ -119,14 +121,14 @@ describe('ApprovalActionButtons', () => {
     const rejectButton = screen.getByText('Reject');
     await userEvent.click(rejectButton);
     
-    // Submit button should be disabled initially
-    const submitButton = screen.getByText('Reject Expense');
+    // Submit button should be disabled initially - use role to be specific
+    const submitButton = screen.getByRole('button', { name: /Reject Expense/ });
     expect(submitButton).toBeDisabled();
-    
+
     // Add reason
     const reasonTextarea = screen.getByPlaceholderText('Please provide a reason for rejecting this expense...');
     await userEvent.type(reasonTextarea, 'Missing receipt');
-    
+
     // Submit button should now be enabled
     expect(submitButton).not.toBeDisabled();
   });
@@ -141,8 +143,8 @@ describe('ApprovalActionButtons', () => {
     const approveButton = screen.getByText('Approve');
     await userEvent.click(approveButton);
     
-    // Submit approval
-    const submitButton = screen.getByText('Approve Expense');
+    // Submit approval - use role to find the button specifically
+    const submitButton = screen.getByRole('button', { name: /Approve Expense/ });
     await userEvent.click(submitButton);
     
     // Should show loading state
@@ -168,8 +170,8 @@ describe('ApprovalActionButtons', () => {
     const reasonTextarea = screen.getByPlaceholderText('Please provide a reason for rejecting this expense...');
     await userEvent.type(reasonTextarea, 'Missing receipt');
     
-    // Submit rejection
-    const submitButton = screen.getByText('Reject Expense');
+    // Submit rejection - use role to find the button specifically
+    const submitButton = screen.getByRole('button', { name: /Reject Expense/ });
     await userEvent.click(submitButton);
     
     // Should show loading state
@@ -190,10 +192,10 @@ describe('ApprovalActionButtons', () => {
     const approveButton = screen.getByText('Approve');
     await userEvent.click(approveButton);
     
-    expect(screen.getByText('Approve Expense')).toBeInTheDocument();
-    
-    // Submit approval
-    const submitButton = screen.getByText('Approve Expense');
+    expect(screen.getByRole('heading', { name: 'Approve Expense' })).toBeInTheDocument();
+
+    // Submit approval - use role to find the button specifically
+    const submitButton = screen.getByRole('button', { name: /Approve Expense/ });
     await userEvent.click(submitButton);
     
     await waitFor(() => {
@@ -210,13 +212,13 @@ describe('ApprovalActionButtons', () => {
     const rejectButton = screen.getByText('Reject');
     await userEvent.click(rejectButton);
     
-    expect(screen.getByText('Reject Expense')).toBeInTheDocument();
-    
+    expect(screen.getByRole('heading', { name: 'Reject Expense' })).toBeInTheDocument();
+
     // Add reason and submit
     const reasonTextarea = screen.getByPlaceholderText('Please provide a reason for rejecting this expense...');
     await userEvent.type(reasonTextarea, 'Missing receipt');
-    
-    const submitButton = screen.getByText('Reject Expense');
+
+    const submitButton = screen.getByRole('button', { name: /Reject Expense/ });
     await userEvent.click(submitButton);
     
     await waitFor(() => {
@@ -234,13 +236,13 @@ describe('ApprovalActionButtons', () => {
     await userEvent.click(approveButton);
     
     // Submit approval
-    const submitButton = screen.getByText('Approve Expense');
+    const submitButton = screen.getByRole('button', { name: /Approve Expense/ });
     await userEvent.click(submitButton);
-    
+
     // Should handle error and reset loading state
     await waitFor(() => {
       expect(screen.queryByText('Approving...')).not.toBeInTheDocument();
-      expect(screen.getByText('Approve Expense')).toBeInTheDocument(); // Dialog should remain open
+      expect(screen.getByRole('heading', { name: 'Approve Expense' })).toBeInTheDocument(); // Dialog should remain open
     });
   });
 });

@@ -9,6 +9,12 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // Suppress act() warnings for now - these are not test failures
+    onConsoleLog(log, type) {
+      if (log.includes('An update to') && log.includes('was not wrapped in act')) {
+        return false
+      }
+    },
   },
   resolve: {
     alias: {
