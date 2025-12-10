@@ -205,28 +205,7 @@ export function InvoiceFormWithApproval({
         </div>
       )}
 
-      {/* Action Buttons - Only show if clients exist */}
-      {!loadingClients && hasClients && (
-        <div className="flex gap-2 px-6 pb-6">
-          <Button
-            variant="outline"
-            onClick={handleCancel}
-            disabled={isSubmitting}
-          >
-            {t('common.cancel', 'Cancel')}
-          </Button>
-          <Button
-            onClick={handleFormSubmit}
-            disabled={isSubmitting || (submitForApproval && !selectedApproverId)}
-          >
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isSubmitting
-              ? t('common.saving', 'Saving...')
-              : (isEdit ? t('invoices.update_invoice', 'Update Invoice') : t('invoices.create_invoice', 'Create Invoice'))
-            }
-          </Button>
-        </div>
-      )}
+
     </>
   );
 }

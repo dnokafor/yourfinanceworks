@@ -297,12 +297,7 @@ export function InvoiceForm({
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            {isEdit ? t('invoices.edit_invoice') : t('invoices.create_invoice')}
-          </CardTitle>
-        </CardHeader>
+      <Card className="pt-6">
         <CardContent>
           <Form {...invoiceForm.form}>
             <form onSubmit={invoiceForm.form.handleSubmit(onSubmit, (errors) => {
