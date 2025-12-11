@@ -751,6 +751,57 @@ class LicenseService:
         features = payload.get("features", [])
         exp_timestamp = payload.get("exp")
         expires_at = datetime.fromtimestamp(exp_timestamp, tz=timezone.utc) if exp_timestamp else None
+
+        # Verify installation ID matches
+        license_installation_id = payload.get("installation_id")
+        if not license_installation_id:
+            # Check if installation_id is in metadata (for backward compatibility)
+            metadata = payload.get("metadata", {})
+            license_installation_id = metadata.get("installation_id")
+
+        if not license_installation_id:
+            # Log failed activation - missing installation ID
+            self._log_validation(
+                installation=installation,
+                validation_type="activation",
+                validation_result="failed",
+                license_key=license_key,
+                error_code="MISSING_INSTALLATION_ID",
+                error_message="License is missing installation_id field",
+                user_id=user_id,
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
+
+            return {
+                "success": False,
+                "message": "License is missing installation identifier",
+                "features": None,
+                "expires_at": None,
+                "error": "MISSING_INSTALLATION_ID"
+            }
+
+        if license_installation_id != installation.installation_id:
+            # Log failed activation - installation ID mismatch
+            self._log_validation(
+                installation=installation,
+                validation_type="activation",
+                validation_result="failed",
+                license_key=license_key,
+                error_code="INSTALLATION_ID_MISMATCH",
+                error_message=f"License installation_id '{license_installation_id}' does not match current installation '{installation.installation_id}'",
+                user_id=user_id,
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
+
+            return {
+                "success": False,
+                "message": "This license is not valid for this installation",
+                "features": None,
+                "expires_at": None,
+                "error": "INSTALLATION_ID_MISMATCH"
+            }
         
         # Update installation record
         now = datetime.now(timezone.utc)
