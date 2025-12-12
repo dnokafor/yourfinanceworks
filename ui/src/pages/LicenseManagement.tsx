@@ -19,6 +19,7 @@ interface LicenseInfo {
   is_licensed: boolean;
   is_personal: boolean;
   is_trial: boolean;
+  license_type: string | null;  // Add license_type from JWT payload
   trial_info: {
     is_trial: boolean;
     trial_active: boolean;
@@ -270,7 +271,12 @@ export const LicenseManagement: React.FC = () => {
             <div className="space-y-2">
               <Label className="text-sm font-medium text-muted-foreground">{t('license.status.usageType')}</Label>
               <div className="text-sm capitalize">
-                {licenseInfo?.usage_type || 'Not Selected'}
+                {licenseInfo?.is_personal ? 'Core' :
+                 licenseInfo?.license_type === 'trial' ? 'Trial' :
+                 licenseInfo?.license_type === 'commercial' ? 'Commercial' :
+                 licenseInfo?.is_trial ? 'Trial' :
+                 licenseInfo?.is_licensed ? 'Commercial' :
+                 'Not Selected'}
               </div>
             </div>
 

@@ -2666,7 +2666,7 @@
       "title": "License Status",
       "description": "View your current license information and manage your subscription",
       "installationId": "Installation ID",
-      "usageType": "Usage Type",
+      "usageType": "Type",
       "trialPeriod": "Trial Period",
       "daysRemaining": "Days Remaining",
       "expiration": "License Expiration",

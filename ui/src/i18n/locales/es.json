@@ -2612,7 +2612,7 @@
       "title": "Estado de la Licencia",
       "description": "Vea su información de licencia actual y administre su suscripción",
       "installationId": "ID de Instalación",
-      "usageType": "Tipo de Uso",
+      "usageType": "Tipo",
       "trialPeriod": "Período de Prueba",
       "daysRemaining": "Días Restantes",
       "expiration": "Expiración de Licencia",

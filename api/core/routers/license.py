@@ -84,6 +84,7 @@ class LicenseStatusResponse(BaseModel):
     is_licensed: bool
     is_personal: bool
     is_trial: bool
+    license_type: Optional[str] = None
     trial_info: dict
     license_info: Optional[dict] = None
     enabled_features: list

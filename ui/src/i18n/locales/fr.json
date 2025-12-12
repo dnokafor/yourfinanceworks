@@ -2546,7 +2546,7 @@
       "title": "Statut de la Licence",
       "description": "Voir vos informations de licence actuelles et gérer votre abonnement",
       "installationId": "ID d'Installation",
-      "usageType": "Type d'Utilisation",
+      "usageType": "Type",
       "trialPeriod": "Période d'Essai",
       "daysRemaining": "Jours Restants",
       "expiration": "Expiration de la Licence",

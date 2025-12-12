@@ -1021,6 +1021,24 @@ class LicenseService:
         trial_status = self.get_trial_status()
         enabled_features = self.get_enabled_features()
         
+        # Get license_type from JWT payload if available
+        license_type = None
+        if installation.license_key:
+            try:
+                # First try to decode without verification to get the license_type
+                # This is safer than full verification for display purposes
+                unverified_payload = jwt.decode(installation.license_key, options={"verify_signature": False})
+                license_type = unverified_payload.get("license_type")
+
+                # Also try full verification to ensure the license is valid
+                verification = self.verify_license(installation.license_key)
+                if not verification["valid"]:
+                    # License is invalid, don't trust the unverified payload
+                    license_type = None
+            except Exception as e:
+                # If anything fails, we can't extract license_type
+                license_type = None
+
         return {
             "installation_id": installation.installation_id,
             "license_status": installation.license_status,
@@ -1029,6 +1047,7 @@ class LicenseService:
             "is_licensed": installation.license_status == "active",
             "is_personal": installation.license_status == "personal",
             "is_trial": installation.license_status == "trial",
+            "license_type": license_type,  # Add the raw license_type from JWT
             "trial_info": trial_status,
             "license_info": {
                 "activated_at": installation.license_activated_at,
