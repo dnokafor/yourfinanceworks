@@ -466,21 +466,26 @@ class LicenseService:
         user_agent: Optional[str] = None
     ):
         """Log license validation attempt"""
-        log_entry = LicenseValidationLog(
-            installation_id=installation.id,
-            validation_type=validation_type,
-            validation_result=validation_result,
-            license_key_hash=self._get_license_key_hash(license_key) if license_key else None,
-            features_validated=features,
-            expiration_date=expiration_date,
-            error_code=error_code,
-            error_message=error_message,
-            user_id=user_id,
-            ip_address=ip_address,
-            user_agent=user_agent
-        )
-        self.db.add(log_entry)
-        self.db.commit()
+        try:
+            log_entry = LicenseValidationLog(
+                installation_id=installation.id,
+                validation_type=validation_type,
+                validation_result=validation_result,
+                license_key_hash=self._get_license_key_hash(license_key) if license_key else None,
+                features_validated=features,
+                expiration_date=expiration_date,
+                error_code=error_code,
+                error_message=error_message,
+                user_id=user_id,
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
+            self.db.add(log_entry)
+            self.db.commit()
+        except Exception as e:
+            # Log the error but don't fail the operation
+            logger.error(f"Failed to log promotion to tenant audit log: {e}")
+            self.db.rollback()
 
     # ==================== Usage Type Selection ====================
 

@@ -76,7 +76,7 @@ if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
 AZURE_CLIENT_ID = os.getenv("AZURE_CLIENT_ID")
 AZURE_CLIENT_SECRET = os.getenv("AZURE_CLIENT_SECRET")
 AZURE_TENANT_ID = os.getenv("AZURE_TENANT_ID", "common")  # 'common' for multi-tenant, or specific tenant ID
-AZURE_OAUTH_SCOPES = ["openid", "email", "profile"]
+AZURE_OAUTH_SCOPES = []  # Azure AD automatically includes openid, email, profile
 
 # Azure AD OAuth client using MSAL
 azure_oauth_client = None
@@ -635,8 +635,9 @@ async def azure_login(request: Request, next: Optional[str] = None):
         raise HTTPException(status_code=503, detail="Azure AD SSO is not configured")
 
     # Determine redirect URI (callback)
-    base_url = str(request.base_url).rstrip("/")
-    callback_url = f"{base_url}/api/v1/auth/azure/callback"
+    # Use UI_BASE_URL for external access (nginx on port 8080)
+    ui_base = os.getenv("UI_BASE_URL") or "http://localhost:8080"
+    callback_url = f"{ui_base}/api/v1/auth/azure/callback"
 
     # Generate state for CSRF protection
     state = secrets.token_urlsafe(32)
@@ -665,7 +666,8 @@ async def azure_callback(request: Request, code: Optional[str] = None, state: Op
         raise HTTPException(status_code=400, detail="Invalid or expired state")
 
     base_url = str(request.base_url).rstrip("/")
-    callback_url = f"{base_url}/api/v1/auth/azure/callback"
+    ui_base = os.getenv("UI_BASE_URL") or "http://localhost:8080"
+    callback_url = f"{ui_base}/api/v1/auth/azure/callback"
 
     # Exchange code for token using MSAL
     try:
