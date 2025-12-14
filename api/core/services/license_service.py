@@ -216,27 +216,27 @@ def create_symlinks_to_latest_version() -> None:
 def load_public_keys() -> Dict[str, str]:
     """
     Load public keys from files in the keys directory.
-    
+
     If no keys are found, automatically generates a new key pair.
     Automatically creates symlinks from non-versioned names to latest version.
-    
+
     Looks for files matching pattern: public_key_*.pem or public_key.pem
     The key version is extracted from the filename.
-    
+
     Also supports loading from environment variables:
     - LICENSE_PUBLIC_KEY_V2, LICENSE_PUBLIC_KEY_V3, etc.
-    
+
     Returns:
         Dict mapping key version to public key content
     """
     public_keys = {}
-    
+
     # Create symlinks to latest version if versioned keys exist
     try:
         create_symlinks_to_latest_version()
     except Exception as e:
         print(f"Warning: Failed to create symlinks: {e}")
-    
+
     # Load from environment variables first (highest priority)
     for env_var, value in os.environ.items():
         if env_var.startswith("LICENSE_PUBLIC_KEY_"):
@@ -260,7 +260,7 @@ def load_public_keys() -> Dict[str, str]:
                     print(f"Loaded public key {version} from {key_file}")
                 except Exception as e:
                     print(f"Warning: Failed to load {key_file}: {e}")
-        
+
         # Also check for default public_key.pem (maps to DEFAULT_KEY_ID)
         default_key_file = KEYS_DIR / "public_key.pem"
         if default_key_file.exists() and DEFAULT_KEY_ID not in public_keys:
@@ -272,21 +272,21 @@ def load_public_keys() -> Dict[str, str]:
                 print(f"Loaded default public key as {DEFAULT_KEY_ID} from {default_key_file}")
             except Exception as e:
                 print(f"Warning: Failed to load {default_key_file}: {e}")
-    
+
     # Auto-generate keys if none found
     if not public_keys:
         print("\n" + "="*60)
         print("No license keys found - generating new key pair...")
         print("="*60 + "\n")
-        
+
         try:
             private_key, public_key = generate_key_pair()
             save_generated_keys(private_key, public_key, version=DEFAULT_KEY_ID)
-            
+
             # Use the generated public key
             public_keys[DEFAULT_KEY_ID] = public_key
             print(f"✓ Generated and loaded new key pair as version {DEFAULT_KEY_ID}")
-            
+
         except Exception as e:
             print(f"✗ Failed to generate keys: {e}")
             print("Please generate keys manually using: python api/scripts/generate_license_keys.py")
@@ -294,7 +294,7 @@ def load_public_keys() -> Dict[str, str]:
                 f"No license keys found and auto-generation failed: {e}\n"
                 "Please generate keys manually or provide them via environment variables."
             )
-    
+
     return public_keys
 
 
@@ -309,20 +309,20 @@ VALIDATION_CACHE_TTL_HOURS = 1
 
 class LicenseService:
     """Service for managing license verification and trial functionality"""
-    
+
     def __init__(self, db: Session):
         self.db = db
-    
+
     # ==================== License Verification ====================
-    
+
     def verify_license(self, license_key: str) -> Dict[str, Any]:
         """
         Verify a license key using JWT signature verification.
         Supports multiple public keys for key rotation.
-        
+
         Args:
             license_key: JWT license key to verify
-            
+
         Returns:
             Dict with verification result:
             {
@@ -349,27 +349,36 @@ class LicenseService:
                 "error": f"Unknown key ID: {key_id}. This license may be from an unsupported version.",
                 "error_code": "UNKNOWN_KEY_ID"
             }
-        
+
         try:
+            # Check if we should allow expired licenses for testing
+            allow_expired = os.getenv("ALLOW_EXPIRED_LICENSES", "false").lower() == "true"
+            
             # Decode and verify JWT signature with the correct key
-            payload = jwt.decode(
-                license_key,
-                public_key,
-                algorithms=["RS256"]
-            )
-            
-            # Check expiration date
-            exp_timestamp = payload.get("exp")
-            if exp_timestamp:
-                exp_date = datetime.fromtimestamp(exp_timestamp, tz=timezone.utc)
-                if datetime.now(timezone.utc) > exp_date:
-                    return {
-                        "valid": False,
-                        "payload": payload,
-                        "error": "License has expired",
-                        "error_code": "EXPIRED"
-                    }
-            
+            if allow_expired:
+                # For testing: decode without expiration verification, then check manually
+                payload = jwt.decode(
+                    license_key,
+                    public_key,
+                    algorithms=["RS256"],
+                    options={"verify_exp": False}  # Don't verify expiration automatically
+                )
+                
+                # Manual expiration check with warning
+                exp_timestamp = payload.get("exp")
+                if exp_timestamp:
+                    exp_date = datetime.fromtimestamp(exp_timestamp, tz=timezone.utc)
+                    if datetime.now(timezone.utc) > exp_date:
+                        import warnings
+                        warnings.warn("Expired license being activated (ALLOW_EXPIRED_LICENSES=true)", UserWarning)
+            else:
+                # Normal verification with automatic expiration checking
+                payload = jwt.decode(
+                    license_key,
+                    public_key,
+                    algorithms=["RS256"]
+                )
+
             # Verify required fields
             required_fields = ["customer_email", "features"]
             missing_fields = [f for f in required_fields if f not in payload]
@@ -380,15 +389,36 @@ class LicenseService:
                     "error": f"Missing required fields: {', '.join(missing_fields)}",
                     "error_code": "MALFORMED"
                 }
-            
+
             return {
                 "valid": True,
                 "payload": payload,
                 "error": None,
                 "error_code": None
             }
-            
+
         except jwt.ExpiredSignatureError:
+            # Check if we should allow expired licenses for testing
+            allow_expired = os.getenv("ALLOW_EXPIRED_LICENSES", "false").lower() == "true"
+            
+            if allow_expired:
+                # For testing: decode without verification to get the payload
+                try:
+                    payload = jwt.decode(
+                        license_key,
+                        options={"verify_signature": False, "verify_exp": False}
+                    )
+                    import warnings
+                    warnings.warn("Expired license being activated (ALLOW_EXPIRED_LICENSES=true)", UserWarning)
+                    return {
+                        "valid": True,
+                        "payload": payload,
+                        "error": None,
+                        "error_code": None
+                    }
+                except Exception:
+                    pass
+            
             return {
                 "valid": False,
                 "payload": None,
@@ -416,11 +446,11 @@ class LicenseService:
                 "error": f"License verification failed: {str(e)}",
                 "error_code": "VERIFICATION_ERROR"
             }
-    
+
     def _get_license_key_hash(self, license_key: str) -> str:
         """Generate SHA-256 hash of license key for logging"""
         return hashlib.sha256(license_key.encode()).hexdigest()
-    
+
     def _log_validation(
         self,
         installation: InstallationInfo,
@@ -451,9 +481,9 @@ class LicenseService:
         )
         self.db.add(log_entry)
         self.db.commit()
-    
+
     # ==================== Usage Type Selection ====================
-    
+
     def select_usage_type(
         self,
         usage_type: str,
@@ -463,13 +493,13 @@ class LicenseService:
     ) -> Dict[str, Any]:
         """
         Select usage type: personal (free) or business (30-day trial).
-        
+
         Args:
             usage_type: Either "personal" or "business"
             user_id: ID of user making the selection
             ip_address: IP address of request
             user_agent: User agent string
-            
+
         Returns:
             Dict with selection result
         """
@@ -479,9 +509,9 @@ class LicenseService:
                 "message": "Invalid usage type. Must be 'personal' or 'business'",
                 "error": "INVALID_USAGE_TYPE"
             }
-        
+
         installation = self._get_or_create_installation()
-        
+
         # Check if usage type already selected
         if installation.usage_type is not None:
             return {
@@ -489,20 +519,20 @@ class LicenseService:
                 "message": f"Usage type already selected as '{installation.usage_type}'",
                 "error": "ALREADY_SELECTED"
             }
-        
+
         now = datetime.now(timezone.utc)
         installation.usage_type = usage_type
         installation.usage_type_selected_at = now
-        
+
         if usage_type == "personal":
             # Personal use: free forever, all features enabled
             installation.license_status = "personal"
             installation.trial_start_date = None
             installation.trial_end_date = None
-            
+
             self.db.commit()
             self.db.refresh(installation)
-            
+
             # Log personal use selection
             self._log_validation(
                 installation=installation,
@@ -512,24 +542,24 @@ class LicenseService:
                 ip_address=ip_address,
                 user_agent=user_agent
             )
-            
+
             return {
                 "success": True,
                 "message": "Personal use selected. All features are available for free.",
                 "usage_type": "personal",
                 "license_status": "personal"
             }
-        
+
         else:  # business
             # Business use: 30-day trial
             trial_end = now + timedelta(days=TRIAL_DURATION_DAYS)
             installation.license_status = "trial"
             installation.trial_start_date = now
             installation.trial_end_date = trial_end
-            
+
             self.db.commit()
             self.db.refresh(installation)
-            
+
             # Log trial start
             self._log_validation(
                 installation=installation,
@@ -552,21 +582,21 @@ class LicenseService:
     def get_usage_type_status(self) -> Dict[str, Any]:
         """
         Get usage type selection status.
-        
+
         Returns:
             Dict with usage type information
         """
         installation = self._get_or_create_installation()
-        
+
         return {
             "usage_type": installation.usage_type,
             "usage_type_selected": installation.usage_type is not None,
             "usage_type_selected_at": installation.usage_type_selected_at.isoformat() if installation.usage_type_selected_at else None,
             "license_status": installation.license_status
         }
-    
+
     # ==================== Trial Management ====================
-    
+
     def _get_or_create_installation(self) -> InstallationInfo:
         """Get existing installation or create new one with invalid status"""
         installation = self.db.query(InstallationInfo).first()
@@ -602,34 +632,34 @@ class LicenseService:
             True if trial is active, False otherwise
         """
         installation = self._get_or_create_installation()
-        
+
         # If licensed or personal use, trial is not active
         if installation.license_status in ["active", "personal"]:
             return False
-        
+
         # If no trial dates set, trial is not active
         if not installation.trial_end_date:
             return False
-        
+
         now = datetime.now(timezone.utc)
-        
+
         # Check if trial extension exists
         if installation.trial_extended_until:
             trial_extended = installation.trial_extended_until
             if trial_extended.tzinfo is None:
                 trial_extended = trial_extended.replace(tzinfo=timezone.utc)
             return now <= trial_extended
-        
+
         # Check standard trial period
         trial_end = installation.trial_end_date
         if trial_end.tzinfo is None:
             trial_end = trial_end.replace(tzinfo=timezone.utc)
         return now <= trial_end
-    
+
     def get_trial_status(self) -> Dict[str, Any]:
         """
         Get detailed trial status information.
-        
+
         Returns:
             Dict with trial status:
             {
@@ -644,7 +674,7 @@ class LicenseService:
         """
         installation = self._get_or_create_installation()
         now = datetime.now(timezone.utc)
-        
+
         # If no trial dates, return inactive trial status
         if not installation.trial_end_date:
             return {
@@ -656,21 +686,21 @@ class LicenseService:
                 "in_grace_period": False,
                 "grace_period_end": None
             }
-        
+
         # Determine effective trial end date
         trial_end = installation.trial_extended_until or installation.trial_end_date
-        
+
         # Ensure trial_end is timezone-aware
         if trial_end.tzinfo is None:
             trial_end = trial_end.replace(tzinfo=timezone.utc)
-        
+
         # Calculate days remaining
         days_remaining = (trial_end - now).days if now <= trial_end else 0
-        
+
         # Check if in grace period
         grace_period_end = trial_end + timedelta(days=GRACE_PERIOD_DAYS)
         in_grace_period = trial_end < now <= grace_period_end
-        
+
         return {
             "is_trial": installation.license_status == "trial",
             "trial_active": now <= trial_end,
@@ -684,7 +714,7 @@ class LicenseService:
     def is_in_grace_period(self) -> bool:
         """
         Check if installation is in grace period (7 days after trial expiration).
-        
+
         Returns:
             True if in grace period, False otherwise
         """
@@ -702,7 +732,7 @@ class LicenseService:
     ) -> Dict[str, Any]:
         """
         Activate a license key and save to database.
-        
+
         Args:
             license_key: JWT license key to activate
             user_id: ID of user activating the license
@@ -721,9 +751,9 @@ class LicenseService:
         """
         # Verify license
         verification = self.verify_license(license_key)
-        
+
         installation = self._get_or_create_installation()
-        
+
         if not verification["valid"]:
             # Log failed activation
             self._log_validation(
@@ -737,7 +767,7 @@ class LicenseService:
                 ip_address=ip_address,
                 user_agent=user_agent
             )
-            
+
             return {
                 "success": False,
                 "message": verification["error"],
@@ -745,7 +775,7 @@ class LicenseService:
                 "expires_at": None,
                 "error": verification["error"]
             }
-        
+
         # Extract license information
         payload = verification["payload"]
         features = payload.get("features", [])
@@ -802,7 +832,7 @@ class LicenseService:
                 "expires_at": None,
                 "error": "INSTALLATION_ID_MISMATCH"
             }
-        
+
         # Update installation record
         now = datetime.now(timezone.utc)
         installation.license_key = license_key
@@ -813,20 +843,20 @@ class LicenseService:
         installation.customer_email = payload.get("customer_email")
         installation.customer_name = payload.get("customer_name")
         installation.organization_name = payload.get("organization_name")
-        
+
         # If usage type not set, set it to business (since they're activating a paid license)
         if not installation.usage_type:
             installation.usage_type = "business"
             installation.usage_type_selected_at = now
-        
+
         # Update validation cache
         installation.last_validation_at = now
         installation.last_validation_result = True
         installation.validation_cache_expires_at = now + timedelta(hours=VALIDATION_CACHE_TTL_HOURS)
-        
+
         self.db.commit()
         self.db.refresh(installation)
-        
+
         # Log successful activation
         self._log_validation(
             installation=installation,
@@ -839,7 +869,7 @@ class LicenseService:
             ip_address=ip_address,
             user_agent=user_agent
         )
-        
+
         return {
             "success": True,
             "message": "License activated successfully",
@@ -856,7 +886,7 @@ class LicenseService:
     ) -> Dict[str, Any]:
         """
         Deactivate the current license and revert to trial.
-        
+
         Args:
             user_id: ID of user deactivating the license
             ip_address: IP address of deactivation request
@@ -870,10 +900,10 @@ class LicenseService:
             }
         """
         installation = self._get_or_create_installation()
-        
+
         # Store old license key for logging
         old_license_key = installation.license_key
-        
+
         # Clear license information
         installation.license_key = None
         installation.license_activated_at = None
@@ -883,14 +913,14 @@ class LicenseService:
         installation.customer_email = None
         installation.customer_name = None
         installation.organization_name = None
-        
+
         # Clear validation cache
         installation.last_validation_at = None
         installation.last_validation_result = None
         installation.validation_cache_expires_at = None
-        
+
         self.db.commit()
-        
+
         # Log deactivation
         self._log_validation(
             installation=installation,
@@ -917,52 +947,63 @@ class LicenseService:
             List of feature IDs that are enabled
         """
         installation = self._get_or_create_installation()
-        
+
         # If personal use, only core features are enabled
         if installation.license_status == "personal":
             return ["core"]
-        
+
         # If in trial or grace period, all features are enabled
         if self.is_trial_active() or self.is_in_grace_period():
             return ["all"]  # Special value indicating all features available
-        
+
         # If licensed, return licensed features plus core
         if installation.license_status == "active" and installation.licensed_features:
             # Check if license is expired
+            is_expired = False
             if installation.license_expires_at:
                 expires_at = installation.license_expires_at
                 if expires_at.tzinfo is None:
                     expires_at = expires_at.replace(tzinfo=timezone.utc)
                 if datetime.now(timezone.utc) > expires_at:
-                    # License expired, update status
-                    installation.license_status = "expired"
-                    self.db.commit()
-                    return ["core"]  # Fallback to core on expiration? Or block? Assuming core is always free.
-            
+                    is_expired = True
+                    
+                    # Check if we should allow expired licenses for testing
+                    allow_expired = os.getenv("ALLOW_EXPIRED_LICENSES", "false").lower() == "true"
+                    
+                    if not allow_expired:
+                        # License expired, update status
+                        installation.license_status = "expired"
+                        self.db.commit()
+                        return ["core"]  # Fallback to core on expiration
+
+            # If license is expired, only return core features (even for testing)
+            if is_expired:
+                return ["core"]
+
             # Check validation cache
             now = datetime.now(timezone.utc)
             cache_valid = False
-            
+
             if installation.validation_cache_expires_at:
                 cache_expires = installation.validation_cache_expires_at
                 if cache_expires.tzinfo is None:
                     cache_expires = cache_expires.replace(tzinfo=timezone.utc)
                 cache_valid = now < cache_expires and installation.last_validation_result
-            
+
             # If cache is valid, return cached result
             if cache_valid:
                 return (installation.licensed_features or []) + ["core"]
-            
+
             # Cache expired or missing - re-verify license if we have a key
             if installation.license_key:
                 verification = self.verify_license(installation.license_key)
-                
+
                 # Update cache
                 installation.last_validation_at = now
                 installation.last_validation_result = verification["valid"]
                 installation.validation_cache_expires_at = now + timedelta(hours=VALIDATION_CACHE_TTL_HOURS)
                 self.db.commit()
-                
+
                 if verification["valid"]:
                     return (installation.licensed_features or []) + ["core"]
                 else:
@@ -976,51 +1017,179 @@ class LicenseService:
                         error_message=verification["error"]
                     )
                     return ["core"]  # Fallback to core if verification fails
-            
+
             # No license key but has licensed_features (shouldn't happen in production)
             # Trust the licensed_features since license hasn't expired
             return (installation.licensed_features or []) + ["core"]
-        
+
         # No active license or trial
         return []
     
     def has_feature(self, feature_id: str, tier: str = "commercial") -> bool:
         """
         Check if a specific feature is enabled.
-        
+
         Args:
             feature_id: Feature ID to check (e.g., "ai_invoice", "tax_integration")
             tier: License tier of the feature ("core" or "commercial")
-            
+
         Returns:
             True if feature is enabled, False otherwise
         """
         enabled_features = self.get_enabled_features()
-        
+
         # "all" means all features are enabled (trial/grace period)
         if "all" in enabled_features:
             return True
-            
+
         # If checking for a core feature, it's enabled if "core" is in the list
         if tier == "core":
             return "core" in enabled_features or "all" in enabled_features
         
         # For commercial features, check specific ID
         return feature_id in enabled_features
-    
+
+    def has_feature_for_gating(self, feature_id: str, tier: str = "commercial") -> bool:
+        """
+        Check if a specific feature is enabled for API gating purposes.
+        This method ignores ALLOW_EXPIRED_LICENSES and checks actual expiration status.
+
+        Args:
+            feature_id: Feature ID to check (e.g., "ai_invoice", "tax_integration")
+            tier: License tier of the feature ("core" or "commercial")
+
+        Returns:
+            True if feature is enabled, False otherwise
+        """
+        installation = self._get_or_create_installation()
+
+        # If personal use, only core features are enabled
+        if installation.license_status == "personal":
+            return tier == "core"
+
+        # If in trial or grace period, all features are enabled
+        if self.is_trial_active() or self.is_in_grace_period():
+            return True
+
+        # If licensed, check if actually expired (ignore ALLOW_EXPIRED_LICENSES)
+        if installation.license_status == "active" and installation.licensed_features:
+            # Always check actual expiration for gating
+            if installation.license_expires_at:
+                expires_at = installation.license_expires_at
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) > expires_at:
+                    return False  # Expired licenses cannot access features for gating
+
+            # License is active (not expired), check features
+            licensed_features = installation.licensed_features or []
+            if tier == "core":
+                return True  # Core features always available with active license
+            return feature_id in licensed_features
+
+        # No active license or trial
+        return False
+
+    def has_feature_read_only(self, feature_id: str, tier: str = "commercial") -> bool:
+        """
+        Check if a specific feature is enabled for read-only access.
+        This allows users to view existing resources even with expired licenses,
+        but blocks write operations.
+
+        Args:
+            feature_id: Feature ID to check (e.g., "cloud_storage", "ai_invoice")
+            tier: License tier of the feature ("core" or "commercial")
+
+        Returns:
+            True if feature is available for read-only access, False otherwise
+        """
+        installation = self._get_or_create_installation()
+
+        # If personal use, only core features are enabled
+        if installation.license_status == "personal":
+            return tier == "core"
+
+        # If in trial or grace period, all features are enabled
+        if self.is_trial_active() or self.is_in_grace_period():
+            return True
+
+        # If licensed (including expired), allow read access to previously licensed features
+        if installation.license_status in ["active", "expired"] and installation.licensed_features:
+            licensed_features = installation.licensed_features or []
+            if tier == "core":
+                return True  # Core features always available for read access
+            return feature_id in licensed_features
+
+        # No active license or trial
+        return False
+
     # ==================== Status Information ====================
     
+    def get_expired_features(self) -> List[str]:
+        """
+        Get list of features that were previously licensed but now expired.
+
+        This allows the frontend to show content for expired features with a 
+        renewal reminder, instead of completely hiding them.
+
+        Returns:
+            List of feature IDs that were licensed but now expired, empty list otherwise
+        """
+        installation = self._get_or_create_installation()
+
+        # Only return expired features if we had licensed features
+        if not installation.licensed_features:
+            return []
+
+        # Check if license is actually expired (ignore ALLOW_EXPIRED_LICENSES for this check)
+        if installation.license_expires_at:
+            expires_at = installation.license_expires_at
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) > expires_at:
+                return installation.licensed_features
+
+        # Also check if license status is explicitly set to expired
+        if installation.license_status == "expired":
+            return installation.licensed_features
+
+        return []
+
+    def is_license_expired(self) -> bool:
+        """
+        Check if the commercial license has expired.
+
+        Returns:
+            True if there was a license that is now expired, False otherwise
+        """
+        installation = self._get_or_create_installation()
+
+        # Explicitly expired status
+        if installation.license_status == "expired":
+            return True
+
+        # Check if license is marked active but actually expired
+        if installation.license_status == "active" and installation.license_expires_at:
+            expires_at = installation.license_expires_at
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) > expires_at:
+                return True
+
+        return False
+
+
     def get_license_status(self) -> Dict[str, Any]:
         """
         Get comprehensive license status information.
-        
+
         Returns:
             Dict with complete license status
         """
         installation = self._get_or_create_installation()
         trial_status = self.get_trial_status()
         enabled_features = self.get_enabled_features()
-        
+
         # Get license_type from JWT payload if available
         license_type = None
         if installation.license_key:
@@ -1039,6 +1208,10 @@ class LicenseService:
                 # If anything fails, we can't extract license_type
                 license_type = None
 
+        # Get expired features for showing data with renewal banners
+        expired_features = self.get_expired_features()
+        is_expired = self.is_license_expired()
+
         return {
             "installation_id": installation.installation_id,
             "license_status": installation.license_status,
@@ -1047,6 +1220,7 @@ class LicenseService:
             "is_licensed": installation.license_status == "active",
             "is_personal": installation.license_status == "personal",
             "is_trial": installation.license_status == "trial",
+            "is_license_expired": is_expired,  # True if license was active but now expired
             "license_type": license_type,  # Add the raw license_type from JWT
             "trial_info": trial_status,
             "license_info": {
@@ -1055,7 +1229,8 @@ class LicenseService:
                 "customer_email": installation.customer_email,
                 "customer_name": installation.customer_name,
                 "organization_name": installation.organization_name
-            } if installation.license_status == "active" else None,
+            } if installation.license_status in ["active", "expired"] else None,
             "enabled_features": enabled_features,
+            "expired_features": expired_features,  # Features that were licensed but now expired
             "has_all_features": "all" in enabled_features
         }

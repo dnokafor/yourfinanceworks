@@ -46,7 +46,7 @@ const Settings = () => {
   const isAdmin = currentUser?.role === 'admin';
 
   // Feature flags
-  const { isFeatureEnabled } = useFeatures();
+  const { isFeatureEnabled, isFeatureReadOnly, licenseStatus } = useFeatures();
 
   // Tax integration status
   const { status: taxIntegrationStatus, isEnabled: taxIntegrationEnabled } = useTaxIntegration();
@@ -1292,7 +1292,7 @@ const Settings = () => {
                   {isFeatureEnabled('tax_integration') && (
                     <TabsTrigger value="tax-integration" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.tax_integration')}</TabsTrigger>
                   )}
-                  {isFeatureEnabled('cloud_storage') && (
+                  {isFeatureReadOnly('cloud_storage') && (
                     <TabsTrigger value="export-destinations" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.export_destinations')}</TabsTrigger>
                   )}
                   <TabsTrigger value="license" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('license.tabTitle')}</TabsTrigger>

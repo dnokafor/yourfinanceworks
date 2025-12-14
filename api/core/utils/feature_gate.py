@@ -17,11 +17,11 @@ from core.services.license_service import LicenseService
 def check_feature(feature_id: str, db: Session, error_message: Optional[str] = None):
     """
     Check if a feature is enabled and raise HTTPException if not.
-    
+
     This is a helper function to be called inside endpoint functions after
     dependencies are resolved. Use this instead of the decorator for endpoints
     that need tenant context to be set first (like API key authenticated endpoints).
-    
+
     Usage:
         @router.post("/batch/upload")
         async def upload_batch(
@@ -29,22 +29,22 @@ def check_feature(feature_id: str, db: Session, error_message: Optional[str] = N
         ):
             check_feature("batch_processing", service.db)
             # ... rest of endpoint
-    
+
     Args:
         feature_id: Feature ID to check (e.g., "batch_processing")
         db: Database session (must have tenant context set)
         error_message: Optional custom error message
-        
+
     Raises:
         HTTPException: 402 Payment Required if feature is not licensed
     """
     license_service = LicenseService(db)
-    
-    if not license_service.has_feature(feature_id):
+
+    if not license_service.has_feature_for_gating(feature_id):
         # Get trial status for better error message
         trial_status = license_service.get_trial_status()
         license_status = license_service.get_license_status()
-        
+
         # Determine appropriate message
         if trial_status["is_trial"] and not trial_status["trial_active"]:
             if trial_status["in_grace_period"]:
@@ -66,11 +66,71 @@ def check_feature(feature_id: str, db: Session, error_message: Optional[str] = N
                 f"The '{feature_id}' feature requires a valid license. "
                 f"Please activate a license or start a trial."
             )
-        
+
         # Use custom message if provided
         if error_message:
             message = error_message
-        
+
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": "FEATURE_NOT_LICENSED",
+                "message": message,
+                "feature_id": feature_id,
+                "license_status": license_status["license_status"],
+                "trial_active": trial_status["trial_active"],
+                "in_grace_period": trial_status["in_grace_period"],
+                "upgrade_required": True
+            }
+        )
+
+
+def check_feature_read_only(feature_id: str, db: Session, error_message: Optional[str] = None):
+    """
+    Check if a feature is enabled for read-only access and raise HTTPException if not.
+    This allows users to view existing resources even with expired licenses.
+
+    Args:
+        feature_id: Feature ID to check (e.g., "cloud_storage", "batch_processing")
+        db: Database session (must have tenant context set)
+        error_message: Optional custom error message
+
+    Raises:
+        HTTPException: 402 Payment Required if feature is not licensed for read access
+    """
+    license_service = LicenseService(db)
+
+    if not license_service.has_feature_read_only(feature_id):
+        # Get trial status for better error message
+        trial_status = license_service.get_trial_status()
+        license_status = license_service.get_license_status()
+
+        # Determine appropriate message
+        if trial_status["is_trial"] and not trial_status["trial_active"]:
+            if trial_status["in_grace_period"]:
+                message = (
+                    f"Your trial has expired. You are in a grace period. "
+                    f"Please activate a license to continue viewing the '{feature_id}' resources."
+                )
+            else:
+                message = (
+                    f"Your trial has expired. Please activate a license to view the '{feature_id}' resources."
+                )
+        elif license_status["is_licensed"]:
+            message = (
+                f"The '{feature_id}' feature is not included in your current license. "
+                f"Please upgrade your license to access these resources."
+            )
+        else:
+            message = (
+                f"The '{feature_id}' feature requires a valid license. "
+                f"Please activate a license or start a trial."
+            )
+
+        # Use custom message if provided
+        if error_message:
+            message = error_message
+
         raise HTTPException(
             status_code=402,
             detail={
@@ -212,7 +272,7 @@ def feature_enabled(feature_id: str, db: Optional[Session] = None) -> bool:
     
     try:
         license_service = LicenseService(db)
-        return license_service.has_feature(feature_id)
+        return license_service.has_feature_for_gating(feature_id)
     finally:
         if close_db:
             db.close()

@@ -30,6 +30,7 @@ services:
     env_file:
       - api/.env
     environment:
+      - ALLOW_EXPIRED_LICENSES=${ALLOW_EXPIRED_LICENSES:-false}
       # Master database for tenant management
       - DATABASE_URL=postgresql://postgres:password@postgres-master:5432/invoice_master
       # JWT settings

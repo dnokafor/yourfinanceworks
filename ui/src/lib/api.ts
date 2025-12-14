@@ -962,9 +962,6 @@ export async function apiRequest<T>(
       throw new Error('Invalid JSON response from server');
     }
 
-    console.log('API Success response:', responseData);
-    console.log('API Response type:', typeof responseData);
-    console.log('API Response keys:', Object.keys(responseData || {}));
     return responseData;
   } catch (error) {
     console.error('API request failed:', error);

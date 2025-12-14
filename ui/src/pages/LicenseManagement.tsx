@@ -330,7 +330,7 @@ export const LicenseManagement: React.FC = () => {
       </Card>
 
       {/* License Activation Card */}
-      {(!licenseInfo?.is_licensed || licenseInfo.trial_info.in_grace_period) && (
+      {(!licenseInfo?.is_licensed || licenseInfo.trial_info.in_grace_period || (licenseInfo.is_licensed && licenseInfo.license_info?.expires_at && new Date(licenseInfo.license_info.expires_at) < new Date())) && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">

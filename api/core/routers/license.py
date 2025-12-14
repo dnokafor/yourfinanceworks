@@ -84,10 +84,12 @@ class LicenseStatusResponse(BaseModel):
     is_licensed: bool
     is_personal: bool
     is_trial: bool
+    is_license_expired: bool  # True if license was active but now expired
     license_type: Optional[str] = None
     trial_info: dict
     license_info: Optional[dict] = None
     enabled_features: list
+    expired_features: list  # Features that were licensed but now expired
     has_all_features: bool
 
 

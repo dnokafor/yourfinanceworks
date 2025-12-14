@@ -25,15 +25,19 @@ interface LicenseStatus {
   is_trial: boolean;
   trial_days_remaining?: number;
   is_licensed: boolean;
+  is_license_expired: boolean;  // True if license was active but now expired
   license_expires_at?: string;
   license_days_remaining?: number;
   in_grace_period: boolean;
+  expired_features: string[];   // Features that were licensed but now expired
 }
 
 interface FeatureContextType {
   features: FeatureFlags;
   licenseStatus: LicenseStatus | null;
   isFeatureEnabled: (featureId: string) => boolean;
+  isFeatureExpired: (featureId: string) => boolean;  // Check if feature was licensed but expired
+  isFeatureReadOnly: (featureId: string) => boolean;  // Check if feature is available for read-only access
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
@@ -51,7 +55,7 @@ export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       setLoading(true);
       setError(null);
-      
+
       // Check if user is authenticated before making the API call
       const token = localStorage.getItem('token');
       if (!token) {
@@ -78,23 +82,25 @@ export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setLoading(false);
         return;
       }
-      
+
       // Fetch actual license status with enabled features
       // This requires authentication and returns user's actual license
       const response = await api.get<{
         enabled_features: string[];
+        expired_features: string[];  // Features that were licensed but now expired
         has_all_features: boolean;
         trial_info: any;
         license_info: any;
         is_licensed: boolean;
         is_trial: boolean;
+        is_license_expired: boolean;  // True if license was active but now expired
         license_status: string;
       }>('/license/status');
-      
+
       // Convert enabled_features array to FeatureFlags object
       const enabledFeatures = response.enabled_features || [];
       const hasAllFeatures = response.has_all_features || enabledFeatures.includes('all');
-      
+
       // Build feature flags object
       const featureFlags: FeatureFlags = {
         ai_invoice: hasAllFeatures || enabledFeatures.includes('ai_invoice'),
@@ -114,9 +120,9 @@ export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ child
         email_integration: hasAllFeatures || enabledFeatures.includes('email_integration'),
         crm: false, // CRM removed from licensing
       };
-      
+
       setFeatures(featureFlags);
-      
+
       // Calculate license days remaining if we have an expiration date
       let licenseDaysRemaining: number | undefined = undefined;
       if (response.license_info?.expires_at) {
@@ -129,27 +135,37 @@ export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ child
           console.error('Failed to calculate license days remaining:', e);
         }
       }
-      
+
       // Build license status from response
       const licenseStatusData: LicenseStatus = {
         is_trial: response.is_trial || false,
         trial_days_remaining: response.trial_info?.days_remaining,
         is_licensed: response.is_licensed || false,
+        is_license_expired: response.is_license_expired || false,
         license_expires_at: response.license_info?.expires_at,
         license_days_remaining: licenseDaysRemaining,
         in_grace_period: response.trial_info?.in_grace_period || false,
+        expired_features: response.expired_features || [],
       };
-      
+
+      // Debug logging
+      console.log('FeatureContext: License status response:', {
+        enabled_features: response.enabled_features,
+        expired_features: response.expired_features,
+        is_license_expired: response.is_license_expired,
+        license_status: response.license_status
+      });
+
       setLicenseStatus(licenseStatusData);
     } catch (err) {
       console.error('Failed to fetch feature flags:', err);
-      
+
       // Don't set error state for auth errors - just use defaults
       // This prevents the UI from showing error messages on initial load
       if (!(err instanceof Error && err.message.includes('Authentication'))) {
         setError(err instanceof Error ? err.message : 'Failed to load features');
       }
-      
+
       // Set all features to false on error (safe defaults)
       setFeatures({
         ai_invoice: false,
@@ -177,23 +193,23 @@ export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   useEffect(() => {
     fetchFeatures();
-    
+
     // Listen for storage events (e.g., when token is set in another tab or after login)
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'token') {
         fetchFeatures();
       }
     };
-    
+
     window.addEventListener('storage', handleStorageChange);
-    
+
     // Also listen for a custom event that we can dispatch after login
     const handleAuthChange = () => {
       fetchFeatures();
     };
-    
+
     window.addEventListener('auth-changed', handleAuthChange);
-    
+
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('auth-changed', handleAuthChange);
@@ -204,12 +220,24 @@ export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return features[featureId] === true;
   };
 
+  const isFeatureExpired = (featureId: string): boolean => {
+    // Check if the feature was previously licensed but now expired
+    if (!licenseStatus) return false;
+    return licenseStatus.is_license_expired &&
+      licenseStatus.expired_features.includes(featureId);
+  };
+
+  const isFeatureReadOnly = (featureId: string): boolean => {
+    // Feature is available for read-only if it's currently enabled OR was previously licensed but expired
+    return isFeatureEnabled(featureId) || isFeatureExpired(featureId);
+  };
+
   const refetch = async () => {
     await fetchFeatures();
   };
 
   return (
-    <FeatureContext.Provider value={{ features, licenseStatus, isFeatureEnabled, loading, error, refetch }}>
+    <FeatureContext.Provider value={{ features, licenseStatus, isFeatureEnabled, isFeatureExpired, isFeatureReadOnly, loading, error, refetch }}>
       {children}
     </FeatureContext.Provider>
   );

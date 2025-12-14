@@ -1,7 +1,7 @@
 import React from 'react';
 import { useFeatures } from '@/contexts/FeatureContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Lock, AlertCircle } from 'lucide-react';
+import { Lock, AlertCircle, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 
@@ -11,6 +11,7 @@ interface FeatureGateProps {
   fallback?: React.ReactNode;
   showUpgradePrompt?: boolean;
   upgradeMessage?: string;
+  showExpiredContent?: boolean;  // If true, show content with renewal banner when expired
 }
 
 export const FeatureGate: React.FC<FeatureGateProps> = ({
@@ -19,8 +20,9 @@ export const FeatureGate: React.FC<FeatureGateProps> = ({
   fallback,
   showUpgradePrompt = false,
   upgradeMessage,
+  showExpiredContent = true,  // Default to showing expired content with banner
 }) => {
-  const { isFeatureEnabled, loading, licenseStatus } = useFeatures();
+  const { isFeatureEnabled, isFeatureExpired, loading, licenseStatus } = useFeatures();
 
   if (loading) {
     return (
@@ -30,11 +32,39 @@ export const FeatureGate: React.FC<FeatureGateProps> = ({
     );
   }
 
-  if (!isFeatureEnabled(feature)) {
+  // Check if this feature was previously licensed but has now expired
+  const featureIsExpired = isFeatureExpired(feature);
+  const featureIsEnabled = isFeatureEnabled(feature);
+
+  // If feature is expired and we should show expired content, display with renewal banner
+  if (featureIsExpired && showExpiredContent && !featureIsEnabled) {
+    return (
+      <>
+        <Alert className="border-amber-300 bg-amber-50 mb-4">
+          <AlertTriangle className="h-4 w-4 text-amber-600" />
+          <AlertTitle className="text-amber-900">License Expired</AlertTitle>
+          <AlertDescription className="text-amber-800">
+            <p className="mb-3">
+              Your license has expired. You can still view your existing data, but some features may be limited.
+              Please renew your license to continue using all features.
+            </p>
+            <div className="flex gap-2">
+              <Button asChild size="sm" variant="default">
+                <Link to="/settings?tab=license">Renew License</Link>
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+        {children}
+      </>
+    );
+  }
+
+  if (!featureIsEnabled) {
     if (showUpgradePrompt) {
       const defaultMessage = upgradeMessage || `This feature requires a license upgrade.`;
       const isTrialExpired = licenseStatus && licenseStatus.is_trial && (licenseStatus.trial_days_remaining || 0) <= 0;
-      const isLicenseExpired = licenseStatus && licenseStatus.is_licensed && (licenseStatus.license_days_remaining || 0) <= 0;
+      const isLicenseExpired = licenseStatus && licenseStatus.is_license_expired;
 
       return (
         <Alert className="border-amber-200 bg-amber-50">
@@ -64,6 +94,7 @@ export const FeatureGate: React.FC<FeatureGateProps> = ({
   return <>{children}</>;
 };
 
+
 interface FeatureAlertProps {
   feature: string;
   title?: string;
@@ -79,7 +110,7 @@ export const FeatureAlert: React.FC<FeatureAlertProps> = ({
 
   const defaultMessage = message || `The ${feature} feature is not available in your current plan.`;
   const isTrialExpired = licenseStatus && licenseStatus.is_trial && (licenseStatus.trial_days_remaining || 0) <= 0;
-  const isLicenseExpired = licenseStatus && licenseStatus.is_licensed && (licenseStatus.license_days_remaining || 0) <= 0;
+  const isLicenseExpired = licenseStatus && licenseStatus.is_license_expired;
 
   return (
     <Alert className="border-blue-200 bg-blue-50">

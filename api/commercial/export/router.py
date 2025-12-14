@@ -24,7 +24,7 @@ from core.schemas.export_destination import (
 )
 from core.utils.rbac import require_admin, require_non_viewer
 from core.utils.audit import log_audit_event
-from core.utils.feature_gate import check_feature
+from core.utils.feature_gate import check_feature, check_feature_read_only
 
 logger = logging.getLogger(__name__)
 
@@ -187,8 +187,8 @@ async def list_export_destinations(
     Includes connection test status.
     Supports pagination.
     """
-    # Check if cloud_storage feature is enabled
-    check_feature("cloud_storage", db)
+    # Check if cloud_storage feature is enabled for read access
+    check_feature_read_only("cloud_storage", db)
     
     try:
         # Get destinations
@@ -262,8 +262,8 @@ async def get_export_destination(
     
     Returns masked credentials.
     """
-    # Check if cloud_storage feature is enabled
-    check_feature("cloud_storage", db)
+    # Check if cloud_storage feature is enabled for read access
+    check_feature_read_only("cloud_storage", db)
     
     try:
         # Get destination
