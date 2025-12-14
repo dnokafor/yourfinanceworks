@@ -3,7 +3,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordBearer, HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 from typing import Optional, List, Dict, Any
 from collections import defaultdict, deque
 import time
@@ -60,7 +60,13 @@ security = HTTPBearer()
 # --- Google OAuth2 (SSO) setup ---
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-GOOGLE_OAUTH_SCOPES = ["openid", "email", "profile"]
+GOOGLE_OAUTH_SCOPES = [
+    "openid",
+    "email",
+    "profile",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile"
+]
 
 google_oauth_client: Optional[GoogleOAuth2] = None
 if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
@@ -471,10 +477,9 @@ async def google_login(request: Request, next: Optional[str] = None):
         raise HTTPException(status_code=503, detail="Google SSO is not configured")
 
     # Determine redirect URI (callback)
-    # Expect external UI at nginx 8080. Backend base is discovered from request.
-    # Using API path /api/v1/auth/google/callback
-    base_url = str(request.base_url).rstrip("/")
-    callback_url = f"{base_url}/api/v1/auth/google/callback"
+    # Use UI_BASE_URL for external access (nginx on port 8080)
+    ui_base = os.getenv("UI_BASE_URL") or "http://localhost:8080"
+    callback_url = f"{ui_base}/api/v1/auth/google/callback"
 
     # Generate state for CSRF protection
     state = secrets.token_urlsafe(32)
@@ -484,8 +489,7 @@ async def google_login(request: Request, next: Optional[str] = None):
     authorization_url = await google_oauth_client.get_authorization_url(
         redirect_uri=callback_url,
         scope=GOOGLE_OAUTH_SCOPES,
-        state=state,
-        extras={"access_type": "offline", "prompt": "consent"}
+        state=state
     )
     return RedirectResponse(url=authorization_url)
 
@@ -503,7 +507,8 @@ async def google_callback(request: Request, code: Optional[str] = None, state: O
         raise HTTPException(status_code=400, detail="Invalid or expired state")
 
     base_url = str(request.base_url).rstrip("/")
-    callback_url = f"{base_url}/api/v1/auth/google/callback"
+    ui_base = os.getenv("UI_BASE_URL") or "http://localhost:8080"
+    callback_url = f"{ui_base}/api/v1/auth/google/callback"
 
     # Exchange code for token
     try:
@@ -515,9 +520,29 @@ async def google_callback(request: Request, code: Optional[str] = None, state: O
     try:
         user_info = await google_oauth_client.get_id_email(token["access_token"])  # returns tuple (id, email, verified)
         google_id, email, verified_email = user_info
-    except Exception:
+        logger.info(f"Successfully fetched Google user info: {email}")
+    except Exception as e:
+        logger.error(f"get_id_email failed: {e}")
         # Fallback to userinfo endpoint if needed
-        raise HTTPException(status_code=400, detail="Failed to fetch Google user info")
+        try:
+            import httpx
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    "https://www.googleapis.com/oauth2/v2/userinfo",
+                    headers={"Authorization": f"Bearer {token['access_token']}"}
+                )
+                if response.status_code == 200:
+                    user_data = response.json()
+                    google_id = user_data.get("id")
+                    email = user_data.get("email")
+                    verified_email = user_data.get("verified_email", False)
+                    logger.info(f"Successfully fetched Google user info via userinfo endpoint: {email}")
+                else:
+                    logger.error(f"Userinfo endpoint failed: {response.status_code} - {response.text}")
+                    raise HTTPException(status_code=400, detail="Failed to fetch Google user info")
+        except Exception as e2:
+            logger.error(f"Both methods failed: {e2}")
+            raise HTTPException(status_code=400, detail="Failed to fetch Google user info")
 
     if not email:
         raise HTTPException(status_code=400, detail="Google account has no email")
@@ -594,8 +619,12 @@ async def google_callback(request: Request, code: Optional[str] = None, state: O
     # Compose URL: e.g., /oauth-callback?token=...&user=...
     import json, base64
     user_payload = UserRead.model_validate(user).model_dump()
-    # encode user payload compactly
-    user_b64 = base64.urlsafe_b64encode(json.dumps(user_payload).encode()).decode()
+    # Convert datetime objects to strings for JSON serialization
+    def datetime_serializer(obj):
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+    user_b64 = base64.urlsafe_b64encode(json.dumps(user_payload, default=datetime_serializer).encode()).decode()
     redirect_url = f"{ui_base}/oauth-callback?token={access_token}&user={user_b64}&next={redirect_next}"
     return RedirectResponse(url=redirect_url)
 
@@ -745,7 +774,12 @@ async def azure_callback(request: Request, code: Optional[str] = None, state: Op
     redirect_next = state_data.get("next") or "/dashboard"
     import json, base64
     user_payload = UserRead.model_validate(user).model_dump()
-    user_b64 = base64.urlsafe_b64encode(json.dumps(user_payload).encode()).decode()
+    # Convert datetime objects to strings for JSON serialization
+    def datetime_serializer(obj):
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+    user_b64 = base64.urlsafe_b64encode(json.dumps(user_payload, default=datetime_serializer).encode()).decode()
     redirect_url = f"{ui_base}/oauth-callback?token={access_token}&user={user_b64}&next={redirect_next}"
     return RedirectResponse(url=redirect_url)
 

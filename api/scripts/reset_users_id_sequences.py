@@ -25,7 +25,6 @@ def reset_users_id_sequence_for_tenant(tenant_db_url):
         # Try to reset the sequence (assume default name users_id_seq)
         try:
             conn.execute(text(f"ALTER SEQUENCE users_id_seq RESTART WITH {max_id + 1};"))
-            logger.info(f"users_id_seq in {tenant_db_url} reset to {max_id + 1}")
         except Exception as e:
             logger.error(f"Failed to reset sequence in {tenant_db_url}: {e}")
 
