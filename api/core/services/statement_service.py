@@ -9,7 +9,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import requests
+from sqlalchemy.orm import Session
 from core.services.ocr_service import track_ai_usage, track_ocr_usage
+from core.services.prompt_service import get_prompt_service
 from core.utils.file_validation import validate_file_path
 
 logger = logging.getLogger(__name__)
@@ -220,6 +222,7 @@ class UniversalBankTransactionExtractor:
     
     def __init__(self, 
                  ai_config: Dict[str, Any],
+                 db_session: Session,
                  temperature: float = 0.1,
                  chunk_size: int = 3000,
                  chunk_overlap: int = 150,
@@ -229,6 +232,7 @@ class UniversalBankTransactionExtractor:
         
         Args:
             ai_config: AI configuration dict with provider_name, model_name, api_key, provider_url
+            db_session: Database session for prompt management
             temperature: Temperature for LLM responses
             chunk_size: Size of text chunks
             chunk_overlap: Overlap between chunks
@@ -248,6 +252,8 @@ class UniversalBankTransactionExtractor:
         self.provider_url = ai_config.get("provider_url")
         self.temperature = temperature
         self.request_timeout = request_timeout
+        self.db_session = db_session
+        self.prompt_service = get_prompt_service(db_session)
         
         logger.info(f"🚀 Initializing UniversalBankTransactionExtractor: {self.provider_name} / {self.model_name}")
         
@@ -358,7 +364,44 @@ class UniversalBankTransactionExtractor:
     def _create_extraction_prompt(self) -> PromptTemplate:
         """Create extraction prompt optimized for universal providers"""
 
-        template = """You are a financial data extraction expert. Extract bank transactions from the text below.
+        # Try to get prompt from service
+        try:
+            prompt_template = self.prompt_service.get_prompt(
+                name="bank_transaction_extraction",
+                variables={},
+                provider_name=self.provider_name,
+                fallback_prompt="""You are a financial data extraction expert. Extract bank transactions from the text below.
+
+RULES:
+1. Look for dates, descriptions, and amounts
+2. Amounts with "-" or in parentheses are debits (money out)
+3. Positive amounts are credits (money in)
+4. Convert dates to YYYY-MM-DD format
+5. Extract merchant names clearly
+6. Only extract actual transactions, not headers or summaries
+
+TEXT:
+{text}
+
+Return ONLY a JSON array like this example:
+[
+  {{"date": "2024-01-15", "description": "GROCERY STORE", "amount": -45.67, "transaction_type": "debit", "balance": 1234.56}},
+  {{"date": "2024-01-16", "description": "SALARY DEPOSIT", "amount": 2500.00, "transaction_type": "credit", "balance": 3689.89}}
+]
+
+JSON:"""
+            )
+
+            # Create PromptTemplate object for compatibility
+            return PromptTemplate(
+                template=prompt_template,
+                input_variables=["text"]
+            )
+
+        except Exception as e:
+            logger.warning(f"Failed to get bank transaction extraction prompt from service: {e}")
+            # Fallback to hardcoded template
+            template = """You are a financial data extraction expert. Extract bank transactions from the text below.
 
 RULES:
 1. Look for dates, descriptions, and amounts
@@ -379,10 +422,10 @@ Return ONLY a JSON array like this example:
 
 JSON:"""
 
-        return PromptTemplate(
-            template=template,
-            input_variables=["text"]
-        )
+            return PromptTemplate(
+                template=template,
+                input_variables=["text"]
+            )
 
     def extract_transactions_with_litellm(self, text: str) -> List[Dict]:
         """Extract transactions using LiteLLM"""

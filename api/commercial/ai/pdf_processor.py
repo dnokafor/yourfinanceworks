@@ -12,6 +12,7 @@ from core.models.models import MasterUser
 from core.models.models_per_tenant import AIConfig as AIConfigModel, Client
 from core.routers.auth import get_current_user
 from core.services.ocr_service import track_ai_usage
+from core.services.prompt_service import get_prompt_service
 from core.utils.feature_gate import require_feature
 
 router = APIRouter(prefix="/invoices", tags=["pdf-processing"])
@@ -140,7 +141,8 @@ async def process_pdf_with_ai(pdf_path: str, ai_config) -> Dict[str, Any]:
             logger.info(f"Truncated text to {max_text_length} characters")
 
         # Prepare prompt for invoice data extraction
-        prompt = f"""Extract invoice information from this text and return ONLY valid JSON:
+        # Define fallback prompt once to avoid duplication
+        fallback_pdf_prompt = f"""Extract invoice information from this text and return ONLY valid JSON:
 
 {{
   "date": "YYYY-MM-DD",
@@ -162,6 +164,20 @@ Invoice text:
 {text}
 
 Respond with JSON only:"""
+
+        try:
+            # Get database session for prompt service
+            db = get_db()
+            prompt_service = get_prompt_service(db)
+            prompt = prompt_service.get_prompt(
+                name="pdf_invoice_extraction",
+                variables={"text": text},
+                provider_name=ai_config.provider_name,
+                fallback_prompt=fallback_pdf_prompt
+            )
+        except Exception as e:
+            logger.warning(f"Failed to get PDF invoice prompt from service: {e}")
+            prompt = fallback_pdf_prompt
 
         # Format model name for LiteLLM
         model_name = ai_config.model_name
@@ -220,7 +236,7 @@ Respond with JSON only:"""
             logger.info(f"AI response received: {response}")
         except Exception as e:
             logger.error(f"AI completion failed: {str(e)}")
-            
+
             # Provide specific error messages based on the likely cause
             error_msg = str(e).lower()
             if "connection" in error_msg or "timeout" in error_msg:
@@ -329,7 +345,7 @@ async def process_pdf(
 
         # Read file content first
         content = await pdf_file.read()
-        
+
         if not content:
             raise HTTPException(status_code=400, detail="Empty file provided")
 

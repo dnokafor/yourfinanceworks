@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 # Import unified AI configuration service
 from core.services.ai_config_service import AIConfigService
+from core.services.prompt_service import get_prompt_service
 
 def _get_ai_config_from_env() -> Optional[Dict[str, Any]]:
     """
@@ -536,7 +537,7 @@ def _looks_like_base64_encrypted(value: str) -> bool:
     return base64_pattern.match(value) and len(value) > 30
 
 
-async def _convert_raw_ocr_to_json(raw_content: str, model_name: str, provider_name: str, kwargs: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+async def _convert_raw_ocr_to_json(raw_content: str, model_name: str, provider_name: str, kwargs: Dict[str, Any], db_session: Session) -> Optional[Dict[str, Any]]:
     """
     Use LLM to convert raw OCR output (markdown, text, etc.) to structured JSON.
     This is a second-pass conversion when the first OCR attempt returns non-JSON format.
@@ -544,7 +545,8 @@ async def _convert_raw_ocr_to_json(raw_content: str, model_name: str, provider_n
     try:
         logger.info(f"Converting raw OCR output to JSON using {provider_name}/{model_name}")
         
-        conversion_prompt = (
+        # Define fallback prompt once to avoid duplication
+        fallback_ocr_prompt = (
             "You are a data extraction expert. The following is OCR output from a receipt or invoice in various formats (markdown, text, etc.). "
             "Convert it to a compact JSON object with these keys: amount, currency, expense_date (YYYY-MM-DD), category, vendor, tax_rate, tax_amount, total_amount, payment_method, reference_number, notes, receipt_timestamp (YYYY-MM-DD HH:MM:SS if available). "
             "For receipt_timestamp, use the exact time from the receipt if visible. "
@@ -552,14 +554,27 @@ async def _convert_raw_ocr_to_json(raw_content: str, model_name: str, provider_n
             "Return ONLY the JSON object, no markdown, no explanations.\n\n"
             f"OCR Output:\n{raw_content}"
         )
-        
+
+        # Try to get prompt from service
+        try:
+            prompt_service = get_prompt_service(db_session)
+            conversion_prompt = prompt_service.get_prompt(
+                name="ocr_data_conversion",
+                variables={"raw_content": raw_content},
+                provider_name=provider_name,
+                fallback_prompt=fallback_ocr_prompt
+            )
+        except Exception as e:
+            logger.warning(f"Failed to get OCR conversion prompt from service: {e}")
+            conversion_prompt = fallback_ocr_prompt
+
         messages = [
             {
                 "role": "user",
                 "content": conversion_prompt
             }
         ]
-        
+
         # Use the same LLM provider to convert
         if provider_name.lower() == "ollama":
             try:
@@ -584,20 +599,20 @@ async def _convert_raw_ocr_to_json(raw_content: str, model_name: str, provider_n
             except Exception as e:
                 logger.warning(f"LiteLLM conversion failed: {e}")
                 return None
-        
+
         if not content:
             logger.warning("Conversion LLM returned empty content")
             return None
-        
+
         # Try to extract JSON from the conversion response
         parsed = _extract_json_from_text(content)
         if parsed:
             logger.info("Successfully extracted JSON from conversion response")
             return parsed
-        
+
         logger.warning(f"Conversion response did not contain valid JSON: {content[:100]}")
         return None
-        
+
     except Exception as e:
         logger.error(f"Failed to convert raw OCR to JSON: {e}")
         return None
@@ -947,7 +962,7 @@ def cancel_ocr_tasks_for_expense(expense_id: int) -> None:
     # No-op: If using Kafka, consider producing a cancel message or managing an outbox/processing table.
 
 
-async def _run_ocr(file_path: str, custom_prompt: Optional[str] = None, ai_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+async def _run_ocr(file_path: str, custom_prompt: Optional[str] = None, ai_config: Optional[Dict[str, Any]] = None, db_session: Optional[Session] = None) -> Dict[str, Any]:
     """Run OCR using the configured AI provider. Supports multiple providers via LiteLLM."""
     try:
         # Use AI config from database if available, otherwise fallback to environment variables
@@ -1140,7 +1155,7 @@ async def _run_ocr(file_path: str, custom_prompt: Optional[str] = None, ai_confi
                         
                         # If we got raw markdown/text, try a second-pass LLM call to convert to JSON
                         logger.info("First-pass OCR returned non-JSON format, attempting second-pass conversion...")
-                        json_conversion_result = await _convert_raw_ocr_to_json(content, model_name, provider_name, kwargs)
+                        json_conversion_result = await _convert_raw_ocr_to_json(content, model_name, provider_name, kwargs, db_session)
                         if json_conversion_result and "error" not in json_conversion_result:
                             logger.info("Successfully converted raw OCR output to JSON via second-pass LLM")
                             return json_conversion_result

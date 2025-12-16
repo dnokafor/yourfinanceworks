@@ -147,14 +147,28 @@ class TenantDatabaseManager:
             # Create all tables in tenant database
             TenantBase.metadata.create_all(bind=tenant_engine)
             
+            # Create prompt templates tables (uses a different Base class)
+            # Import here to avoid circular imports
+            from core.models.prompt_templates import PromptTemplate, PromptUsageLog
+            from core.models.database import Base as DatabaseBase
+            DatabaseBase.metadata.create_all(bind=tenant_engine, tables=[
+                PromptTemplate.__table__,
+                PromptUsageLog.__table__
+            ])
+            logger.info(f"Created prompt templates tables for tenant {tenant_id}")
+
             # Initialize any default data if needed
             SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=tenant_engine)
             db = SessionLocal()
-            
+
             try:
                 # Add any tenant-specific initialization here
                 # For example, create default settings, currencies, etc.
                 self._create_tenant_defaults(db)
+
+                # Seed default prompt templates
+                self._seed_prompt_templates(db)
+
                 db.commit()
                 logger.info(f"Schema initialized for tenant {tenant_id}")
             finally:
@@ -187,6 +201,37 @@ class TenantDatabaseManager:
             currency = SupportedCurrency(**currency_data)
             db_session.add(currency)
     
+    def _seed_prompt_templates(self, db_session):
+        """Seed default prompt templates for a new tenant database"""
+        import json
+        from core.models.prompt_templates import PromptTemplate
+        from core.constants.default_prompts import DEFAULT_PROMPT_TEMPLATES
+
+        # Check if templates already exist
+        existing_count = db_session.query(PromptTemplate).count()
+        if existing_count > 0:
+            logger.info("Prompt templates already exist, skipping seed")
+            return
+
+        for template_data in DEFAULT_PROMPT_TEMPLATES:
+            # Create a copy to modify for DB insertion
+            db_template_data = template_data.copy()
+
+            # Serialize JSON fields
+            if isinstance(db_template_data.get('template_variables'), (list, dict)):
+                db_template_data['template_variables'] = json.dumps(db_template_data['template_variables'])
+
+            if isinstance(db_template_data.get('default_values'), (list, dict)):
+                db_template_data['default_values'] = json.dumps(db_template_data['default_values'])
+
+            if isinstance(db_template_data.get('provider_overrides'), (list, dict)):
+                db_template_data['provider_overrides'] = json.dumps(db_template_data['provider_overrides'])
+
+            template = PromptTemplate(**db_template_data)
+            db_session.add(template)
+
+        logger.info(f"Seeded {len(DEFAULT_PROMPT_TEMPLATES)} default prompt templates")
+
     def tenant_database_exists(self, tenant_id: int) -> bool:
         """Check if a tenant database exists"""
         try:
@@ -208,9 +253,9 @@ class TenantDatabaseManager:
             # Check if tenant database exists before creating connection
             if not self.tenant_database_exists(tenant_id):
                 raise ValueError(f"Tenant database does not exist for tenant {tenant_id}")
-            
+
             tenant_url = self.get_tenant_database_url(tenant_id)
-            
+
             self.tenant_engines[tenant_key] = create_engine(
                 tenant_url,
                 pool_pre_ping=True,
@@ -218,27 +263,27 @@ class TenantDatabaseManager:
                 pool_size=5,
                 max_overflow=10
             )
-            
+
             self.tenant_sessions[tenant_key] = sessionmaker(
                 autocommit=False,
                 autoflush=False,
                 bind=self.tenant_engines[tenant_key]
             )
-            
+
             logger.info(f"Created database connection for {tenant_key}")
-        
+
         return self.tenant_engines[tenant_key]
-    
+
     def get_tenant_session(self, tenant_id: int) -> sessionmaker:
         """Get database session factory for a tenant"""
         tenant_key = f"tenant_{tenant_id}"
-        
+
         if tenant_key not in self.tenant_sessions:
             # Check if tenant database exists before creating session
             if not self.tenant_database_exists(tenant_id):
                 raise ValueError(f"Tenant database does not exist for tenant {tenant_id}")
             self.get_tenant_engine(tenant_id)  # This will create both engine and session
-        
+
         return self.tenant_sessions[tenant_key]
     
     def drop_tenant_database(self, tenant_id: int) -> bool:
@@ -273,21 +318,21 @@ class TenantDatabaseManager:
 
     # Alias for compatibility with tests
     delete_tenant_database = drop_tenant_database
-    
+
     def migrate_tenant_schema(self, tenant_id: int):
         """Apply schema migrations to a tenant database"""
         try:
             tenant_engine = self.get_tenant_engine(tenant_id)
-            
+
             # Apply any pending migrations
             TenantBase.metadata.create_all(bind=tenant_engine)
-            
+
             logger.info(f"Schema migration completed for tenant {tenant_id}")
-            
+
         except Exception as e:
             logger.error(f"Failed to migrate schema for tenant {tenant_id}: {e}")
             raise
-    
+
     def get_all_tenant_databases(self) -> list:
         """Get list of all tenant database names"""
         try:
@@ -299,10 +344,10 @@ class TenantDatabaseManager:
         except Exception as e:
             logger.error(f"Failed to get tenant databases: {e}")
             return []
-    
+
     def get_existing_tenant_ids(self) -> list:
         """Get list of tenant IDs that have both master record and database
-        
+
         Optimized to use a single JOIN query instead of N+1 queries
         """
         try:
@@ -310,7 +355,7 @@ class TenantDatabaseManager:
             master_session_factory = self.master_session
             if master_session_factory is None:
                 return []
-            
+
             master_db = master_session_factory()
             try:
                 # Use a single query to get active tenants that have databases
@@ -329,7 +374,7 @@ class TenantDatabaseManager:
                 return existing_tenant_ids
             finally:
                 master_db.close()
-            
+
         except Exception as e:
             logger.error(f"Failed to get existing tenant IDs: {e}")
             # Fallback to old method if the optimized query fails
@@ -340,7 +385,7 @@ class TenantDatabaseManager:
                     master_tenant_ids = [row[0] for row in tenant_rows]
                 finally:
                     master_db.close()
-                
+
                 # Filter to only those with existing databases
                 existing_tenant_ids = []
                 for tenant_id in master_tenant_ids:
@@ -348,23 +393,23 @@ class TenantDatabaseManager:
                         existing_tenant_ids.append(tenant_id)
                     else:
                         logger.warning(f"Tenant {tenant_id} exists in master but database is missing")
-                
+
                 return existing_tenant_ids
             except Exception as fallback_error:
                 logger.error(f"Fallback method also failed: {fallback_error}")
                 return []
-    
+
     def close_all_connections(self):
         """Close all database connections"""
         for engine in self.tenant_engines.values():
             engine.dispose()
-        
+
         if self.master_engine:
             self.master_engine.dispose()
-        
+
         self.tenant_engines.clear()
         self.tenant_sessions.clear()
-        
+
         logger.info("All database connections closed")
 
     def terminate_db_connections(self, db_name):

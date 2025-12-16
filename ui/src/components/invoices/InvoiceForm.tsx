@@ -24,7 +24,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CurrencySelector } from "@/components/ui/currency-selector";
-import { invoiceApi, paymentApi, Invoice } from "@/lib/api";
+import { invoiceApi, paymentApi, Invoice, approvalApi } from "@/lib/api";
 import { InvoicePDF } from "./InvoicePDF";
 import { TemplateSelector } from "./TemplateSelector";
 import { apiRequest } from "@/lib/api";
@@ -93,6 +93,20 @@ export function InvoiceForm({
     setClients: (clients) => invoiceForm.setClients(clients),
     tenantInfo: invoiceForm.tenantInfo
   });
+
+  // Wrapper for client creation that calls the callback
+  const handleCreateClientWithCallback = async () => {
+    try {
+      await clientManagement.handleCreateClient();
+      // Call the onClientCreated callback if provided
+      if (onClientCreated) {
+        onClientCreated();
+      }
+    } catch (error) {
+      // Error is already handled in the hook, but we re-throw to maintain behavior
+      throw error;
+    }
+  };
 
   const attachmentManagement = useAttachmentManagement({
     invoice,
@@ -171,6 +185,20 @@ export function InvoiceForm({
           onInvoiceUpdate(updatedInvoice);
         }
 
+        // Handle approval submission if requested (for edited invoices)
+        if (submitForApproval && approverIdForApproval) {
+          try {
+            await approvalApi.submitInvoiceForApproval(invoice.id, {
+              approver_id: approverIdForApproval,
+              notes: t('invoices.auto_submitted_for_approval_after_edit', 'Invoice automatically submitted for approval after edit')
+            });
+            toast.success(t('invoices.submitted_for_approval', 'Invoice submitted for approval successfully!'));
+          } catch (approvalError) {
+            console.error('Failed to submit invoice for approval:', approvalError);
+            toast.error(t('invoices.failed_to_submit_for_approval', 'Invoice updated but failed to submit for approval'));
+          }
+        }
+
         navigate("/invoices");
       } else {
         // Create new invoice
@@ -218,6 +246,20 @@ export function InvoiceForm({
           }
         } else {
           toast.success("Invoice created successfully!");
+        }
+
+        // Handle approval submission if requested
+        if (submitForApproval && approverIdForApproval) {
+          try {
+            await approvalApi.submitInvoiceForApproval(newInvoice.id, {
+              approver_id: approverIdForApproval,
+              notes: t('invoices.auto_submitted_for_approval', 'Invoice automatically submitted for approval after creation')
+            });
+            toast.success(t('invoices.submitted_for_approval', 'Invoice submitted for approval successfully!'));
+          } catch (approvalError) {
+            console.error('Failed to submit invoice for approval:', approvalError);
+            toast.error(t('invoices.failed_to_submit_for_approval', 'Invoice created but failed to submit for approval'));
+          }
         }
 
         navigate("/invoices");
@@ -344,7 +386,7 @@ export function InvoiceForm({
               }}>
                 {t('invoices.cancel')}
               </Button>
-              <Button onClick={clientManagement.handleCreateClient}>{t('invoices.add_client')}</Button>
+              <Button onClick={handleCreateClientWithCallback}>{t('invoices.add_client')}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -392,7 +434,7 @@ export function InvoiceForm({
                 newClientForm={clientManagement.newClientForm}
                 setNewClientForm={clientManagement.setNewClientForm}
                 resetNewClientForm={clientManagement.resetNewClientForm}
-                handleCreateClient={clientManagement.handleCreateClient}
+                handleCreateClient={handleCreateClientWithCallback}
               />
 
               {/* Items Section */}
@@ -476,7 +518,7 @@ export function InvoiceForm({
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium">Name</label>
+              <label className="text-sm font-medium">{t('invoices.name')}</label>
               <input
                 className="w-full p-2 border rounded"
                 value={clientManagement.newClientForm.name}
@@ -487,7 +529,7 @@ export function InvoiceForm({
               />
             </div>
             <div>
-              <label className="text-sm font-medium">Email</label>
+              <label className="text-sm font-medium">{t('invoices.email')}</label>
               <input
                 className="w-full p-2 border rounded"
                 type="email"
@@ -498,6 +540,36 @@ export function InvoiceForm({
                 })}
               />
             </div>
+            <div>
+              <label className="text-sm font-medium">{t('invoices.phone')}</label>
+              <input
+                className="w-full p-2 border rounded"
+                value={clientManagement.newClientForm.phone || ''}
+                onChange={(e) => clientManagement.setNewClientForm({
+                  ...clientManagement.newClientForm,
+                  phone: e.target.value
+                })}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">{t('invoices.address')}</label>
+              <input
+                className="w-full p-2 border rounded"
+                value={clientManagement.newClientForm.address || ''}
+                onChange={(e) => clientManagement.setNewClientForm({
+                  ...clientManagement.newClientForm,
+                  address: e.target.value
+                })}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">{t('invoices.preferred_currency')}</label>
+              <CurrencySelector
+                value={clientManagement.newClientForm.preferred_currency || invoiceForm.tenantInfo?.default_currency || 'USD'}
+                onValueChange={(val) => clientManagement.setNewClientForm({ ...clientManagement.newClientForm, preferred_currency: val })}
+                placeholder={t('invoices.select_preferred_currency')}
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => {
@@ -506,7 +578,7 @@ export function InvoiceForm({
             }}>
               {t('invoices.cancel')}
             </Button>
-            <Button onClick={clientManagement.handleCreateClient}>
+            <Button onClick={handleCreateClientWithCallback}>
               {t('invoices.add_client')}
             </Button>
           </DialogFooter>

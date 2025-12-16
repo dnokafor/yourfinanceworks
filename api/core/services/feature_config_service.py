@@ -136,6 +136,14 @@ class FeatureConfigService:
             'default': False,
             'license_tier': 'commercial'
         },
+        'prompt_management': {
+            'name': 'Prompt Management',
+            'description': 'AI prompt template management and customization',
+            'category': 'advanced',
+            'env_var': 'FEATURE_PROMPT_MANAGEMENT_ENABLED',
+            'default': False,
+            'license_tier': 'commercial'
+        },
     }
     
     @classmethod

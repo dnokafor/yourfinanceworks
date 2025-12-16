@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useSearch } from './SearchProvider';
 import { apiClient } from '@/lib/api';
 import { FeatureGate } from '@/components/FeatureGate';
+import { Button } from '@/components/ui/button';
 
 interface SearchResult {
   id: string;

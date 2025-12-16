@@ -91,10 +91,13 @@ export function InvoiceFormWithApproval({
 
   const checkClientsAgain = async () => {
     try {
+      setLoadingClients(true);
       const clients = await clientApi.getClients();
       setHasClients(Array.isArray(clients) && clients.length > 0);
     } catch (error) {
       console.error('Failed to fetch clients:', error);
+    } finally {
+      setLoadingClients(false);
     }
   };
 

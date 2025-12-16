@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2, Download, Database, Upload, Plus, Edit, Trash2, Calculator, CheckCircle, XCircle } from "lucide-react";
+import { Loader2, Download, Database, Upload, Plus, Edit, Trash2, Calculator, CheckCircle, XCircle, Search, MessageSquare } from "lucide-react";
 import { settingsApi, discountRulesApi, aiConfigApi, DiscountRule, DiscountRuleCreate, AIConfig, AIConfigCreate, AIProviderInfo } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -24,6 +24,7 @@ import APIClientManagement from "@/components/APIClientManagement/APIClientManag
 import CookieSettings from "@/components/settings/CookieSettings";
 import ExportDestinationsTab from "@/components/settings/ExportDestinationsTab";
 import EmailIntegrationSettings from "@/components/settings/EmailIntegrationSettings";
+import PromptManagement from "./PromptManagement";
 import { getCurrentUser } from "@/utils/auth";
 import { useTaxIntegration } from "@/hooks/useTaxIntegration";
 import LicenseManagement from "@/pages/LicenseManagement";
@@ -1285,6 +1286,7 @@ const Settings = () => {
                   <TabsTrigger value="currencies" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.currencies')}</TabsTrigger>
                   <TabsTrigger value="discount-rules" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.discount_rules')}</TabsTrigger>
                   <TabsTrigger value="ai-config" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.ai_config')}</TabsTrigger>
+                  <TabsTrigger value="prompts" className="text-xs md:text-sm min-w-0 flex-shrink-0">Prompts</TabsTrigger>
                   <TabsTrigger value="api-keys" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.api_keys')}</TabsTrigger>
                   <TabsTrigger value="search" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.search')}</TabsTrigger>
                   <TabsTrigger value="email-notifications" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.email_notifications')}</TabsTrigger>
@@ -1814,7 +1816,60 @@ const Settings = () => {
 
             {isAdmin && (
               <TabsContent value="search" className="mt-6">
-                <SearchStatus />
+                <FeatureGate
+                  feature="advanced_search"
+                  fallback={
+                    <div className="bg-white dark:bg-gray-800 rounded-xl p-12 shadow-sm border border-gray-200 dark:border-gray-700">
+                      <div className="text-center max-w-2xl mx-auto">
+                        <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <Search className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">Business License Required</h3>
+                        <p className="text-gray-600 dark:text-gray-300 mb-6">
+                          Advanced search with OpenSearch provides powerful full-text search capabilities across all your business data - invoices, expenses, clients, and more.
+                          Upgrade to a business license to enable advanced search features.
+                        </p>
+                        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-6 mb-6">
+                          <h4 className="font-semibold text-gray-900 dark:text-white mb-3">With Business License, you get:</h4>
+                          <ul className="text-left space-y-2 text-gray-700 dark:text-gray-300">
+                            <li className="flex items-start">
+                              <span className="text-blue-600 mr-2">✓</span>
+                              <span>Full-text search across all documents and data</span>
+                            </li>
+                            <li className="flex items-start">
+                              <span className="text-blue-600 mr-2">✓</span>
+                              <span>Advanced filtering and search operators</span>
+                            </li>
+                            <li className="flex items-start">
+                              <span className="text-blue-600 mr-2">✓</span>
+                              <span>Real-time search indexing</span>
+                            </li>
+                            <li className="flex items-start">
+                              <span className="text-blue-600 mr-2">✓</span>
+                              <span>Search analytics and performance monitoring</span>
+                            </li>
+                          </ul>
+                        </div>
+                        <div className="flex justify-center space-x-4">
+                          <Button
+                            onClick={() => window.location.href = '/settings?tab=license'}
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                          >
+                            Activate Business License
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => window.open('https://docs.example.com/advanced-search', '_blank')}
+                          >
+                            Learn More
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                >
+                  <SearchStatus />
+                </FeatureGate>
               </TabsContent>
             )}
 
@@ -2951,6 +3006,65 @@ const Settings = () => {
                     </div>
                   </CardContent>
                 </ProfessionalCard>
+              </TabsContent>
+            )}
+
+            {isAdmin && (
+              <TabsContent value="prompts" className="mt-6">
+                <FeatureGate
+                  feature="ai_chat"
+                  fallback={
+                    <div className="bg-white dark:bg-gray-800 rounded-xl p-12 shadow-sm border border-gray-200 dark:border-gray-700">
+                      <div className="text-center max-w-2xl mx-auto">
+                        <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <MessageSquare className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">Business License Required</h3>
+                        <p className="text-gray-600 dark:text-gray-300 mb-6">
+                          Advanced prompt management allows you to customize and optimize AI templates for better document processing and analysis.
+                          Upgrade to a business license to access advanced AI customization features.
+                        </p>
+                        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-6 mb-6">
+                          <h4 className="font-semibold text-gray-900 dark:text-white mb-3">With Business License, you get:</h4>
+                          <ul className="text-left space-y-2 text-gray-700 dark:text-gray-300">
+                            <li className="flex items-start">
+                              <span className="text-blue-600 mr-2">✓</span>
+                              <span>Custom AI prompt templates for all processing tasks</span>
+                            </li>
+                            <li className="flex items-start">
+                              <span className="text-blue-600 mr-2">✓</span>
+                              <span>Version control and prompt optimization</span>
+                            </li>
+                            <li className="flex items-start">
+                              <span className="text-blue-600 mr-2">✓</span>
+                              <span>Advanced testing and performance analytics</span>
+                            </li>
+                            <li className="flex items-start">
+                              <span className="text-blue-600 mr-2">✓</span>
+                              <span>Real-time prompt usage statistics and monitoring</span>
+                            </li>
+                          </ul>
+                        </div>
+                        <div className="flex justify-center space-x-4">
+                          <Button
+                            onClick={() => window.location.href = '/settings?tab=license'}
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                          >
+                            Activate Business License
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => window.open('https://docs.example.com/prompt-management', '_blank')}
+                          >
+                            Learn More
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                >
+                  <PromptManagement />
+                </FeatureGate>
               </TabsContent>
             )}
 

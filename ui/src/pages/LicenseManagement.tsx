@@ -6,6 +6,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Loader2, CheckCircle, XCircle, AlertTriangle, Key, Calendar, Shield, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -52,6 +63,8 @@ export const LicenseManagement: React.FC = () => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [activating, setActivating] = useState(false);
+  const [deactivating, setDeactivating] = useState(false);
+  const [showDeactivateDialog, setShowDeactivateDialog] = useState(false);
   const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
   const [features, setFeatures] = useState<FeatureInfo[]>([]);
   const [licenseKey, setLicenseKey] = useState('');
@@ -118,23 +131,27 @@ export const LicenseManagement: React.FC = () => {
   };
 
   const handleDeactivateLicense = async () => {
-    if (!confirm(t('license.status.confirmDeactivate'))) {
-      return;
-    }
+    setShowDeactivateDialog(true);
+  };
 
+  const confirmDeactivateLicense = async () => {
     try {
+      setDeactivating(true);
       const response = await api.post<{ success: boolean; message: string }>('/license/deactivate');
 
       if (response.success) {
         toast.success(t('license.status.deactivateSuccess'));
         await fetchLicenseStatus();
         await refetch(); // Refresh feature flags
+        setShowDeactivateDialog(false);
       } else {
         toast.error(response.message || t('license.status.deactivateError'));
       }
     } catch (error: any) {
       console.error('Failed to deactivate license:', error);
       toast.error(error.message || t('license.status.deactivateError'));
+    } finally {
+      setDeactivating(false);
     }
   };
 
@@ -321,9 +338,43 @@ export const LicenseManagement: React.FC = () => {
 
           {licenseInfo?.is_licensed && (
             <div className="pt-4 border-t">
-              <Button variant="outline" size="sm" onClick={handleDeactivateLicense}>
-                {t('license.status.deactivate')}
-              </Button>
+              <AlertDialog open={showDeactivateDialog} onOpenChange={setShowDeactivateDialog}>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" onClick={handleDeactivateLicense}>
+                    {t('license.status.deactivate')}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Deactivate License?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to deactivate your license? This will disable all licensed features including:
+                      <ul className="mt-2 ml-4 list-disc space-y-1">
+                        <li>Prompt Management - AI prompt templates and customization</li>
+                        <li>AI Invoice Processing - Automated invoice data extraction</li>
+                        <li>AI Expense Processing - AI-powered expense categorization</li>
+                        <li>Advanced Reporting - Custom reports and analytics</li>
+                        <li>Approval Workflows - Multi-level approval systems</li>
+                        <li>All other premium features</li>
+                      </ul>
+                      You can reactivate your license at any time by entering a new license key.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={confirmDeactivateLicense} disabled={deactivating}>
+                      {deactivating ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Deactivating...
+                        </>
+                      ) : (
+                        'Deactivate License'
+                      )}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           )}
         </CardContent>

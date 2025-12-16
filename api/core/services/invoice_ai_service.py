@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from core.services.ai_config_service import AIConfigService
 from core.services.ocr_service import _run_ocr, track_ai_usage
+from core.services.prompt_service import get_prompt_service
 
 logger = logging.getLogger(__name__)
 
@@ -76,10 +77,13 @@ class InvoiceAIService:
                     "error": "No AI configuration available for invoice processing",
                     "success": False
                 }
-            
+
             # Use invoice-specific prompt if not provided
             if not custom_prompt:
-                custom_prompt = (
+                prompt_service = get_prompt_service(self.db_session)
+
+                # Define fallback prompt once to avoid duplication
+                fallback_extraction_prompt = (
                     "You are an invoice data extraction AI. Extract key invoice fields and respond ONLY with compact JSON. "
                     "Required keys: invoice_number, invoice_date (YYYY-MM-DD), due_date (YYYY-MM-DD), "
                     "vendor_name, vendor_address, client_name, client_address, "
@@ -88,16 +92,27 @@ class InvoiceAIService:
                     "payment_terms, notes. "
                     "If a field is unknown, set it to null. Do not include any prose."
                 )
-            
+
+                try:
+                    custom_prompt = prompt_service.get_prompt(
+                        name="invoice_data_extraction",
+                        variables={"file_path": file_path},
+                        provider_name=ai_config.get("provider_name"),
+                        fallback_prompt=fallback_extraction_prompt
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to get prompt from service, using fallback: {e}")
+                    custom_prompt = fallback_extraction_prompt
+
             logger.info(f"Extracting invoice data from {file_path} using {ai_config['provider_name']}")
-            
+
             # Extract data using OCR service
             result = await _run_ocr(file_path, custom_prompt=custom_prompt, ai_config=ai_config)
-            
+
             if isinstance(result, dict) and "error" not in result:
                 # Track successful AI usage
                 self._track_usage(ai_config, "invoice_extraction", result)
-                
+
                 # Add extraction metadata
                 result["extraction_metadata"] = {
                     "provider": ai_config["provider_name"],
@@ -105,7 +120,7 @@ class InvoiceAIService:
                     "component": "invoice",
                     "success": True
                 }
-                
+
                 logger.info(f"Successfully extracted invoice data: {len(result)} fields")
                 return {"success": True, "data": result}
             else:
@@ -120,7 +135,7 @@ class InvoiceAIService:
                         "success": False
                     }
                 }
-                
+
         except Exception as e:
             logger.error(f"Invoice AI processing failed: {e}")
             return {
@@ -147,7 +162,11 @@ class InvoiceAIService:
                     "error": "No AI configuration available for invoice classification"
                 }
             
-            classification_prompt = (
+            # Get classification prompt from service
+            prompt_service = get_prompt_service(self.db_session)
+
+            # Define fallback prompt once to avoid duplication
+            fallback_classification_prompt = (
                 "Analyze this invoice document and classify it. Respond ONLY with JSON. "
                 "Required keys: document_type (invoice/receipt/bill/statement), "
                 "invoice_type (service/product/mixed), complexity (simple/standard/complex), "
@@ -155,9 +174,20 @@ class InvoiceAIService:
                 "estimated_processing_difficulty (low/medium/high). "
                 "Do not include any prose."
             )
-            
+
+            try:
+                classification_prompt = prompt_service.get_prompt(
+                    name="invoice_classification",
+                    variables={"file_path": file_path},
+                    provider_name=ai_config.get("provider_name"),
+                    fallback_prompt=fallback_classification_prompt
+                )
+            except Exception as e:
+                logger.warning(f"Failed to get classification prompt from service, using fallback: {e}")
+                classification_prompt = fallback_classification_prompt
+
             result = await _run_ocr(file_path, custom_prompt=classification_prompt, ai_config=ai_config)
-            
+
             if isinstance(result, dict) and "error" not in result:
                 self._track_usage(ai_config, "invoice_classification", result)
                 return {"success": True, "classification": result}
@@ -166,21 +196,21 @@ class InvoiceAIService:
                     "success": False,
                     "error": result.get("error", "Classification failed")
                 }
-                
+
         except Exception as e:
             logger.error(f"Invoice classification failed: {e}")
             return {
                 "success": False,
                 "error": f"Invoice classification failed: {str(e)}"
             }
-    
+
     async def validate_invoice_data(self, extracted_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Validate extracted invoice data for completeness and accuracy.
-        
+
         Args:
             extracted_data: Previously extracted invoice data
-            
+
         Returns:
             Dictionary with validation results
         """
@@ -190,45 +220,45 @@ class InvoiceAIService:
             "warnings": [],
             "completeness_score": 0.0
         }
-        
+
         # Required fields for a complete invoice
         required_fields = [
             "invoice_number", "invoice_date", "vendor_name", 
             "total_amount", "currency"
         ]
-        
+
         # Optional but important fields
         important_fields = [
             "due_date", "client_name", "subtotal", "tax_amount", "line_items"
         ]
-        
+
         # Check required fields
         missing_required = []
         for field in required_fields:
             if not extracted_data.get(field):
                 missing_required.append(field)
                 validation_results["valid"] = False
-        
+
         if missing_required:
             validation_results["errors"].append(f"Missing required fields: {', '.join(missing_required)}")
-        
+
         # Check important fields
         missing_important = []
         for field in important_fields:
             if not extracted_data.get(field):
                 missing_important.append(field)
-        
+
         if missing_important:
             validation_results["warnings"].append(f"Missing important fields: {', '.join(missing_important)}")
-        
+
         # Calculate completeness score
         total_fields = len(required_fields) + len(important_fields)
         present_fields = sum(1 for field in required_fields + important_fields if extracted_data.get(field))
         validation_results["completeness_score"] = (present_fields / total_fields) * 100
-        
+
         # Validate data types and formats
         self._validate_field_formats(extracted_data, validation_results)
-        
+
         return validation_results
     
     def _validate_field_formats(self, data: Dict[str, Any], validation: Dict[str, Any]) -> None:
@@ -243,7 +273,7 @@ class InvoiceAIService:
                 except Exception:
                     validation["errors"].append(f"Invalid date format in {field}: {data[field]}")
                     validation["valid"] = False
-        
+
         # Numeric field validation
         numeric_fields = ["subtotal", "tax_amount", "tax_rate", "total_amount"]
         for field in numeric_fields:
@@ -252,14 +282,14 @@ class InvoiceAIService:
                     float(str(data[field]).replace(",", "").replace("$", ""))
                 except (ValueError, TypeError):
                     validation["warnings"].append(f"Non-numeric value in {field}: {data[field]}")
-        
+
         # Currency validation
         if data.get("currency"):
             currency = str(data["currency"]).upper()
             valid_currencies = ["USD", "EUR", "GBP", "CAD", "AUD", "JPY", "CHF", "CNY", "INR", "BRL"]
             if currency not in valid_currencies:
                 validation["warnings"].append(f"Unrecognized currency: {currency}")
-    
+
     def _track_usage(self, ai_config: Dict[str, Any], operation_type: str, result: Dict[str, Any]) -> None:
         """Track AI usage for invoice processing."""
         try:
@@ -280,14 +310,14 @@ class InvoiceAIService:
                     "fields_extracted": len(result) if isinstance(result, dict) else 0
                 }
             )
-            
+
         except Exception as e:
             logger.error(f"Failed to track invoice AI usage: {e}")
     
     def get_processing_stats(self) -> Dict[str, Any]:
         """
         Get invoice processing statistics.
-        
+
         Returns:
             Dictionary with processing statistics
         """
@@ -302,7 +332,7 @@ class InvoiceAIService:
                 "ocr_enabled": ai_config.get("ocr_enabled", False) if ai_config else False,
                 "config_source": ai_config.get("source") if ai_config else None
             }
-            
+
         except Exception as e:
             logger.error(f"Failed to get invoice processing stats: {e}")
             return {"error": str(e)}
@@ -316,12 +346,12 @@ async def extract_invoice_data_with_fallback(
 ) -> Dict[str, Any]:
     """
     Convenience function to extract invoice data with AI fallback.
-    
+
     Args:
         db: Database session
         file_path: Path to invoice file
         custom_prompt: Optional custom extraction prompt
-        
+
     Returns:
         Dictionary with extraction results
     """
@@ -332,10 +362,10 @@ async def extract_invoice_data_with_fallback(
 def get_invoice_ai_config(db: Session) -> Optional[Dict[str, Any]]:
     """
     Convenience function to get invoice AI configuration.
-    
+
     Args:
         db: Database session
-        
+
     Returns:
         AI configuration dictionary or None
     """

@@ -64,6 +64,7 @@ import ApprovalReportsPage from "./pages/ApprovalReportsPage";
 import Reminders from "./pages/Reminders";
 import { AppLayout } from "./components/layout/AppLayout";
 import OrganizationJoinRequests from "./pages/OrganizationJoinRequests";
+import PromptManagement from "./pages/PromptManagement";
 
 
 
@@ -154,7 +155,8 @@ const AppContent = () => {
                 <Route path="/inventory/new" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><NewInventoryItem /></RoleProtectedRoute></ProtectedRoute>} />
                 <Route path="/inventory/view/:id" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><InventoryItemDetail /></RoleProtectedRoute></ProtectedRoute>} />
                 <Route path="/inventory/edit/:id" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><EditInventoryItem /></RoleProtectedRoute></ProtectedRoute>} />
-                <Route path="/invoices/new-inventory" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><NewInventoryInvoice /></RoleProtectedRoute></ProtectedRoute>} />
+                <Route path="/inventory/new-inventory" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><NewInventoryInvoice /></RoleProtectedRoute></ProtectedRoute>} />
+                <Route path="/prompts" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin']}><PromptManagement /></RoleProtectedRoute></ProtectedRoute>} />
 
                 <Route path="*" element={<NotFound />} />
               </Routes>

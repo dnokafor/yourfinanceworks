@@ -68,7 +68,7 @@ const NewInvoice = () => {
   };
 
   const handleInventoryCreate = () => {
-    navigate('/invoices/new-inventory');
+    navigate('/inventory/new-inventory');
   };
 
   const handlePdfImport = async (pdfData: any, pdfFile: File) => {
