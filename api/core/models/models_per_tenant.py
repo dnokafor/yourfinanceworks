@@ -229,6 +229,11 @@ class Expense(Base):
     receipt_timestamp = Column(DateTime(timezone=True), nullable=True)  # Exact timestamp from receipt
     receipt_time_extracted = Column(Boolean, default=False, nullable=False)  # Whether timestamp was extracted from receipt
 
+    # Soft delete fields for recycle bin functionality
+    is_deleted = Column(Boolean, default=False, nullable=False)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # Track who deleted it
+
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -237,6 +242,7 @@ class Expense(Base):
     invoice = relationship("Invoice", back_populates="expenses")
     approvals = relationship("ExpenseApproval", back_populates="expense", cascade="all, delete-orphan")
     created_by = relationship("User", foreign_keys=[created_by_user_id])
+    deleted_by_user = relationship("User", foreign_keys=[deleted_by])
 
     @property
     def created_by_username(self):
@@ -427,6 +433,11 @@ class BankStatement(Base):
     labels = Column(JSON, nullable=True)
     created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # User attribution
 
+    # Soft delete fields for recycle bin functionality
+    is_deleted = Column(Boolean, default=False, nullable=False)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # Track who deleted it
+
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -434,6 +445,7 @@ class BankStatement(Base):
     transactions = relationship("BankStatementTransaction", back_populates="statement", cascade="all, delete-orphan")
     attachments = relationship("BankStatementAttachment", back_populates="statement", cascade="all, delete-orphan")
     created_by = relationship("User", foreign_keys=[created_by_user_id])
+    deleted_by_user = relationship("User", foreign_keys=[deleted_by])
 
 
 class BankStatementTransaction(Base):

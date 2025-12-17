@@ -118,7 +118,7 @@ export function InvoiceClientSection({
                 />
               </FormControl>
               <FormDescription>
-                If left empty, an invoice number will be generated automatically
+                {t('invoices.invoice_number_auto_generate')}
               </FormDescription>
               <FormMessage />
             </FormItem>

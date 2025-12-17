@@ -209,26 +209,28 @@ export function InvoiceFormWithApproval({
       )}
 
       {/* Form Actions */}
-      <div className="w-full px-6 py-6">
-        <div className="flex justify-end gap-4">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleCancel}
-            disabled={isSubmitting}
-          >
-            {t('invoices.cancel')}
-          </Button>
-          <Button
-            type="button"
-            onClick={handleFormSubmit}
-            disabled={isSubmitting || (submitForApproval && !approvalsNotLicensed && !selectedApproverId)}
-          >
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isEdit ? t('invoices.update_invoice') : t('invoices.create_invoice')}
-          </Button>
+      {!isEdit && (
+        <div className="w-full px-6 py-6">
+          <div className="flex justify-end gap-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCancel}
+              disabled={isSubmitting}
+            >
+              {t('invoices.cancel')}
+            </Button>
+            <Button
+              type="button"
+              onClick={handleFormSubmit}
+              disabled={isSubmitting || (submitForApproval && !approvalsNotLicensed && !selectedApproverId)}
+            >
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {t('invoices.create_invoice')}
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
 
 
     </>

@@ -50,3 +50,27 @@ class BankStatementWithTransactions(BankStatementResponse):
     transactions: List[BankStatementTransactionResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# === Recycle Bin Schemas ===
+
+class DeletedBankStatement(BankStatementResponse):
+    """Schema for displaying deleted bank statements in the recycle bin"""
+    is_deleted: bool
+    deleted_at: Optional[datetime]
+    deleted_by: Optional[int]
+    deleted_by_username: Optional[str] = None  # Username of who deleted it
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RecycleBinStatementResponse(BaseModel):
+    """Response schema for statement recycle bin operations"""
+    message: str
+    statement_id: int
+    action: str  # "moved_to_recycle", "restored", "permanently_deleted"
+
+
+class RestoreStatementRequest(BaseModel):
+    """Request schema for restoring a statement"""
+    new_status: Optional[str] = "processed"  # Status to set when restoring

@@ -9,14 +9,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { CalendarIcon, Upload, ArrowLeft, Eye, Download, ExternalLink, Trash2, FileText, Plus, Copy, X, Edit, MoreHorizontal } from 'lucide-react';
+import { CalendarIcon, Upload, ArrowLeft, Eye, Download, ExternalLink, Trash2, FileText, Plus, Copy, X, Edit, MoreHorizontal, Loader2, ChevronDown, ChevronUp, ArrowDown } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
-import { bankStatementApi, BankTransactionEntry, BankStatementDetail, BankStatementSummary, expenseApi, invoiceApi, clientApi, formatStatus } from '@/lib/api';
+import { bankStatementApi, BankTransactionEntry, BankStatementDetail, BankStatementSummary, expenseApi, invoiceApi, clientApi, formatStatus, DeletedBankStatement } from '@/lib/api';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { InvoiceForm } from '@/components/invoices/InvoiceForm';
@@ -54,9 +55,10 @@ function StatementUploadButton({ onUpload }: { onUpload: () => void }) {
           {t('statements.new_statement', { defaultValue: 'New Statement' })}
         </ProfessionalButton>
         <div className="bg-amber-50 border border-amber-200 rounded-md p-3 max-w-md">
-          <p className="text-sm text-amber-800">
-            <strong>License Required:</strong> Bank statement processing requires the AI Bank Statement feature. Please upgrade your license to enable this functionality.
-          </p>
+          <p className="text-sm text-amber-800" dangerouslySetInnerHTML={{ 
+            __html: t('settings.bank_statement_license_required', { defaultValue: 'License Required: Bank statement processing requires the AI Bank Statement feature. Please upgrade your license to enable this functionality.' })
+              .replace('License Required:', '<strong>License Required:</strong>') 
+          }} />
         </div>
       </div>
     );
@@ -119,6 +121,13 @@ export default function Statements() {
   const [statementToDelete, setStatementToDelete] = useState<number | null>(null);
   const [reprocessingLocks, setReprocessingLocks] = useState<Set<number>>(new Set());
   const readOnly = detail?.status === 'processing';
+
+  // Recycle bin state
+  const [showRecycleBin, setShowRecycleBin] = useState(false);
+  const [deletedStatements, setDeletedStatements] = useState<DeletedBankStatement[]>([]);
+  const [recycleBinLoading, setRecycleBinLoading] = useState(false);
+  const [statementToPermanentlyDelete, setStatementToPermanentlyDelete] = useState<number | null>(null);
+  const [emptyRecycleBinModalOpen, setEmptyRecycleBinModalOpen] = useState(false);
 
   useEffect(() => {
     const loadClients = async () => {
@@ -411,6 +420,10 @@ export default function Statements() {
       await bankStatementApi.delete(statementToDelete);
       toast.success(t('statements.statement_deleted'));
       await loadList();
+      // Refresh recycle bin if it's currently open
+      if (showRecycleBin) {
+        fetchDeletedStatements();
+      }
       if (selected === statementToDelete) {
         setSelected(null);
         setDetail(null);
@@ -421,6 +434,67 @@ export default function Statements() {
     } finally {
       setDeleteModalOpen(false);
       setStatementToDelete(null);
+    }
+  };
+
+  // Recycle bin functions
+  const fetchDeletedStatements = async () => {
+    try {
+      setRecycleBinLoading(true);
+      const data = await bankStatementApi.getDeletedStatements();
+      setDeletedStatements(data);
+    } catch (error) {
+      console.error('Failed to fetch deleted statements:', error);
+      toast.error('Failed to load recycle bin');
+    } finally {
+      setRecycleBinLoading(false);
+    }
+  };
+
+  const handleRestoreStatement = async (statementId: number) => {
+    try {
+      await bankStatementApi.restoreStatement(statementId, 'processed');
+      toast.success('Statement restored successfully');
+      fetchDeletedStatements();
+      loadList(); // Refresh main list
+    } catch (error: any) {
+      console.error('Failed to restore statement:', error);
+      toast.error(error?.message || 'Failed to restore statement');
+    }
+  };
+
+  const handlePermanentlyDeleteStatement = async (statementId: number) => {
+    try {
+      await bankStatementApi.permanentlyDeleteStatement(statementId);
+      toast.success('Statement permanently deleted');
+      fetchDeletedStatements();
+      setStatementToPermanentlyDelete(null);
+    } catch (error: any) {
+      console.error('Failed to permanently delete statement:', error);
+      toast.error(error?.message || 'Failed to permanently delete statement');
+    }
+  };
+
+  const handleEmptyRecycleBin = () => {
+    setEmptyRecycleBinModalOpen(true);
+  };
+
+  const confirmEmptyRecycleBin = async () => {
+    try {
+      const response = await bankStatementApi.emptyRecycleBin();
+      toast.success('Recycle bin emptied successfully');
+      fetchDeletedStatements();
+      setEmptyRecycleBinModalOpen(false);
+    } catch (error: any) {
+      console.error('Failed to empty recycle bin:', error);
+      toast.error(error?.message || 'Failed to empty recycle bin');
+    }
+  };
+
+  const handleToggleRecycleBin = () => {
+    setShowRecycleBin(!showRecycleBin);
+    if (!showRecycleBin) {
+      fetchDeletedStatements();
     }
   };
 
@@ -474,7 +548,20 @@ export default function Statements() {
         <PageHeader
           title={t('statements.title')}
           description={t('statements.description')}
-          actions={!selected && <StatementUploadButton onUpload={() => setUploadModalOpen(true)} />}
+          actions={!selected && (
+            <div className="flex gap-2">
+              <ProfessionalButton
+                variant="outline"
+                onClick={handleToggleRecycleBin}
+                className="whitespace-nowrap"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {t('recycleBin.title', { defaultValue: 'Recycle Bin' })}
+                {showRecycleBin ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />}
+              </ProfessionalButton>
+              <StatementUploadButton onUpload={() => setUploadModalOpen(true)} />
+            </div>
+          )}
         />
 
         {!selected && (
@@ -1260,6 +1347,135 @@ export default function Statements() {
           </DialogContent>
         </Dialog>
 
+        {/* Recycle Bin Section */}
+        <Collapsible open={showRecycleBin} onOpenChange={setShowRecycleBin}>
+          <CollapsibleContent>
+            <ProfessionalCard className="slide-in">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Trash2 className="w-5 h-5" />
+                      {t('recycleBin.title', { defaultValue: 'Recycle Bin' })}
+                    </CardTitle>
+                    <p className="text-muted-foreground text-sm">{t('recycleBin.description', { defaultValue: 'Deleted statements that can be restored or permanently deleted' })}</p>
+                  </div>
+                  <ProfessionalButton
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleEmptyRecycleBin}
+                    className="gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {t('recycleBin.empty_recycle_bin', { defaultValue: 'Empty Recycle Bin' })}
+                  </ProfessionalButton>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {recycleBinLoading ? (
+                  <div className="flex justify-center items-center h-24">
+                    <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                    {t('recycleBin.loading', { defaultValue: 'Loading...' })}
+                  </div>
+                ) : deletedStatements.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-24 text-center">
+                    <Trash2 className="h-8 w-8 text-muted-foreground mb-2" />
+                    <p className="text-muted-foreground">{t('recycleBin.recycle_bin_empty', { defaultValue: 'Recycle bin is empty' })}</p>
+                  </div>
+                ) : (
+                  <div className="rounded-md border overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{t('statements.filename')}</TableHead>
+                          <TableHead>{t('statements.status')}</TableHead>
+                          <TableHead>{t('statements.transactions')}</TableHead>
+                          <TableHead>{t('recycleBin.deleted_at')}</TableHead>
+                          <TableHead>{t('recycleBin.deleted_by')}</TableHead>
+                          <TableHead>{t('recycleBin.actions')}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {deletedStatements.map((statement) => (
+                          <TableRow key={statement.id}>
+                            <TableCell className="font-medium">{statement.original_filename}</TableCell>
+                            <TableCell>{formatStatus(statement.status)}</TableCell>
+                            <TableCell>{statement.extracted_count}</TableCell>
+                            <TableCell>{statement.deleted_at ? format(new Date(statement.deleted_at), 'PP p') : 'N/A'}</TableCell>
+                            <TableCell>{statement.deleted_by_username || t('common.unknown')}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleRestoreStatement(statement.id)}
+                                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                >
+                                  <ArrowDown className="w-4 h-4 mr-1" />
+                                  {t('recycleBin.restore', { defaultValue: 'Restore' })}
+                                </Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    >
+                                      <Trash2 className="w-4 h-4 mr-1" />
+                                      {t('recycleBin.permanently_delete', { defaultValue: 'Delete' })}
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>{t('recycleBin.permanent_delete_confirm_title', { defaultValue: 'Permanently Delete Statement' })}</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        {t('recycleBin.permanent_delete_confirm_description', { defaultValue: 'Are you sure you want to permanently delete this statement? This action cannot be undone.' })}
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => handlePermanentlyDeleteStatement(statement.id)}
+                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                      >
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        {t('recycleBin.permanently_delete', { defaultValue: 'Delete Permanently' })}
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </ProfessionalCard>
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* Empty Recycle Bin Modal */}
+        <AlertDialog open={emptyRecycleBinModalOpen} onOpenChange={setEmptyRecycleBinModalOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('recycleBin.empty_recycle_bin_confirm_title', { defaultValue: 'Empty Recycle Bin' })}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t('recycleBin.empty_recycle_bin_confirm_description', { defaultValue: 'Are you sure you want to permanently delete all statements in the recycle bin? This action cannot be undone and all deleted statements will be completely removed from the system.' })}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmEmptyRecycleBin} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                <Trash2 className="mr-2 h-4 w-4" />
+                {t('recycleBin.empty_recycle_bin', { defaultValue: 'Empty Recycle Bin' })}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {/* Delete Statement Modal */}
         <AlertDialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
           <AlertDialogContent>
@@ -1282,5 +1498,3 @@ export default function Statements() {
     </AppLayout>
   );
 }
-
-

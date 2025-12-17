@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { Check, ChevronsUpDown, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -24,6 +25,7 @@ export function SmartClientSelector({
   placeholder = "Select a client...",
   disabled = false
 }: SmartClientSelectorProps) {
+  const { t } = useTranslation();
 
   const [open, setOpen] = useState(false);
 
@@ -77,7 +79,7 @@ export function SmartClientSelector({
           <div className="flex items-center border-b px-3">
             <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
             <CommandInput
-              placeholder="Search clients..."
+              placeholder={t('clients.search_placeholder', { defaultValue: 'Search clients...' })}
               className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
             />
           </div>

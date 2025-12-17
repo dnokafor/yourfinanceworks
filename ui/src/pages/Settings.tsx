@@ -1337,8 +1337,8 @@ const Settings = () => {
                     </div>
                     <div className="flex items-center justify-between mt-4">
                       <div className="space-y-0.5">
-                        <Label htmlFor="show_analytics">Show Analytics Menu</Label>
-                        <p className="text-sm text-muted-foreground">Show or hide the analytics menu in the sidebar</p>
+                        <Label htmlFor="show_analytics">{t('settings.show_analytics_menu')}</Label>
+                        <p className="text-sm text-muted-foreground">{t('settings.show_analytics_menu_description')}</p>
                       </div>
                       <Switch
                         id="show_analytics"
@@ -1417,7 +1417,7 @@ const Settings = () => {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="timezone">Timezone</Label>
+                      <Label htmlFor="timezone">{t('settings.timezone')}</Label>
                       <Select value={timezone} onValueChange={setTimezone}>
                         <SelectTrigger id="timezone">
                           <SelectValue placeholder="Select timezone" />
@@ -1460,7 +1460,7 @@ const Settings = () => {
                           <SelectItem value="Africa/Cairo">Cairo</SelectItem>
                         </SelectContent>
                       </Select>
-                      <p className="text-sm text-muted-foreground">Select your organization's timezone for date and time display</p>
+                      <p className="text-sm text-muted-foreground">{t('settings.organization_timezone')}</p>
                     </div>
 
                     <div className="space-y-2">

@@ -9,7 +9,6 @@ import os
 import re
 from pathlib import Path
 import uuid
-import shutil
 from collections import defaultdict
 import sqlalchemy as sa
 
@@ -17,7 +16,7 @@ from core.models.database import get_db
 from core.models.models_per_tenant import Expense, ExpenseAttachment, User, Invoice, BankStatementTransaction
 from core.models.models import MasterUser
 from core.routers.auth import get_current_user
-from core.schemas.expense import ExpenseCreate, ExpenseUpdate, Expense as ExpenseSchema
+from core.schemas.expense import ExpenseCreate, ExpenseUpdate, Expense as ExpenseSchema, DeletedExpense, RecycleBinExpenseResponse, RestoreExpenseRequest
 from core.services.currency_service import CurrencyService
 from core.services.search_service import search_service
 from core.utils.rbac import require_non_viewer
@@ -55,6 +54,9 @@ def check_expense_modification_allowed(expense: Expense) -> None:
         )
 
 
+
+
+
 @router.get("/", response_model=List[ExpenseSchema])
 async def list_expenses(
     skip: int = 0,
@@ -78,9 +80,9 @@ async def list_expenses(
         # Note: No user_id filter needed - tenant isolation is provided by the per-tenant database
         logger.info(f"list_expenses: current_user.id={current_user.id}, tenant_id={current_user.tenant_id}, search={search}")
         from sqlalchemy.orm import joinedload
-        query = db.query(Expense).options(joinedload(Expense.created_by))
+        query = db.query(Expense).options(joinedload(Expense.created_by)).filter(Expense.is_deleted == False)
         base_count = query.count()
-        logger.info(f"list_expenses: base_count (before filters)={base_count}")
+        logger.info(f"list_expenses: current_user.id={current_user.id}, tenant_id={current_user.tenant_id}, search={search}")
         if category and category != "all":
             query = query.filter(Expense.category == category)
         if label:
@@ -152,7 +154,7 @@ async def list_expenses(
         raise HTTPException(status_code=500, detail="Failed to fetch expenses")
 
 
-@router.get("/{expense_id}", response_model=ExpenseSchema)
+@router.get("/{expense_id:\\d+}", response_model=ExpenseSchema)
 async def get_expense(
     expense_id: int,
     db: Session = Depends(get_db),
@@ -699,7 +701,7 @@ async def bulk_delete_expenses(
                     db=db,
                     user_id=current_user.id,
                     user_email=current_user.email,
-                    action="BULK_DELETE",
+                    action="BULK_SOFT_DELETE",
                     resource_type="expense",
                     resource_id=str(expense.id),
                     resource_name=f"Expense {expense.id}",
@@ -714,8 +716,11 @@ async def bulk_delete_expenses(
                     }
                 )
 
-                # Delete the expense
-                db.delete(expense)
+                # Soft delete the expense (move to recycle bin)
+                expense.is_deleted = True
+                expense.deleted_at = datetime.now(timezone.utc)
+                expense.deleted_by = current_user.id
+                expense.updated_at = datetime.now(timezone.utc)
                 deleted_count += 1
                 
             except Exception as e:
@@ -724,14 +729,14 @@ async def bulk_delete_expenses(
                 continue
         
         db.commit()
-        logger.info(f"Successfully bulk deleted {deleted_count} expenses for user {current_user.id}")
+        logger.info(f"Successfully bulk soft deleted {deleted_count} expenses for user {current_user.id}")
         
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
-        logger.error(f"Failed to bulk delete expenses: {e}")
-        raise HTTPException(status_code=500, detail="Failed to bulk delete expenses")
+        logger.error(f"Failed to bulk soft delete expenses: {e}")
+        raise HTTPException(status_code=500, detail="Failed to bulk soft delete expenses")
 
 
 @router.put("/{expense_id}", response_model=ExpenseSchema)
@@ -992,23 +997,296 @@ async def update_expense(
         raise HTTPException(status_code=500, detail="Failed to update expense")
 
 
-@router.delete("/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
+# Recycle Bin Endpoints (must come before /{expense_id} route)
+
+@router.get("/recycle-bin", response_model=List[DeletedExpense])
+async def get_deleted_expenses(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Get all deleted expenses in the recycle bin"""
+    try:
+        deleted_expenses = db.query(Expense).filter(
+            Expense.is_deleted == True
+        ).offset(skip).limit(limit).all()
+
+        result = []
+        for expense in deleted_expenses:
+            # Get deleted by user information
+            deleted_by_username = None
+            if expense.deleted_by_user:
+                if expense.deleted_by_user.first_name and expense.deleted_by_user.last_name:
+                    deleted_by_username = f"{expense.deleted_by_user.first_name} {expense.deleted_by_user.last_name}"
+                elif expense.deleted_by_user.first_name:
+                    deleted_by_username = expense.deleted_by_user.first_name
+                else:
+                    deleted_by_username = expense.deleted_by_user.email
+
+            expense_dict = {
+                "id": expense.id,
+                "amount": expense.amount,
+                "currency": expense.currency,
+                "expense_date": expense.expense_date,
+                "category": expense.category,
+                "vendor": expense.vendor,
+                "status": expense.status,
+                "notes": expense.notes,
+                "user_id": expense.user_id,
+                "created_at": expense.created_at,
+                "updated_at": expense.updated_at,
+                "is_deleted": expense.is_deleted,
+                "deleted_at": expense.deleted_at,
+                "deleted_by": expense.deleted_by,
+                "deleted_by_username": deleted_by_username,
+                "created_by_user_id": expense.created_by_user_id,
+                "created_by_username": expense.created_by_username,
+                "created_by_email": expense.created_by_email
+            }
+            result.append(expense_dict)
+
+        return result
+    except Exception as e:
+        logger.error(f"Error getting deleted expenses: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get deleted expenses: {str(e)}"
+        )
+
+@router.post("/recycle-bin/empty", response_model=dict)
+async def empty_expense_recycle_bin(
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Empty the entire expense recycle bin (admin only)"""
+    try:
+        # Only admins can empty the recycle bin
+        if current_user.role != 'admin':
+            raise HTTPException(
+                status_code=403,
+                detail="Only admins can empty the recycle bin"
+            )
+
+        # Get all deleted expenses
+        deleted_expenses = db.query(Expense).filter(Expense.is_deleted == True).all()
+        count = len(deleted_expenses)
+
+        if count == 0:
+            return {"message": "Recycle bin is already empty", "deleted_count": 0}
+
+        # Delete all attachment files from storage before deleting expenses
+        try:
+            for expense in deleted_expenses:
+                # Delete legacy receipt file if exists
+                if expense.receipt_path:
+                    try:
+                        await delete_file_from_storage(expense.receipt_path, current_user.tenant_id, current_user.id, db)
+                    except Exception as e:
+                        logger.warning(f"Failed to delete receipt file {expense.receipt_path}: {e}")
+
+                # Delete modern attachments
+                attachments = db.query(ExpenseAttachment).filter(ExpenseAttachment.expense_id == expense.id).all()
+                for att in attachments:
+                    if att.file_path:
+                        try:
+                            await delete_file_from_storage(att.file_path, current_user.tenant_id, current_user.id, db)
+                        except Exception as e:
+                            logger.warning(f"Failed to delete attachment file {att.file_path}: {e}")
+
+            if deleted_expenses:
+                logger.info(f"Deleted attachment files for {len(deleted_expenses)} expense(s) during recycle bin empty")
+        except Exception as e:
+            logger.warning(f"Failed to delete attachment files during expense recycle bin empty: {e}")
+
+        # Delete all expenses in recycle bin
+        for expense in deleted_expenses:
+            db.delete(expense)
+
+        db.commit()
+
+        # Audit log for empty recycle bin
+        log_audit_event(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="Empty Expense Recycle Bin",
+            resource_type="expense",
+            resource_id=None,
+            resource_name=None,
+            details={"message": f"Expense recycle bin emptied, {count} expenses permanently deleted."},
+            status="success"
+        )
+
+        return {
+            "message": f"Expense recycle bin emptied successfully. {count} expenses permanently deleted.",
+            "deleted_count": count
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error emptying expense recycle bin: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to empty expense recycle bin: {str(e)}"
+        )
+
+@router.post("/{expense_id}/restore", response_model=RecycleBinExpenseResponse)
+async def restore_expense(
+    expense_id: int,
+    restore_request: RestoreExpenseRequest = RestoreExpenseRequest(),
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Restore an expense from the recycle bin"""
+    try:
+        # Find the deleted expense
+        db_expense = db.query(Expense).filter(
+            Expense.id == expense_id,
+            Expense.is_deleted == True
+        ).first()
+
+        if not db_expense:
+            raise HTTPException(
+                status_code=404,
+                detail="Deleted expense not found"
+            )
+
+        # Restore the expense
+        db_expense.is_deleted = False
+        db_expense.deleted_at = None
+        db_expense.deleted_by = None
+        db_expense.status = restore_request.new_status  # Set the new status
+        db_expense.updated_at = datetime.now(timezone.utc)
+
+        db.commit()
+
+        # Audit log for restore
+        log_audit_event(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="Restore",
+            resource_type="expense",
+            resource_id=str(expense_id),
+            resource_name=f"Expense {expense_id}",
+            details={"message": "Expense restored from recycle bin"},
+            status="success"
+        )
+
+        return RecycleBinExpenseResponse(
+            message="Expense restored successfully",
+            expense_id=expense_id,
+            action="restored"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error restoring expense {expense_id}: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to restore expense: {str(e)}"
+        )
+
+@router.delete("/{expense_id}/permanent", response_model=RecycleBinExpenseResponse)
+async def permanently_delete_expense(
+    expense_id: int,
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Permanently delete an expense from the recycle bin"""
+    try:
+        # Find the deleted expense
+        db_expense = db.query(Expense).filter(
+            Expense.id == expense_id,
+            Expense.is_deleted == True
+        ).first()
+
+        if not db_expense:
+            raise HTTPException(
+                status_code=404,
+                detail="Deleted expense not found"
+            )
+
+        # Delete attachment files from storage
+        try:
+            # Delete legacy receipt file if exists
+            if db_expense.receipt_path:
+                try:
+                    await delete_file_from_storage(db_expense.receipt_path, current_user.tenant_id, current_user.id, db)
+                except Exception as e:
+                    logger.warning(f"Failed to delete receipt file {db_expense.receipt_path}: {e}")
+
+            # Delete modern attachments
+            attachments = db.query(ExpenseAttachment).filter(ExpenseAttachment.expense_id == expense_id).all()
+            for att in attachments:
+                if att.file_path:
+                    try:
+                        await delete_file_from_storage(att.file_path, current_user.tenant_id, current_user.id, db)
+                    except Exception as e:
+                        logger.warning(f"Failed to delete attachment file {att.file_path}: {e}")
+
+            if attachments or db_expense.receipt_path:
+                logger.info(f"Deleted attachment files for expense {expense_id}")
+        except Exception as e:
+            logger.warning(f"Failed to delete attachment files for expense {expense_id}: {e}")
+
+        # Permanently delete the expense
+        db.delete(db_expense)
+        db.commit()
+
+        # Audit log for permanent delete
+        log_audit_event(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="Permanent Delete",
+            resource_type="expense",
+            resource_id=str(expense_id),
+            resource_name=f"Expense {expense_id}",
+            details={"message": "Expense permanently deleted"},
+            status="success"
+        )
+
+        return RecycleBinExpenseResponse(
+            message="Expense permanently deleted",
+            expense_id=expense_id,
+            action="permanently_deleted"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error permanently deleting expense {expense_id}: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to permanently delete expense: {str(e)}"
+        )
+
+
+@router.delete("/{expense_id}", response_model=RecycleBinExpenseResponse)
 async def delete_expense(
     expense_id: int,
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user),
 ):
+    """Move an expense to the recycle bin (soft delete)"""
     require_non_viewer(current_user, "delete expenses")
-    
+
     # Set tenant context for encryption operations
     from core.models.database import set_tenant_context
     set_tenant_context(current_user.tenant_id)
-    
+
     try:
-        db_expense = db.query(Expense).filter(Expense.id == expense_id).first()
+        db_expense = db.query(Expense).filter(
+            Expense.id == expense_id,
+            Expense.is_deleted == False
+        ).first()
         if not db_expense:
             raise HTTPException(status_code=404, detail="Expense not found")
-        
+
         # Check if expense can be deleted based on current status
         # Allow admins to bypass this check
         if current_user.role != 'admin' and db_expense.status in [ExpenseStatus.PENDING_APPROVAL.value, ExpenseStatus.APPROVED.value]:
@@ -1016,25 +1294,12 @@ async def delete_expense(
                 status_code=400, 
                 detail=f"Cannot delete expense with status '{db_expense.status}'. Expense is in approval workflow."
             )
-        
+
         # Prevent deleting an expense that is linked to an invoice
         if getattr(db_expense, "invoice_id", None) is not None:
             raise HTTPException(status_code=400, detail=EXPENSE_LINKED_TO_INVOICE)
-        
-        # Remove any legacy single receipt file if present
-        if db_expense.receipt_path:
-            await delete_file_from_storage(db_expense.receipt_path, current_user.tenant_id, current_user.id, db)
 
-        # Remove all attachment files associated with this expense
-        try:
-            attachments = db.query(ExpenseAttachment).filter(ExpenseAttachment.expense_id == expense_id).all()
-            for att in attachments:
-                if getattr(att, "file_path", None):
-                    await delete_file_from_storage(att.file_path, current_user.tenant_id, current_user.id, db)
-        except Exception as e:
-            logger.warning(f"Failed to enumerate attachments for deletion: {e}")
-
-        # Unlink any bank statement transactions that reference this expense BEFORE deletion
+        # Unlink any bank statement transactions that reference this expense
         try:
             from core.models.models_per_tenant import BankStatementTransaction
             linked_transactions = db.query(BankStatementTransaction).filter(
@@ -1047,7 +1312,7 @@ async def delete_expense(
         except Exception as e:
             logger.warning(f"Failed to unlink bank transactions from expense {expense_id}: {e}")
 
-        # Unlink any raw emails that reference this expense BEFORE deletion
+        # Unlink any raw emails that reference this expense
         try:
             from core.models.models_per_tenant import RawEmail
             linked_emails = db.query(RawEmail).filter(
@@ -1060,20 +1325,12 @@ async def delete_expense(
         except Exception as e:
             logger.warning(f"Failed to unlink raw emails from expense {expense_id}: {e}")
 
-        # Capture expense details for audit log before deletion
-        expense_details = {
-            "id": db_expense.id,
-            "amount": db_expense.amount,
-            "currency": db_expense.currency,
-            "date": db_expense.expense_date.isoformat() if db_expense.expense_date else None,
-            "category": db_expense.category,
-            "vendor": db_expense.vendor,
-            "status": db_expense.status,
-            "notes": db_expense.notes
-        }
+        # Soft delete the expense
+        db_expense.is_deleted = True
+        db_expense.deleted_at = datetime.now(timezone.utc)
+        db_expense.deleted_by = current_user.id
+        db_expense.updated_at = datetime.now(timezone.utc)
 
-        # Delete the expense (unlinking should prevent FK constraint errors)
-        db.delete(db_expense)
         db.commit()
 
         # Remove from search index
@@ -1082,24 +1339,33 @@ async def delete_expense(
         except Exception as e:
             logger.warning(f"Failed to remove expense {expense_id} from search index: {e}")
 
+        # Audit log for soft delete
         log_audit_event(
             db=db,
             user_id=current_user.id,
             user_email=current_user.email,
-            action="DELETE",
+            action="Soft Delete",
             resource_type="expense",
             resource_id=str(expense_id),
             resource_name=f"Expense {expense_id}",
-            details=expense_details,
-            status="success",
+            details={"message": "Expense moved to recycle bin"},
+            status="success"
         )
-        return None
+
+        return RecycleBinExpenseResponse(
+            message="Expense moved to recycle bin successfully",
+            expense_id=expense_id,
+            action="moved_to_recycle"
+        )
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
-        logger.error(f"Failed to delete expense: {e}")
-        raise HTTPException(status_code=500, detail="Failed to delete expense")
+        logger.error(f"Error in delete_expense: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to move expense to recycle bin: {str(e)}"
+        )
 
 
 @router.post("/{expense_id}/upload-receipt")

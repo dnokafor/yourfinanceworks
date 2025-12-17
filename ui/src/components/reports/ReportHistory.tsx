@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -99,6 +100,7 @@ const STATUS_ICONS = {
 };
 
 export function ReportHistory({ className }: ReportHistoryProps) {
+  const { t } = useTranslation();
   const [reports, setReports] = useState<ReportHistoryType[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
@@ -267,7 +269,7 @@ export function ReportHistory({ className }: ReportHistoryProps) {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
-                  placeholder="Search reports..."
+                  placeholder={t('reports.search_placeholder', { defaultValue: 'Search reports...' })}
                   value={filters.search}
                   onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
                   className="pl-10"

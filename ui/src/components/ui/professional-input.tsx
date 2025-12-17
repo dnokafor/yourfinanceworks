@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Eye, EyeOff, Search, X } from "lucide-react";
 
@@ -172,6 +173,7 @@ interface SearchInputProps extends Omit<ProfessionalInputProps, 'leftIcon' | 'ty
 
 const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
   ({ onSearch, ...props }, ref) => {
+    const { t } = useTranslation();
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'Enter' && onSearch) {
         onSearch(e.currentTarget.value);
@@ -186,7 +188,7 @@ const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
         ref={ref}
         type="search"
         leftIcon={<Search />}
-        placeholder="Search..."
+        placeholder={t('common.search', { defaultValue: 'Search...' })}
         clearable
         {...props}
         onKeyDown={handleKeyDown}

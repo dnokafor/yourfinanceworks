@@ -33,13 +33,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 // removed duplicate useEffect import
 import { Loader2, Plus, Search, Trash2, Upload, ChevronDown, ChevronUp, MoreHorizontal, Edit, Package, ArrowDown, BarChart3 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Link } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { expenseApi, approvalApi, Expense, ExpenseAttachmentMeta, api, linkApi, settingsApi } from '@/lib/api';
+import { expenseApi, approvalApi, Expense, ExpenseAttachmentMeta, api, linkApi, settingsApi, DeletedExpense } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { CurrencySelector } from '@/components/ui/currency-selector';
 import { Label } from '@/components/ui/label';
@@ -133,6 +134,13 @@ const Expenses = () => {
 
   // Creating state for new expense modal
   const [creating, setCreating] = useState(false);
+
+  // Recycle bin state
+  const [showRecycleBin, setShowRecycleBin] = useState(false);
+  const [deletedExpenses, setDeletedExpenses] = useState<DeletedExpense[]>([]);
+  const [recycleBinLoading, setRecycleBinLoading] = useState(false);
+  const [expenseToPermanentlyDelete, setExpenseToPermanentlyDelete] = useState<number | null>(null);
+  const [emptyRecycleBinModalOpen, setEmptyRecycleBinModalOpen] = useState(false);
 
   // Fetch settings to get timezone
   const { data: settings } = useQuery({
@@ -423,6 +431,10 @@ const Expenses = () => {
     try {
       await expenseApi.deleteExpense(id);
       setExpenses(prev => prev.filter(e => e.id !== id));
+      // Refresh recycle bin if it's currently open
+      if (showRecycleBin) {
+        fetchDeletedExpenses();
+      }
       toast.success('Expense deleted');
     } catch (e: any) {
       toast.error(e?.message || 'Failed to delete expense');
@@ -586,6 +598,67 @@ const Expenses = () => {
     }
   };
 
+  // Recycle bin functions
+  const fetchDeletedExpenses = async () => {
+    try {
+      setRecycleBinLoading(true);
+      const data = await expenseApi.getDeletedExpenses();
+      setDeletedExpenses(data);
+    } catch (error) {
+      console.error('Failed to fetch deleted expenses:', error);
+      toast.error('Failed to load recycle bin');
+    } finally {
+      setRecycleBinLoading(false);
+    }
+  };
+
+  const handleRestoreExpense = async (expenseId: number) => {
+    try {
+      await expenseApi.restoreExpense(expenseId, 'recorded');
+      toast.success('Expense restored successfully');
+      fetchDeletedExpenses();
+      fetchExpenses(); // Refresh main list
+    } catch (error: any) {
+      console.error('Failed to restore expense:', error);
+      toast.error(error?.message || 'Failed to restore expense');
+    }
+  };
+
+  const handlePermanentlyDeleteExpense = async (expenseId: number) => {
+    try {
+      await expenseApi.permanentlyDeleteExpense(expenseId);
+      toast.success('Expense permanently deleted');
+      fetchDeletedExpenses();
+      setExpenseToPermanentlyDelete(null);
+    } catch (error: any) {
+      console.error('Failed to permanently delete expense:', error);
+      toast.error(error?.message || 'Failed to permanently delete expense');
+    }
+  };
+
+  const handleEmptyRecycleBin = () => {
+    setEmptyRecycleBinModalOpen(true);
+  };
+
+  const confirmEmptyRecycleBin = async () => {
+    try {
+      const response = await expenseApi.emptyRecycleBin();
+      toast.success('Recycle bin emptied successfully');
+      fetchDeletedExpenses();
+      setEmptyRecycleBinModalOpen(false);
+    } catch (error: any) {
+      console.error('Failed to empty recycle bin:', error);
+      toast.error(error?.message || 'Failed to empty recycle bin');
+    }
+  };
+
+  const handleToggleRecycleBin = () => {
+    setShowRecycleBin(!showRecycleBin);
+    if (!showRecycleBin) {
+      fetchDeletedExpenses();
+    }
+  };
+
   return (
     <AppLayout>
       <div className="h-full space-y-6 fade-in">
@@ -594,6 +667,15 @@ const Expenses = () => {
           description={t('expenses.description')}
           actions={canPerformActions() && (
             <div className="flex gap-2">
+              <ProfessionalButton
+                variant="outline"
+                onClick={handleToggleRecycleBin}
+                className="whitespace-nowrap"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {t('recycleBin.title', { defaultValue: 'Recycle Bin' })}
+                {showRecycleBin ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />}
+              </ProfessionalButton>
               <ProfessionalButton
                 variant="outline"
                 onClick={() => setShowAnalytics(!showAnalytics)}
@@ -630,6 +712,111 @@ const Expenses = () => {
             </div>
           )}
         />
+
+        {/* Recycle Bin Section */}
+        <Collapsible open={showRecycleBin} onOpenChange={setShowRecycleBin}>
+          <CollapsibleContent>
+            <ProfessionalCard className="slide-in">
+              <CardHeader>
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Trash2 className="w-5 h-5" />
+                    {t('recycleBin.title', { defaultValue: 'Recycle Bin' })}
+                  </CardTitle>
+                  <p className="text-muted-foreground text-sm">{t('recycleBin.description', { defaultValue: 'Deleted expenses that can be restored or permanently deleted' })}</p>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {recycleBinLoading ? (
+                  <div className="flex justify-center items-center h-24">
+                    <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                    {t('recycleBin.loading', { defaultValue: 'Loading...' })}
+                  </div>
+                ) : deletedExpenses.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-24 text-center">
+                    <Trash2 className="h-8 w-8 text-muted-foreground mb-2" />
+                    <p className="text-muted-foreground">{t('recycleBin.recycle_bin_empty', { defaultValue: 'Recycle bin is empty' })}</p>
+                  </div>
+                ) : (
+                  <div className="rounded-md border overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{t('expenses.table.id', { defaultValue: 'ID' })}</TableHead>
+                          <TableHead>{t('expenses.table.date')}</TableHead>
+                          <TableHead>{t('expenses.table.category')}</TableHead>
+                          <TableHead>{t('expenses.table.vendor')}</TableHead>
+                          <TableHead>{t('expenses.table.amount')}</TableHead>
+                          <TableHead>{t('recycleBin.deleted_at')}</TableHead>
+                          <TableHead>{t('recycleBin.deleted_by')}</TableHead>
+                          <TableHead>{t('recycleBin.actions')}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {deletedExpenses.map((expense) => (
+                          <TableRow key={expense.id}>
+                            <TableCell className="text-muted-foreground whitespace-nowrap">#{expense.id}</TableCell>
+                            <TableCell>
+                              {expense.expense_date ? new Date(expense.expense_date).toLocaleDateString('en-US', { timeZone: timezone }) : 'N/A'}
+                            </TableCell>
+                            <TableCell>{expense.category}</TableCell>
+                            <TableCell>{expense.vendor || '—'}</TableCell>
+                            <TableCell><CurrencyDisplay amount={expense.amount || 0} currency={expense.currency || 'USD'} /></TableCell>
+                            <TableCell>{expense.deleted_at ? format(new Date(expense.deleted_at), 'PP p') : 'N/A'}</TableCell>
+                            <TableCell>{expense.deleted_by_username || t('common.unknown')}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleRestoreExpense(expense.id)}
+                                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                >
+                                  <ArrowDown className="w-4 h-4 mr-1" />
+                                  {t('recycleBin.restore', { defaultValue: 'Restore' })}
+                                </Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    >
+                                      <Trash2 className="w-4 h-4 mr-1" />
+                                      {t('recycleBin.permanently_delete', { defaultValue: 'Delete' })}
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>{t('recycleBin.permanent_delete_confirm_title', { defaultValue: 'Permanently Delete Expense' })}</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        {t('recycleBin.permanent_delete_confirm_description', { defaultValue: 'Are you sure you want to permanently delete this expense? This action cannot be undone.' })}
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => handlePermanentlyDeleteExpense(expense.id)}
+                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                      >
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        {t('recycleBin.permanently_delete', { defaultValue: 'Delete Permanently' })}
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </ProfessionalCard>
+          </CollapsibleContent>
+        </Collapsible>
 
         {/* Expense Summary and Analytics */}
         {showAnalytics && (
@@ -758,18 +945,18 @@ const Expenses = () => {
                       disabled={!canPerformActions() || selectedIds.length === 0}
                     >
                       <Trash2 className="w-4 h-4 mr-2" />
-                      Delete Selected
+                      {t('expenses.delete_selected', { defaultValue: 'Delete Selected' })}
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Delete {selectedIds.length} Expense{selectedIds.length > 1 ? 's' : ''}</AlertDialogTitle>
+                      <AlertDialogTitle>{selectedIds.length === 1 ? t('expenses.delete_single_title', { defaultValue: 'Delete 1 Expense' }) : t('expenses.delete_multiple_title', { count: selectedIds.length, defaultValue: `Delete ${selectedIds.length} Expenses` })}</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Are you sure you want to delete {selectedIds.length} expense{selectedIds.length > 1 ? 's' : ''}? This action cannot be undone and will permanently remove the selected expenses and all their attachments.
+                        {selectedIds.length === 1 ? t('expenses.delete_single_description', { defaultValue: 'Are you sure you want to delete 1 expense? This will move the selected expense to the recycle bin where it can be restored or permanently deleted later.' }) : t('expenses.delete_multiple_description', { count: selectedIds.length, defaultValue: `Are you sure you want to delete ${selectedIds.length} expenses? This will move the selected expenses to the recycle bin where they can be restored or permanently deleted later.` })}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
                       <AlertDialogAction
                         onClick={async () => {
                           try {
@@ -783,7 +970,7 @@ const Expenses = () => {
                           }
                         }}
                       >
-                        Delete
+                        {t('common.delete', { defaultValue: 'Delete' })}
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
@@ -1135,7 +1322,7 @@ const Expenses = () => {
                 </Popover>
               </div>
               <div>
-                <label className="text-sm">Receipt Time (HH:MM)</label>
+                <label className="text-sm">{t('expenses.receipt_time', { defaultValue: 'Receipt Time (HH:MM)' })}</label>
                 <Input
                   type="time"
                   value={newExpense.receipt_timestamp ? new Date(newExpense.receipt_timestamp as string).toISOString().substring(11, 16) : ''}
@@ -1404,7 +1591,7 @@ const Expenses = () => {
                 </Popover>
               </div>
               <div>
-                <label className="text-sm">Receipt Time (HH:MM)</label>
+                <label className="text-sm">{t('expenses.receipt_time', { defaultValue: 'Receipt Time (HH:MM)' })}</label>
                 <Input
                   type="time"
                   value={editExpense.receipt_timestamp ? new Date(editExpense.receipt_timestamp as string).toISOString().substring(11, 16) : ''}
@@ -1633,6 +1820,25 @@ const Expenses = () => {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Empty Recycle Bin Modal */}
+        <AlertDialog open={emptyRecycleBinModalOpen} onOpenChange={setEmptyRecycleBinModalOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('recycleBin.empty_recycle_bin_confirm_title', { defaultValue: 'Empty Recycle Bin' })}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t('recycleBin.empty_recycle_bin_confirm_description', { defaultValue: 'Are you sure you want to permanently delete all expenses in the recycle bin? This action cannot be undone and all deleted expenses will be completely removed from the system.' })}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmEmptyRecycleBin} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                <Trash2 className="mr-2 h-4 w-4" />
+                {t('recycleBin.empty_recycle_bin', { defaultValue: 'Empty Recycle Bin' })}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Bulk Expense Creation Modal */}
         <BulkExpenseModal

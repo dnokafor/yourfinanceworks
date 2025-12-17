@@ -476,7 +476,7 @@ export function InvoiceForm({
               />
 
               {/* Form Actions */}
-              {renderButtons && (
+              {renderButtons && !isEdit && (
                 <div className="flex justify-end gap-4">
                   <Button
                     type="button"
@@ -490,7 +490,7 @@ export function InvoiceForm({
                     disabled={invoiceForm.submitting}
                   >
                     {invoiceForm.submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {isEdit ? t('invoices.update_invoice') : t('invoices.create_invoice')}
+                    {t('invoices.create_invoice')}
                   </Button>
                 </div>
               )}

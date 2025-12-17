@@ -34,6 +34,8 @@ import AIAssistant from "./components/AIAssistant";
 import { Toaster } from "sonner";
 import AuditLog from "./pages/AuditLog";
 import RecycleBin from "./pages/RecycleBin";
+import ExpenseRecycleBin from "./pages/ExpenseRecycleBin";
+import StatementRecycleBin from "./pages/StatementRecycleBin";
 import Analytics from "./pages/Analytics";
 import Reports from "./pages/Reports";
 import ReportDetail from "./pages/ReportDetail";
@@ -157,6 +159,9 @@ const AppContent = () => {
                 <Route path="/inventory/edit/:id" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><EditInventoryItem /></RoleProtectedRoute></ProtectedRoute>} />
                 <Route path="/inventory/new-inventory" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><NewInventoryInvoice /></RoleProtectedRoute></ProtectedRoute>} />
                 <Route path="/prompts" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin']}><PromptManagement /></RoleProtectedRoute></ProtectedRoute>} />
+                <Route path="/recycle-bin" element={<ProtectedRoute><RecycleBin /></ProtectedRoute>} />
+                <Route path="/expenses/recycle-bin" element={<ProtectedRoute><ExpenseRecycleBin /></ProtectedRoute>} />
+                <Route path="/statements/recycle-bin" element={<ProtectedRoute><StatementRecycleBin /></ProtectedRoute>} />
 
                 <Route path="*" element={<NotFound />} />
               </Routes>

@@ -2,6 +2,21 @@ import { toast } from 'sonner';
 import { EXPENSE_CATEGORY_OPTIONS } from '@/constants/expenses';
 import type { ExpenseApproval, ApprovalHistoryEntry, ApprovalDashboardStats, User, ApprovalDelegate, ApprovalDelegateCreate, ApprovalDelegateUpdate } from '@/types';
 
+// Define recycle bin types
+export interface DeletedExpense extends Expense {
+  is_deleted: boolean;
+  deleted_at?: string | null;
+  deleted_by?: number | null;
+  deleted_by_username?: string | null;
+}
+
+export interface DeletedBankStatement extends BankStatementSummary {
+  is_deleted: boolean;
+  deleted_at?: string | null;
+  deleted_by?: number | null;
+  deleted_by_username?: string | null;
+}
+
 // API base URL comes from env var. Set VITE_API_URL in your environment.
 // When running in containers, use nginx proxy on port 8080
 export const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
@@ -578,6 +593,19 @@ export const bankStatementApi = {
       { method: 'DELETE' }
     );
   },
+
+  // Recycle bin methods
+  getDeletedStatements: () =>
+    apiRequest<DeletedBankStatement[]>('/statements/recycle-bin'),
+  restoreStatement: (id: number, newStatus: string = 'processed') =>
+    apiRequest(`/statements/${id}/restore`, {
+      method: 'POST',
+      body: JSON.stringify({ new_status: newStatus }),
+    }),
+  permanentlyDeleteStatement: (id: number) =>
+    apiRequest(`/statements/${id}/permanent`, { method: 'DELETE' }),
+  emptyRecycleBin: () =>
+    apiRequest('/statements/recycle-bin/empty', { method: 'POST' }),
 };
 
 // Add settings types
@@ -1950,6 +1978,19 @@ export const expenseApi = {
       total_categories: number;
     }>(`/expenses/analytics/categories${searchParams.toString() ? `?${searchParams.toString()}` : ''}`);
   },
+
+  // Recycle bin methods
+  getDeletedExpenses: () =>
+    apiRequest<DeletedExpense[]>('/expenses/recycle-bin'),
+  restoreExpense: (id: number, newStatus: string = 'recorded') =>
+    apiRequest(`/expenses/${id}/restore`, {
+      method: 'POST',
+      body: JSON.stringify({ new_status: newStatus }),
+    }),
+  permanentlyDeleteExpense: (id: number) =>
+    apiRequest(`/expenses/${id}/permanent`, { method: 'DELETE' }),
+  emptyRecycleBin: () =>
+    apiRequest('/expenses/recycle-bin/empty', { method: 'POST' }),
 };
 
 // Dashboard API

@@ -321,3 +321,27 @@ class ExpenseWithInventoryConsumption(Expense):
     model_config = ConfigDict(from_attributes=True)
 
 
+# === Recycle Bin Schemas ===
+
+class DeletedExpense(Expense):
+    """Schema for displaying deleted expenses in the recycle bin"""
+    is_deleted: bool
+    deleted_at: Optional[datetime]
+    deleted_by: Optional[int]
+    deleted_by_username: Optional[str] = None  # Username of who deleted it
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RecycleBinExpenseResponse(BaseModel):
+    """Response schema for expense recycle bin operations"""
+    message: str
+    expense_id: int
+    action: str  # "moved_to_recycle", "restored", "permanently_deleted"
+
+
+class RestoreExpenseRequest(BaseModel):
+    """Request schema for restoring an expense"""
+    new_status: Optional[str] = "recorded"  # Status to set when restoring
+
+

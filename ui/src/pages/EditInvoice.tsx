@@ -346,7 +346,7 @@ const EditInvoice = () => {
                   <Package className="h-5 w-5 text-orange-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Linked Expenses</p>
+                  <p className="text-sm text-muted-foreground">{t('invoices.linked_expenses_header')}</p>
                   <p className="text-lg font-semibold">{linkedExpenses.length}</p>
                 </div>
               </div>
@@ -361,7 +361,7 @@ const EditInvoice = () => {
               className="flex items-center gap-2"
             >
               <File className="h-4 w-4" />
-              Live Preview
+              {t('editInvoice.livePreview')}
             </Button>
             <Button
               variant="outline"
@@ -369,13 +369,13 @@ const EditInvoice = () => {
               className="flex items-center gap-2"
             >
               <History className="h-4 w-4" />
-              View History ({invoiceHistory.length})
+              {t('editInvoice.viewHistory')} ({invoiceHistory.length})
             </Button>
             <Button
               variant="outline"
               onClick={() => navigate('/invoices')}
             >
-              Cancel
+              {t('editInvoice.cancel')}
             </Button>
             <Button
               onClick={() => {
@@ -383,7 +383,7 @@ const EditInvoice = () => {
                 if (submitBtn) submitBtn.click();
               }}
             >
-              Save Changes
+              {t('editInvoice.saveChanges')}
             </Button>
           </div>
         </div>
@@ -427,14 +427,14 @@ const EditInvoice = () => {
                     <Package className="h-5 w-5 text-orange-600" />
                   </div>
                   <div>
-                    <CardTitle className="text-lg">Linked Expenses</CardTitle>
+                    <CardTitle className="text-lg">{t('invoices.linked_expenses_header')}</CardTitle>
                     <p className="text-sm text-muted-foreground">
-                      Connect expenses to this invoice for better tracking and reconciliation
+                      {t('invoices.connect_expenses_to_invoice')}
                     </p>
                   </div>
                 </div>
                 <Badge variant="secondary" className="px-2 py-1">
-                  {linkedExpenses.length} linked
+                  {t('invoices.zero_linked', { count: linkedExpenses.length })}
                 </Badge>
               </div>
             </CardHeader>
@@ -443,11 +443,11 @@ const EditInvoice = () => {
               <div className="flex flex-col lg:flex-row gap-3 p-4 bg-gray-50 rounded-lg border">
                 <div className="flex-1">
                   <label className="text-sm font-medium text-gray-700 mb-2 block">
-                    Link Existing Expense
+                    {t('invoices.link_existing_expense')}
                   </label>
                   <Select value={linkSelect} onValueChange={setLinkSelect}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose an unlinked expense to attach..." />
+                      <SelectValue placeholder={t('invoices.choose_unlinked_expense')} />
                     </SelectTrigger>
                     <SelectContent>
                       {availableExpenses.length === 0 ? (
@@ -498,7 +498,7 @@ const EditInvoice = () => {
                     className="flex items-center gap-2"
                   >
                     <Plus className="h-4 w-4" />
-                    Link Expense
+                    {t('invoices.link_expense')}
                   </Button>
                   <Button
                     variant="outline"
@@ -506,7 +506,7 @@ const EditInvoice = () => {
                     className="flex items-center gap-2"
                   >
                     <Plus className="h-4 w-4" />
-                    Create Expense
+                    {t('invoices.create_expense')}
                   </Button>
                 </div>
               </div>
@@ -515,9 +515,9 @@ const EditInvoice = () => {
               {linkedExpenses.length === 0 ? (
                 <div className="text-center py-8">
                   <Package className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No expenses linked yet</h3>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">{t('invoices.no_expenses_linked_yet')}</h3>
                   <p className="text-muted-foreground mb-4">
-                    Link existing expenses or create new ones to track costs associated with this invoice.
+                    {t('invoices.link_existing_expenses_description')}
                   </p>
                 </div>
               ) : (

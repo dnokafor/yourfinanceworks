@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { useFeatures } from '@/contexts/FeatureContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Lock, AlertCircle, AlertTriangle } from 'lucide-react';
@@ -22,6 +23,7 @@ export const FeatureGate: React.FC<FeatureGateProps> = ({
   upgradeMessage,
   showExpiredContent = true,  // Default to showing expired content with banner
 }) => {
+  const { t } = useTranslation();
   const { isFeatureEnabled, isFeatureExpired, loading, licenseStatus } = useFeatures();
 
   if (loading) {
@@ -42,15 +44,14 @@ export const FeatureGate: React.FC<FeatureGateProps> = ({
       <>
         <Alert className="border-amber-300 bg-amber-50 mb-4">
           <AlertTriangle className="h-4 w-4 text-amber-600" />
-          <AlertTitle className="text-amber-900">License Expired</AlertTitle>
+          <AlertTitle className="text-amber-900">{t('license.expired')}</AlertTitle>
           <AlertDescription className="text-amber-800">
             <p className="mb-3">
-              Your license has expired. You can still view your existing data, but some features may be limited.
-              Please renew your license to continue using all features.
+              {t('license.expired_message')}
             </p>
             <div className="flex gap-2">
               <Button asChild size="sm" variant="default">
-                <Link to="/settings?tab=license">Renew License</Link>
+                <Link to="/settings?tab=license">{t('license.renew')}</Link>
               </Button>
             </div>
           </AlertDescription>
@@ -69,18 +70,18 @@ export const FeatureGate: React.FC<FeatureGateProps> = ({
       return (
         <Alert className="border-amber-200 bg-amber-50">
           <Lock className="h-4 w-4 text-amber-600" />
-          <AlertTitle className="text-amber-900">Feature Locked</AlertTitle>
+          <AlertTitle className="text-amber-900">{t('license.feature_locked')}</AlertTitle>
           <AlertDescription className="text-amber-800">
             <p className="mb-3">{defaultMessage}</p>
             {isTrialExpired && (
-              <p className="mb-3 text-sm">Your trial period has ended. Activate a license to continue using this feature.</p>
+              <p className="mb-3 text-sm">{t('license.trial_ended')}</p>
             )}
             {isLicenseExpired && (
-              <p className="mb-3 text-sm">Your license has expired. Please renew to continue using this feature.</p>
+              <p className="mb-3 text-sm">{t('license.license_expired_feature')}</p>
             )}
             <div className="flex gap-2">
               <Button asChild size="sm" variant="default">
-                <Link to="/settings?tab=license">Manage License</Link>
+                <Link to="/settings?tab=license">{t('license.manage')}</Link>
               </Button>
             </div>
           </AlertDescription>
@@ -106,6 +107,7 @@ export const FeatureAlert: React.FC<FeatureAlertProps> = ({
   title = 'Feature Not Available',
   message,
 }) => {
+  const { t } = useTranslation();
   const { licenseStatus } = useFeatures();
 
   const defaultMessage = message || `The ${feature} feature is not available in your current plan.`;
@@ -119,14 +121,14 @@ export const FeatureAlert: React.FC<FeatureAlertProps> = ({
       <AlertDescription className="text-blue-800">
         <p className="mb-3">{defaultMessage}</p>
         {isTrialExpired && (
-          <p className="mb-3 text-sm">Your trial period has ended. Activate a license to access this feature.</p>
+          <p className="mb-3 text-sm">{t('license.trial_ended_access')}</p>
         )}
         {isLicenseExpired && (
-          <p className="mb-3 text-sm">Your license has expired. Please renew to access this feature.</p>
+          <p className="mb-3 text-sm">{t('license.license_expired_access')}</p>
         )}
         <div className="flex gap-2">
           <Button asChild size="sm" variant="default">
-            <Link to="/settings?tab=license">Manage License</Link>
+            <Link to="/settings?tab=license">{t('license.manage')}</Link>
           </Button>
         </div>
       </AlertDescription>

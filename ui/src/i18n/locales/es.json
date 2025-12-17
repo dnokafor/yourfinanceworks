@@ -6,6 +6,7 @@
     "save": "Guardar",
     "cancel": "Cancelar",
     "delete": "Eliminar",
+    "search": "Buscar...",
     "edit": "Editar",
     "add": "Agregar",
     "remove": "Quitar",
@@ -17,7 +18,6 @@
     "back": "Atrás",
     "next": "Siguiente",
     "previous": "Anterior",
-    "search": "Buscar",
     "filter": "Filtrar",
     "clear": "Limpiar",
     "submit": "Enviar",
@@ -263,6 +263,76 @@
     },
     "provider_error": "useSearch debe usarse dentro de un SearchProvider"
   },
+  "license": {
+    "feature_locked": "Funcionalidad Bloqueada",
+    "expired": "Licencia Expirada",
+    "expired_message": "Su licencia ha expirado. Todavía puede ver sus datos existentes, pero algunas funciones pueden estar limitadas. Por favor renueve su licencia para continuar usando todas las funciones.",
+    "renew": "Renovar Licencia",
+    "manage": "Gestionar Licencia",
+    "trial_ended": "Su período de prueba ha terminado. Active una licencia para continuar usando esta función.",
+    "license_expired_feature": "Su licencia ha expirado. Por favor renueve para continuar usando esta función.",
+    "trial_ended_access": "Su período de prueba ha terminado. Active una licencia para acceder a esta función.",
+    "license_expired_access": "Su licencia ha expirado. Por favor renueve para acceder a esta función.",
+    "advanced_search_required": "La Búsqueda Avanzada requiere una licencia comercial. Actualice para buscar en todos sus datos con filtros potentes.",
+    "tabTitle": "Licencia",
+    "status": {
+      "title": "Estado de la Licencia",
+      "description": "Vea su información de licencia actual y administre su suscripción",
+      "installationId": "ID de Instalación",
+      "usageType": "Tipo",
+      "trialPeriod": "Período de Prueba",
+      "daysRemaining": "Días Restantes",
+      "expiration": "Expiración de la Licencia",
+      "licensedTo": "Licenciado A",
+      "deactivate": "Desactivar Licencia",
+      "confirmDeactivate": "¿Está seguro de que desea desactivar su licencia? Esto desactivará las funciones con licencia.",
+      "deactivateSuccess": "Licencia desactivada exitosamente",
+      "deactivateError": "Error al desactivar la licencia"
+    },
+    "activate": {
+      "title": "Activar Licencia",
+      "description": "Ingrese su clave de licencia para activar funciones premium",
+      "keyLabel": "Clave de Licencia",
+      "keyPlaceholder": "Ingrese su clave de licencia",
+      "button": "Activar Licencia",
+      "purchase": "Comprar Licencia",
+      "success": "¡Licencia activada exitosamente!",
+      "error": "Error al activar la licencia",
+      "enterKey": "Por favor ingrese una clave de licencia"
+    },
+    "features": {
+      "title": "Funciones Disponibles",
+      "description": "Funciones disponibles en su plan actual",
+      "enabled": "Habilitado"
+    },
+    "help": {
+      "title": "¿Necesita Ayuda?",
+      "description": "Si tiene preguntas sobre licencias o necesita asistencia, por favor contacte a nuestro equipo de soporte.",
+      "contactSupport": "Contactar Soporte",
+      "documentation": "Documentación"
+    },
+    "badges": {
+      "expiredGrace": "Expirado (Período de Gracia)",
+      "expired": "Expirado",
+      "expiringSoon": "Expirando Pronto",
+      "active": "Activo",
+      "trialExpired": "Prueba Expirada",
+      "trialEndingSoon": "Prueba Terminando Pronto",
+      "trialActive": "Prueba Activa",
+      "personalUse": "Edición Core",
+      "noLicense": "Sin Licencia"
+    },
+    "warnings": {
+      "actionRequired": "Acción Requerida",
+      "gracePeriod": "Su licencia ha expirado. Está en un período de gracia. Por favor renueve su licencia para continuar usando todas las funciones.",
+      "trialEnded": "Su período de prueba ha terminado. Active una licencia para continuar usando funciones premium.",
+      "trialEnding": "Su período de prueba termina en {{days}} días. Active una licencia para evitar interrupciones.",
+      "expiring": "Su licencia expira en {{days}} días. Por favor renueve para evitar interrupciones del servicio.",
+      "expired": "Su licencia ha expirado. Por favor renueve para continuar usando todas las funciones."
+    },
+    "loading": "Cargando información de licencia...",
+    "failedToLoad": "Error al cargar información de licencia"
+  },
   "dashboard": {
     "title": "Panel de Control",
     "welcome": "¡Bienvenido de vuelta, {{name}}!",
@@ -306,6 +376,8 @@
       "inventory_desc": "Gestionar artículos de inventario",
       "reports": "Generar Reportes",
       "reports_desc": "Crear reportes financieros",
+      "analytics": "Analíticas",
+      "analytics_desc": "Genere informes completos y analice sus datos de negocio",
       "reminders": "Recordatorios",
       "reminders_desc": "Gestionar recordatorios de pago"
     },
@@ -430,6 +502,7 @@
     "outstanding_label": "Pendiente",
     "total_amount": "Monto Total",
     "invoice_number": "Número de Factura",
+    "invoice_number_auto_generate": "Si se deja vacío, un número de factura se generará automáticamente",
     "invoice_date": "Fecha de Factura",
     "due_date": "Fecha de Vencimiento",
     "status": {
@@ -628,6 +701,16 @@
     "expense_unlinked_success": "Gasto desvinculado de la factura",
     "failed_to_link_expense": "No se pudo vincular el gasto",
     "failed_to_unlink_expense": "No se pudo desvincular el gasto",
+    "approval_workflow": "Flujo de Aprobación",
+    "submit_this_invoice_for_approval": "Enviar esta factura para aprobación",
+    "submit_this_invoice_for_approval_after_creation": "Enviar esta factura para aprobación después de la creación",
+    "linked_expenses_header": "Gastos Vinculados",
+    "connect_expenses_to_invoice": "Conecta gastos a esta factura para mejor seguimiento y conciliación",
+    "zero_linked": "{{count}} vinculados",
+    "link_existing_expense": "Vincular Gasto Existente",
+    "choose_unlinked_expense": "Elige un gasto no vinculado para adjuntar...",
+    "no_expenses_linked_yet": "No hay gastos vinculados aún",
+    "link_existing_expenses_description": "Vincula gastos existentes o crea nuevos para rastrear costos asociados con esta factura.",
     "invoice_ready_to_be_created": "La factura está lista para ser creada",
     "invoice_ready_to_be_updated": "La factura está lista para ser actualizada",
     "create_new_invoice": "Crear Nueva Factura",
@@ -961,6 +1044,8 @@
     "ai_assistant_description": "Habilita o deshabilita el asistente de IA de facturación para tu organización.",
     "show_analytics_menu": "Mostrar Menú de Analíticas",
     "show_analytics_menu_description": "Mostrar u ocultar el menú de analíticas en la barra lateral",
+    "organization_timezone": "Selecciona la zona horaria de tu organización para mostrar fecha y hora",
+    "timezone": "Zona Horaria",
     "configure_ai_provider_for_enhanced_features": "Configura el proveedor de IA para funciones mejoradas",
     "create_discount_rule": "Crear Regla de Descuento",
     "edit_discount_rule": "Editar Regla de Descuento",
@@ -1081,6 +1166,7 @@
     "reminder_overdue": "Recordatorio Vencido",
     "reminder_overdue_description": "Cuando un recordatorio se vence",
     "ai_assistant_license_required": "El Asistente de IA requiere una licencia válida. Por favor actualice su plan.",
+    "bank_statement_license_required": "Licencia Requerida: El procesamiento de extractos bancarios requiere la función de Extractos Bancarios IA. Por favor actualice su licencia para habilitar esta funcionalidad.",
     "update": "Actualizar",
     "discount": "Descuento",
     "min_amount": "Monto Mínimo",
@@ -1386,7 +1472,13 @@
     "uploading": "Subiendo...",
     "preview": "Vista previa",
     "delete_confirm_title": "¿Eliminar gasto?",
-    "delete_confirm_description": "Esta acción no se puede deshacer. Esto eliminará permanentemente este gasto y sus adjuntos.",
+    "delete_confirm_description": "Esto moverá el gasto a la papelera de reciclaje donde podrá ser restaurado o eliminado permanentemente más tarde.",
+    "delete_selected": "Eliminar Selección",
+    "delete_single_title": "Eliminar 1 Gasto",
+    "delete_single_description": "¿Estás seguro de que quieres eliminar 1 gasto? Esto moverá el gasto seleccionado a la papelera de reciclaje donde podrá ser restaurado o eliminado permanentemente más tarde.",
+    "delete_multiple_title": "Eliminar {{count}} Gastos",
+    "delete_multiple_description": "¿Estás seguro de que quieres eliminar {{count}} gastos? Esto moverá los gastos seleccionados a la papelera de reciclaje donde podrán ser restaurados o eliminados permanentemente más tarde.",
+    "receipt_time": "Hora del Recibo (HH:MM)",
     "new_title": "Nuevo Gasto",
     "edit_title": "Editar Gasto",
     "view_title": "Ver Gasto",
@@ -1657,7 +1749,15 @@
     "invoiceNotFound": "Factura no encontrada",
     "invoiceNotFoundDescription": "La factura que buscas no existe o no pudo ser cargada.",
     "editInvoice": "Editar Factura",
-    "updateInvoiceDetails": "Actualizar detalles de la factura"
+    "updateInvoiceDetails": "Actualizar detalles de la factura",
+    "totalAmount": "Monto Total",
+    "dueDate": "Fecha de Vencimiento",
+    "items": "Artículos",
+    "linkedExpenses": "Gastos Vinculados",
+    "livePreview": "Vista Previa en Vivo",
+    "viewHistory": "Ver Historial",
+    "cancel": "Cancelar",
+    "saveChanges": "Guardar Cambios"
   },
   "newClient": {
     "addNewClient": "Agregar Nuevo Cliente",
@@ -2157,7 +2257,12 @@
       "name_required": "El nombre del artículo es obligatorio",
       "price_required": "Se requiere un precio unitario válido"
     },
-    "total": "Total"
+    "total": "Total",
+    "stock_impact": "Impacto de Inventario",
+    "how_invoice_affected_stock": "Cómo esta factura afectó tu inventario",
+    "total_stock_impact": "Impacto Total",
+    "no_stock_movements": "Sin Movimientos de Inventario",
+    "stock_movements_will_be_created": "Los movimientos de inventario se crearán cuando esta factura sea marcada como pagada o completada."
   },
   "approvalDashboard": {
     "title": "Panel de Aprobaciones",
@@ -2606,65 +2711,5 @@
     "connectionSuccessful": "¡Conexión exitosa!",
     "connectionFailed": "Conexión fallida",
     "syncStarted": "Sincronización iniciada en segundo plano..."
-  },
-  "license": {
-    "tabTitle": "Licencia",
-    "status": {
-      "title": "Estado de la Licencia",
-      "description": "Vea su información de licencia actual y administre su suscripción",
-      "installationId": "ID de Instalación",
-      "usageType": "Tipo",
-      "trialPeriod": "Período de Prueba",
-      "daysRemaining": "Días Restantes",
-      "expiration": "Expiración de Licencia",
-      "licensedTo": "Licenciado A",
-      "deactivate": "Desactivar Licencia",
-      "confirmDeactivate": "¿Está seguro de que desea desactivar su licencia? Esto deshabilitará las funciones licenciadas.",
-      "deactivateSuccess": "Licencia desactivada exitosamente",
-      "deactivateError": "Error al desactivar la licencia"
-    },
-    "activate": {
-      "title": "Activar Licencia",
-      "description": "Ingrese su clave de licencia para activar funciones premium",
-      "keyLabel": "Clave de Licencia",
-      "keyPlaceholder": "Ingrese su clave de licencia",
-      "button": "Activar Licencia",
-      "purchase": "Comprar Licencia",
-      "success": "¡Licencia activada exitosamente!",
-      "error": "Error al activar la licencia",
-      "enterKey": "Por favor ingrese una clave de licencia"
-    },
-    "features": {
-      "title": "Funciones Disponibles",
-      "description": "Funciones disponibles en su plan actual",
-      "enabled": "Habilitado"
-    },
-    "help": {
-      "title": "¿Necesita Ayuda?",
-      "description": "Si tiene preguntas sobre licencias o necesita asistencia, por favor contacte a nuestro equipo de soporte.",
-      "contactSupport": "Contactar Soporte",
-      "documentation": "Documentación"
-    },
-    "badges": {
-      "expiredGrace": "Expirado (Período de Gracia)",
-      "expired": "Expirado",
-      "expiringSoon": "Expira Pronto",
-      "active": "Activo",
-      "trialExpired": "Prueba Expirada",
-      "trialEndingSoon": "Prueba Termina Pronto",
-      "trialActive": "Prueba Activa",
-      "personalUse": "Edición Core",
-      "noLicense": "Sin Licencia"
-    },
-    "warnings": {
-      "actionRequired": "Acción Requerida",
-      "gracePeriod": "Su licencia ha expirado. Está en un período de gracia. Por favor renueve su licencia para continuar usando todas las funciones.",
-      "trialEnded": "Su período de prueba ha terminado. Active una licencia para continuar usando funciones premium.",
-      "trialEnding": "Su período de prueba termina en {{days}} días. Active una licencia para evitar interrupciones.",
-      "expiring": "Su licencia expira en {{days}} días. Por favor renueve para evitar interrupciones del servicio.",
-      "expired": "Su licencia ha expirado. Por favor renueve para continuar usando todas las funciones."
-    },
-    "loading": "Cargando información de licencia...",
-    "failedToLoad": "Error al cargar información de licencia"
   }
 }

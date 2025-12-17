@@ -130,7 +130,7 @@ export function SearchDialog() {
         <FeatureGate
           feature="advanced_search"
           showUpgradePrompt={true}
-          upgradeMessage="Advanced Search requires a commercial license. Upgrade to search across all your data with powerful filters."
+          upgradeMessage={t('license.advanced_search_required')}
         >
           <Command className="rounded-lg">
             <div className="flex items-center border-b px-3">

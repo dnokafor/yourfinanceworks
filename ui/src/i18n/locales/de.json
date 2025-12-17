@@ -6,6 +6,7 @@
     "save": "Speichern",
     "cancel": "Abbrechen",
     "delete": "Löschen",
+    "search": "Suchen...",
     "edit": "Bearbeiten",
     "add": "Hinzufügen",
     "remove": "Entfernen",
@@ -17,7 +18,6 @@
     "back": "Zurück",
     "next": "Weiter",
     "previous": "Zurück",
-    "search": "Suchen",
     "filter": "Filtern",
     "clear": "Löschen",
     "submit": "Absenden",
@@ -255,6 +255,18 @@
     },
     "provider_error": "useSearch muss innerhalb eines SearchProvider verwendet werden"
   },
+  "license": {
+    "feature_locked": "Funktion Gesperrt",
+    "expired": "Lizenz Abgelaufen",
+    "expired_message": "Ihre Lizenz ist abgelaufen. Sie können weiterhin Ihre vorhandenen Daten anzeigen, aber einige Funktionen können eingeschränkt sein. Bitte erneuern Sie Ihre Lizenz, um alle Funktionen weiterhin zu nutzen.",
+    "renew": "Lizenz Erneuern",
+    "manage": "Lizenz Verwalten",
+    "trial_ended": "Ihr Testzeitraum ist beendet. Aktivieren Sie eine Lizenz, um diese Funktion weiterhin zu nutzen.",
+    "license_expired_feature": "Ihre Lizenz ist abgelaufen. Bitte erneuern Sie, um diese Funktion weiterhin zu nutzen.",
+    "trial_ended_access": "Ihr Testzeitraum ist beendet. Aktivieren Sie eine Lizenz, um auf diese Funktion zuzugreifen.",
+    "license_expired_access": "Ihre Lizenz ist abgelaufen. Bitte erneuern Sie, um auf diese Funktion zuzugreifen.",
+    "advanced_search_required": "Erweiterte Suche erfordert eine kommerzielle Lizenz. Aktualisieren Sie, um alle Ihre Daten mit leistungsstarken Filtern zu durchsuchen."
+  },
   "dashboard": {
     "title": "Dashboard",
     "welcome": "Willkommen zurück, {{name}}!",
@@ -298,6 +310,8 @@
       "inventory_desc": "Inventarartikel verwalten",
       "reports": "Berichte erstellen",
       "reports_desc": "Finanzberichte erstellen",
+      "analytics": "Analytics",
+      "analytics_desc": "Erstellen Sie umfassende Berichte und analysieren Sie Ihre Geschäftsdaten",
       "reminders": "Erinnerungen",
       "reminders_desc": "Zahlungserinnerungen verwalten"
     },
@@ -428,6 +442,7 @@
     "outstanding_label": "Ausstehend",
     "total_amount": "Gesamtbetrag",
     "invoice_number": "Rechnungsnummer",
+    "invoice_number_auto_generate": "Wenn leer gelassen, wird eine Rechnungsnummer automatisch generiert",
     "invoice_date": "Rechnungsdatum",
     "due_date": "Fälligkeitsdatum",
     "status": {
@@ -642,6 +657,16 @@
     "expense_unlinked_success": "Ausgabe von Rechnung entknüpft",
     "failed_to_link_expense": "Ausgabe konnte nicht verknüpft werden",
     "failed_to_unlink_expense": "Ausgabe konnte nicht entknüpft werden",
+    "approval_workflow": "Genehmigungs-Workflow",
+    "submit_this_invoice_for_approval": "Diese Rechnung zur Genehmigung einreichen",
+    "submit_this_invoice_for_approval_after_creation": "Diese Rechnung nach Erstellung zur Genehmigung einreichen",
+    "linked_expenses_header": "Verknüpfte Ausgaben",
+    "connect_expenses_to_invoice": "Verbinden Sie Ausgaben mit dieser Rechnung für bessere Nachverfolgung und Abstimmung",
+    "zero_linked": "{{count}} verknüpft",
+    "link_existing_expense": "Vorhandene Ausgabe Verknüpfen",
+    "choose_unlinked_expense": "Wählen Sie eine nicht verknüpfte Ausgabe zum Anhängen...",
+    "no_expenses_linked_yet": "Noch keine Ausgaben verknüpft",
+    "link_existing_expenses_description": "Verknüpfen Sie vorhandene Ausgaben oder erstellen Sie neue, um Kosten im Zusammenhang mit dieser Rechnung zu verfolgen.",
     "invoice_ready_to_be_created": "Rechnung kann erstellt werden",
     "invoice_ready_to_be_updated": "Rechnung kann aktualisiert werden",
     "payment_added": "Zahlung Hinzugefügt",
@@ -940,6 +965,8 @@
     "ai_assistant_description": "KI-Assistent für Rechnungen aktivieren oder deaktivieren.",
     "show_analytics_menu": "Analytics-Menü anzeigen",
     "show_analytics_menu_description": "Analytics-Menü in der Seitenleiste ein- oder ausblenden",
+    "organization_timezone": "Wählen Sie die Zeitzone Ihrer Organisation für Datums- und Zeitanzeige",
+    "timezone": "Zeitzone",
     "create_discount_rule": "Rabattregel erstellen",
     "edit_discount_rule": "Rabattregel bearbeiten",
     "rule_name": "Regelname",
@@ -1061,6 +1088,7 @@
     "reminder_overdue": "Erinnerung Überfällig",
     "reminder_overdue_description": "Wenn eine Erinnerung überfällig wird",
     "ai_assistant_license_required": "KI-Assistent erfordert eine gültige Lizenz. Bitte aktualisieren Sie Ihren Plan.",
+    "bank_statement_license_required": "Lizenz erforderlich: Die Verarbeitung von Kontoauszügen erfordert die KI-Kontoauszug-Funktion. Bitte aktualisieren Sie Ihre Lizenz, um diese Funktionalität zu aktivieren.",
     "update": "Aktualisieren",
     "discount": "Rabatt"
   },
@@ -1310,7 +1338,13 @@
     "uploading": "Wird hochgeladen...",
     "preview": "Vorschau",
     "delete_confirm_title": "Ausgabe löschen?",
-    "delete_confirm_description": "Diese Aktion kann nicht rückgängig gemacht werden. Dies wird diese Ausgabe und ihre Anhänge dauerhaft löschen.",
+    "delete_confirm_description": "Dies verschiebt die Ausgabe in den Papierkorb, wo sie wiederhergestellt oder später endgültig gelöscht werden kann.",
+    "delete_selected": "Auswahl löschen",
+    "delete_single_title": "1 Ausgabe löschen",
+    "delete_single_description": "Sind Sie sicher, dass Sie 1 Ausgabe löschen möchten? Dies verschiebt die ausgewählte Ausgabe in den Papierkorb, wo sie wiederhergestellt oder später endgültig gelöscht werden kann.",
+    "delete_multiple_title": "{{count}} Ausgaben löschen",
+    "delete_multiple_description": "Sind Sie sicher, dass Sie {{count}} Ausgaben löschen möchten? Dies verschiebt die ausgewählten Ausgaben in den Papierkorb, wo sie wiederhergestellt oder später endgültig gelöscht werden können.",
+    "receipt_time": "Belegzeit (HH:MM)",
     "new_title": "Neue Ausgabe",
     "edit_title": "Ausgabe bearbeiten",
     "view_title": "Ausgabe anzeigen",
@@ -1581,7 +1615,15 @@
     "invoiceNotFound": "Rechnung nicht gefunden",
     "invoiceNotFoundDescription": "Die Rechnung, nach der Sie suchen, existiert nicht oder konnte nicht geladen werden.",
     "editInvoice": "Rechnung bearbeiten",
-    "updateInvoiceDetails": "Rechnungsdetails aktualisieren"
+    "updateInvoiceDetails": "Rechnungsdetails aktualisieren",
+    "totalAmount": "Gesamtbetrag",
+    "dueDate": "Fälligkeitsdatum",
+    "items": "Artikel",
+    "linkedExpenses": "Verknüpfte Ausgaben",
+    "livePreview": "Live-Vorschau",
+    "viewHistory": "Verlauf anzeigen",
+    "cancel": "Abbrechen",
+    "saveChanges": "Änderungen speichern"
   },
   "newClient": {
     "addNewClient": "Neuen Kunden hinzufügen",
@@ -1832,6 +1874,7 @@
     "title": "Auszüge",
     "description": "Jeder Eintrag ist ein PDF oder CSV. Öffnen Sie, um dessen Transaktionen anzuzeigen oder zu bearbeiten.",
     "list_title": "Auszugsliste",
+    "new_statement": "Neuer Auszug",
     "select_files": "PDFs oder CSVs auswählen",
     "upload": "Hochladen",
     "processing": "Wird verarbeitet...",
@@ -2079,7 +2122,12 @@
       "name_required": "Artikelname ist erforderlich",
       "price_required": "Gültiger Stückpreis ist erforderlich"
     },
-    "total": "Total"
+    "total": "Total",
+    "stock_impact": "Lagerbestand-Auswirkung",
+    "how_invoice_affected_stock": "Wie diese Rechnung Ihren Lagerbestand beeinflusst hat",
+    "total_stock_impact": "Gesamtauswirkung",
+    "no_stock_movements": "Keine Lagerbewegungen",
+    "stock_movements_will_be_created": "Lagerbewegungen werden erstellt, wenn diese Rechnung als bezahlt oder abgeschlossen markiert wird."
   },
   "approvalDashboard": {
     "title": "Genehmigungs-Dashboard",
@@ -2549,65 +2597,5 @@
     "connectionSuccessful": "Verbindung erfolgreich!",
     "connectionFailed": "Verbindung fehlgeschlagen",
     "syncStarted": "Synchronisierung im Hintergrund gestartet..."
-  },
-  "license": {
-    "tabTitle": "Lizenz",
-    "status": {
-      "title": "Lizenzstatus",
-      "description": "Sehen Sie Ihre aktuellen Lizenzinformationen und verwalten Sie Ihr Abonnement",
-      "installationId": "Installations-ID",
-      "usageType": "Nutzungstyp",
-      "trialPeriod": "Testzeitraum",
-      "daysRemaining": "Verbleibende Tage",
-      "expiration": "Lizenzablauf",
-      "licensedTo": "Lizenziert für",
-      "deactivate": "Lizenz deaktivieren",
-      "confirmDeactivate": "Sind Sie sicher, dass Sie Ihre Lizenz deaktivieren möchten? Dadurch werden lizenzierte Funktionen deaktiviert.",
-      "deactivateSuccess": "Lizenz erfolgreich deaktiviert",
-      "deactivateError": "Fehler beim Deaktivieren der Lizenz"
-    },
-    "activate": {
-      "title": "Lizenz aktivieren",
-      "description": "Geben Sie Ihren Lizenzschlüssel ein, um Premium-Funktionen zu aktivieren",
-      "keyLabel": "Lizenzschlüssel",
-      "keyPlaceholder": "Geben Sie Ihren Lizenzschlüssel ein",
-      "button": "Lizenz aktivieren",
-      "purchase": "Lizenz kaufen",
-      "success": "Lizenz erfolgreich aktiviert!",
-      "error": "Fehler beim Aktivieren der Lizenz",
-      "enterKey": "Bitte geben Sie einen Lizenzschlüssel ein"
-    },
-    "features": {
-      "title": "Verfügbare Funktionen",
-      "description": "In Ihrem aktuellen Plan verfügbare Funktionen",
-      "enabled": "Aktiviert"
-    },
-    "help": {
-      "title": "Brauchen Sie Hilfe?",
-      "description": "Wenn Sie Fragen zur Lizenzierung haben oder Unterstützung benötigen, wenden Sie sich bitte an unser Support-Team.",
-      "contactSupport": "Support kontaktieren",
-      "documentation": "Dokumentation"
-    },
-    "badges": {
-      "expiredGrace": "Abgelaufen (Gnadenfrist)",
-      "expired": "Abgelaufen",
-      "expiringSoon": "Läuft bald ab",
-      "active": "Aktiv",
-      "trialExpired": "Testzeitraum abgelaufen",
-      "trialEndingSoon": "Testzeitraum endet bald",
-      "trialActive": "Testzeitraum aktiv",
-      "personalUse": "Core-Edition",
-      "noLicense": "Keine Lizenz"
-    },
-    "warnings": {
-      "actionRequired": "Handlung erforderlich",
-      "gracePeriod": "Ihre Lizenz ist abgelaufen. Sie befinden sich in einer Gnadenfrist. Bitte erneuern Sie Ihre Lizenz, um weiterhin alle Funktionen nutzen zu können.",
-      "trialEnded": "Ihr Testzeitraum ist abgelaufen. Aktivieren Sie eine Lizenz, um weiterhin Premium-Funktionen nutzen zu können.",
-      "trialEnding": "Ihr Testzeitraum endet in {{days}} Tagen. Aktivieren Sie eine Lizenz, um Unterbrechungen zu vermeiden.",
-      "expiring": "Ihre Lizenz läuft in {{days}} Tagen ab. Bitte erneuern Sie, um Serviceunterbrechungen zu vermeiden.",
-      "expired": "Ihre Lizenz ist abgelaufen. Bitte erneuern Sie, um weiterhin alle Funktionen nutzen zu können."
-    },
-    "loading": "Lizenzinformationen werden geladen...",
-    "failedToLoad": "Fehler beim Laden der Lizenzinformationen"
   }
 }
