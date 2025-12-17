@@ -303,7 +303,7 @@ const EditInvoice = () => {
                   <DollarSign className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Amount</p>
+                  <p className="text-sm text-muted-foreground">{t('editInvoice.totalAmount')}</p>
                   <p className="text-lg font-semibold">
                     <CurrencyDisplay
                       amount={invoice.amount || 0}
@@ -320,7 +320,7 @@ const EditInvoice = () => {
                   <Calendar className="h-5 w-5 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Due Date</p>
+                  <p className="text-sm text-muted-foreground">{t('editInvoice.dueDate')}</p>
                   <p className="text-lg font-semibold">
                     {invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : 'Not set'}
                   </p>
@@ -334,7 +334,7 @@ const EditInvoice = () => {
                   <FileText className="h-5 w-5 text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Items</p>
+                  <p className="text-sm text-muted-foreground">{t('editInvoice.items')}</p>
                   <p className="text-lg font-semibold">{invoice.items?.length || 0}</p>
                 </div>
               </div>
