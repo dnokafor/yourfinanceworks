@@ -7,8 +7,9 @@ def generate_invoice_number(db: Session) -> str:
     Generate a unique invoice number for the current tenant.
     Format: INV-{YYYYMMDD}-{XXXX} where XXXX is a sequential number
     """
-    # Get the current date in YYYYMMDD format (safe - controlled format)
-    date_prefix = datetime.now(timezone.utc).strftime("%Y%m%d")
+    # Get the current date in YYYYMMDD format (using local time to match user's date)
+    from datetime import datetime
+    date_prefix = datetime.now().strftime("%Y%m%d")
     
     # Validate date_prefix is numeric only (additional safety)
     if not date_prefix.isdigit() or len(date_prefix) != 8:

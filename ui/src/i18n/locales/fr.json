@@ -2528,7 +2528,11 @@
       "snooze_failed": "Échec du report du rappel",
       "unsnooze_failed": "Échec de la réactivation du rappel",
       "delete_failed": "Échec de la suppression du rappel",
-      "load_failed": "Échec du chargement des rappels"
+      "load_failed": "Échec du chargement des rappels",
+      "all_notifications_marked_as_read": "Toutes les notifications marquées comme lues",
+      "failed_to_load_notifications": "Échec du chargement des notifications",
+      "failed_to_mark_all_as_read": "Échec du marquage de toutes les notifications comme lues",
+      "failed_to_dismiss_notification": "Échec de la suppression de la notification"
     }
   },
   "organizationJoinRequests": {

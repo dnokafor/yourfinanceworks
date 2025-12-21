@@ -2469,7 +2469,11 @@
       "snooze_failed": "Fehler beim Verschieben der Erinnerung",
       "unsnooze_failed": "Fehler beim Reaktivieren der Erinnerung",
       "delete_failed": "Fehler beim Löschen der Erinnerung",
-      "load_failed": "Fehler beim Laden der Erinnerungen"
+      "load_failed": "Fehler beim Laden der Erinnerungen",
+      "all_notifications_marked_as_read": "Alle Benachrichtigungen als gelesen markiert",
+      "failed_to_load_notifications": "Fehler beim Laden der Benachrichtigungen",
+      "failed_to_mark_all_as_read": "Fehler beim Markieren aller Benachrichtigungen als gelesen",
+      "failed_to_dismiss_notification": "Fehler beim Schließen der Benachrichtigung"
     },
     "no_reminders": "Keine Erinnerungen gefunden",
     "no_reminders_description": "Sie haben noch keine Erinnerungen. Erstellen Sie eine, um Ihre Aufgaben und Fristen im Blick zu behalten.",

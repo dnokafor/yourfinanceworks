@@ -2575,7 +2575,11 @@
       "snooze_failed": "Error al posponer el recordatorio",
       "unsnooze_failed": "Error al reactivar el recordatorio",
       "delete_failed": "Error al eliminar el recordatorio",
-      "load_failed": "Error al cargar los recordatorios"
+      "load_failed": "Error al cargar los recordatorios",
+      "all_notifications_marked_as_read": "Todas las notificaciones marcadas como leídas",
+      "failed_to_load_notifications": "Error al cargar las notificaciones",
+      "failed_to_mark_all_as_read": "Error al marcar todas las notificaciones como leídas",
+      "failed_to_dismiss_notification": "Error al descartar la notificación"
     }
   },
   "organizationJoinRequests": {
