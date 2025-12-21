@@ -14,7 +14,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { CalendarIcon, Upload, ArrowLeft, Eye, Download, ExternalLink, Trash2, FileText, Plus, Copy, X, Edit, MoreHorizontal, Loader2, ChevronDown, ChevronUp, ArrowDown } from 'lucide-react';
+import { CalendarIcon, Upload, ArrowLeft, Eye, Download, ExternalLink, Trash2, FileText, Plus, Copy, X, Edit, MoreHorizontal, Loader2, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
 import { bankStatementApi, BankTransactionEntry, BankStatementDetail, BankStatementSummary, expenseApi, invoiceApi, clientApi, formatStatus, DeletedBankStatement } from '@/lib/api';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -622,25 +622,41 @@ export default function Statements() {
                             <TableCell>{statement.deleted_by_username || t('common.unknown')}</TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleRestoreStatement(statement.id)}
-                                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                                >
-                                  <ArrowDown className="w-4 h-4 mr-1" />
-                                  {t('recycleBin.restore', { defaultValue: 'Restore' })}
-                                </Button>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleRestoreStatement(statement.id)}
+                                        className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                      >
+                                        <RotateCcw className="w-4 h-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      {t('recycleBin.restore', { defaultValue: 'Restore' })}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                    >
-                                      <Trash2 className="w-4 h-4 mr-1" />
-                                      {t('recycleBin.permanently_delete', { defaultValue: 'Delete' })}
-                                    </Button>
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          {t('recycleBin.permanently_delete', { defaultValue: 'Delete' })}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
                                   </AlertDialogTrigger>
                                   <AlertDialogContent>
                                     <AlertDialogHeader>

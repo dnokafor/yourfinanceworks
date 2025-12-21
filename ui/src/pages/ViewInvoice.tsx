@@ -20,6 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ApprovalActionButtons } from '@/components/approvals/ApprovalActionButtons';
 import { CurrencyDisplay } from '@/components/ui/currency-display';
 import { ApprovalHistoryEntry } from '@/types';
+import { canEditInvoice, canEditInvoicePayment } from '@/utils/auth';
 
 export default function ViewInvoice() {
   const { t } = useTranslation();
@@ -133,10 +134,11 @@ export default function ViewInvoice() {
                   onAction={handleApprovalAction}
                 />
               )}
-              {invoice.status !== 'pending_approval' && invoice.status !== 'approved' && (
+              {invoice.status !== 'pending_approval' && (
                 <Button
                   onClick={() => navigate(`/invoices/edit/${invoice.id}`)}
                   variant="outline"
+                  disabled={!canEditInvoice(invoice) && !canEditInvoicePayment(invoice)}
                 >
                   <Edit className="mr-2 h-4 w-4" />
                   {t('common.edit')}

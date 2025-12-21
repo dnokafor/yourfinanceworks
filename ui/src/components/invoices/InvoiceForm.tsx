@@ -15,6 +15,7 @@ import { InvoiceClientSection } from "./InvoiceClientSection";
 import { InvoiceItemsSection } from "./InvoiceItemsSection";
 import { InvoiceDiscountSection } from "./InvoiceDiscountSection";
 import { InvoiceAttachmentSection } from "./InvoiceAttachmentSection";
+import { InvoicePaymentSection } from "./InvoicePaymentSection";
 
 // UI Components
 import { Form } from "@/components/ui/form";
@@ -47,6 +48,7 @@ interface InvoiceFormProps {
   approverIdForApproval?: number;
   submitButtonRef?: React.RefObject<HTMLButtonElement | null>;
   onSubmitStateChange?: (isSubmitting: boolean) => void;
+  canEditPayment?: boolean;
 }
 
 export function InvoiceForm({
@@ -64,7 +66,8 @@ export function InvoiceForm({
   submitForApproval = false,
   approverIdForApproval,
   submitButtonRef,
-  onSubmitStateChange
+  onSubmitStateChange,
+  canEditPayment = false
 }: InvoiceFormProps) {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -147,6 +150,7 @@ export function InvoiceForm({
           notes: data.notes || "",
           status: data.status,
           client_id: Number(data.client),
+          paid_amount: data.paidAmount || 0,
           items: data.items.map((item: any) => ({
             description: item.description || '',
             quantity: Number(item.quantity) || 1,
@@ -459,6 +463,15 @@ export function InvoiceForm({
                 calculateTotal={invoiceForm.calculateTotal}
                 applyDiscountRule={invoiceForm.applyDiscountRule}
               />
+
+              {/* Payment Section - Only show for approved invoices or when payment editing is allowed */}
+              {isEdit && (invoice?.status === 'approved' || canEditPayment) && (
+                <InvoicePaymentSection
+                  form={invoiceForm.form}
+                  invoice={invoice}
+                  canEditPayment={canEditPayment}
+                />
+              )}
 
               {/* Attachment Section */}
               <InvoiceAttachmentSection

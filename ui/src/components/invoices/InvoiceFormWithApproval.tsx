@@ -20,6 +20,7 @@ interface InvoiceFormWithApprovalProps {
   prefillNewClient?: { name?: string; email?: string; address?: string; phone?: string } | null;
   openNewClientOnInit?: boolean;
   existingApproval?: { approver_id: number };
+  canEditPayment?: boolean;
 }
 
 export function InvoiceFormWithApproval({
@@ -30,7 +31,8 @@ export function InvoiceFormWithApproval({
   attachment,
   prefillNewClient,
   openNewClientOnInit,
-  existingApproval
+  existingApproval,
+  canEditPayment = false
 }: InvoiceFormWithApprovalProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -136,6 +138,7 @@ export function InvoiceFormWithApproval({
           approverIdForApproval={selectedApproverId ? parseInt(selectedApproverId) : undefined}
           submitButtonRef={submitButtonRef}
           onSubmitStateChange={setIsSubmitting}
+          canEditPayment={canEditPayment}
         />
       </div>
 

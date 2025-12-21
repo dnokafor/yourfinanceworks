@@ -15,6 +15,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { CalendarIcon, X, Eye, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useFeatures } from '@/contexts/FeatureContext';
 import { BulkExpenseModal } from '@/components/BulkExpenseModal';
 import { InventoryConsumptionForm } from '@/components/inventory/InventoryConsumptionForm';
@@ -35,7 +36,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 // removed duplicate useEffect import
-import { Loader2, Plus, Search, Trash2, Upload, ChevronDown, ChevronUp, MoreHorizontal, Edit, Package, ArrowDown, BarChart3, Receipt } from 'lucide-react';
+import { Loader2, Plus, Search, Trash2, Upload, ChevronDown, ChevronUp, MoreHorizontal, Edit, Package, RotateCcw, BarChart3, Receipt } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Link } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
@@ -766,25 +767,41 @@ const Expenses = () => {
                             <TableCell>{expense.deleted_by_username || t('common.unknown')}</TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleRestoreExpense(expense.id)}
-                                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                                >
-                                  <ArrowDown className="w-4 h-4 mr-1" />
-                                  {t('recycleBin.restore', { defaultValue: 'Restore' })}
-                                </Button>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleRestoreExpense(expense.id)}
+                                        className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                      >
+                                        <RotateCcw className="w-4 h-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      {t('recycleBin.restore', { defaultValue: 'Restore' })}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                    >
-                                      <Trash2 className="w-4 h-4 mr-1" />
-                                      {t('recycleBin.permanently_delete', { defaultValue: 'Delete' })}
-                                    </Button>
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          {t('recycleBin.permanently_delete', { defaultValue: 'Delete' })}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
                                   </AlertDialogTrigger>
                                   <AlertDialogContent>
                                     <AlertDialogHeader>

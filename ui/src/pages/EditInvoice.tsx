@@ -6,7 +6,7 @@ import { InvoiceStockImpact } from "@/components/invoices/InvoiceStockImpact";
 import { InvoiceHistoryDetailsModal } from "@/components/invoices/InvoiceHistoryDetailsModal";
 import { InvoicePDF } from "@/components/invoices/InvoicePDF";
 import { invoiceApi, Invoice, getErrorMessage, expenseApi, Expense, inventoryApi, approvalApi, InvoiceHistory, clientApi } from "@/lib/api";
-import { canEditInvoice } from "@/utils/auth";
+import { canEditInvoice, canEditInvoicePayment } from "@/utils/auth";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,9 @@ const EditInvoice = () => {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [livePreviewLoading, setLivePreviewLoading] = useState(false);
 
+  // Calculate payment editing permissions when invoice changes
+  const canEditPayment = invoice ? canEditInvoicePayment(invoice) : false;
+
   // Fetch invoice history when invoice changes
   useEffect(() => {
     if (invoice?.id) {
@@ -72,8 +75,15 @@ const EditInvoice = () => {
         const data = await invoiceApi.getInvoice(parseInt(id));
 
         // Check if user can edit this invoice
-        if (!canEditInvoice(data)) {
-          toast.error('This invoice cannot be edited while it is in the approval workflow');
+        const canEdit = canEditInvoice(data);
+        const canEditPayment = canEditInvoicePayment(data);
+        
+        if (!canEdit && !canEditPayment) {
+          if (data.status === 'approved') {
+            toast.error('This invoice can only be edited for payment updates');
+          } else {
+            toast.error('This invoice cannot be edited while it is in the approval workflow');
+          }
           navigate('/invoices');
           return;
         }
@@ -397,6 +407,7 @@ const EditInvoice = () => {
             invoice={invoice}
             isEdit={true}
             existingApproval={existingApproval}
+            canEditPayment={canEditPayment}
             key={`${invoice.id}-${invoice.has_attachment}-${invoice.attachment_filename}`}
             onInvoiceUpdate={async (updatedInvoice) => {
               console.log("🔍 EDIT INVOICE - Invoice updated via callback:", updatedInvoice);

@@ -1235,8 +1235,6 @@ async def read_invoice(
                     created_by_username = creator.email
                 created_by_email = creator.email
 
-        logger.info(f"🔍 CREATOR DEBUG - invoice_id: {invoice_id}, created_by_user_id: {invoice.created_by_user_id}, created_by_username: {created_by_username}, created_by_email: {created_by_email}")
-
         invoice_dict = {
             "date": invoice.created_at.isoformat() if invoice.created_at else None,
             "id": invoice.id,
@@ -1275,25 +1273,6 @@ async def read_invoice(
             "created_by_username": created_by_username,
             "created_by_email": created_by_email
         }
-
-        logger.info(f"[DEBUG] Final invoice_dict response - custom_fields: {invoice_dict.get('custom_fields')}")
-        logger.info(f"[DEBUG] Final invoice_dict response - custom_fields type: {type(invoice_dict.get('custom_fields'))}")
-        logger.info(f"[DEBUG] Final invoice_dict response - all keys: {list(invoice_dict.keys())}")
-        logger.info(f"🔍 ATTACHMENT DEBUG - DB values: attachment_path={invoice.attachment_path}, attachment_filename={invoice.attachment_filename}")
-        logger.info(f"🔍 ATTACHMENT DEBUG - DB attachment_filename type: {type(invoice.attachment_filename)}")
-        logger.info(f"🔍 ATTACHMENT DEBUG - DB attachment_filename repr: {repr(invoice.attachment_filename)}")
-        logger.info(f"🔍 ATTACHMENT DEBUG - bool(invoice.attachment_filename): {bool(invoice.attachment_filename)}")
-        logger.info(f"🔍 ATTACHMENT DEBUG - Response values: has_attachment={invoice_dict['has_attachment']}, attachment_filename={invoice_dict['attachment_filename']}")
-        logger.info(f"🔍 ATTACHMENT DEBUG - Response attachment_filename type: {type(invoice_dict['attachment_filename'])}")
-        logger.info(f"🔍 ATTACHMENT DEBUG - Response attachment_filename repr: {repr(invoice_dict['attachment_filename'])}")
-
-        # Check the actual invoice object attributes
-        logger.info(f"🔍 INVOICE OBJECT DEBUG - hasattr attachment_filename: {hasattr(invoice, 'attachment_filename')}")
-        logger.info(f"🔍 INVOICE OBJECT DEBUG - hasattr attachment_path: {hasattr(invoice, 'attachment_path')}")
-        if hasattr(invoice, 'attachment_filename'):
-            logger.info(f"🔍 INVOICE OBJECT DEBUG - invoice.attachment_filename: {invoice.attachment_filename}")
-        if hasattr(invoice, 'attachment_path'):
-            logger.info(f"🔍 INVOICE OBJECT DEBUG - invoice.attachment_path: {invoice.attachment_path}")
 
         return invoice_dict
     except HTTPException:
@@ -1443,22 +1422,49 @@ async def update_invoice(
                     continue
                 elif key == 'paid_amount' and value is not None:
                     # Create a payment adjustment if allowed
-                    if db_invoice.status == "paid":
-                        # Already paid invoices cannot be modified except status; skip
+                    # Allow payment updates for approved invoices to support partial payments
+                    # Only block payment updates for invoices that are already fully paid
+                    if db_invoice.status == "paid" and float(value) >= db_invoice.amount:
+                        # Already fully paid invoices cannot increase payment amount; skip
                         continue
-                    try:
-                        pay = Payment(
-                            invoice_id=db_invoice.id,
-                            amount=float(value),
-                            currency=db_invoice.currency,
-                            payment_date=datetime.now(timezone.utc),
-                            payment_method="manual",
-                            reference_number=f"ADJ-{db_invoice.number}-{int(datetime.now(timezone.utc).timestamp())}",
-                            notes="Manual paid amount update via invoice API"
-                        )
-                        db.add(pay)
-                    except Exception:
-                        logger.warning("Failed to create payment from paid_amount update", exc_info=True)
+                    
+                    # Calculate current total paid from existing payments
+                    from core.models.models_per_tenant import Payment as PaymentModel
+                    existing_payments = db.query(PaymentModel).filter(PaymentModel.invoice_id == db_invoice.id).all()
+                    current_paid = sum(p.amount for p in existing_payments) if existing_payments else 0
+                    
+                    # Calculate incremental payment amount
+                    new_paid_amount = float(value)
+                    incremental_amount = new_paid_amount - current_paid
+                    
+                    # Only create payment if there's an actual increase
+                    if incremental_amount > 0:
+                        try:
+                            pay = PaymentModel(
+                                invoice_id=db_invoice.id,
+                                amount=incremental_amount,
+                                currency=db_invoice.currency,
+                                payment_date=datetime.now(timezone.utc),
+                                payment_method="manual",
+                                reference_number=f"ADJ-{db_invoice.number}-{int(datetime.now(timezone.utc).timestamp())}",
+                                notes=f"Manual paid amount update via invoice API. New total: ${new_paid_amount:.2f}"
+                            )
+                            db.add(pay)
+                            
+                            # Create history entry for payment update
+                            from core.models.models_per_tenant import InvoiceHistory as InvoiceHistoryModel
+                            history_entry = InvoiceHistoryModel(
+                                invoice_id=db_invoice.id,
+                                user_id=current_user.id,
+                                action='payment_updated',
+                                details=f'Payment updated: ${current_paid:.2f} → ${new_paid_amount:.2f} (incremental: ${incremental_amount:.2f})',
+                                previous_values={'paid_amount': current_paid},
+                                current_values={'paid_amount': new_paid_amount, 'incremental_amount': incremental_amount}
+                            )
+                            db.add(history_entry)
+                            
+                        except Exception:
+                            logger.warning("Failed to create payment from paid_amount update", exc_info=True)
                     continue
                 setattr(db_invoice, key, value)
 

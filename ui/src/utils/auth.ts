@@ -169,8 +169,29 @@ export const canEditInvoice = (invoice: { status: string }): boolean => {
   }
 
   // Prevent editing invoices that are in approval workflow (except rejected - users should be able to fix and resubmit)
-  const approvalStatuses = ['pending_approval', 'approved', 'resubmitted'];
+  const approvalStatuses = ['pending_approval', 'resubmitted'];
   if (approvalStatuses.includes(invoice.status)) {
+    return false;
+  }
+
+  return true;
+};
+
+/**
+ * Check if an invoice can be edited for payment updates specifically
+ * @param invoice The invoice to check
+ * @returns boolean - true if the invoice payment can be updated
+ */
+export const canEditInvoicePayment = (invoice: { status: string }): boolean => {
+  // First check if user has general action permissions
+  if (!canPerformActions()) {
+    return false;
+  }
+
+  // Allow payment updates for approved invoices to support partial payments
+  // Only block payment updates for invoices in pending approval or resubmitted status
+  const blockedStatuses = ['pending_approval', 'resubmitted'];
+  if (blockedStatuses.includes(invoice.status)) {
     return false;
   }
 
