@@ -67,6 +67,7 @@ import Reminders from "./pages/Reminders";
 import { AppLayout } from "./components/layout/AppLayout";
 import OrganizationJoinRequests from "./pages/OrganizationJoinRequests";
 import PromptManagement from "./pages/PromptManagement";
+import Gamification from "./pages/Gamification";
 
 
 
@@ -159,6 +160,7 @@ const AppContent = () => {
                 <Route path="/inventory/edit/:id" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><EditInventoryItem /></RoleProtectedRoute></ProtectedRoute>} />
                 <Route path="/inventory/new-inventory" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin', 'user']}><NewInventoryInvoice /></RoleProtectedRoute></ProtectedRoute>} />
                 <Route path="/prompts" element={<ProtectedRoute><RoleProtectedRoute allowedRoles={['admin']}><PromptManagement /></RoleProtectedRoute></ProtectedRoute>} />
+                <Route path="/gamification" element={<ProtectedRoute><Gamification /></ProtectedRoute>} />
                 <Route path="/recycle-bin" element={<ProtectedRoute><RecycleBin /></ProtectedRoute>} />
                 <Route path="/expenses/recycle-bin" element={<ProtectedRoute><ExpenseRecycleBin /></ProtectedRoute>} />
                 <Route path="/statements/recycle-bin" element={<ProtectedRoute><StatementRecycleBin /></ProtectedRoute>} />

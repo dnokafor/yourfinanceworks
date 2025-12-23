@@ -40,7 +40,10 @@ from core.routers import (
     super_admin,  # Add the super admin router
     audit_log,  # Add the audit log router
     notifications,  # Add the notifications router
-    prompts  # Add the new prompts router
+    prompts,  # Add the new prompts router
+    gamification,  # Add the gamification router
+    social_features,  # Add the social features router
+    user_preference_controls  # Add the user preference controls router
 )
 
 # Import Commercial Modules (Conditional)
@@ -353,6 +356,9 @@ if batch_processing:
     app.include_router(batch_processing.router, prefix="/api/v1") # Include the batch processing router
 app.include_router(license.router, prefix="/api/v1") # Include the license management router
 app.include_router(prompts.router, prefix="/api/v1") # Include the new prompts router
+app.include_router(gamification.router, prefix="/api/v1") # Include the gamification router
+app.include_router(social_features.router, prefix="/api/v1") # Include the social features router
+app.include_router(user_preference_controls.router, prefix="/api/v1") # Include the user preference controls router
 
 @app.get("/")
 def read_root():

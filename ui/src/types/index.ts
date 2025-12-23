@@ -189,4 +189,7 @@ export interface ApprovalDelegateUpdate {
   start_date?: string;
   end_date?: string;
   is_active?: boolean;
-} 
+}
+
+// Re-export gamification types
+export * from './gamification'; 

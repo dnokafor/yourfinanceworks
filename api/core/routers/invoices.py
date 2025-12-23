@@ -442,6 +442,32 @@ async def create_invoice(
             created_by_username = format_user_name(invoice.created_by)
             created_by_email = invoice.created_by.email
 
+        # Process gamification event for invoice creation
+        try:
+            from core.services.financial_event_processor import create_financial_event_processor
+            event_processor = create_financial_event_processor(db)
+            
+            invoice_data = {
+                "client_id": invoice.client_id,
+                "invoice_number": invoice.number,
+                "total": float(invoice.amount)
+            }
+            
+            gamification_result = await event_processor.process_invoice_created(
+                user_id=current_user.id,
+                invoice_id=invoice.id,
+                invoice_data=invoice_data
+            )
+            
+            if gamification_result:
+                logger.info(
+                    f"Gamification event processed for invoice {invoice.id}: "
+                    f"points={gamification_result.get('points_awarded', 0)}"
+                )
+        except Exception as e:
+            logger.warning(f"Failed to process gamification event for invoice {invoice.id}: {e}")
+            # Don't fail the invoice creation if gamification processing fails
+
         return {
             "id": invoice.id,
             "number": invoice.number,

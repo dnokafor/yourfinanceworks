@@ -428,6 +428,32 @@ async def create_expense(
         except Exception as e:
             uvicorn_logger.warning(f"Failed to index expense {db_expense.id} for search: {e}")
 
+        # Process gamification event for expense creation
+        try:
+            from core.services.financial_event_processor import create_financial_event_processor
+            event_processor = create_financial_event_processor(db)
+            
+            expense_data = {
+                "vendor": db_expense.vendor,
+                "category": db_expense.category,
+                "amount": float(db_expense.amount) if db_expense.amount else 0
+            }
+            
+            gamification_result = await event_processor.process_expense_added(
+                user_id=current_user.id,
+                expense_id=db_expense.id,
+                expense_data=expense_data
+            )
+            
+            if gamification_result:
+                uvicorn_logger.info(
+                    f"Gamification event processed for expense {db_expense.id}: "
+                    f"points={gamification_result.get('points_awarded', 0)}"
+                )
+        except Exception as e:
+            uvicorn_logger.warning(f"Failed to process gamification event for expense {db_expense.id}: {e}")
+            # Don't fail the expense creation if gamification processing fails
+
         return db_expense
     except HTTPException:
         raise

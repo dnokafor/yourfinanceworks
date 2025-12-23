@@ -472,7 +472,6 @@ export function AppSidebar() {
       tourId: 'nav-reports'
     },
 
-
     // Users, Audit Log, and Analytics moved under Settings; remove from main nav
   ];
 

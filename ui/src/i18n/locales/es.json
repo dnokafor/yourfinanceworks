@@ -153,6 +153,7 @@
     "bank_statements": "Estados de Cuenta",
     "reminders": "Recordatorios",
     "reports": "Reportes",
+    "gamification": "Gamificación",
     "clients": "Clientes",
     "payments": "Pagos",
     "inventory": "Inventario",
@@ -904,6 +905,7 @@
       "email_notifications": "Correo & Notificaciones",
       "tax_integration": "Integración Fiscal",
       "approval_rules": "Reglas de Aprobación",
+      "gamification": "Gamificación",
       "cookies": "Configuración de Cookies",
       "export": "Gestión de Datos",
       "add_rule": "Agregar Regla",
@@ -927,6 +929,9 @@
     "approval_rules": {
       "title": "Gestión de Reglas de Aprobación",
       "description": "Configure flujos de trabajo y reglas de aprobación para envíos de gastos"
+    },
+    "gamification": {
+      "description": "Habilita o deshabilita las funciones de gamificación para tu experiencia de gestión financiera. Elige cómo se manejan tus datos al cambiar el sistema."
     },
     "currency_management": "Gestión de Monedas",
     "ai_configuration": "Configuración de IA",
