@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Award, Trophy, Star, Target, TrendingUp, Lock } from 'lucide-react';
+import { Award, Trophy, Star, Target, TrendingUp, Lock, RefreshCw } from 'lucide-react';
 import { gamificationApi } from '@/lib/api';
-import type { UserAchievement, AchievementCategory } from '@/types/gamification';
+import type { UserAchievement } from '@/types/gamification';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { Button } from '@/components/ui/button';
 
 const categoryIcons = {
   expense_tracking: Target,
@@ -104,23 +105,36 @@ export function AchievementGrid() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchAchievements = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const data = await gamificationApi.getAchievements();
+      setAchievements(data);
+    } catch (err) {
+      console.error('Error fetching achievements:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load achievements');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    try {
+      setRefreshing(true);
+      const data = await gamificationApi.getAchievements();
+      setAchievements(data);
+    } catch (err) {
+      console.error('Error refreshing achievements:', err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchAchievements = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        const data = await gamificationApi.getAchievements();
-        setAchievements(data);
-      } catch (err) {
-        console.error('Error fetching achievements:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load achievements');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchAchievements();
   }, []);
 
@@ -173,18 +187,29 @@ export function AchievementGrid() {
               <Award className="h-5 w-5 text-purple-500" />
               <span>Achievements</span>
             </div>
-            <Badge variant="outline" className="text-sm">
-              {completedCount} / {totalCount} Completed
-            </Badge>
+            <div className="flex items-center space-x-2">
+              <Badge variant="outline" className="text-sm">
+                {completedCount} / {totalCount} Completed
+              </Badge>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="h-8 w-8 p-0"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Overall Progress</span>
-              <span className="font-medium">{Math.round((completedCount / totalCount) * 100)}%</span>
+              <span className="font-medium">{totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0}%</span>
             </div>
-            <Progress value={(completedCount / totalCount) * 100} className="h-2" />
+            <Progress value={totalCount > 0 ? (completedCount / totalCount) * 100 : 0} className="h-2" />
           </div>
         </CardContent>
       </Card>

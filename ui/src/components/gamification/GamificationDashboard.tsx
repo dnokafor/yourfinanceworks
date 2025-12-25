@@ -21,7 +21,8 @@ export function GamificationDashboard() {
     loading, 
     error, 
     canShowGamification,
-    isEnabled 
+    isEnabled,
+    refreshDashboard
   } = useGamification();
 
   if (loading) {

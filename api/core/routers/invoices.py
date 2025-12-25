@@ -462,7 +462,7 @@ async def create_invoice(
             if gamification_result:
                 logger.info(
                     f"Gamification event processed for invoice {invoice.id}: "
-                    f"points={gamification_result.get('points_awarded', 0)}"
+                    f"points={gamification_result.points_awarded}"
                 )
         except Exception as e:
             logger.warning(f"Failed to process gamification event for invoice {invoice.id}: {e}")

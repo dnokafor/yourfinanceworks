@@ -430,26 +430,37 @@ async def create_expense(
 
         # Process gamification event for expense creation
         try:
+            from core.services.tenant_database_manager import tenant_db_manager
             from core.services.financial_event_processor import create_financial_event_processor
-            event_processor = create_financial_event_processor(db)
             
-            expense_data = {
-                "vendor": db_expense.vendor,
-                "category": db_expense.category,
-                "amount": float(db_expense.amount) if db_expense.amount else 0
-            }
-            
-            gamification_result = await event_processor.process_expense_added(
-                user_id=current_user.id,
-                expense_id=db_expense.id,
-                expense_data=expense_data
-            )
-            
-            if gamification_result:
-                uvicorn_logger.info(
-                    f"Gamification event processed for expense {db_expense.id}: "
-                    f"points={gamification_result.get('points_awarded', 0)}"
-                )
+            # Get tenant database session for gamification
+            tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)
+            if tenant_session:
+                gamification_db = tenant_session()
+                try:
+                    event_processor = create_financial_event_processor(gamification_db)
+
+                    expense_data = {
+                        "vendor": db_expense.vendor,
+                        "category": db_expense.category,
+                        "amount": float(db_expense.amount) if db_expense.amount else 0
+                    }
+
+                    gamification_result = await event_processor.process_expense_added(
+                        user_id=current_user.id,
+                        expense_id=db_expense.id,
+                        expense_data=expense_data
+                    )
+
+                    if gamification_result:
+                        uvicorn_logger.info(
+                            f"Gamification event processed for expense {db_expense.id}: "
+                            f"points={gamification_result.points_awarded}"
+                        )
+                finally:
+                    gamification_db.close()
+            else:
+                uvicorn_logger.warning(f"Could not get tenant session for gamification (tenant {current_user.tenant_id})")
         except Exception as e:
             uvicorn_logger.warning(f"Failed to process gamification event for expense {db_expense.id}: {e}")
             # Don't fail the expense creation if gamification processing fails

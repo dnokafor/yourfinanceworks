@@ -33,12 +33,15 @@ interface GamificationContextValue {
   uploadReceipt: (receiptData: any) => Promise<void>;
   reviewBudget: () => Promise<void>;
   recordPayment: (paymentData: any) => Promise<void>;
+  
+  // Refresh dashboard data
+  refreshDashboard: () => Promise<void>;
 }
 
 const GamificationContext = createContext<GamificationContextValue | undefined>(undefined);
 
 export function GamificationProvider({ children }: { children: React.ReactNode }) {
-  const { processEvent, canShowGamification } = useGamification();
+  const { processEvent, canShowGamification, refreshDashboard: refreshGamificationDashboard } = useGamification();
   const [currentCelebration, setCurrentCelebration] = useState<CelebrationData | null>(null);
 
   const showCelebration = useCallback((celebration: CelebrationData) => {
@@ -173,7 +176,8 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     createInvoice,
     uploadReceipt,
     reviewBudget,
-    recordPayment
+    recordPayment,
+    refreshDashboard: refreshGamificationDashboard
   };
 
   return (

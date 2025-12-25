@@ -237,6 +237,208 @@ def sync_users_to_tenant_db(tenant_id: int):
         logger.error(f"Error syncing admin user to tenant database {tenant_id}: {str(e)}")
         raise e
 
+def create_gamification_tables(database_url):
+    """Create gamification tables directly without migrations."""
+    try:
+        engine = create_engine(database_url)
+
+        with engine.connect() as conn:
+            # Create enum types if they don't exist
+            enums_to_create = [
+                ("dataretentionpolicy", "('preserve', 'archive', 'delete')"),
+                ("habittype", "('daily_expense_tracking', 'weekly_budget_review', 'invoice_follow_up', 'receipt_documentation')"),
+                ("achievementcategory", "('expense_tracking', 'invoice_management', 'habit_formation', 'financial_health', 'exploration')"),
+                ("achievementdifficulty", "('bronze', 'silver', 'gold', 'platinum')"),
+                ("challengetype", "('personal', 'community', 'seasonal')"),
+            ]
+
+            for enum_name, enum_values in enums_to_create:
+                try:
+                    conn.execute(text(f"CREATE TYPE {enum_name} AS ENUM {enum_values}"))
+                    logger.info(f"Created enum type {enum_name}")
+                except Exception as e:
+                    if "already exists" in str(e):
+                        logger.info(f"Enum type {enum_name} already exists")
+                    else:
+                        logger.warning(f"Error creating enum {enum_name}: {e}")
+
+            conn.commit()
+
+            # Create tables
+            tables_sql = [
+                """CREATE TABLE IF NOT EXISTS user_gamification_profiles (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL UNIQUE,
+                    module_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                    enabled_at TIMESTAMP WITH TIME ZONE,
+                    disabled_at TIMESTAMP WITH TIME ZONE,
+                    data_retention_policy dataretentionpolicy NOT NULL DEFAULT 'preserve',
+                    level INTEGER NOT NULL DEFAULT 1,
+                    total_experience_points INTEGER NOT NULL DEFAULT 0,
+                    current_level_progress FLOAT NOT NULL DEFAULT 0.0,
+                    financial_health_score FLOAT NOT NULL DEFAULT 0.0,
+                    preferences JSONB NOT NULL DEFAULT '{}',
+                    statistics JSONB NOT NULL DEFAULT '{}',
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                )""",
+                """CREATE TABLE IF NOT EXISTS achievements (
+                    id SERIAL PRIMARY KEY,
+                    achievement_id VARCHAR NOT NULL UNIQUE,
+                    name VARCHAR NOT NULL,
+                    description TEXT NOT NULL,
+                    category achievementcategory NOT NULL,
+                    difficulty achievementdifficulty NOT NULL,
+                    requirements JSONB NOT NULL,
+                    reward_xp INTEGER NOT NULL DEFAULT 0,
+                    reward_badge_url VARCHAR,
+                    is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL
+                )""",
+                """CREATE TABLE IF NOT EXISTS user_achievements (
+                    id SERIAL PRIMARY KEY,
+                    profile_id INTEGER NOT NULL,
+                    achievement_id INTEGER NOT NULL,
+                    progress FLOAT NOT NULL DEFAULT 0.0,
+                    is_completed BOOLEAN NOT NULL DEFAULT FALSE,
+                    unlocked_at TIMESTAMP WITH TIME ZONE,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                    FOREIGN KEY (profile_id) REFERENCES user_gamification_profiles(id) ON DELETE CASCADE,
+                    FOREIGN KEY (achievement_id) REFERENCES achievements(id) ON DELETE CASCADE
+                )""",
+                """CREATE TABLE IF NOT EXISTS user_streaks (
+                    id SERIAL PRIMARY KEY,
+                    profile_id INTEGER NOT NULL,
+                    habit_type habittype NOT NULL,
+                    current_length INTEGER NOT NULL DEFAULT 0,
+                    longest_length INTEGER NOT NULL DEFAULT 0,
+                    last_activity_date TIMESTAMP WITH TIME ZONE,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    streak_start_date TIMESTAMP WITH TIME ZONE,
+                    times_broken INTEGER NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                    FOREIGN KEY (profile_id) REFERENCES user_gamification_profiles(id) ON DELETE CASCADE
+                )""",
+                """CREATE TABLE IF NOT EXISTS challenges (
+                    id SERIAL PRIMARY KEY,
+                    challenge_id VARCHAR NOT NULL UNIQUE,
+                    name VARCHAR NOT NULL,
+                    description TEXT NOT NULL,
+                    challenge_type challengetype NOT NULL,
+                    duration_days INTEGER NOT NULL,
+                    requirements JSONB NOT NULL,
+                    reward_xp INTEGER NOT NULL DEFAULT 0,
+                    reward_badge_url VARCHAR,
+                    start_date TIMESTAMP WITH TIME ZONE,
+                    end_date TIMESTAMP WITH TIME ZONE,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    organization_id INTEGER,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL
+                )""",
+                """CREATE TABLE IF NOT EXISTS user_challenges (
+                    id SERIAL PRIMARY KEY,
+                    profile_id INTEGER NOT NULL,
+                    challenge_id INTEGER NOT NULL,
+                    progress FLOAT NOT NULL DEFAULT 0.0,
+                    is_completed BOOLEAN NOT NULL DEFAULT FALSE,
+                    opted_in BOOLEAN NOT NULL DEFAULT TRUE,
+                    started_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                    completed_at TIMESTAMP WITH TIME ZONE,
+                    milestones JSONB NOT NULL DEFAULT '[]',
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                    FOREIGN KEY (profile_id) REFERENCES user_gamification_profiles(id) ON DELETE CASCADE,
+                    FOREIGN KEY (challenge_id) REFERENCES challenges(id) ON DELETE CASCADE
+                )""",
+                """CREATE TABLE IF NOT EXISTS point_history (
+                    id SERIAL PRIMARY KEY,
+                    profile_id INTEGER NOT NULL,
+                    action_type VARCHAR NOT NULL,
+                    points_awarded INTEGER NOT NULL,
+                    action_metadata JSONB,
+                    base_points INTEGER NOT NULL,
+                    streak_multiplier FLOAT NOT NULL DEFAULT 1.0,
+                    accuracy_bonus INTEGER NOT NULL DEFAULT 0,
+                    completeness_bonus INTEGER NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                    FOREIGN KEY (profile_id) REFERENCES user_gamification_profiles(id) ON DELETE CASCADE
+                )""",
+                """CREATE TABLE IF NOT EXISTS organization_gamification_configs (
+                    id SERIAL PRIMARY KEY,
+                    organization_id INTEGER NOT NULL UNIQUE,
+                    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                    custom_point_values JSONB NOT NULL DEFAULT '{}',
+                    achievement_thresholds JSONB NOT NULL DEFAULT '{}',
+                    enabled_features JSONB NOT NULL DEFAULT '{}',
+                    team_settings JSONB NOT NULL DEFAULT '{}',
+                    policy_alignment JSONB NOT NULL DEFAULT '{}',
+                    created_by INTEGER,
+                    updated_by INTEGER,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                    FOREIGN KEY (created_by) REFERENCES users(id),
+                    FOREIGN KEY (updated_by) REFERENCES users(id)
+                )""",
+            ]
+
+            for sql in tables_sql:
+                try:
+                    conn.execute(text(sql))
+                    logger.info(f"Created table from SQL")
+                except Exception as e:
+                    if "already exists" in str(e):
+                        logger.info(f"Table already exists")
+                    else:
+                        logger.warning(f"Error creating table: {e}")
+            
+            # Create indexes
+            indexes_sql = [
+                "CREATE INDEX IF NOT EXISTS ix_user_gamification_profiles_id ON user_gamification_profiles(id)",
+                "CREATE INDEX IF NOT EXISTS ix_user_gamification_profiles_user_id ON user_gamification_profiles(user_id)",
+                "CREATE INDEX IF NOT EXISTS ix_achievements_id ON achievements(id)",
+                "CREATE INDEX IF NOT EXISTS ix_achievements_achievement_id ON achievements(achievement_id)",
+                "CREATE INDEX IF NOT EXISTS ix_achievements_category ON achievements(category)",
+                "CREATE INDEX IF NOT EXISTS ix_achievements_difficulty ON achievements(difficulty)",
+                "CREATE INDEX IF NOT EXISTS ix_user_achievements_id ON user_achievements(id)",
+                "CREATE INDEX IF NOT EXISTS ix_user_achievements_profile_id ON user_achievements(profile_id)",
+                "CREATE INDEX IF NOT EXISTS ix_user_achievements_achievement_id ON user_achievements(achievement_id)",
+                "CREATE INDEX IF NOT EXISTS ix_user_streaks_id ON user_streaks(id)",
+                "CREATE INDEX IF NOT EXISTS ix_user_streaks_profile_id ON user_streaks(profile_id)",
+                "CREATE INDEX IF NOT EXISTS ix_user_streaks_habit_type ON user_streaks(habit_type)",
+                "CREATE INDEX IF NOT EXISTS ix_challenges_id ON challenges(id)",
+                "CREATE INDEX IF NOT EXISTS ix_challenges_challenge_id ON challenges(challenge_id)",
+                "CREATE INDEX IF NOT EXISTS ix_challenges_challenge_type ON challenges(challenge_type)",
+                "CREATE INDEX IF NOT EXISTS ix_user_challenges_id ON user_challenges(id)",
+                "CREATE INDEX IF NOT EXISTS ix_user_challenges_profile_id ON user_challenges(profile_id)",
+                "CREATE INDEX IF NOT EXISTS ix_user_challenges_challenge_id ON user_challenges(challenge_id)",
+                "CREATE INDEX IF NOT EXISTS ix_point_history_id ON point_history(id)",
+                "CREATE INDEX IF NOT EXISTS ix_point_history_profile_id ON point_history(profile_id)",
+                "CREATE INDEX IF NOT EXISTS ix_point_history_action_type ON point_history(action_type)",
+                "CREATE INDEX IF NOT EXISTS ix_point_history_created_at ON point_history(created_at)",
+                "CREATE INDEX IF NOT EXISTS ix_organization_gamification_configs_id ON organization_gamification_configs(id)",
+                "CREATE INDEX IF NOT EXISTS ix_organization_gamification_configs_organization_id ON organization_gamification_configs(organization_id)",
+            ]
+
+            for sql in indexes_sql:
+                try:
+                    conn.execute(text(sql))
+                except Exception as e:
+                    logger.debug(f"Index creation note: {e}")
+
+            conn.commit()
+            logger.info("Gamification tables created successfully")
+            return True
+
+    except Exception as e:
+        logger.error(f"Error creating gamification tables: {e}")
+        return False
+
 def init_db(skip_migrations=True):
     """Initialize database with essential setup, optionally skipping migrations."""
     logger.info("Starting essential database initialization...")
@@ -286,6 +488,9 @@ def init_db(skip_migrations=True):
     from core.models.analytics import Base as AnalyticsBase
     AnalyticsBase.metadata.create_all(bind=engine)
 
+    # Create gamification tables in master DB
+    create_gamification_tables(SQLALCHEMY_DATABASE_URL)
+
     # Create all tables for every tenant
     master_db = next(get_master_db())
     from core.models.models import Tenant
@@ -312,9 +517,13 @@ def init_db(skip_migrations=True):
             # databases are created dynamically and need immediate schema setup
             TenantBase.metadata.create_all(bind=tenant_engine)
             logger.info(f"Tables created for tenant {tenant.id}")
+
+            # Create gamification tables for this tenant
+            create_gamification_tables(tenant_db_url)
+
         except Exception as e:
             logger.error(f"Error creating tables for tenant {tenant.id}: {str(e)}")
-        
+
         # Note: User sync is deferred until after DB_INIT_PHASE to ensure proper encryption
 
     # Create session
@@ -347,7 +556,6 @@ def init_db(skip_migrations=True):
                     is_active=True
                 ))
             db.commit()
-        
     except Exception as e:
         db.rollback()
         logger.error(f"Error initializing database: {str(e)}")
@@ -355,6 +563,28 @@ def init_db(skip_migrations=True):
     finally:
         db.close()
     
+    # Initialize achievements for all tenant databases
+    logger.info("Initializing achievements for all tenants...")
+    for tenant in tenants:
+        try:
+            logger.info(f"Initializing achievements for tenant {tenant.id}...")
+            tenant_session = tenant_db_manager.get_tenant_session(tenant.id)
+            tenant_db = tenant_session()
+
+            try:
+                from core.services.achievement_engine import AchievementEngine
+                achievement_engine = AchievementEngine(tenant_db)
+                success = achievement_engine.initialize_achievements()
+                if success:
+                    logger.info(f"Successfully initialized achievements for tenant {tenant.id}")
+                else:
+                    logger.error(f"Failed to initialize achievements for tenant {tenant.id}")
+            finally:
+                tenant_db.close()
+
+        except Exception as e:
+            logger.error(f"Failed to initialize achievements for tenant {tenant.id}: {str(e)}")
+
     # Skip migrations to avoid multiple heads issue
     # from scripts.run_all_migrations import run_all_migrations
     # run_all_migrations()
@@ -372,7 +602,7 @@ def init_db(skip_migrations=True):
     try:
         from core.services.key_management_service import KeyManagementService
         key_management = KeyManagementService()
-        
+
         for tenant in tenants:
             try:
                 # Check if tenant key already exists

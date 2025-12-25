@@ -8,8 +8,7 @@ import type {
   EnableGamificationRequest,
   DisableGamificationRequest,
   FinancialEvent,
-  GamificationResult,
-  DataRetentionPolicy
+  GamificationResult
 } from '@/types/gamification';
 
 export interface UseGamificationReturn {
@@ -25,6 +24,7 @@ export interface UseGamificationReturn {
   updatePreferences: (preferences: GamificationPreferences) => Promise<void>;
   processEvent: (event: FinancialEvent) => Promise<GamificationResult | null>;
   refresh: () => Promise<void>;
+  refreshDashboard: () => Promise<void>;
 }
 
 export function useGamification(): UseGamificationReturn {
@@ -48,12 +48,10 @@ export function useGamification(): UseGamificationReturn {
 
       if (statusData.enabled) {
         // If enabled, fetch profile and dashboard
-        const [profileData, dashboardData] = await Promise.all([
-          gamificationApi.getProfile(),
-          gamificationApi.getDashboard()
-        ]);
-        
+        const profileData = await gamificationApi.getProfile();
         setProfile(profileData);
+
+        const dashboardData = await gamificationApi.getDashboard();
         setDashboard(dashboardData);
       } else {
         // If disabled, clear profile and dashboard
@@ -65,6 +63,22 @@ export function useGamification(): UseGamificationReturn {
       setError(err instanceof Error ? err.message : 'Failed to load gamification data');
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const refreshDashboard = useCallback(async () => {
+    try {
+      // Refresh dashboard and profile without showing loading state
+      const [profileData, dashboardData] = await Promise.all([
+        gamificationApi.getProfile(),
+        gamificationApi.getDashboard()
+      ]);
+      
+      setProfile(profileData);
+      setDashboard(dashboardData);
+    } catch (err) {
+      console.error('Error refreshing dashboard:', err);
+      // Don't set error state for background refresh
     }
   }, []);
 
@@ -132,7 +146,7 @@ export function useGamification(): UseGamificationReturn {
       
       if (response.success && response.result) {
         // Refresh dashboard to show updated progress
-        await fetchData();
+        await refreshDashboard();
         return response.result;
       }
       
@@ -142,7 +156,7 @@ export function useGamification(): UseGamificationReturn {
       // Don't throw here as this is often called in background
       return null;
     }
-  }, [fetchData]);
+  }, [refreshDashboard]);
 
   const refresh = useCallback(async () => {
     await fetchData();
@@ -165,7 +179,8 @@ export function useGamification(): UseGamificationReturn {
     disable,
     updatePreferences,
     processEvent,
-    refresh
+    refresh,
+    refreshDashboard
   };
 }
 

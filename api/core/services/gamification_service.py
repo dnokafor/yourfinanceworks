@@ -188,8 +188,17 @@ class GamificationService:
             if not profile.streaks:
                 await self._initialize_user_streaks(profile.id)
             
+            # Initialize achievements for new profiles
+            existing_achievements = self.db.query(UserAchievement).filter(
+                UserAchievement.profile_id == profile.id
+            ).count()
+
+            if existing_achievements == 0:
+                self._initialize_user_achievements(profile.id)
+
+            self.db.commit()
             return UserGamificationProfileResponse.from_orm(profile)
-            
+
         except Exception as e:
             logger.error(f"Error enabling gamification for user {user_id}: {str(e)}")
             self.db.rollback()
@@ -204,7 +213,7 @@ class GamificationService:
             
             if not profile:
                 return True  # Already disabled/doesn't exist
-            
+
             profile.module_enabled = False
             profile.disabled_at = datetime.now(timezone.utc)
             profile.data_retention_policy = data_retention_policy
@@ -217,7 +226,7 @@ class GamificationService:
             
             self.db.commit()
             return True
-            
+
         except Exception as e:
             logger.error(f"Error disabling gamification for user {user_id}: {str(e)}")
             self.db.rollback()
@@ -233,26 +242,32 @@ class GamificationService:
             # Check if gamification is enabled for this user
             if not await self.is_enabled_for_user(event.user_id):
                 return None
-            
+
             profile = self.db.query(UserGamificationProfile).filter(
                 UserGamificationProfile.user_id == event.user_id
             ).first()
-            
+
             if not profile:
                 logger.warning(f"No gamification profile found for user {event.user_id}")
                 return None
-            
+
             # Calculate points for this action using the points calculator
             points_awarded, point_breakdown = await self.points_calculator.calculate_points(
                 event, profile, organization_id=None  # TODO: Get organization_id from user context
             )
-            
+
             # Update user statistics
             await self._update_user_statistics(profile, event)
-            
+
+            # Commit statistics update before checking achievements
+            self.db.commit()
+
+            # Refresh profile to get updated statistics
+            self.db.refresh(profile)
+
             # Update streaks using the streak tracker
             streaks_updated_raw = await self.streak_tracker.update_streaks_from_event(event)
-            
+
             # Convert streak updates to response format
             streaks_updated = []
             if streaks_updated_raw:
@@ -262,7 +277,7 @@ class GamificationService:
                         streak_dict = streak.__dict__
                     else:
                         streak_dict = streak
-                    
+
                     # Get the actual UserStreak from database for proper response
                     user_streak = self.db.query(UserStreak).filter(
                         and_(
@@ -273,26 +288,26 @@ class GamificationService:
                     
                     if user_streak:
                         streaks_updated.append(user_streak)
-            
+
             # Check for achievements using the achievement engine
             achievements_unlocked = await self.achievement_engine.check_achievements(profile, event)
-            
+
             # Update challenge progress using the challenge manager
             challenges_updated = await self.challenge_manager.update_challenge_progress_from_event(event)
-            
+
             # Update financial health score using the dedicated calculator
             health_score_change = await self.financial_health_calculator.update_score(event.user_id, event)
-            
+
             # Check for level up using the level progression system
             level_up = await self.level_progression.check_level_up(profile, points_awarded)
-            
+
             # Record point history with detailed breakdown
             await self._record_point_history(profile, event, points_awarded, point_breakdown)
-            
+
             # Update profile totals (level progression system handles XP updates)
             # profile.total_experience_points is updated by level_progression.check_level_up
             profile.updated_at = datetime.now(timezone.utc)
-            
+
             self.db.commit()
             
             # Determine if celebration should be triggered
@@ -326,7 +341,7 @@ class GamificationService:
             
             if not profile:
                 return None
-            
+
             # Get recent achievements (last 10)
             recent_achievements = self.db.query(UserAchievement).filter(
                 and_(
@@ -334,7 +349,7 @@ class GamificationService:
                     UserAchievement.is_completed == True
                 )
             ).order_by(desc(UserAchievement.unlocked_at)).limit(10).all()
-            
+
             # Get active streaks
             active_streaks = self.db.query(UserStreak).filter(
                 and_(
@@ -343,7 +358,7 @@ class GamificationService:
                     UserStreak.current_length > 0
                 )
             ).all()
-            
+
             # Get active challenges
             active_challenges = self.db.query(UserChallenge).filter(
                 and_(
@@ -352,18 +367,18 @@ class GamificationService:
                     UserChallenge.opted_in == True
                 )
             ).all()
-            
+
             # Get recent points (last 20)
             recent_points = self.db.query(PointHistory).filter(
                 PointHistory.profile_id == profile.id
             ).order_by(desc(PointHistory.created_at)).limit(20).all()
-            
+
             # Calculate level progress
             level_progress = await self._calculate_level_progress(profile)
-            
+
             # Get financial health trend (last 30 days)
             financial_health_trend = await self._get_financial_health_trend(profile)
-            
+
             return GamificationDashboard(
                 profile=UserGamificationProfileResponse.from_orm(profile),
                 recent_achievements=recent_achievements,
@@ -373,7 +388,7 @@ class GamificationService:
                 level_progress=level_progress,
                 financial_health_trend=financial_health_trend
             )
-            
+
         except Exception as e:
             logger.error(f"Error getting dashboard for user {user_id}: {str(e)}")
             return None
@@ -393,18 +408,18 @@ class GamificationService:
         try:
             if not await self.is_enabled_for_user(user_id):
                 return []
-            
+
             profile = self.db.query(UserGamificationProfile).filter(
                 UserGamificationProfile.user_id == user_id
             ).first()
-            
+
             if not profile:
                 return []
             
             return await self.achievement_engine.get_user_achievements(
                 profile.id, category, completed_only
             )
-            
+
         except Exception as e:
             logger.error(f"Error getting user achievements for user {user_id}: {str(e)}")
             return []
@@ -418,11 +433,11 @@ class GamificationService:
         try:
             if not await self.is_enabled_for_user(user_id):
                 return None
-            
+
             profile = self.db.query(UserGamificationProfile).filter(
                 UserGamificationProfile.user_id == user_id
             ).first()
-            
+
             if not profile:
                 return None
             
@@ -445,18 +460,18 @@ class GamificationService:
         try:
             if not await self.is_enabled_for_user(user_id):
                 return []
-            
+
             profile = self.db.query(UserGamificationProfile).filter(
                 UserGamificationProfile.user_id == user_id
             ).first()
-            
+
             if not profile:
                 return []
-            
+
             streaks = self.db.query(UserStreak).filter(
                 UserStreak.profile_id == profile.id
             ).all()
-            
+
             streak_data = []
             for streak in streaks:
                 status = await self.streak_tracker.track_streak(
@@ -488,9 +503,9 @@ class GamificationService:
         try:
             if not await self.is_enabled_for_user(user_id):
                 return None
-            
+
             analytics = await self.streak_tracker.get_streak_insights(user_id)
-            
+
             return {
                 "total_active_streaks": analytics.total_active_streaks,
                 "longest_overall_streak": analytics.longest_overall_streak,
@@ -532,7 +547,7 @@ class GamificationService:
         try:
             if not await self.is_enabled_for_user(user_id):
                 return None
-            
+
             # Convert string to enum
             habit_type_map = {
                 "daily_expense_tracking": HabitType.DAILY_EXPENSE_TRACKING,
@@ -569,9 +584,9 @@ class GamificationService:
         try:
             if not await self.is_enabled_for_user(user_id):
                 return []
-            
+
             from core.models.gamification import ChallengeType as ChallengeTypeEnum
-            
+
             # Convert string to enum if provided
             challenge_type_enum = None
             if challenge_type:
@@ -602,11 +617,11 @@ class GamificationService:
         try:
             if not await self.is_enabled_for_user(user_id):
                 return []
-            
+
             challenges = await self.challenge_manager.get_user_challenges(
                 user_id, active_only, completed_only
             )
-            
+
             return [challenge.dict() for challenge in challenges]
             
         except Exception as e:
@@ -618,12 +633,12 @@ class GamificationService:
         try:
             if not await self.is_enabled_for_user(user_id):
                 return None
-            
+
             user_challenge = await self.challenge_manager.opt_into_challenge(user_id, challenge_id)
-            
+
             if user_challenge:
-                return user_challenge.dict()
-            
+                return user_challenge.model_dump()
+
             return None
             
         except Exception as e:
@@ -635,9 +650,9 @@ class GamificationService:
         try:
             if not await self.is_enabled_for_user(user_id):
                 return False
-            
+
             return await self.challenge_manager.opt_out_of_challenge(user_id, challenge_id)
-            
+
         except Exception as e:
             logger.error(f"Error opting user {user_id} out of challenge {challenge_id}: {str(e)}")
             return False
@@ -647,9 +662,9 @@ class GamificationService:
         try:
             if not await self.is_enabled_for_user(user_id):
                 return None
-            
+
             return await self.challenge_manager.get_challenge_progress(user_id, challenge_id)
-            
+
         except Exception as e:
             logger.error(f"Error getting challenge progress for user {user_id}: {str(e)}")
             return None
@@ -664,9 +679,9 @@ class GamificationService:
         try:
             if not await self.is_enabled_for_user(user_id):
                 return None
-            
+
             health_score = await self.financial_health_calculator.calculate_score(user_id)
-            
+
             if not health_score:
                 return None
             
@@ -693,7 +708,7 @@ class GamificationService:
         """Get information about all health score components"""
         try:
             components = await self.financial_health_calculator.get_score_components()
-            
+
             return [
                 {
                     "name": comp.name,
@@ -713,19 +728,19 @@ class GamificationService:
         try:
             if not await self.is_enabled_for_user(user_id):
                 return None
-            
+
             profile = self.db.query(UserGamificationProfile).filter(
                 UserGamificationProfile.user_id == user_id
             ).first()
-            
+
             if not profile:
                 return None
-            
+
             health_score = await self.financial_health_calculator.calculate_score(user_id)
-            
+
             if not health_score:
                 return None
-            
+
             # Update the profile
             profile.financial_health_score = health_score.overall
             profile.updated_at = datetime.now(timezone.utc)
@@ -741,9 +756,18 @@ class GamificationService:
     # Private Helper Methods
     async def _update_user_statistics(self, profile: UserGamificationProfile, event: FinancialEvent):
         """Update user statistics based on the event"""
-        stats = profile.statistics or {}
+        # Get current statistics or use defaults
+        stats = profile.statistics.copy() if profile.statistics else {
+            "totalActionsCompleted": 0,
+            "expensesTracked": 0,
+            "invoicesCreated": 0,
+            "receiptsUploaded": 0,
+            "budgetReviews": 0
+        }
+
+        # Update counters
         stats["totalActionsCompleted"] = stats.get("totalActionsCompleted", 0) + 1
-        
+
         # Update specific action counters
         if event.action_type == ActionType.EXPENSE_ADDED:
             stats["expensesTracked"] = stats.get("expensesTracked", 0) + 1
@@ -754,7 +778,11 @@ class GamificationService:
         elif event.action_type == ActionType.BUDGET_REVIEWED:
             stats["budgetReviews"] = stats.get("budgetReviews", 0) + 1
         
+        # Update the profile statistics field
         profile.statistics = stats
+        # Mark the field as dirty for SQLAlchemy
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(profile, "statistics")
 
     async def _update_streaks(self, profile: UserGamificationProfile, event: FinancialEvent) -> List:
         """Update user streaks based on the event"""
@@ -777,7 +805,7 @@ class GamificationService:
                     UserStreak.habit_type == habit_type
                 )
             ).first()
-            
+
             if streak:
                 # Simplified streak update logic
                 today = datetime.now(timezone.utc).date()
@@ -814,7 +842,7 @@ class GamificationService:
                 **event.metadata,
                 "point_breakdown": point_breakdown
             })
-            
+
             point_record = PointHistory(
                 profile_id=profile.id,
                 action_type=event.action_type.value,
@@ -826,9 +854,9 @@ class GamificationService:
                 timeliness_bonus=point_breakdown.get("timeliness_bonus", 0),
                 action_metadata=serialized_metadata
             )
-            
+
             self.db.add(point_record)
-            
+
         except Exception as e:
             logger.error(f"Error recording point history: {str(e)}")
             # Create minimal record on error
@@ -865,6 +893,38 @@ class GamificationService:
             )
             self.db.add(streak)
 
+    def _initialize_user_achievements(self, profile_id: int):
+        """Initialize all achievements for a new user"""
+        try:
+            # First ensure achievement definitions exist
+            from core.services.achievement_engine import AchievementEngine
+            engine = AchievementEngine(self.db)
+            engine.initialize_achievements()
+
+            # Get all active achievements from the database
+            achievements = self.db.query(Achievement).filter(
+                Achievement.is_active == True
+            ).all()
+
+            if not achievements:
+                logger.warning(f"No active achievements found to initialize for profile {profile_id}")
+                return
+
+            # Create UserAchievement records for each achievement
+            for achievement in achievements:
+                user_achievement = UserAchievement(
+                    profile_id=profile_id,
+                    achievement_id=achievement.id,
+                    progress=0.0,
+                    is_completed=False
+                )
+                self.db.add(user_achievement)
+
+            logger.info(f"Initialized {len(achievements)} achievements for profile {profile_id}")
+
+        except Exception as e:
+            logger.error(f"Error initializing achievements for profile {profile_id}: {str(e)}")
+
     async def _delete_user_gamification_data(self, profile_id: int):
         """Delete all gamification data for a user"""
         # Delete related records
@@ -872,7 +932,7 @@ class GamificationService:
         self.db.query(UserStreak).filter(UserStreak.profile_id == profile_id).delete()
         self.db.query(UserChallenge).filter(UserChallenge.profile_id == profile_id).delete()
         self.db.query(PointHistory).filter(PointHistory.profile_id == profile_id).delete()
-        
+
         # Delete profile
         self.db.query(UserGamificationProfile).filter(UserGamificationProfile.id == profile_id).delete()
 
@@ -883,7 +943,7 @@ class GamificationService:
         profile = self.db.query(UserGamificationProfile).filter(
             UserGamificationProfile.id == profile_id
         ).first()
-        
+
         if profile:
             # Add archived flag to preferences
             preferences = profile.preferences or {}

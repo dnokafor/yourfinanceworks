@@ -49,7 +49,7 @@ async def initialize_achievements_for_tenant(tenant_id: int, tenant_name: str) -
             achievement_engine = AchievementEngine(db)
             
             # Initialize achievements
-            success = await achievement_engine.initialize_achievements()
+            success = achievement_engine.initialize_achievements()
             
             if success:
                 logger.info(f"✅ Achievements initialized for tenant {tenant_id}")

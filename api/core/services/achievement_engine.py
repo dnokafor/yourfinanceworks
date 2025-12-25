@@ -47,7 +47,7 @@ class AchievementEngine:
         self.db = db
         self._achievement_definitions = None
 
-    async def initialize_achievements(self) -> bool:
+    def initialize_achievements(self) -> bool:
         """
         Initialize all achievement definitions in the database.
         This should be called during system setup or migration.
@@ -114,6 +114,8 @@ class AchievementEngine:
             unlocked_achievements = []
             
             # Get all active achievements that the user hasn't completed
+            from sqlalchemy import select
+
             completed_achievement_ids = self.db.query(UserAchievement.achievement_id).filter(
                 and_(
                     UserAchievement.profile_id == profile.id,
@@ -124,7 +126,7 @@ class AchievementEngine:
             available_achievements = self.db.query(Achievement).filter(
                 and_(
                     Achievement.is_active == True,
-                    ~Achievement.id.in_(completed_achievement_ids)
+                    ~Achievement.id.in_(select(completed_achievement_ids.c.achievement_id))
                 )
             ).all()
             
@@ -376,9 +378,12 @@ class AchievementEngine:
                 self.db.add(user_achievement)
             
             # Update user statistics
-            stats = profile.statistics or {}
+            stats = profile.statistics.copy() if profile.statistics else {}
             stats["achievementsUnlocked"] = stats.get("achievementsUnlocked", 0) + 1
             profile.statistics = stats
+            # Mark statistics field as dirty for SQLAlchemy
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(profile, "statistics")
             
             # Award XP for the achievement
             profile.total_experience_points += achievement.reward_xp
