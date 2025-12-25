@@ -11,6 +11,7 @@ from pathlib import Path
 import uuid
 from collections import defaultdict
 import sqlalchemy as sa
+import traceback
 
 from core.models.database import get_db
 from core.models.models_per_tenant import Expense, ExpenseAttachment, User, Invoice, BankStatementTransaction
