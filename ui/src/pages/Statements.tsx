@@ -556,7 +556,7 @@ export default function Statements() {
                 className="whitespace-nowrap"
               >
                 <Trash2 className="mr-2 h-4 w-4" />
-                {t('recycleBin.title', { defaultValue: 'Recycle Bin' })}
+                {t('statementRecycleBin.title', { defaultValue: 'Recycle Bin' })}
                 {showRecycleBin ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />}
               </ProfessionalButton>
               <StatementUploadButton onUpload={() => setUploadModalOpen(true)} />
@@ -573,9 +573,9 @@ export default function Statements() {
                   <div>
                     <CardTitle className="flex items-center gap-2">
                       <Trash2 className="w-5 h-5" />
-                      {t('recycleBin.title', { defaultValue: 'Recycle Bin' })}
+                      {t('statementRecycleBin.title', { defaultValue: 'Recycle Bin' })}
                     </CardTitle>
-                    <p className="text-muted-foreground text-sm">{t('recycleBin.description', { defaultValue: 'Deleted statements that can be restored or permanently deleted' })}</p>
+                    <p className="text-muted-foreground text-sm">{t('statementRecycleBin.description', { defaultValue: 'Deleted statements that can be restored or permanently deleted' })}</p>
                   </div>
                   <ProfessionalButton
                     variant="destructive"
@@ -584,7 +584,7 @@ export default function Statements() {
                     className="gap-2"
                   >
                     <Trash2 className="h-4 w-4" />
-                    {t('recycleBin.empty_recycle_bin', { defaultValue: 'Empty Recycle Bin' })}
+                    {t('statementRecycleBin.empty_recycle_bin', { defaultValue: 'Empty Recycle Bin' })}
                   </ProfessionalButton>
                 </div>
               </CardHeader>
@@ -592,12 +592,12 @@ export default function Statements() {
                 {recycleBinLoading ? (
                   <div className="flex justify-center items-center h-24">
                     <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                    {t('recycleBin.loading', { defaultValue: 'Loading...' })}
+                    {t('statementRecycleBin.loading', { defaultValue: 'Loading...' })}
                   </div>
                 ) : deletedStatements.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-24 text-center">
                     <Trash2 className="h-8 w-8 text-muted-foreground mb-2" />
-                    <p className="text-muted-foreground">{t('recycleBin.recycle_bin_empty', { defaultValue: 'Recycle bin is empty' })}</p>
+                    <p className="text-muted-foreground">{t('statementRecycleBin.recycle_bin_empty', { defaultValue: 'Recycle bin is empty' })}</p>
                   </div>
                 ) : (
                   <div className="rounded-md border overflow-x-auto">
@@ -607,9 +607,9 @@ export default function Statements() {
                           <TableHead>{t('statements.filename')}</TableHead>
                           <TableHead>{t('statements.status')}</TableHead>
                           <TableHead>{t('statements.transactions')}</TableHead>
-                          <TableHead>{t('recycleBin.deleted_at')}</TableHead>
-                          <TableHead>{t('recycleBin.deleted_by')}</TableHead>
-                          <TableHead>{t('recycleBin.actions')}</TableHead>
+                          <TableHead>{t('statementRecycleBin.deleted_at')}</TableHead>
+                          <TableHead>{t('statementRecycleBin.deleted_by')}</TableHead>
+                          <TableHead>{t('statementRecycleBin.actions')}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -635,7 +635,7 @@ export default function Statements() {
                                       </Button>
                                     </TooltipTrigger>
                                     <TooltipContent>
-                                      {t('recycleBin.restore', { defaultValue: 'Restore' })}
+                                      {t('statementRecycleBin.restore', { defaultValue: 'Restore' })}
                                     </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
@@ -653,16 +653,16 @@ export default function Statements() {
                                           </Button>
                                         </TooltipTrigger>
                                         <TooltipContent>
-                                          {t('recycleBin.permanently_delete', { defaultValue: 'Delete' })}
+                                          {t('statementRecycleBin.permanently_delete', { defaultValue: 'Delete' })}
                                         </TooltipContent>
                                       </Tooltip>
                                     </TooltipProvider>
                                   </AlertDialogTrigger>
                                   <AlertDialogContent>
                                     <AlertDialogHeader>
-                                      <AlertDialogTitle>{t('recycleBin.permanent_delete_confirm_title', { defaultValue: 'Permanently Delete Statement' })}</AlertDialogTitle>
+                                      <AlertDialogTitle>{t('statementRecycleBin.permanent_delete_confirm_title', { defaultValue: 'Permanently Delete Statement' })}</AlertDialogTitle>
                                       <AlertDialogDescription>
-                                        {t('recycleBin.permanent_delete_confirm_description', { defaultValue: 'Are you sure you want to permanently delete this statement? This action cannot be undone.' })}
+                                        {t('statementRecycleBin.permanent_delete_confirm_description', { defaultValue: 'Are you sure you want to permanently delete this statement? This action cannot be undone.' })}
                                       </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
@@ -672,7 +672,7 @@ export default function Statements() {
                                         className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                       >
                                         <Trash2 className="mr-2 h-4 w-4" />
-                                        {t('recycleBin.permanently_delete', { defaultValue: 'Delete Permanently' })}
+                                        {t('statementRecycleBin.permanently_delete', { defaultValue: 'Delete Permanently' })}
                                       </AlertDialogAction>
                                     </AlertDialogFooter>
                                   </AlertDialogContent>
@@ -1487,16 +1487,16 @@ export default function Statements() {
         <AlertDialog open={emptyRecycleBinModalOpen} onOpenChange={setEmptyRecycleBinModalOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>{t('recycleBin.empty_recycle_bin_confirm_title', { defaultValue: 'Empty Recycle Bin' })}</AlertDialogTitle>
+              <AlertDialogTitle>{t('statementRecycleBin.empty_recycle_bin_confirm_title', { defaultValue: 'Empty Recycle Bin' })}</AlertDialogTitle>
               <AlertDialogDescription>
-                {t('recycleBin.empty_recycle_bin_confirm_description', { defaultValue: 'Are you sure you want to permanently delete all statements in the recycle bin? This action cannot be undone and all deleted statements will be completely removed from the system.' })}
+                {t('statementRecycleBin.empty_recycle_bin_confirm_description', { defaultValue: 'Are you sure you want to permanently delete all statements in the recycle bin? This action cannot be undone and all deleted statements will be completely removed from the system.' })}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
               <AlertDialogAction onClick={confirmEmptyRecycleBin} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                 <Trash2 className="mr-2 h-4 w-4" />
-                {t('recycleBin.empty_recycle_bin', { defaultValue: 'Empty Recycle Bin' })}
+                {t('statementRecycleBin.empty_recycle_bin', { defaultValue: 'Empty Recycle Bin' })}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

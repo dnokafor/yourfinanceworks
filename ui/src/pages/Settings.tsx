@@ -638,6 +638,11 @@ const Settings = () => {
         toast.error(getErrorMessage(error, t));
       }
 
+      // Refresh the page after successful save
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+
     } catch (error) {
       console.error("Failed to save settings:", error);
       toast.error(getErrorMessage(error, t));
