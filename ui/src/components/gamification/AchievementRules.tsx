@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 
 const categoryIcons = {
   expense_tracking: Target,
@@ -175,6 +176,7 @@ function AchievementRuleCard({ rule, onToggle, isToggling = false }: Achievement
 }
 
 export function AchievementRules() {
+  const { t } = useTranslation();
   const [rules, setRules] = useState<AchievementRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -270,12 +272,12 @@ export function AchievementRules() {
   }
 
   const categories = [
-    { id: 'all', name: 'All Rules', icon: Award },
-    { id: 'expense_tracking', name: 'Expense Tracking', icon: Target },
-    { id: 'invoice_management', name: 'Invoice Management', icon: TrendingUp },
-    { id: 'habit_formation', name: 'Habit Formation', icon: Star },
-    { id: 'financial_health', name: 'Financial Health', icon: Trophy },
-    { id: 'exploration', name: 'Exploration', icon: Award }
+    { id: 'all', name: t('settings.gamification.rules.categories.all'), icon: Award },
+    { id: 'expense_tracking', name: t('settings.gamification.rules.categories.expense_tracking'), icon: Target },
+    { id: 'invoice_management', name: t('settings.gamification.rules.categories.invoice_management'), icon: TrendingUp },
+    { id: 'habit_formation', name: t('settings.gamification.rules.categories.habit_formation'), icon: Star },
+    { id: 'financial_health', name: t('settings.gamification.rules.categories.financial_health'), icon: Trophy },
+    { id: 'exploration', name: t('settings.gamification.rules.categories.exploration'), icon: Award }
   ];
 
   const filteredRules = selectedCategory === 'all' 
@@ -293,11 +295,11 @@ export function AchievementRules() {
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <Trophy className="h-5 w-5 text-purple-500" />
-              <span>Achievement Rules</span>
+              <span>{t('settings.gamification.rules.title')}</span>
             </div>
             <div className="flex items-center space-x-2">
               <Badge variant="outline" className="text-sm">
-                {activeRulesCount} / {totalCount} Active
+                {activeRulesCount} / {totalCount} {t('settings.gamification.rules.status.active')}
               </Badge>
               <Button
                 variant="ghost"
@@ -311,13 +313,13 @@ export function AchievementRules() {
             </div>
           </CardTitle>
           <CardDescription>
-            View all achievement rules and their requirements. These rules define how users can unlock achievements and earn XP.
+            {t('settings.gamification.rules.subtitle')}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Active Rules</span>
+              <span className="text-gray-600">{t('settings.gamification.rules.active_rules')}</span>
               <span className="font-medium">{totalCount > 0 ? Math.round((activeRulesCount / totalCount) * 100) : 0}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">

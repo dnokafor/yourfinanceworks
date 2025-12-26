@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Award, Trophy, Star, Target, TrendingUp, Lock, RefreshCw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { gamificationApi } from '@/lib/api';
 import type { UserAchievement } from '@/types/gamification';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -34,9 +35,10 @@ const difficultyColors = {
 
 interface AchievementCardProps {
   achievement: UserAchievement;
+  t: (key: string, options?: any) => string;
 }
 
-function AchievementCard({ achievement }: AchievementCardProps) {
+function AchievementCard({ achievement, t }: AchievementCardProps) {
   const IconComponent = categoryIcons[achievement.achievement.category as keyof typeof categoryIcons] || Award;
   const iconColor = categoryColors[achievement.achievement.category as keyof typeof categoryColors] || 'text-gray-500';
   const difficultyColor = difficultyColors[achievement.achievement.difficulty as keyof typeof difficultyColors] || 'bg-gray-100 text-gray-800';
@@ -73,7 +75,7 @@ function AchievementCard({ achievement }: AchievementCardProps) {
             {!isCompleted && (
               <div className="space-y-1">
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">Progress</span>
+                  <span className="text-gray-500">{t('settings.gamification.achievements.progress')}</span>
                   <span className="font-medium">{progress}%</span>
                 </div>
                 <Progress value={progress} className="h-2" />
@@ -83,7 +85,7 @@ function AchievementCard({ achievement }: AchievementCardProps) {
             {isCompleted && achievement.unlocked_at && (
               <div className="flex items-center space-x-1 text-xs text-green-600">
                 <Trophy className="h-3 w-3" />
-                <span>Unlocked {new Date(achievement.unlocked_at).toLocaleDateString()}</span>
+                <span>{t('settings.gamification.achievements.unlocked')} {new Date(achievement.unlocked_at).toLocaleDateString()}</span>
               </div>
             )}
             
@@ -101,6 +103,7 @@ function AchievementCard({ achievement }: AchievementCardProps) {
 }
 
 export function AchievementGrid() {
+  const { t } = useTranslation();
   const [achievements, setAchievements] = useState<UserAchievement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -142,7 +145,7 @@ export function AchievementGrid() {
     return (
       <div className="flex items-center justify-center p-8">
         <LoadingSpinner />
-        <span className="ml-2">Loading achievements...</span>
+        <span className="ml-2">{t('settings.gamification.achievements.loading')}</span>
       </div>
     );
   }
@@ -153,7 +156,7 @@ export function AchievementGrid() {
         <CardContent className="p-6">
           <div className="flex items-center space-x-2 text-red-600">
             <Award className="h-5 w-5" />
-            <span className="font-medium">Error loading achievements</span>
+            <span className="font-medium">{t('settings.gamification.achievements.error')}</span>
           </div>
           <p className="text-red-600 text-sm mt-2">{error}</p>
         </CardContent>
@@ -162,12 +165,12 @@ export function AchievementGrid() {
   }
 
   const categories = [
-    { id: 'all', name: 'All Achievements', icon: Award },
-    { id: 'expense_tracking', name: 'Expense Tracking', icon: Target },
-    { id: 'invoice_management', name: 'Invoice Management', icon: TrendingUp },
-    { id: 'habit_formation', name: 'Habit Formation', icon: Star },
-    { id: 'financial_health', name: 'Financial Health', icon: Trophy },
-    { id: 'exploration', name: 'Exploration', icon: Award }
+    { id: 'all', name: t('settings.gamification.achievements.categories.all'), icon: Award },
+    { id: 'expense_tracking', name: t('settings.gamification.achievements.categories.expense_tracking'), icon: Target },
+    { id: 'invoice_management', name: t('settings.gamification.achievements.categories.invoice_management'), icon: TrendingUp },
+    { id: 'habit_formation', name: t('settings.gamification.achievements.categories.habit_formation'), icon: Star },
+    { id: 'financial_health', name: t('settings.gamification.achievements.categories.financial_health'), icon: Trophy },
+    { id: 'exploration', name: t('settings.gamification.achievements.categories.exploration'), icon: Award }
   ];
 
   const filteredAchievements = selectedCategory === 'all' 
@@ -185,11 +188,11 @@ export function AchievementGrid() {
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <Award className="h-5 w-5 text-purple-500" />
-              <span>Achievements</span>
+              <span>{t('settings.gamification.achievements.title')}</span>
             </div>
             <div className="flex items-center space-x-2">
               <Badge variant="outline" className="text-sm">
-                {completedCount} / {totalCount} Completed
+                {t('settings.gamification.achievements.completed_count', { completed: completedCount, total: totalCount })}
               </Badge>
               <Button
                 variant="ghost"
@@ -206,7 +209,7 @@ export function AchievementGrid() {
         <CardContent>
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Overall Progress</span>
+              <span className="text-gray-600">{t('settings.gamification.achievements.overall_progress')}</span>
               <span className="font-medium">{totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0}%</span>
             </div>
             <Progress value={totalCount > 0 ? (completedCount / totalCount) * 100 : 0} className="h-2" />
@@ -233,16 +236,16 @@ export function AchievementGrid() {
             {filteredAchievements.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredAchievements.map((achievement) => (
-                  <AchievementCard key={achievement.id} achievement={achievement} />
+                  <AchievementCard key={achievement.id} achievement={achievement} t={t} />
                 ))}
               </div>
             ) : (
               <Card>
                 <CardContent className="p-8 text-center">
                   <Lock className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No Achievements Yet</h3>
+                  <h3 className="text-lg font-semibold mb-2">{t('settings.gamification.achievements.no_achievements')}</h3>
                   <p className="text-gray-600">
-                    Start using the app to unlock achievements in this category!
+                    {t('settings.gamification.achievements.no_achievements_description')}
                   </p>
                 </CardContent>
               </Card>

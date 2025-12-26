@@ -948,7 +948,253 @@
       "description": "Configure approval workflows and rules for expense submissions"
     },
     "gamification": {
-      "description": "Enable or disable gamification features for your financial management experience. Choose how your data is handled when toggling the system."
+      "description": "Enable or disable gamification features for your financial management experience. Choose how your data is handled when toggling the system.",
+      "title": "Gamification",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "toggle_title": "Enable Gamification",
+      "disable_title": "Disable Gamification",
+      "enable_description": "Transform your financial management into an engaging experience with points, achievements, streaks, and challenges. You can disable this at any time.",
+      "disable_description": "This will disable all gamification features. Your financial app will continue to work normally without any game elements.",
+      "data_retention_policy": "Data Retention Policy",
+      "preserve_data": {
+        "label": "Preserve Data",
+        "description": "Keep all progress and restore when re-enabled"
+      },
+      "archive_data": {
+        "label": "Archive Data", 
+        "description": "Archive progress, can be restored later"
+      },
+      "delete_data": {
+        "label": "Delete Data",
+        "description": "Permanently delete all gamification data"
+      },
+      "warning": "Warning",
+      "delete_warning": "This will permanently delete all your points, achievements, streaks, and progress. This action cannot be undone.",
+      "what_you_get": "What you'll get:",
+      "benefits": {
+        "points": "Earn points for financial activities",
+        "achievements": "Unlock achievements and badges",
+        "streaks": "Build streaks for consistent habits",
+        "challenges": "Join challenges to improve skills",
+        "wellness": "Track your financial wellness score"
+      },
+      "level_progress": {
+        "title": "Level Progress",
+        "current_level": "Current Level",
+        "progress_to_level": "Progress to Level {{level}}",
+        "xp_needed": "XP needed",
+        "total_xp": "Total XP",
+        "level_progress": "Level Progress",
+        "next_level_benefits": "Next Level Benefits",
+        "xp_bonus": "+5% XP Bonus",
+        "new_achievements": "New Achievements",
+        "exclusive_challenges": "Exclusive Challenges"
+      },
+      "dashboard": {
+        "title": "Your Progress",
+        "subtitle": "Track your financial habits and achievements",
+        "level": "Level",
+        "total_xp": "Total XP",
+        "achievements": "Achievements",
+        "wellness_score": "Wellness Score",
+        "overview": "Overview",
+        "achievements_tab": "Achievements",
+        "rules": "Rules",
+        "streaks": "Streaks",
+        "challenges": "Challenges",
+        "wellness": "Wellness Score",
+        "view_full_dashboard": "View Full Dashboard",
+        "view_dashboard": "View Dashboard"
+      },
+      "achievements": {
+        "title": "Achievements",
+        "loading": "Loading achievements...",
+        "error": "Error loading achievements",
+        "no_achievements": "No Achievements Yet",
+        "no_achievements_description": "Start using the app to unlock achievements in this category!",
+        "progress": "Progress",
+        "unlocked": "Unlocked",
+        "completed": "Completed",
+        "overall_progress": "Overall Progress",
+        "completed_count": "{{completed}} / {{total}} Completed",
+        "categories": {
+          "all": "All Achievements",
+          "expense_tracking": "Expense Tracking",
+          "invoice_management": "Invoice Management",
+          "habit_formation": "Habit Formation",
+          "financial_health": "Financial Health",
+          "exploration": "Exploration"
+        },
+        "names": {
+          "bronze": "Bronze",
+          "first_invoice": "First Invoice",
+          "getting_started": "Getting Started",
+          "first_steps": "First Steps",
+          "expense_enthusiast": "Expense Enthusiast",
+          "expense_expert": "Expense Expert",
+          "expense_master": "Expense Master",
+          "receipt_collector": "Receipt Collector",
+          "receipt_archivist": "Receipt Archivist",
+          "invoice_professional": "Invoice Professional",
+          "invoice_expert": "Invoice Expert",
+          "week_warrior": "Week Warrior",
+          "month_master": "Month Master",
+          "quarter_champion": "Quarter Champion",
+          "year_legend": "Year Legend",
+          "perfect_week": "Perfect Week",
+          "budget_conscious": "Budget Conscious",
+          "getting_healthier": "Getting Healthier",
+          "financially_fit": "Financially Fit",
+          "financial_guru": "Financial Guru",
+          "rising_star": "Rising Star",
+          "experienced_user": "Experienced User",
+          "finance_veteran": "Finance Veteran",
+          "point_collector": "Point Collector",
+          "point_enthusiast": "Point Enthusiast",
+          "daily_dedication": "Daily Dedication"
+        },
+        "no_achievements_unlocked": "No achievements unlocked yet",
+        "start_tracking": "Start tracking expenses to unlock your first achievement!",
+        "difficulty": {
+          "bronze": "Bronze",
+          "silver": "Silver",
+          "gold": "Gold",
+          "platinum": "Platinum"
+        },
+        "requirements": "Requirements"
+      },
+      "rules": {
+        "title": "Achievement Rules",
+        "subtitle": "View all achievement rules and their requirements. These rules define how users can unlock achievements and earn XP.",
+        "active_rules": "Active Rules",
+        "total_rules": "Total Rules",
+        "no_rules": "No Rules Found",
+        "no_rules_description": "No achievement rules found in this category.",
+        "categories": {
+          "all": "All Rules",
+          "expense_tracking": "Expense Tracking",
+          "invoice_management": "Invoice Management",
+          "habit_formation": "Habit Formation",
+          "financial_health": "Financial Health",
+          "exploration": "Exploration"
+        },
+        "status": {
+          "active": "Active",
+          "inactive": "Inactive"
+        },
+        "requirements": {
+          "expense_count": "Track {{count}} expense{{plural}}",
+          "invoice_count": "Create {{count}} invoice{{plural}}",
+          "receipt_count": "Upload {{count}} receipt{{plural}}",
+          "streak_length": "Maintain a {{count}}-day streak",
+          "budget_review_count": "Review budget {{count}} time{{plural}}",
+          "perfect_week": "Complete {{count}} perfect week{{plural}}",
+          "financial_health_score": "Achieve {{count}} financial health score",
+          "total_xp": "Earn {{count}} total XP",
+          "level_reached": "Reach level {{count}}"
+        }
+      },
+      "streaks": {
+        "title": "Streaks",
+        "no_active_streaks": "No Active Streaks",
+        "start_tracking": "Start tracking expenses daily to build your first streak!",
+        "current_streak": "Current Streak",
+        "longest_streak": "Longest Streak",
+        "best": "Best",
+        "days": "days",
+        "broken": "Streak broken",
+        "times_broken": "Times Broken",
+        "days_since": "Days Since",
+        "last_activity": "Last activity",
+        "next_milestone": "Next Milestone",
+        "risk_warning": "Streak at risk!",
+        "expense_tracking_warning": "Track an expense today to keep your streak alive.",
+        "habit_completion_warning": "Complete this habit soon to maintain your streak.",
+        "encouragement": "Don't worry! Every expert was once a beginner. Start a new streak today.",
+        "start_new_streak": "Start New Streak",
+        "risk_labels": {
+          "safe": "On Track",
+          "low_risk": "Low Risk",
+          "medium_risk": "At Risk",
+          "high_risk": "High Risk",
+          "broken": "Broken"
+        },
+        "habit_types": {
+          "daily_expense_tracking": "Daily Expense Tracking",
+          "weekly_budget_review": "Weekly Budget Review",
+          "invoice_follow_up": "Invoice Follow-up",
+          "receipt_documentation": "Receipt Documentation"
+        }
+      },
+      "challenges": {
+        "title": "Challenges",
+        "active": "Active",
+        "available": "Available",
+        "completed": "Completed",
+        "no_active_challenges": "No Active Challenges",
+        "no_available_challenges": "No Available Challenges",
+        "join_challenge": "Join Challenge",
+        "opt_out": "Opt Out",
+        "challenge_completed": "Challenge Completed",
+        "completed_on": "Completed on",
+        "reward_xp": "{{xp}} XP",
+        "duration": "{{days}} days",
+        "progress": "{{progress}}% complete",
+        "types": {
+          "weekly": "Weekly",
+          "monthly": "Monthly",
+          "custom": "Custom"
+        }
+      },
+      "recent_points": {
+        "title": "Recent Points",
+        "no_activity": "No Recent Activity",
+        "start_tracking": "Start tracking expenses or creating invoices to earn your first points!",
+        "showing_activities": "Showing {{shown}} of {{total}} recent activities",
+        "expense_added": "Expense Added",
+        "invoice_created": "Invoice Created",
+        "receipt_uploaded": "Receipt Uploaded",
+        "budget_reviewed": "Budget Reviewed",
+        "payment_recorded": "Payment Recorded",
+        "category_assigned": "Category Assigned"
+      },
+      "wellness_score": {
+        "title": "Financial Wellness Score",
+        "subtitle": "A gamification metric based on your financial activities. Track your progress and earn rewards!",
+        "out_of_100": "of 100",
+        "score_trend": "Score Trend",
+        "disclaimer": {
+          "title": "About Your Score",
+          "description": "This score is calculated based on your financial habits and helps you track your financial wellness over time."
+        },
+        "score_components": "Score Components",
+        "improve_score": "Improve Your Score",
+        "tips": {
+          "daily_expenses": "Track daily expenses for consistency",
+          "weekly_budget": "Review weekly budget regularly",
+          "invoice_followup": "Follow up on invoices promptly",
+          "receipt_upload": "Upload receipts for better categorization"
+        },
+        "labels": {
+          "excellent": "Excellent",
+          "good": "Good",
+          "fair": "Fair",
+          "needs_improvement": "Needs Improvement"
+        }
+      },
+      "notifications": {
+        "enabled_success": "Gamification enabled! Start earning points for your financial activities.",
+        "disabled_success": "Gamification disabled. Your financial app will work normally.",
+        "toggle_error": "Failed to {{action}} gamification",
+        "achievement_unlocked": "Achievement Unlocked!",
+        "streak_milestone": "Streak Milestone Reached!",
+        "challenge_completed": "Challenge Completed!",
+        "level_up": "Level Up!"
+      },
+      "loading": "Loading gamification data...",
+      "error": "Error loading gamification",
+      "not_available": "Gamification data not available"
     },
     "min_amount": "Minimum Amount",
     "priority": "Priority",

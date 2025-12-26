@@ -5,6 +5,7 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Trophy, Target, Flame, TrendingUp, Star, Award, Calendar, Zap } from 'lucide-react';
 import { useGamification } from '@/hooks/useGamification';
+import { useTranslation } from 'react-i18next';
 import { LevelProgressCard } from './LevelProgressCard';
 import { AchievementGrid } from './AchievementGrid';
 import { StreakDisplay } from './StreakDisplay';
@@ -16,6 +17,7 @@ import { AchievementRules } from './AchievementRules';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 export function GamificationDashboard() {
+  const { t } = useTranslation();
   const { 
     profile, 
     dashboard, 
@@ -30,7 +32,7 @@ export function GamificationDashboard() {
     return (
       <div className="flex items-center justify-center p-8">
         <LoadingSpinner />
-        <span className="ml-2">Loading gamification data...</span>
+        <span className="ml-2">{t('settings.gamification.loading')}</span>
       </div>
     );
   }
@@ -41,7 +43,7 @@ export function GamificationDashboard() {
         <CardContent className="p-6">
           <div className="flex items-center space-x-2 text-red-600">
             <Trophy className="h-5 w-5" />
-            <span className="font-medium">Error loading gamification</span>
+            <span className="font-medium">{t('settings.gamification.error')}</span>
           </div>
           <p className="text-red-600 text-sm mt-2">{error}</p>
         </CardContent>
@@ -55,10 +57,10 @@ export function GamificationDashboard() {
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <Trophy className="h-5 w-5" />
-            <span>Gamification</span>
+            <span>{t('settings.gamification.title')}</span>
           </CardTitle>
           <CardDescription>
-            Transform your financial management into an engaging, habit-building experience
+            {t('settings.gamification.description')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -66,9 +68,9 @@ export function GamificationDashboard() {
             <div className="mb-4">
               <Trophy className="h-16 w-16 mx-auto text-gray-400" />
             </div>
-            <h3 className="text-lg font-semibold mb-2">Gamification is disabled</h3>
+            <h3 className="text-lg font-semibold mb-2">{t('settings.gamification.title')} {t('settings.gamification.disabled')}</h3>
             <p className="text-gray-600 mb-6">
-              Enable gamification to earn points, unlock achievements, and build better financial habits.
+              {t('settings.gamification.enable_description')}
             </p>
             <GamificationToggle />
           </div>
@@ -83,7 +85,7 @@ export function GamificationDashboard() {
         <CardContent className="p-6">
           <div className="text-center">
             <Trophy className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-            <p className="text-gray-600">Gamification data not available</p>
+            <p className="text-gray-600">{t('settings.gamification.not_available')}</p>
           </div>
         </CardContent>
       </Card>
@@ -97,9 +99,9 @@ export function GamificationDashboard() {
         <div>
           <h1 className="text-2xl font-bold flex items-center space-x-2">
             <Trophy className="h-6 w-6 text-yellow-500" />
-            <span>Your Progress</span>
+            <span>{t('settings.gamification.dashboard.title')}</span>
           </h1>
-          <p className="text-gray-600">Track your financial habits and achievements</p>
+          <p className="text-gray-600">{t('settings.gamification.dashboard.subtitle')}</p>
         </div>
         <GamificationToggle />
       </div>
@@ -111,7 +113,7 @@ export function GamificationDashboard() {
             <div className="flex items-center space-x-2">
               <Star className="h-5 w-5 text-yellow-500" />
               <div>
-                <p className="text-sm text-gray-600">Level</p>
+                <p className="text-sm text-gray-600">{t('settings.gamification.dashboard.level')}</p>
                 <p className="text-2xl font-bold">{profile.level}</p>
               </div>
             </div>
@@ -123,7 +125,7 @@ export function GamificationDashboard() {
             <div className="flex items-center space-x-2">
               <Zap className="h-5 w-5 text-blue-500" />
               <div>
-                <p className="text-sm text-gray-600">Total XP</p>
+                <p className="text-sm text-gray-600">{t('settings.gamification.dashboard.total_xp')}</p>
                 <p className="text-2xl font-bold">{profile.total_experience_points.toLocaleString()}</p>
               </div>
             </div>
@@ -135,7 +137,7 @@ export function GamificationDashboard() {
             <div className="flex items-center space-x-2">
               <Award className="h-5 w-5 text-purple-500" />
               <div>
-                <p className="text-sm text-gray-600">Achievements</p>
+                <p className="text-sm text-gray-600">{t('settings.gamification.dashboard.achievements')}</p>
                 <p className="text-2xl font-bold">{dashboard.recent_achievements.length}</p>
               </div>
             </div>
@@ -147,7 +149,7 @@ export function GamificationDashboard() {
             <div className="flex items-center space-x-2">
               <TrendingUp className="h-5 w-5 text-green-500" />
               <div>
-                <p className="text-sm text-gray-600">Health Score</p>
+                <p className="text-sm text-gray-600">{t('settings.gamification.dashboard.wellness_score')}</p>
                 <p className="text-2xl font-bold">{Math.round(profile.financial_health_score)}</p>
               </div>
             </div>
@@ -158,12 +160,12 @@ export function GamificationDashboard() {
       {/* Main Dashboard Content */}
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="achievements">Achievements</TabsTrigger>
-          <TabsTrigger value="rules">Rules</TabsTrigger>
-          <TabsTrigger value="streaks">Streaks</TabsTrigger>
-          <TabsTrigger value="challenges">Challenges</TabsTrigger>
-          <TabsTrigger value="health">Health Score</TabsTrigger>
+          <TabsTrigger value="overview">{t('settings.gamification.dashboard.overview')}</TabsTrigger>
+          <TabsTrigger value="achievements">{t('settings.gamification.dashboard.achievements_tab')}</TabsTrigger>
+          <TabsTrigger value="rules">{t('settings.gamification.dashboard.rules')}</TabsTrigger>
+          <TabsTrigger value="streaks">{t('settings.gamification.dashboard.streaks')}</TabsTrigger>
+          <TabsTrigger value="challenges">{t('settings.gamification.dashboard.challenges')}</TabsTrigger>
+          <TabsTrigger value="wellness">{t('settings.gamification.dashboard.wellness')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -174,7 +176,7 @@ export function GamificationDashboard() {
               levelProgress={dashboard.level_progress}
             />
 
-            {/* Financial Health Score */}
+            {/* Financial Wellness Score */}
             <FinancialHealthScore 
               score={profile.financial_health_score}
               trend={dashboard.financial_health_trend}
@@ -187,7 +189,7 @@ export function GamificationDashboard() {
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <Flame className="h-5 w-5 text-orange-500" />
-                  <span>Active Streaks</span>
+                  <span>{t('settings.gamification.streaks.title')}</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -199,7 +201,7 @@ export function GamificationDashboard() {
                   </div>
                 ) : (
                   <p className="text-gray-600 text-center py-4">
-                    No active streaks. Start tracking expenses daily to build your first streak!
+                    {t('settings.gamification.streaks.start_tracking')}
                   </p>
                 )}
               </CardContent>
@@ -215,7 +217,7 @@ export function GamificationDashboard() {
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <Award className="h-5 w-5 text-purple-500" />
-                  <span>Recent Achievements</span>
+                  <span>{t('settings.gamification.achievements.title')}</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -224,7 +226,7 @@ export function GamificationDashboard() {
                     <div key={achievement.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
                       <div className="flex-shrink-0">
                         <Badge variant="secondary" className="bg-purple-100 text-purple-700">
-                          {achievement.achievement.difficulty}
+                          {t(`settings.gamification.achievements.difficulty.${achievement.achievement.difficulty.toLowerCase()}`)}
                         </Badge>
                       </div>
                       <div className="flex-1 min-w-0">
@@ -234,7 +236,7 @@ export function GamificationDashboard() {
                         <p className="text-xs text-gray-600">
                           {achievement.unlocked_at ? 
                             new Date(achievement.unlocked_at).toLocaleDateString() : 
-                            `${Math.round(achievement.progress * 100)}% complete`
+                            `${Math.round(achievement.progress * 100)}% ${t('settings.gamification.achievements.progress')}`
                           }
                         </p>
                       </div>
@@ -263,9 +265,9 @@ export function GamificationDashboard() {
               <Card>
                 <CardContent className="p-8 text-center">
                   <Flame className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No Active Streaks</h3>
+                  <h3 className="text-lg font-semibold mb-2">{t('settings.gamification.streaks.no_active_streaks')}</h3>
                   <p className="text-gray-600">
-                    Start tracking your expenses daily to build your first streak!
+                    {t('settings.gamification.streaks.start_tracking')}
                   </p>
                 </CardContent>
               </Card>
@@ -277,7 +279,7 @@ export function GamificationDashboard() {
           <ChallengeCards />
         </TabsContent>
 
-        <TabsContent value="health">
+        <TabsContent value="wellness">
           <div className="space-y-6">
             <FinancialHealthScore 
               score={profile.financial_health_score}

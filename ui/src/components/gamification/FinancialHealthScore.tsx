@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, TrendingDown, Minus, Heart, RefreshCw, Info } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, Star, RefreshCw, Info, Gamepad2 } from 'lucide-react';
 import { gamificationApi } from '@/lib/api';
+import { useTranslation } from 'react-i18next';
 import type { FinancialHealthTrend } from '@/types/gamification';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -21,6 +22,7 @@ export function FinancialHealthScore({
   detailed = false, 
   showTrend = true 
 }: FinancialHealthScoreProps) {
+  const { t } = useTranslation();
   const [healthData, setHealthData] = useState<any>(null);
   const [components, setComponents] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -55,10 +57,10 @@ export function FinancialHealthScore({
   };
 
   const getScoreLabel = (score: number) => {
-    if (score >= 80) return 'Excellent';
-    if (score >= 60) return 'Good';
-    if (score >= 40) return 'Fair';
-    return 'Needs Improvement';
+    if (score >= 80) return t('settings.gamification.wellness_score.labels.excellent');
+    if (score >= 60) return t('settings.gamification.wellness_score.labels.good');
+    if (score >= 40) return t('settings.gamification.wellness_score.labels.fair');
+    return t('settings.gamification.wellness_score.labels.needs_improvement');
   };
 
   const getTrendIcon = () => {
@@ -83,7 +85,7 @@ export function FinancialHealthScore({
         <CardContent className="p-6">
           <div className="flex items-center justify-center">
             <RefreshCw className="h-5 w-5 animate-spin mr-2" />
-            <span>Loading detailed health data...</span>
+            <span>{t('settings.gamification.loading')}</span>
           </div>
         </CardContent>
       </Card>
@@ -95,16 +97,14 @@ export function FinancialHealthScore({
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <Heart className="h-5 w-5 text-red-500" />
-            <span>Financial Health Score</span>
+            <Gamepad2 className="h-5 w-5 text-purple-500" />
+            <span>{t('settings.gamification.wellness_score.title')}</span>
           </div>
-          {detailed && (
-            <Button variant="outline" size="sm" onClick={fetchDetailedHealthData}>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
-            </Button>
-          )}
+          {showTrend && getTrendIcon()}
         </CardTitle>
+        <CardDescription>
+          {t('settings.gamification.wellness_score.subtitle')}
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Main Score Display */}
@@ -138,7 +138,7 @@ export function FinancialHealthScore({
                 <div className={`text-3xl font-bold ${getScoreColor(score)}`}>
                   {Math.round(score)}
                 </div>
-                <div className="text-xs text-gray-600">out of 100</div>
+                <div className="text-xs text-gray-600">{t('settings.gamification.wellness_score.out_of_100')}</div>
               </div>
             </div>
           </div>
@@ -154,7 +154,7 @@ export function FinancialHealthScore({
         {/* Trend Chart */}
         {showTrend && trend.length > 1 && (
           <div className="space-y-2">
-            <h4 className="text-sm font-medium text-gray-700">Score Trend</h4>
+            <h4 className="text-sm font-medium text-gray-700">{t('settings.gamification.wellness_score.score_trend')}</h4>
             <div className="h-32">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData}>
@@ -185,7 +185,20 @@ export function FinancialHealthScore({
         {/* Detailed Components */}
         {detailed && healthData && (
           <div className="space-y-4">
-            <h4 className="text-sm font-medium text-gray-700">Score Components</h4>
+            {/* Disclaimer */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="flex items-start space-x-2">
+                <Info className="h-4 w-4 text-blue-500 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium text-blue-800">{t('settings.gamification.wellness_score.disclaimer.title')}</p>
+                  <p className="text-blue-600">
+                    {t('settings.gamification.wellness_score.disclaimer.description')}
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <h4 className="text-sm font-medium text-gray-700">{t('settings.gamification.wellness_score.score_components')}</h4>
             <div className="space-y-3">
               {Object.entries(healthData.components || {}).map(([key, value]) => {
                 const componentScore = typeof value === 'number' ? value : 0;
@@ -225,12 +238,12 @@ export function FinancialHealthScore({
         {/* Quick Tips */}
         {!detailed && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <h4 className="text-sm font-medium text-blue-800 mb-2">Improve Your Score</h4>
+            <h4 className="text-sm font-medium text-blue-800 mb-2">{t('settings.gamification.wellness_score.improve_score')}</h4>
             <ul className="text-xs text-blue-700 space-y-1">
-              <li>• Track expenses daily to build consistency</li>
-              <li>• Review your budget weekly</li>
-              <li>• Follow up on invoices promptly</li>
-              <li>• Upload receipts for better categorization</li>
+              <li>• {t('settings.gamification.wellness_score.tips.daily_expenses')}</li>
+              <li>• {t('settings.gamification.wellness_score.tips.weekly_budget')}</li>
+              <li>• {t('settings.gamification.wellness_score.tips.invoice_followup')}</li>
+              <li>• {t('settings.gamification.wellness_score.tips.receipt_upload')}</li>
             </ul>
           </div>
         )}

@@ -4,14 +4,13 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Flame, Calendar, Target, TrendingUp, AlertTriangle, CheckCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { UserStreak, HabitType } from '@/types/gamification';
 
-const habitTypeLabels = {
-  daily_expense_tracking: 'Daily Expense Tracking',
-  weekly_budget_review: 'Weekly Budget Review',
-  invoice_follow_up: 'Invoice Follow-up',
-  receipt_documentation: 'Receipt Documentation'
-};
+interface StreakDisplayProps {
+  streak: UserStreak;
+  compact?: boolean;
+}
 
 const habitTypeIcons = {
   daily_expense_tracking: Target,
@@ -27,12 +26,16 @@ const habitTypeColors = {
   receipt_documentation: 'text-orange-500'
 };
 
-interface StreakDisplayProps {
-  streak: UserStreak;
-  compact?: boolean;
-}
-
 export function StreakDisplay({ streak, compact = false }: StreakDisplayProps) {
+  const { t } = useTranslation();
+  
+  const habitTypeLabels = {
+    daily_expense_tracking: t('settings.gamification.streaks.habit_types.daily_expense_tracking'),
+    weekly_budget_review: t('settings.gamification.streaks.habit_types.weekly_budget_review'),
+    invoice_follow_up: t('settings.gamification.streaks.habit_types.invoice_follow_up'),
+    receipt_documentation: t('settings.gamification.streaks.habit_types.receipt_documentation')
+  };
+
   const habitLabel = habitTypeLabels[streak.habit_type as keyof typeof habitTypeLabels] || streak.habit_type;
   const IconComponent = habitTypeIcons[streak.habit_type as keyof typeof habitTypeIcons] || Target;
   const iconColor = habitTypeColors[streak.habit_type as keyof typeof habitTypeColors] || 'text-gray-500';
@@ -63,11 +66,11 @@ export function StreakDisplay({ streak, compact = false }: StreakDisplayProps) {
   };
 
   const riskLabels = {
-    safe: 'On Track',
-    low_risk: 'Low Risk',
-    medium_risk: 'At Risk',
-    high_risk: 'High Risk',
-    broken: 'Broken'
+    safe: t('settings.gamification.streaks.risk_labels.safe'),
+    low_risk: t('settings.gamification.streaks.risk_labels.low_risk'),
+    medium_risk: t('settings.gamification.streaks.risk_labels.medium_risk'),
+    high_risk: t('settings.gamification.streaks.risk_labels.high_risk'),
+    broken: t('settings.gamification.streaks.risk_labels.broken')
   };
 
   if (compact) {
@@ -84,7 +87,7 @@ export function StreakDisplay({ streak, compact = false }: StreakDisplayProps) {
           <div>
             <p className="text-sm font-medium">{habitLabel}</p>
             <p className="text-xs text-gray-600">
-              {isActive ? `${streak.current_length} day streak` : 'Streak broken'}
+              {isActive ? `${streak.current_length} ${t('settings.gamification.streaks.days')}` : t('settings.gamification.streaks.broken')}
             </p>
           </div>
         </div>
@@ -94,7 +97,7 @@ export function StreakDisplay({ streak, compact = false }: StreakDisplayProps) {
           </Badge>
           {streak.longest_length > 0 && (
             <p className="text-xs text-gray-500 mt-1">
-              Best: {streak.longest_length} days
+              {t('settings.gamification.streaks.best')}: {streak.longest_length} {t('settings.gamification.streaks.days')}
             </p>
           )}
         </div>
@@ -125,7 +128,7 @@ export function StreakDisplay({ streak, compact = false }: StreakDisplayProps) {
             </span>
           </div>
           <p className="text-sm text-gray-600">
-            {isActive ? 'Current Streak' : 'Streak Broken'}
+            {isActive ? t('settings.gamification.streaks.current_streak') : t('settings.gamification.streaks.broken')}
           </p>
         </div>
 
@@ -133,11 +136,11 @@ export function StreakDisplay({ streak, compact = false }: StreakDisplayProps) {
         {isActive && (
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Next Milestone</span>
+              <span className="text-gray-600">{t('settings.gamification.streaks.next_milestone')}</span>
               <span className="font-medium">
-                {streak.current_length < 7 ? '7 days' : 
-                 streak.current_length < 30 ? '30 days' : 
-                 streak.current_length < 90 ? '90 days' : '365 days'}
+                {streak.current_length < 7 ? `7 ${t('settings.gamification.streaks.days')}` : 
+                 streak.current_length < 30 ? `30 ${t('settings.gamification.streaks.days')}` : 
+                 streak.current_length < 90 ? `90 ${t('settings.gamification.streaks.days')}` : `365 ${t('settings.gamification.streaks.days')}`}
               </span>
             </div>
             <Progress 
@@ -156,22 +159,22 @@ export function StreakDisplay({ streak, compact = false }: StreakDisplayProps) {
         <div className="grid grid-cols-3 gap-4 pt-4 border-t">
           <div className="text-center">
             <p className="text-lg font-bold text-blue-600">{streak.longest_length}</p>
-            <p className="text-xs text-gray-600">Best Streak</p>
+            <p className="text-xs text-gray-600">{t('settings.gamification.streaks.longest_streak')}</p>
           </div>
           <div className="text-center">
             <p className="text-lg font-bold text-purple-600">{streak.times_broken || 0}</p>
-            <p className="text-xs text-gray-600">Times Broken</p>
+            <p className="text-xs text-gray-600">{t('settings.gamification.streaks.times_broken')}</p>
           </div>
           <div className="text-center">
             <p className="text-lg font-bold text-green-600">{daysSinceActivity}</p>
-            <p className="text-xs text-gray-600">Days Since</p>
+            <p className="text-xs text-gray-600">{t('settings.gamification.streaks.days_since')}</p>
           </div>
         </div>
 
         {/* Last Activity */}
         {streak.last_activity_date && (
           <div className="text-center text-sm text-gray-600">
-            Last activity: {new Date(streak.last_activity_date).toLocaleDateString()}
+            {t('settings.gamification.streaks.last_activity')}: {new Date(streak.last_activity_date).toLocaleDateString()}
           </div>
         )}
 
@@ -180,11 +183,11 @@ export function StreakDisplay({ streak, compact = false }: StreakDisplayProps) {
           <div className="flex items-center space-x-2 p-3 bg-red-50 border border-red-200 rounded-lg">
             <AlertTriangle className="h-4 w-4 text-red-500" />
             <div className="text-sm">
-              <p className="font-medium text-red-800">Streak at risk!</p>
+              <p className="font-medium text-red-800">{t('settings.gamification.streaks.risk_warning')}</p>
               <p className="text-red-600">
                 {streak.habit_type === 'daily_expense_tracking' 
-                  ? 'Track an expense today to keep your streak alive.'
-                  : 'Complete this habit soon to maintain your streak.'
+                  ? t('settings.gamification.streaks.expense_tracking_warning')
+                  : t('settings.gamification.streaks.habit_completion_warning')
                 }
               </p>
             </div>
@@ -195,10 +198,10 @@ export function StreakDisplay({ streak, compact = false }: StreakDisplayProps) {
         {!isActive && (
           <div className="text-center">
             <p className="text-sm text-gray-600 mb-3">
-              Don't worry! Every expert was once a beginner. Start a new streak today.
+              {t('settings.gamification.streaks.encouragement')}
             </p>
             <Button size="sm" variant="outline">
-              Start New Streak
+              {t('settings.gamification.streaks.start_new_streak')}
             </Button>
           </div>
         )}

@@ -934,7 +934,251 @@
       "description": "Configurez les workflows et règles d'approbation pour les soumissions de dépenses"
     },
     "gamification": {
-      "description": "Activez ou désactivez les fonctionnalités de gamification pour votre expérience de gestion financière. Choisissez comment vos données sont traitées lors du basculement du système."
+      "description": "Activez ou désactivez les fonctionnalités de gamification pour votre expérience de gestion financière. Choisissez comment vos données sont traitées lors du basculement du système.",
+      "title": "Gamification",
+      "enabled": "Activé",
+      "disabled": "Désactivé",
+      "toggle_title": "Activer la Gamification",
+      "disable_title": "Désactiver la Gamification",
+      "enable_description": "Transformez votre gestion financière en une expérience engageante avec des points, des réalisations, des séries et des défis. Vous pouvez désactiver ceci à tout moment.",
+      "disable_description": "Ceci désactivera toutes les fonctionnalités de gamification. Votre application financière continuera de fonctionner normalement sans éléments de jeu.",
+      "data_retention_policy": "Politique de Rétention des Données",
+      "preserve_data": {
+        "label": "Préserver les Données",
+        "description": "Conserver tous les progrès et restaurer lors de la réactivation"
+      },
+      "archive_data": {
+        "label": "Archiver les Données",
+        "description": "Archiver les progrès, peut être restauré plus tard"
+      },
+      "delete_data": {
+        "label": "Supprimer les Données",
+        "description": "Supprimer définitivement toutes les données de gamification"
+      },
+      "warning": "Avertissement",
+      "delete_warning": "Ceci supprimera définitivement tous vos points, réalisations, séries et progrès. Cette action ne peut pas être annulée.",
+      "what_you_get": "Ce que vous obtenez :",
+      "benefits": {
+        "points": "Gagnez des points pour les activités financières",
+        "achievements": "Débloquez des réalisations et des badges",
+        "streaks": "Construisez des séries pour des habitudes cohérentes",
+        "challenges": "Rejoignez des défis pour améliorer les compétences",
+        "wellness": "Suivez votre score de bien-être financier"
+      },
+      "dashboard": {
+        "title": "Votre Progrès",
+        "subtitle": "Suivez vos habitudes et réalisations financières",
+        "level": "Niveau",
+        "total_xp": "XP Total",
+        "achievements": "Réalisations",
+        "wellness_score": "Score de Bien-être",
+        "overview": "Aperçu",
+        "achievements_tab": "Réalisations",
+        "rules": "Règles",
+        "streaks": "Séries",
+        "challenges": "Défis",
+        "wellness": "Score de Bien-être"
+      },
+      "achievements": {
+        "title": "Réalisations",
+        "loading": "Chargement des réalisations...",
+        "error": "Erreur lors du chargement des réalisations",
+        "no_achievements": "Aucune Réalisation Encore",
+        "no_achievements_description": "Commencez à utiliser l'application pour débloquer des réalisations dans cette catégorie !",
+        "progress": "Progrès",
+        "unlocked": "Débloqué",
+        "completed": "Terminé",
+        "overall_progress": "Progrès Général",
+        "completed_count": "{{completed}} / {{total}} Terminé",
+        "categories": {
+          "all": "Toutes les Réalisations",
+          "expense_tracking": "Suivi des Dépenses",
+          "invoice_management": "Gestion des Factures",
+          "habit_formation": "Formation d'Habitudes",
+          "financial_health": "Santé Financière",
+          "exploration": "Exploration"
+        },
+        "names": {
+          "bronze": "Bronze",
+          "first_invoice": "Première Facture",
+          "getting_started": "Premiers Pas",
+          "first_steps": "Premiers Pas",
+          "expense_enthusiast": "Passionné de Dépenses",
+          "expense_expert": "Expert en Dépenses",
+          "expense_master": "Maître des Dépenses",
+          "receipt_collector": "Collectionneur de Reçus",
+          "receipt_archivist": "Archiviste de Reçus",
+          "invoice_professional": "Professionnel des Factures",
+          "invoice_expert": "Expert en Factures",
+          "week_warrior": "Guerrier de la Semaine",
+          "month_master": "Maître du Mois",
+          "quarter_champion": "Champion du Trimestre",
+          "year_legend": "Légende de l'Année",
+          "perfect_week": "Semaine Parfaite",
+          "budget_conscious": "Conscient du Budget",
+          "getting_healthier": "Devenir Plus Sain",
+          "financially_fit": "Financièrement en Forme",
+          "financial_guru": "Gourou Financier",
+          "rising_star": "Étoile Montante",
+          "experienced_user": "Utilisateur Expérimenté",
+          "finance_veteran": "Vétéran des Finances",
+          "point_collector": "Collectionneur de Points",
+          "point_enthusiast": "Passionné de Points",
+          "daily_dedication": "Dédié Quotidien"
+        },
+        "no_achievements_unlocked": "Aucune réalisation débloquée",
+        "start_tracking": "Commencez à suivre les dépenses pour débloquer votre première réalisation !",
+        "difficulty": {
+          "bronze": "Bronze",
+          "silver": "Argent",
+          "gold": "Or",
+          "platinum": "Platine"
+        },
+        "requirements": "Exigences"
+      },
+      "rules": {
+        "title": "Règles de Réalisation",
+        "subtitle": "Voir toutes les règles de réalisation et leurs exigences. Ces règles définissent comment les utilisateurs peuvent débloquer des réalisations et gagner des XP.",
+        "active_rules": "Règles Actives",
+        "total_rules": "Total des Règles",
+        "no_rules": "Aucune Règle Trouvée",
+        "no_rules_description": "Aucune règle de réalisation trouvée dans cette catégorie.",
+        "categories": {
+          "all": "Toutes les Règles",
+          "expense_tracking": "Suivi des Dépenses",
+          "invoice_management": "Gestion des Factures",
+          "habit_formation": "Formation d'Habitudes",
+          "financial_health": "Santé Financière",
+          "exploration": "Exploration"
+        },
+        "status": {
+          "active": "Actif",
+          "inactive": "Inactif"
+        },
+        "requirements": {
+          "expense_count": "Suivre {{count}} dépense{{plural}}",
+          "invoice_count": "Créer {{count}} facture{{plural}}",
+          "receipt_count": "Téléverser {{count}} reçu{{plural}}",
+          "streak_length": "Maintenir une série de {{count}} jours",
+          "budget_review_count": "Réviser le budget {{count}} fois{{plural}}",
+          "perfect_week": "Compléter {{count}} semaine{{plural}} parfaite{{plural}}",
+          "financial_health_score": "Atteindre {{count}} de score de santé financière",
+          "total_xp": "Gagner {{count}} XP total",
+          "level_reached": "Atteindre le niveau {{count}}"
+        }
+      },
+      "streaks": {
+        "title": "Séries",
+        "no_active_streaks": "Aucune Série Active",
+        "start_tracking": "Commencez à suivre les dépenses quotidiennement pour construire votre première série !",
+        "current_streak": "Série Actuelle",
+        "longest_streak": "Plus Longue Série",
+        "best": "Meilleur",
+        "days": "jours",
+        "broken": "Série Rompue",
+        "times_broken": "Fois Rompu",
+        "days_since": "Jours Depuis",
+        "last_activity": "Dernière Activité",
+        "next_milestone": "Prochain Jalon",
+        "risk_warning": "Série en Risque !",
+        "expense_tracking_warning": "Enregistrez une dépense aujourd'hui pour maintenir votre série active.",
+        "habit_completion_warning": "Complétez cette habitude bientôt pour maintenir votre série.",
+        "encouragement": "Ne vous inquiétez pas ! Tout expert a été un jour un débutant. Commencez une nouvelle série aujourd'hui.",
+        "start_new_streak": "Commencer une Nouvelle Série",
+        "risk_labels": {
+          "safe": "Sur la Bonne Voie",
+          "low_risk": "Faible Risque",
+          "medium_risk": "En Risque",
+          "high_risk": "Risque Élevé",
+          "broken": "Rompu"
+        },
+        "habit_types": {
+          "daily_expense_tracking": "Suivi Quotidien des Dépenses",
+          "weekly_budget_review": "Révision Hebdomadaire du Budget",
+          "invoice_follow_up": "Suivi des Factures",
+          "receipt_documentation": "Documentation des Reçus"
+        }
+      },
+      "challenges": {
+        "title": "Défis",
+        "active": "Actif",
+        "available": "Disponible",
+        "completed": "Terminé",
+        "no_active_challenges": "Aucun Défi Actif",
+        "no_available_challenges": "Aucun Défi Disponible",
+        "join_challenge": "Rejoindre le Défi",
+        "opt_out": "Se Désinscrire",
+        "challenge_completed": "Défi Terminé",
+        "completed_on": "Terminé le",
+        "reward_xp": "{{xp}} XP",
+        "duration": "{{days}} jours",
+        "progress": "{{progress}}% terminé",
+        "types": {
+          "weekly": "Hebdomadaire",
+          "monthly": "Mensuel",
+          "custom": "Personnalisé"
+        }
+      },
+      "wellness_score": {
+        "title": "Score de Bien-être Financier",
+        "subtitle": "Une métrique de gamification basée sur vos activités financières. Suivez vos progrès et gagnez des récompenses !",
+        "disclaimer": {
+          "title": "Fonctionnalité de Gamification",
+          "description": "Ceci est un score de bien-être de gamification basé sur vos activités financières dans l'application. Il est conçu pour encourager de bonnes habitudes financières et n'est pas un conseil financier professionnel."
+        },
+        "score_components": "Composants du Score",
+        "score_trend": "Tendance du Score",
+        "out_of_100": "sur 100",
+        "improve_score": "Améliorez Votre Score",
+        "tips": {
+          "daily_expenses": "Suivez les dépenses quotidiennes pour construire la cohérence",
+          "weekly_budget": "Révisez votre budget hebdomadairement",
+          "invoice_followup": "Suivez les factures rapidement",
+          "receipt_upload": "Téléversez des reçus pour une meilleure catégorisation"
+        },
+        "labels": {
+          "excellent": "Excellent",
+          "good": "Bon",
+          "fair": "Correct",
+          "needs_improvement": "Nécessite des Améliorations"
+        }
+      },
+      "notifications": {
+        "enabled_success": "Gamification activée ! Commencez à gagner des points pour vos activités financières.",
+        "disabled_success": "Gamification désactivée. Votre application financière fonctionnera normalement.",
+        "toggle_error": "Échec de {{action}} la gamification",
+        "achievement_unlocked": "Réalisation Débloquée !",
+        "streak_milestone": "Jalon de Série Atteint !",
+        "challenge_completed": "Défi Terminé !",
+        "level_up": "Niveau Supérieur !"
+      },
+      "loading": "Chargement des données de gamification...",
+      "error": "Erreur lors du chargement de la gamification",
+      "not_available": "Données de gamification non disponibles",
+      "level_progress": {
+        "title": "Progrès de Niveau",
+        "current_level": "Niveau Actuel",
+        "progress_to_level": "Progrès vers le Niveau {{level}}",
+        "xp_needed": "XP nécessaires",
+        "total_xp": "XP Total",
+        "level_progress": "Progrès de Niveau",
+        "next_level_benefits": "Avantages du Prochain Niveau",
+        "xp_bonus": "+5% Bonus d'XP",
+        "new_achievements": "Nouvelles Réalisations",
+        "exclusive_challenges": "Défis Exclusifs"
+      },
+      "recent_points": {
+        "title": "Points Récents",
+        "no_activity": "Aucune Activité Récente",
+        "start_tracking": "Commencez à suivre les dépenses ou créer des factures pour gagner vos premiers points !",
+        "showing_activities": "Affichage de {{shown}} sur {{total}} activités récentes",
+        "expense_added": "Dépense Ajoutée",
+        "invoice_created": "Facture Créée",
+        "receipt_uploaded": "Reçu Téléchargé",
+        "budget_reviewed": "Budget Révisé",
+        "payment_recorded": "Paiement Enregistré",
+        "category_assigned": "Catégorie Assignée"
+      }
     },
     "currency_management": "Gestion des Devises",
     "ai_configuration": "Configuration de l'IA",

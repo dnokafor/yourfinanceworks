@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Zap, Target, TrendingUp, Calendar, CheckCircle, Plus } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { PointHistory } from '@/types/gamification';
 
 const actionTypeIcons = {
@@ -11,15 +12,6 @@ const actionTypeIcons = {
   budget_reviewed: Calendar,
   payment_recorded: Plus,
   category_assigned: CheckCircle
-};
-
-const actionTypeLabels = {
-  expense_added: 'Expense Added',
-  invoice_created: 'Invoice Created',
-  receipt_uploaded: 'Receipt Uploaded',
-  budget_reviewed: 'Budget Reviewed',
-  payment_recorded: 'Payment Recorded',
-  category_assigned: 'Category Assigned'
 };
 
 const actionTypeColors = {
@@ -33,24 +25,36 @@ const actionTypeColors = {
 
 interface RecentPointsHistoryProps {
   points: PointHistory[];
+  compact?: boolean;
 }
 
-export function RecentPointsHistory({ points }: RecentPointsHistoryProps) {
+export function RecentPointsHistory({ points, compact = false }: RecentPointsHistoryProps) {
+  const { t } = useTranslation();
+  
+  const actionTypeLabels = {
+    expense_added: t('settings.gamification.recent_points.expense_added'),
+    invoice_created: t('settings.gamification.recent_points.invoice_created'),
+    receipt_uploaded: t('settings.gamification.recent_points.receipt_uploaded'),
+    budget_reviewed: t('settings.gamification.recent_points.budget_reviewed'),
+    payment_recorded: t('settings.gamification.recent_points.payment_recorded'),
+    category_assigned: t('settings.gamification.recent_points.category_assigned')
+  };
+
   if (!points || points.length === 0) {
     return (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <Zap className="h-5 w-5 text-blue-500" />
-            <span>Recent Points</span>
+            <span>{t('settings.gamification.recent_points.title')}</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-center py-8">
             <Zap className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No Recent Activity</h3>
+            <h3 className="text-lg font-semibold mb-2">{t('settings.gamification.recent_points.no_activity')}</h3>
             <p className="text-gray-600">
-              Start tracking expenses or creating invoices to earn your first points!
+              {t('settings.gamification.recent_points.start_tracking')}
             </p>
           </div>
         </CardContent>
@@ -66,7 +70,7 @@ export function RecentPointsHistory({ points }: RecentPointsHistoryProps) {
         <CardTitle className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <Zap className="h-5 w-5 text-blue-500" />
-            <span>Recent Points</span>
+            <span>{t('settings.gamification.recent_points.title')}</span>
           </div>
           <Badge variant="outline" className="text-blue-600">
             +{totalRecentPoints} XP
@@ -136,7 +140,7 @@ export function RecentPointsHistory({ points }: RecentPointsHistoryProps) {
         {points.length > 8 && (
           <div className="text-center mt-4">
             <p className="text-sm text-gray-600">
-              Showing {Math.min(8, points.length)} of {points.length} recent activities
+              {t('settings.gamification.recent_points.showing_activities', { shown: Math.min(8, points.length), total: points.length })}
             </p>
           </div>
         )}

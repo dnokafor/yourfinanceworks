@@ -20,10 +20,12 @@ import {
 import { Label } from '@/components/ui/label';
 import { Trophy, Settings, AlertTriangle, Info } from 'lucide-react';
 import { useGamification } from '@/hooks/useGamification';
+import { useTranslation } from 'react-i18next';
 import { DataRetentionPolicy, NotificationFrequency } from '@/types/gamification';
 import { toast } from 'sonner';
 
 export function GamificationToggle() {
+  const { t } = useTranslation();
   const { isEnabled, loading, enable, disable } = useGamification();
   const [showDialog, setShowDialog] = useState(false);
   const [isEnabling, setIsEnabling] = useState(false);
@@ -66,21 +68,21 @@ export function GamificationToggle() {
             }
           }
         });
-        toast.success('Gamification enabled! Start earning points for your financial activities.');
+        toast.success(t('settings.gamification.notifications.enabled_success'));
         // Refresh page to reload gamification state
         window.location.reload();
       } else {
         await disable({
           data_retention_policy: dataRetentionPolicy
         });
-        toast.success('Gamification disabled. Your financial app will work normally.');
+        toast.success(t('settings.gamification.notifications.disabled_success'));
         // Refresh page to reload gamification state
         window.location.reload();
       }
       setShowDialog(false);
     } catch (error) {
       console.error('Error toggling gamification:', error);
-      toast.error(`Failed to ${isEnabling ? 'enable' : 'disable'} gamification`);
+      toast.error(t('settings.gamification.notifications.toggle_error', { action: isEnabling ? 'enable' : 'disable' }));
     }
   };
 
@@ -89,9 +91,9 @@ export function GamificationToggle() {
       <div className="flex items-center space-x-3">
         <div className="flex items-center space-x-2">
           <Trophy className="h-4 w-4 text-yellow-500" />
-          <span className="text-sm font-medium">Gamification</span>
+          <span className="text-sm font-medium">{t('settings.gamification.title')}</span>
           <Badge variant={isEnabled ? "default" : "secondary"} className="text-xs">
-            {isEnabled ? 'Enabled' : 'Disabled'}
+            {isEnabled ? t('settings.gamification.enabled') : t('settings.gamification.disabled')}
           </Badge>
         </div>
         <Switch
@@ -108,25 +110,23 @@ export function GamificationToggle() {
               {isEnabling ? (
                 <>
                   <Trophy className="h-5 w-5 text-yellow-500" />
-                  <span>Enable Gamification</span>
+                  <span>{t('settings.gamification.toggle_title')}</span>
                 </>
               ) : (
                 <>
                   <Settings className="h-5 w-5 text-gray-500" />
-                  <span>Disable Gamification</span>
+                  <span>{t('settings.gamification.disable_title')}</span>
                 </>
               )}
             </DialogTitle>
             <DialogDescription>
               {isEnabling ? (
                 <>
-                  Transform your financial management into an engaging experience with points, 
-                  achievements, streaks, and challenges. You can disable this at any time.
+                  {t('settings.gamification.enable_description')}
                 </>
               ) : (
                 <>
-                  This will disable all gamification features. Your financial app will continue 
-                  to work normally without any game elements.
+                  {t('settings.gamification.disable_description')}
                 </>
               )}
             </DialogDescription>
@@ -135,7 +135,7 @@ export function GamificationToggle() {
           <div className="space-y-4">
             {/* Data Retention Policy */}
             <div className="space-y-2">
-              <Label htmlFor="retention-policy">Data Retention Policy</Label>
+              <Label htmlFor="retention-policy">{t('settings.gamification.data_retention_policy')}</Label>
               <Select
                 value={dataRetentionPolicy}
                 onValueChange={(value) => setDataRetentionPolicy(value as DataRetentionPolicy)}
@@ -146,25 +146,25 @@ export function GamificationToggle() {
                 <SelectContent>
                   <SelectItem value={DataRetentionPolicy.PRESERVE}>
                     <div className="space-y-1">
-                      <div className="font-medium">Preserve Data</div>
+                      <div className="font-medium">{t('settings.gamification.preserve_data.label')}</div>
                       <div className="text-xs text-gray-600">
-                        Keep all progress and restore when re-enabled
+                        {t('settings.gamification.preserve_data.description')}
                       </div>
                     </div>
                   </SelectItem>
                   <SelectItem value={DataRetentionPolicy.ARCHIVE}>
                     <div className="space-y-1">
-                      <div className="font-medium">Archive Data</div>
+                      <div className="font-medium">{t('settings.gamification.archive_data.label')}</div>
                       <div className="text-xs text-gray-600">
-                        Archive progress, can be restored later
+                        {t('settings.gamification.archive_data.description')}
                       </div>
                     </div>
                   </SelectItem>
                   <SelectItem value={DataRetentionPolicy.DELETE}>
                     <div className="space-y-1">
-                      <div className="font-medium">Delete Data</div>
+                      <div className="font-medium">{t('settings.gamification.delete_data.label')}</div>
                       <div className="text-xs text-gray-600">
-                        Permanently delete all gamification data
+                        {t('settings.gamification.delete_data.description')}
                       </div>
                     </div>
                   </SelectItem>
@@ -177,10 +177,9 @@ export function GamificationToggle() {
               <div className="flex items-start space-x-2 p-3 bg-red-50 border border-red-200 rounded-lg">
                 <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5" />
                 <div className="text-sm">
-                  <p className="font-medium text-red-800">Warning</p>
+                  <p className="font-medium text-red-800">{t('settings.gamification.warning')}</p>
                   <p className="text-red-600">
-                    This will permanently delete all your points, achievements, streaks, and progress. 
-                    This action cannot be undone.
+                    {t('settings.gamification.delete_warning')}
                   </p>
                 </div>
               </div>
@@ -191,13 +190,13 @@ export function GamificationToggle() {
               <div className="flex items-start space-x-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <Info className="h-4 w-4 text-blue-500 mt-0.5" />
                 <div className="text-sm">
-                  <p className="font-medium text-blue-800">What you'll get:</p>
+                  <p className="font-medium text-blue-800">{t('settings.gamification.what_you_get')}</p>
                   <ul className="text-blue-600 mt-1 space-y-1">
-                    <li>• Earn points for financial activities</li>
-                    <li>• Unlock achievements and badges</li>
-                    <li>• Build streaks for consistent habits</li>
-                    <li>• Join challenges to improve skills</li>
-                    <li>• Track your financial health score</li>
+                    <li>• {t('settings.gamification.benefits.points')}</li>
+                    <li>• {t('settings.gamification.benefits.achievements')}</li>
+                    <li>• {t('settings.gamification.benefits.streaks')}</li>
+                    <li>• {t('settings.gamification.benefits.challenges')}</li>
+                    <li>• {t('settings.gamification.benefits.wellness')}</li>
                   </ul>
                 </div>
               </div>
@@ -206,10 +205,10 @@ export function GamificationToggle() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDialog(false)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button onClick={handleConfirm}>
-              {isEnabling ? 'Enable Gamification' : 'Disable Gamification'}
+              {isEnabling ? t('settings.gamification.toggle_title') : t('settings.gamification.disable_title')}
             </Button>
           </DialogFooter>
         </DialogContent>

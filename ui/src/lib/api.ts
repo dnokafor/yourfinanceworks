@@ -1057,10 +1057,17 @@ export interface ReportFilters {
   balance_max?: number;
   include_inactive?: boolean;
   is_recurring?: boolean;
+  // Inventory-specific filters
+  category_ids?: number[];
+  item_type?: string[];
+  date_filter_type?: string;
+  value_min?: number;
+  value_max?: number;
+  low_stock_only?: boolean;
 }
 
 export interface ReportGenerateRequest {
-  report_type: 'client' | 'invoice' | 'payment' | 'expense' | 'statement';
+  report_type: 'client' | 'invoice' | 'payment' | 'expense' | 'statement' | 'inventory';
   filters: ReportFilters;
   columns?: string[];
   export_format: 'pdf' | 'csv' | 'excel' | 'json';
@@ -1068,7 +1075,7 @@ export interface ReportGenerateRequest {
 }
 
 export interface ReportPreviewRequest {
-  report_type: 'client' | 'invoice' | 'payment' | 'expense' | 'statement';
+  report_type: 'client' | 'invoice' | 'payment' | 'expense' | 'statement' | 'inventory';
   filters: ReportFilters;
   limit?: number;
 }
@@ -1076,7 +1083,7 @@ export interface ReportPreviewRequest {
 export interface ReportTemplate {
   id: number;
   name: string;
-  report_type: 'client' | 'invoice' | 'payment' | 'expense' | 'statement';
+  report_type: 'client' | 'invoice' | 'payment' | 'expense' | 'statement' | 'inventory';
   filters: ReportFilters;
   columns?: string[];
   formatting?: Record<string, any>;
@@ -1088,7 +1095,7 @@ export interface ReportTemplate {
 
 export interface ReportTemplateCreate {
   name: string;
-  report_type: 'client' | 'invoice' | 'payment' | 'expense' | 'statement';
+  report_type: 'client' | 'invoice' | 'payment' | 'expense' | 'statement' | 'inventory';
   filters: ReportFilters;
   columns?: string[];
   formatting?: Record<string, any>;

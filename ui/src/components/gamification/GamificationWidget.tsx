@@ -13,9 +13,11 @@ import {
   TrendingUp
 } from 'lucide-react';
 import { useGamification } from '@/hooks/useGamification';
+import { useTranslation } from 'react-i18next';
 import { GamificationNotifications } from './GamificationNotifications';
 
 export function GamificationWidget() {
+  const { t } = useTranslation();
   const { profile, dashboard, canShowGamification, isEnabled } = useGamification();
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -58,28 +60,28 @@ export function GamificationWidget() {
               <Star className="h-3 w-3 text-yellow-500" />
               <span className="text-sm font-bold">{profile.level}</span>
             </div>
-            <p className="text-xs text-gray-600">Level</p>
+            <p className="text-xs text-gray-600">{t('settings.gamification.dashboard.level')}</p>
           </div>
           <div>
             <div className="flex items-center justify-center space-x-1">
               <Zap className="h-3 w-3 text-blue-500" />
               <span className="text-sm font-bold">{profile.total_experience_points.toLocaleString()}</span>
             </div>
-            <p className="text-xs text-gray-600">XP</p>
+            <p className="text-xs text-gray-600">{t('settings.gamification.dashboard.total_xp')}</p>
           </div>
           <div>
             <div className="flex items-center justify-center space-x-1">
               <TrendingUp className="h-3 w-3 text-green-500" />
               <span className="text-sm font-bold">{Math.round(profile.financial_health_score)}</span>
             </div>
-            <p className="text-xs text-gray-600">Health</p>
+            <p className="text-xs text-gray-600">{t('settings.gamification.dashboard.wellness_score')}</p>
           </div>
         </div>
 
         {/* Active Streaks */}
         {activeStreaks.length > 0 && (
           <div>
-            <h4 className="text-xs font-medium text-gray-700 mb-2">Active Streaks</h4>
+            <h4 className="text-xs font-medium text-gray-700 mb-2">{t('settings.gamification.streaks.title')}</h4>
             <div className="space-y-1">
               {activeStreaks.slice(0, 2).map((streak) => (
                 <div key={streak.id} className="flex items-center justify-between text-xs">
@@ -101,7 +103,7 @@ export function GamificationWidget() {
         {/* Recent Achievements */}
         {recentAchievements.length > 0 && (
           <div>
-            <h4 className="text-xs font-medium text-gray-700 mb-2">Recent Achievements</h4>
+            <h4 className="text-xs font-medium text-gray-700 mb-2">{t('settings.gamification.achievements.title')}</h4>
             <div className="space-y-1">
               {recentAchievements.map((achievement) => (
                 <div key={achievement.id} className="flex items-center space-x-2 text-xs">
@@ -121,7 +123,7 @@ export function GamificationWidget() {
         {/* Active Challenges */}
         {activeChallenges.length > 0 && (
           <div>
-            <h4 className="text-xs font-medium text-gray-700 mb-2">Active Challenges</h4>
+            <h4 className="text-xs font-medium text-gray-700 mb-2">{t('settings.gamification.challenges.title')}</h4>
             <div className="space-y-1">
               {activeChallenges.slice(0, 2).map((challenge) => (
                 <div key={challenge.id} className="flex items-center justify-between text-xs">
@@ -152,7 +154,7 @@ export function GamificationWidget() {
                 onClick={() => window.location.href = '/gamification'}
                 className="text-xs"
               >
-                View Full Dashboard
+                {t('settings.gamification.dashboard.view_full_dashboard')}
               </Button>
             </div>
           </div>
@@ -167,7 +169,7 @@ export function GamificationWidget() {
               onClick={() => window.location.href = '/gamification'}
               className="text-xs text-blue-600 hover:text-blue-700"
             >
-              View Dashboard
+              {t('settings.gamification.dashboard.view_dashboard')}
             </Button>
           </div>
         )}
