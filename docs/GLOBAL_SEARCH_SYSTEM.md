@@ -1,6 +1,6 @@
 # Global Search System
 
-A comprehensive search system that allows users to search across all data in the invoice management system using OpenSearch for indexing and full-text search capabilities.
+A comprehensive search system that allows users to search across all data in the {APP_NAME} using OpenSearch for indexing and full-text search capabilities.
 
 ## 🚀 Features
 
@@ -312,4 +312,4 @@ curl "http://localhost:8000/api/v1/search/status"
 
 ---
 
-The global search system provides a powerful and user-friendly way to find information across the entire invoice management system, with robust fallback mechanisms and comprehensive monitoring capabilities.
+The global search system provides a powerful and user-friendly way to find information across the entire {APP_NAME}, with robust fallback mechanisms and comprehensive monitoring capabilities.

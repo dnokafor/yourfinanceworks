@@ -245,4 +245,4 @@ Authorization: Bearer <token>
 - Notification settings are per-user and per-tenant
 - The system gracefully handles missing email configuration
 
-This feature provides a comprehensive notification system that keeps users informed about important activities in their invoice management system while maintaining flexibility and user control.
+This feature provides a comprehensive notification system that keeps users informed about important activities in their {APP_NAME} while maintaining flexibility and user control.

@@ -2,6 +2,7 @@ import React from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ThemeProvider } from "@/components/ui/theme-provider";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { RoleProtectedRoute } from "./components/auth/RoleProtectedRoute";
 import { TenantProtectedRoute } from "./components/auth/TenantProtectedRoute";
@@ -243,7 +244,9 @@ const AppContent = () => {
 const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppContent />
+      <ThemeProvider defaultTheme="system" storageKey="invoice-app-theme">
+        <AppContent />
+      </ThemeProvider>
     </QueryClientProvider>
   );
 };

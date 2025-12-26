@@ -4,6 +4,9 @@ Configuration settings for the Invoice Application
 import os
 from typing import Optional
 
+# Application constants
+APP_NAME = "YourFinanceWORKS"
+
 
 class Config:
     """Main configuration for the invoice application"""
@@ -29,7 +32,7 @@ class Config:
     SMTP_PASSWORD: Optional[str] = os.getenv("SMTP_PASSWORD")
     FROM_EMAIL: Optional[str] = os.getenv("FROM_EMAIL")
     EMAIL_FROM: Optional[str] = os.getenv("EMAIL_FROM", "noreply@invoiceapp.com")
-    EMAIL_FROM_NAME: Optional[str] = os.getenv("EMAIL_FROM_NAME", "Invoice Management System")
+    EMAIL_FROM_NAME: Optional[str] = os.getenv("EMAIL_FROM_NAME", APP_NAME)
 
     # File upload settings
     MAX_UPLOAD_SIZE: int = int(os.getenv("MAX_UPLOAD_SIZE", "10485760"))  # 10MB default

@@ -15,6 +15,8 @@ import { toast } from 'sonner';
 import { useTranslation } from "react-i18next";
 import { superAdminApi, apiRequest } from '../lib/api';
 import { CurrencySelector } from '@/components/ui/currency-selector';
+import { PageHeader } from '@/components/ui/professional-layout';
+import { ProfessionalCard } from '@/components/ui/professional-card';
 
 interface Tenant {
   id: number;
@@ -394,8 +396,13 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
     );
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-background">
-      <div className="container mx-auto px-4 py-8">
+    <>
+      <div className="h-full space-y-6 fade-in">
+        <PageHeader
+          title={t('superAdmin.dashboard_title')}
+          description={t('superAdmin.dashboard_description')}
+        />
+
         {/* Alert for tenants whose email is missing in users */}
         {tenantEmailsMissingUsers.length > 0 && (
           <Alert className="mb-6" variant="destructive">
@@ -413,13 +420,6 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
             </AlertDescription>
           </Alert>
         )}
-        {/* Dashboard Header with Professional Styling */}
-        <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent rounded-2xl border border-primary/20 p-8 backdrop-blur-sm mb-8">
-          <div className="space-y-2">
-            <h1 className="text-4xl font-bold tracking-tight">{t('superAdmin.dashboard_title')}</h1>
-            <p className="text-muted-foreground text-base">{t('superAdmin.dashboard_description')}</p>
-          </div>
-        </div>
 
         {error && (
           <Alert className="mb-6" variant="destructive">
@@ -429,8 +429,8 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
         )}
 
         <div className="mb-8">
-          <Card>
-            <CardContent className="p-6">
+          <ProfessionalCard className="slide-in">
+            <div className="p-6">
               <form onSubmit={handlePromote} className="flex flex-col md:flex-row items-center gap-4">
                 <Label htmlFor="promote-email" className="font-medium">{t('superAdmin.promote_user_label')}</Label>
                 <Input
@@ -452,14 +452,14 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
                   <div className="text-red-600 text-sm mt-2" role="alert">{promoteError}</div>
                 )}
               </form>
-            </CardContent>
-          </Card>
+            </div>
+          </ProfessionalCard>
         </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card className="border border-border/50 hover:border-border/80 transition-all duration-200">
-            <CardContent className="p-6">
+          <ProfessionalCard className="border border-border/50 hover:border-border/80 transition-all duration-200 slide-in">
+            <div className="p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">{t('superAdmin.total_organizations_label')}</p>
@@ -468,11 +468,11 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
                 <Building className="h-8 w-8 text-primary/60" />
               </div>
               <p className="text-sm text-muted-foreground mt-3">{activeTenants} {t('superAdmin.active_label')}</p>
-            </CardContent>
-          </Card>
+            </div>
+          </ProfessionalCard>
 
-          <Card className="border border-border/50 hover:border-border/80 transition-all duration-200">
-            <CardContent className="p-6">
+          <ProfessionalCard className="border border-border/50 hover:border-border/80 transition-all duration-200 slide-in">
+            <div className="p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">{t('superAdmin.total_users_label')}</p>
@@ -481,11 +481,11 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
                 <Users className="h-8 w-8 text-primary/60" />
               </div>
               <p className="text-sm text-muted-foreground mt-3">{superUsers} {t('superAdmin.super_users')}</p>
-            </CardContent>
-          </Card>
+            </div>
+          </ProfessionalCard>
 
-          <Card className="border border-border/50 hover:border-border/80 transition-all duration-200">
-            <CardContent className="p-6">
+          <ProfessionalCard className="border border-border/50 hover:border-border/80 transition-all duration-200 slide-in">
+            <div className="p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">{t('superAdmin.databases_label')}</p>
@@ -494,11 +494,11 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
                 <Database className="h-8 w-8 text-primary/60" />
               </div>
               <p className="text-sm text-muted-foreground mt-3">{healthyDatabases} {t('superAdmin.healthy_databases')}</p>
-            </CardContent>
-          </Card>
+            </div>
+          </ProfessionalCard>
 
-          <Card className="border border-border/50 hover:border-border/80 transition-all duration-200">
-            <CardContent className="p-6">
+          <ProfessionalCard className="border border-border/50 hover:border-border/80 transition-all duration-200 slide-in">
+            <div className="p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">{t('superAdmin.system_status_label')}</p>
@@ -512,8 +512,8 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
                   <AlertTriangle className="h-8 w-8 text-red-600/60" />
                 )}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </ProfessionalCard>
         </div>
 
         {/* Main Content */}
@@ -525,10 +525,10 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
           </TabsList>
 
           <TabsContent value="tenants" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <CardTitle>{t('superAdmin.organizations_management_title')}</CardTitle>
+            <ProfessionalCard className="slide-in">
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-semibold">{t('superAdmin.organizations_management_title')}</h2>
                   <Dialog open={showCreateTenant} onOpenChange={setShowCreateTenant}>
                     <DialogTrigger asChild>
                       <Button>
@@ -573,80 +573,80 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
                     </DialogContent>
                   </Dialog>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t('superAdmin.name_header')}</TableHead>
-                      <TableHead>{t('superAdmin.email_header')}</TableHead>
-                      <TableHead>{t('superAdmin.users_header')}</TableHead>
-                      <TableHead>{t('superAdmin.currency_header')}</TableHead>
-                      <TableHead>{t('superAdmin.status_header')}</TableHead>
-                      <TableHead>{t('superAdmin.created_at_header')}</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {tenants
-                      .slice()
-                      .sort((a, b) => a.name.localeCompare(b.name))
-                      .map((tenant) => (
-                        <TableRow key={tenant.id}>
-                          <TableCell className="font-medium">{tenant.name}</TableCell>
-                          <TableCell>{tenant.email}</TableCell>
-                          <TableCell>{tenant.user_count}</TableCell>
-                          <TableCell>{tenant.default_currency}</TableCell>
-                          <TableCell>
-                            <Badge variant={tenant.is_active ? "default" : "secondary"}>
-                              {tenant.is_active ? t('superAdmin.active_status') : t('superAdmin.inactive_status')}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{new Date(tenant.created_at).toLocaleDateString()}</TableCell>
-                          <TableCell>
-                            <div className="flex space-x-2">
-                              <Button size="sm" variant="outline" onClick={() => handleEditTenant(tenant)}>
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              {currentUser && tenant.id !== currentUser.tenant_id && (
-                                <Button
-                                  size="sm"
-                                  variant={tenant.is_active ? "destructive" : "default"}
-                                  onClick={async () => {
-                                    try {
-                                      await apiRequest(`/super-admin/tenants/${tenant.id}/toggle-status`, {
-                                        method: 'PATCH'
-                                      }, { skipTenant: true });
-                                      toast.success(`Organization ${tenant.is_active ? 'disabled' : 'enabled'} successfully`);
-                                      fetchTenants();
-                                    } catch (err) {
-                                      toast.error('Failed to toggle organization status');
-                                    }
-                                  }}
-                                >
-                                  {tenant.is_active ? t('superAdmin.disable_button') : t('superAdmin.enable_button')}
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t('superAdmin.name_header')}</TableHead>
+                        <TableHead>{t('superAdmin.email_header')}</TableHead>
+                        <TableHead>{t('superAdmin.users_header')}</TableHead>
+                        <TableHead>{t('superAdmin.currency_header')}</TableHead>
+                        <TableHead>{t('superAdmin.status_header')}</TableHead>
+                        <TableHead>{t('superAdmin.created_at_header')}</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {tenants
+                        .slice()
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map((tenant) => (
+                          <TableRow key={tenant.id}>
+                            <TableCell className="font-medium">{tenant.name}</TableCell>
+                            <TableCell>{tenant.email}</TableCell>
+                            <TableCell>{tenant.user_count}</TableCell>
+                            <TableCell>{tenant.default_currency}</TableCell>
+                            <TableCell>
+                              <Badge variant={tenant.is_active ? "default" : "secondary"}>
+                                {tenant.is_active ? t('superAdmin.active_status') : t('superAdmin.inactive_status')}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{new Date(tenant.created_at).toLocaleDateString()}</TableCell>
+                            <TableCell>
+                              <div className="flex space-x-2">
+                                <Button size="sm" variant="outline" onClick={() => handleEditTenant(tenant)}>
+                                  <Edit className="h-4 w-4" />
                                 </Button>
-                              )}
-                              {currentUser && tenant.id !== currentUser.tenant_id && (
-                                <Button size="sm" variant="outline" onClick={() => handleDeleteTenant(tenant)}>
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+                                {currentUser && tenant.id !== currentUser.tenant_id && (
+                                  <Button
+                                    size="sm"
+                                    variant={tenant.is_active ? "destructive" : "default"}
+                                    onClick={async () => {
+                                      try {
+                                        await apiRequest(`/super-admin/tenants/${tenant.id}/toggle-status`, {
+                                          method: 'PATCH'
+                                        }, { skipTenant: true });
+                                        toast.success(`Organization ${tenant.is_active ? 'disabled' : 'enabled'} successfully`);
+                                        fetchTenants();
+                                      } catch (err) {
+                                        toast.error('Failed to toggle organization status');
+                                      }
+                                    }}
+                                  >
+                                    {tenant.is_active ? t('superAdmin.disable_button') : t('superAdmin.enable_button')}
+                                  </Button>
+                                )}
+                                {currentUser && tenant.id !== currentUser.tenant_id && (
+                                  <Button size="sm" variant="outline" onClick={() => handleDeleteTenant(tenant)}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </ProfessionalCard>
           </TabsContent>
 
           <TabsContent value="users" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <CardTitle>{t('superAdmin.users_management_title')}</CardTitle>
+            <ProfessionalCard className="slide-in">
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-semibold">{t('superAdmin.users_management_title')}</h2>
                   <div className="flex items-center space-x-4">
                     <div className="flex items-center space-x-2">
                       <Label>Filter by Organization:</Label>
@@ -781,154 +781,154 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
                     </Dialog>
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t('superAdmin.name_header')}</TableHead>
-                      <TableHead>{t('superAdmin.email_header')}</TableHead>
-                      <TableHead>{t('superAdmin.organization_header')}</TableHead>
-                      <TableHead>{t('superAdmin.role_header')}</TableHead>
-                      <TableHead>{t('superAdmin.status_header')}</TableHead>
-                      <TableHead>{t('superAdmin.created_at_header')}</TableHead>
-                      <TableHead>{t('superAdmin.actions_header')}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {users
-                      .slice()
-                      .sort((a, b) => {
-                        // Current user first
-                        if (currentUser && a.id === currentUser.id) return -1;
-                        if (currentUser && b.id === currentUser.id) return 1;
-                        // Then sort by name
-                        const aName = `${a.first_name} ${a.last_name}`.trim();
-                        const bName = `${b.first_name} ${b.last_name}`.trim();
-                        return aName.localeCompare(bName);
-                      })
-                      .map((user) => (
-                        <TableRow key={user.id}>
-                          <TableCell className="font-medium">
-                            {user.first_name} {user.last_name}
-                            {user.is_superuser && (
-                              <Badge variant="outline" className="ml-2">{t('superAdmin.super_user_badge')}</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>{user.email}</TableCell>
-                          <TableCell>{user.tenant_name}</TableCell>
-                          <TableCell>
-                            <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
-                              {t(`superAdmin.role_${user.role}_label`)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={user.is_active ? "default" : "secondary"}>
-                              {user.is_active ? t('superAdmin.active_status') : t('superAdmin.inactive_status')}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
-                          <TableCell>
-                            <div className="flex space-x-2">
-                              <Button size="sm" variant="outline" onClick={() => handleEditUser(user)}>
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              {currentUser && user.id !== currentUser.id && (
-                                <Button
-                                  size="sm"
-                                  variant={user.is_active ? "destructive" : "default"}
-                                  onClick={async () => {
-                                    try {
-                                      await apiRequest(`/super-admin/users/${user.id}/toggle-status`, {
-                                        method: 'PATCH'
-                                      }, { skipTenant: true });
-                                      toast.success(`User ${user.is_active ? 'disabled' : 'enabled'} successfully`);
-                                      fetchUsers(selectedTenantForUsers?.id);
-                                    } catch (err) {
-                                      toast.error('Failed to toggle user status');
-                                    }
-                                  }}
-                                >
-                                  {user.is_active ? t('superAdmin.disable_button') : t('superAdmin.enable_button')}
-                                </Button>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t('superAdmin.name_header')}</TableHead>
+                        <TableHead>{t('superAdmin.email_header')}</TableHead>
+                        <TableHead>{t('superAdmin.organization_header')}</TableHead>
+                        <TableHead>{t('superAdmin.role_header')}</TableHead>
+                        <TableHead>{t('superAdmin.status_header')}</TableHead>
+                        <TableHead>{t('superAdmin.created_at_header')}</TableHead>
+                        <TableHead>{t('superAdmin.actions_header')}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {users
+                        .slice()
+                        .sort((a, b) => {
+                          // Current user first
+                          if (currentUser && a.id === currentUser.id) return -1;
+                          if (currentUser && b.id === currentUser.id) return 1;
+                          // Then sort by name
+                          const aName = `${a.first_name} ${a.last_name}`.trim();
+                          const bName = `${b.first_name} ${b.last_name}`.trim();
+                          return aName.localeCompare(bName);
+                        })
+                        .map((user) => (
+                          <TableRow key={user.id}>
+                            <TableCell className="font-medium">
+                              {user.first_name} {user.last_name}
+                              {user.is_superuser && (
+                                <Badge variant="outline" className="ml-2">{t('superAdmin.super_user_badge')}</Badge>
                               )}
-                              {currentUser && user.id !== currentUser.id && (
-                                <Button size="sm" variant="outline" onClick={() => handleDeleteUser(user)}>
-                                  <Trash2 className="h-4 w-4" />
+                            </TableCell>
+                            <TableCell>{user.email}</TableCell>
+                            <TableCell>{user.tenant_name}</TableCell>
+                            <TableCell>
+                              <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
+                                {t(`superAdmin.role_${user.role}_label`)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={user.is_active ? "default" : "secondary"}>
+                                {user.is_active ? t('superAdmin.active_status') : t('superAdmin.inactive_status')}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
+                            <TableCell>
+                              <div className="flex space-x-2">
+                                <Button size="sm" variant="outline" onClick={() => handleEditUser(user)}>
+                                  <Edit className="h-4 w-4" />
                                 </Button>
-                              )}
-                              {user.is_superuser && currentUser && user.email !== currentUser.email && superUsers > 1 && (
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={async () => {
-                                    if (window.confirm(t('superAdmin.confirm_remove_super_admin'))) {
+                                {currentUser && user.id !== currentUser.id && (
+                                  <Button
+                                    size="sm"
+                                    variant={user.is_active ? "destructive" : "default"}
+                                    onClick={async () => {
                                       try {
-                                        await superAdminApi.demoteSuperAdmin(user.email);
-                                        toast.success(t('superAdmin.remove_super_admin_success'));
+                                        await apiRequest(`/super-admin/users/${user.id}/toggle-status`, {
+                                          method: 'PATCH'
+                                        }, { skipTenant: true });
+                                        toast.success(`User ${user.is_active ? 'disabled' : 'enabled'} successfully`);
                                         fetchUsers(selectedTenantForUsers?.id);
-                                      } catch (err: any) {
-                                        toast.error(err?.message || t('superAdmin.remove_super_admin_failed'));
+                                      } catch (err) {
+                                        toast.error('Failed to toggle user status');
                                       }
-                                    }
-                                  }}
-                                >
-                                  {t('superAdmin.remove_super_admin_button')}
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+                                    }}
+                                  >
+                                    {user.is_active ? t('superAdmin.disable_button') : t('superAdmin.enable_button')}
+                                  </Button>
+                                )}
+                                {currentUser && user.id !== currentUser.id && (
+                                  <Button size="sm" variant="outline" onClick={() => handleDeleteUser(user)}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                {user.is_superuser && currentUser && user.email !== currentUser.email && superUsers > 1 && (
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={async () => {
+                                      if (window.confirm(t('superAdmin.confirm_remove_super_admin'))) {
+                                        try {
+                                          await superAdminApi.demoteSuperAdmin(user.email);
+                                          toast.success(t('superAdmin.remove_super_admin_success'));
+                                          fetchUsers(selectedTenantForUsers?.id);
+                                        } catch (err: any) {
+                                          toast.error(err?.message || t('superAdmin.remove_super_admin_failed'));
+                                        }
+                                      }
+                                    }}
+                                  >
+                                    {t('superAdmin.remove_super_admin_button')}
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </ProfessionalCard>
           </TabsContent>
 
           <TabsContent value="databases" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>{t('superAdmin.database_management_title')}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t('superAdmin.tenant_header')}</TableHead>
-                      <TableHead>{t('superAdmin.database_header')}</TableHead>
-                      <TableHead>{t('superAdmin.status_header')}</TableHead>
-                      <TableHead>{t('superAdmin.message_header')}</TableHead>
-                      <TableHead>{t('superAdmin.actions_header')}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {databases.map((db) => (
-                      <TableRow key={db.tenant_id}>
-                        <TableCell className="font-medium">{db.tenant_name}</TableCell>
-                        <TableCell>{db.database_name}</TableCell>
-                        <TableCell>
-                          <Badge variant={db.status === 'connected' ? 'default' : 'destructive'}>
-                            {db.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{db.message || db.error || '-'}</TableCell>
-                        <TableCell>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleRecreateDatabase(db)}
-                          >
-                            <Database className="h-4 w-4 mr-2" />
-                            {t('superAdmin.recreate_database_button')}
-                          </Button>
-                        </TableCell>
+            <ProfessionalCard className="slide-in">
+              <div className="p-6">
+                <h2 className="text-xl font-semibold mb-6">{t('superAdmin.database_management_title')}</h2>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t('superAdmin.tenant_header')}</TableHead>
+                        <TableHead>{t('superAdmin.database_header')}</TableHead>
+                        <TableHead>{t('superAdmin.status_header')}</TableHead>
+                        <TableHead>{t('superAdmin.message_header')}</TableHead>
+                        <TableHead>{t('superAdmin.actions_header')}</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+                    </TableHeader>
+                    <TableBody>
+                      {databases.map((db) => (
+                        <TableRow key={db.tenant_id}>
+                          <TableCell className="font-medium">{db.tenant_name}</TableCell>
+                          <TableCell>{db.database_name}</TableCell>
+                          <TableCell>
+                            <Badge variant={db.status === 'connected' ? 'default' : 'destructive'}>
+                              {db.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{db.message || db.error || '-'}</TableCell>
+                          <TableCell>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleRecreateDatabase(db)}
+                            >
+                              <Database className="h-4 w-4 mr-2" />
+                              {t('superAdmin.recreate_database_button')}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </ProfessionalCard>
           </TabsContent>
         </Tabs>
       </div>
@@ -1111,7 +1111,7 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 };
 

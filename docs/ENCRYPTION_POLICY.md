@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the encryption policy for the Invoice Management System, detailing which data fields are encrypted and why certain fields remain unencrypted for operational requirements.
+This document outlines the encryption policy for the {APP_NAME}, detailing which data fields are encrypted and why certain fields remain unencrypted for operational requirements.
 
 ## Encryption Architecture
 

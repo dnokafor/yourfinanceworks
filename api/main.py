@@ -210,7 +210,7 @@ async def app_lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Invoice API",
-    description="API for the Invoice Management System",
+    description="API for the YourFinanceWORKS",
     version="1.0.0",
     lifespan=app_lifespan,
     redirect_slashes=False  # Disable automatic trailing slash redirects

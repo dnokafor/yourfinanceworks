@@ -160,7 +160,7 @@ The migration will:
 
 ### Usage Type Selection Modal
 ```
-Welcome to Invoice Management System!
+Welcome to {APP_NAME}!
 
 How will you be using this application?
 

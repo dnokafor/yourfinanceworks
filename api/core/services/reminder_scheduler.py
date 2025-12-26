@@ -17,6 +17,7 @@ from core.models.models_per_tenant import (
 )
 from core.services.notification_service import NotificationService
 from core.utils.notifications import get_notification_service
+from config import APP_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,7 @@ class ReminderScheduler:
 
         return None
 
-    def process_due_reminders(self, company_name: str = "Invoice Management System") -> Dict[str, Any]:
+    def process_due_reminders(self, company_name: str = APP_NAME) -> Dict[str, Any]:
         """
         Process all due reminders and send notifications.
 
@@ -162,7 +163,7 @@ class ReminderScheduler:
     def send_upcoming_reminders(
         self, 
         advance_days: int = 1,
-        company_name: str = "Invoice Management System"
+        company_name: str = APP_NAME
     ) -> Dict[str, Any]:
         """
         Send notifications for reminders that are due in the near future.

@@ -2,7 +2,7 @@
 
 ## 📋 Repository Overview
 
-This document contains a comprehensive review of the invoice management application codebase with 20 targeted suggestions for improvement. The application is a multi-tenant invoice management system built with FastAPI (backend), React/TypeScript (frontend), and React Native (mobile).
+This document contains a comprehensive review of the {APP_NAME} codebase with 20 targeted suggestions for improvement. The application is a multi-tenant {APP_NAME} built with FastAPI (backend), React/TypeScript (frontend), and React Native (mobile).
 
 ## 🔧 Architecture & Performance Improvements
 

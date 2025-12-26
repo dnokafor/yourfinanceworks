@@ -1,7 +1,7 @@
 # Encrypted Data Exposure Fix - Verification Report
 
 ## Overview
-This document summarizes the successful implementation and verification of fixes for encrypted data exposure issues in the invoice management system.
+This document summarizes the successful implementation and verification of fixes for encrypted data exposure issues in the {APP_NAME}.
 
 ## Issues Fixed
 

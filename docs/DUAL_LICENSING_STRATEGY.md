@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the transition from a Freemium model to a **Dual-Licensing Open Source Strategy** for the Invoice Management System (IMS). This strategy aligns with the goal of open-sourcing the core product under **GPLv3** while sustaining the business through a **Commercial License** for proprietary enterprise modules.
+This document outlines the transition from a Freemium model to a **Dual-Licensing Open Source Strategy** for the {APP_NAME} (IMS). This strategy aligns with the goal of open-sourcing the core product under **GPLv3** while sustaining the business through a **Commercial License** for proprietary enterprise modules.
 
 ---
 

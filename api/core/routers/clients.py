@@ -269,7 +269,7 @@ async def create_client(
                 master_db = next(get_master_db())
                 try:
                     tenant = master_db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
-                    company_name = tenant.name if tenant else "Invoice Management System"
+                    company_name = tenant.name if tenant else APP_NAME
                 finally:
                     master_db.close()
 

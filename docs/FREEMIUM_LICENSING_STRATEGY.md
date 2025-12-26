@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the recommended freemium licensing model for the Invoice Management System, designed to allow individual users to use the application with limitations while providing a clear upgrade path to business licenses.
+This document outlines the recommended freemium licensing model for the {APP_NAME}, designed to allow individual users to use the application with limitations while providing a clear upgrade path to business licenses.
 
 ---
 

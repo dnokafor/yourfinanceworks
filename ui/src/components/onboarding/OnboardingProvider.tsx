@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { APP_NAME } from '../../constants/app';
 
 interface OnboardingStep {
   id: string;
@@ -76,7 +77,7 @@ const TOURS: OnboardingTour[] = [
       {
         id: 'sidebar',
         title: 'Main Navigation',
-        content: 'Use this sidebar to navigate between different sections of your invoice management system.',
+        content: `Use this sidebar to navigate between different sections of your ${APP_NAME.toLowerCase()}.`,
         target: '[data-tour="sidebar"]',
         placement: 'right'
       },
