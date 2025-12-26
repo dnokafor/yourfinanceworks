@@ -1561,6 +1561,14 @@ async def get_audit_logs(user_id: Optional[int] = None, user_email: Optional[str
         limit: Maximum number of results (default: 100)
         offset: Number of results to skip (default: 0)
     """
+    # Validate pagination parameters
+    if offset < 0:
+        offset = 0
+    if limit < 1:
+        limit = 100
+    if limit > 10000:  # Prevent excessive load
+        limit = 10000
+        
     if server_context.tools is None:
         return {"success": False, "error": "Server not properly initialized"}
 

@@ -512,6 +512,14 @@ class InvoiceAPIClient:
         offset: int = 0
     ) -> Dict[str, Any]:
         """Get audit logs with optional filters"""
+        # Validate pagination parameters
+        if offset < 0:
+            offset = 0
+        if limit < 1:
+            limit = 100
+        if limit > 10000:  # Prevent excessive load
+            limit = 10000
+            
         params = {"limit": limit, "offset": offset}
         if user_id is not None:
             params["user_id"] = user_id

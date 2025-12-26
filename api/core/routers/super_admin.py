@@ -53,6 +53,28 @@ def require_super_admin(current_user: MasterUser = Depends(get_current_user)):
 
 # ========== TENANT MANAGEMENT ==========
 
+@router.get("/organizations")
+async def get_organizations(
+    skip: int = 0,
+    limit: int = 1000,
+    master_db: Session = Depends(get_master_db),
+    current_user: MasterUser = Depends(require_super_admin)
+):
+    """Get all organizations for super admin dropdown"""
+    tenants = master_db.query(Tenant).offset(skip).limit(limit).all()
+    
+    organizations = []
+    for tenant in tenants:
+        organizations.append({
+            'id': tenant.id,
+            'name': tenant.name
+        })
+    
+    # Sort by name for better UX
+    organizations.sort(key=lambda x: x['name'])
+    
+    return organizations
+
 @router.get("/tenants")
 async def get_tenants(
     skip: int = 0,

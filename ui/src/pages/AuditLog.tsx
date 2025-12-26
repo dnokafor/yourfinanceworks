@@ -13,6 +13,7 @@ import { AuditLogDetailsModal } from '@/components/audit/AuditLogDetailsModal';
 import { apiRequest } from '@/lib/api';
 import { PageHeader } from '@/components/ui/professional-layout';
 import { ProfessionalCard } from '@/components/ui/professional-card';
+import { isSuperAdmin } from '@/utils/auth';
 import {
   Pagination,
   PaginationContent,
@@ -36,6 +37,13 @@ interface AuditLog {
   status: string;
   error_message?: string;
   created_at: string;
+  tenant_name?: string;  // Added for all organizations view
+  tenant_id?: number;    // Added for all organizations view
+}
+
+interface Organization {
+  id: number;
+  name: string;
 }
 
 type DateOrNull = Date | null;
@@ -48,6 +56,12 @@ export default function AuditLogPage() {
 
   // Pagination state
   const [page, setPage] = useState(1);
+  const safeSetPage = (newPage: number | ((prev: number) => number)) => {
+    setPage(prev => {
+      const resolvedPage = typeof newPage === 'function' ? newPage(prev) : newPage;
+      return Math.max(1, resolvedPage);
+    });
+  };
   const [perPage, setPerPage] = useState(50);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -62,12 +76,40 @@ export default function AuditLogPage() {
   const [endDate, setEndDate] = useState<DateOrNull>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  
+  // Organization state for super admin
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [selectedOrganization, setSelectedOrganization] = useState<string>('current');
+  const isCurrentUserSuperAdmin = isSuperAdmin();
 
   useEffect(() => {
     fetchLogs(page);
-  }, [page, perPage, action, status, userEmail, resourceType, startDate, endDate]);
+  }, [page, perPage, action, status, userEmail, resourceType, startDate, endDate, selectedOrganization]);
+
+  // Fetch organizations for super admin
+  useEffect(() => {
+    if (isCurrentUserSuperAdmin) {
+      fetchOrganizations();
+    }
+  }, [isCurrentUserSuperAdmin]);
+
+  const fetchOrganizations = async () => {
+    try {
+      const data = await apiRequest<Organization[]>('/super-admin/organizations');
+      setOrganizations(data);
+    } catch (err: any) {
+      console.error('Failed to fetch organizations:', err);
+    }
+  };
 
   const fetchLogs = async (currentPage: number = 1) => {
+    // Ensure page is always positive
+    if (currentPage < 1) {
+      currentPage = 1;
+      safeSetPage(1);
+      return;
+    }
+    
     setLoading(true);
     setError(null);
     try {
@@ -83,6 +125,15 @@ export default function AuditLogPage() {
       if (resourceType) params.append('resource_type', resourceType);
       if (startDate) params.append('start_date', startDate.toISOString());
       if (endDate) params.append('end_date', endDate.toISOString());
+      
+      // Add organization_id for super admin
+      if (isCurrentUserSuperAdmin && selectedOrganization && selectedOrganization !== 'current') {
+        if (selectedOrganization === 'all') {
+          params.append('all_organizations', 'true');
+        } else {
+          params.append('organization_id', selectedOrganization);
+        }
+      }
 
       const data = await apiRequest<{
         audit_logs: AuditLog[],
@@ -104,7 +155,7 @@ export default function AuditLogPage() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    setPage(1);
+    safeSetPage(1);
     fetchLogs(1);
   };
 
@@ -123,7 +174,8 @@ export default function AuditLogPage() {
     setResourceType('');
     setStartDate(null);
     setEndDate(null);
-    setPage(1);
+    setSelectedOrganization('current');
+    safeSetPage(1);
     // Directly fetch with cleared search too
     fetchLogs(1);
   };
@@ -161,7 +213,7 @@ export default function AuditLogPage() {
           </form>
           <Select value={perPage.toString()} onValueChange={v => {
             setPerPage(parseInt(v));
-            setPage(1);
+            safeSetPage(1);
           }}>
             <SelectTrigger className="w-[120px]">
               <SelectValue placeholder="Per page" />
@@ -176,7 +228,7 @@ export default function AuditLogPage() {
           </Select>
           <Select value={action || 'all'} onValueChange={v => {
             setAction(v === 'all' ? '' : v);
-            setPage(1);
+            safeSetPage(1);
           }}>
             <SelectTrigger className="w-[140px]">
               <SelectValue placeholder={t('auditLog.filters.action') || 'Action'} />
@@ -190,7 +242,7 @@ export default function AuditLogPage() {
           </Select>
           <Select value={status || 'all'} onValueChange={v => {
             setStatus(v === 'all' ? '' : v);
-            setPage(1);
+            safeSetPage(1);
           }}>
             <SelectTrigger className="w-[120px]">
               <SelectValue placeholder={t('auditLog.filters.status') || 'Status'} />
@@ -204,7 +256,7 @@ export default function AuditLogPage() {
           </Select>
           <Select value={userEmail || 'all'} onValueChange={v => {
             setUserEmail(v === 'all' ? '' : v);
-            setPage(1);
+            safeSetPage(1);
           }}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder={t('auditLog.filters.user') || 'User'} />
@@ -218,7 +270,7 @@ export default function AuditLogPage() {
           </Select>
           <Select value={resourceType || 'all'} onValueChange={v => {
             setResourceType(v === 'all' ? '' : v);
-            setPage(1);
+            safeSetPage(1);
           }}>
             <SelectTrigger className="w-[160px]">
               <SelectValue placeholder={t('auditLog.filters.resource_type') || 'Resource Type'} />
@@ -230,6 +282,27 @@ export default function AuditLogPage() {
               ))}
             </SelectContent>
           </Select>
+          {isCurrentUserSuperAdmin && (
+            <Select value={selectedOrganization} onValueChange={v => {
+              setSelectedOrganization(v);
+              safeSetPage(1);
+            }}>
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="Select Organization" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="current">Current Organization</SelectItem>
+                <SelectItem value="all" className="text-orange-600">
+                  All Organizations (Slow)
+                </SelectItem>
+                {organizations.map(org => (
+                  <SelectItem key={org.id} value={org.id.toString()}>
+                    {org.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="flex items-center gap-2">
@@ -243,7 +316,7 @@ export default function AuditLogPage() {
                 selected={startDate}
                 onSelect={(date) => {
                   setStartDate(date);
-                  setPage(1);
+                  safeSetPage(1);
                 }}
                 initialFocus
               />
@@ -262,7 +335,7 @@ export default function AuditLogPage() {
                 selected={endDate}
                 onSelect={(date) => {
                   setEndDate(date);
-                  setPage(1);
+                  safeSetPage(1);
                 }}
                 initialFocus
               />
@@ -287,6 +360,9 @@ export default function AuditLogPage() {
                   <TableHead>{t('auditLog.filters.action') || 'Action'}</TableHead>
                   <TableHead>{t('auditLog.filters.resource_type') || 'Resource Type'}</TableHead>
                   <TableHead>{t('auditLog.filters.status') || 'Status'}</TableHead>
+                  {isCurrentUserSuperAdmin && selectedOrganization === 'all' && (
+                    <TableHead>Organization</TableHead>
+                  )}
                   <TableHead>{t('auditLog.filters.date') || 'Date'}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -298,6 +374,9 @@ export default function AuditLogPage() {
                     <TableCell>{toCamelCase(log.action)}</TableCell>
                     <TableCell>{toCamelCase(log.resource_type)}</TableCell>
                     <TableCell>{toCamelCase(log.status)}</TableCell>
+                    {isCurrentUserSuperAdmin && selectedOrganization === 'all' && (
+                      <TableCell>{log.tenant_name || 'Unknown'}</TableCell>
+                    )}
                     <TableCell>{new Date(log.created_at).toLocaleString()}</TableCell>
                   </TableRow>
                 ))}
@@ -308,41 +387,43 @@ export default function AuditLogPage() {
             <div className="text-sm text-muted-foreground whitespace-nowrap">
               {t('auditLog.total_logs', { count: totalCount })}
             </div>
-            <Pagination>
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                  />
-                </PaginationItem>
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  let pageNum = page;
-                  if (totalPages <= 5) pageNum = i + 1;
-                  else if (page <= 3) pageNum = i + 1;
-                  else if (page >= totalPages - 2) pageNum = totalPages - 4 + i;
-                  else pageNum = page - 2 + i;
+            {totalCount > 0 && (
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={() => safeSetPage(p => Math.max(1, p - 1))}
+                      className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum = page;
+                    if (totalPages <= 5) pageNum = i + 1;
+                    else if (page <= 3) pageNum = i + 1;
+                    else if (page >= totalPages - 2) pageNum = totalPages - 4 + i;
+                    else pageNum = page - 2 + i;
 
-                  return (
-                    <PaginationItem key={pageNum}>
-                      <PaginationLink
-                        onClick={() => setPage(pageNum)}
-                        isActive={page === pageNum}
-                        className="cursor-pointer"
-                      >
-                        {pageNum}
-                      </PaginationLink>
-                    </PaginationItem>
-                  );
-                })}
-                <PaginationItem>
-                  <PaginationNext
-                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                    className={page === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
+                    return (
+                      <PaginationItem key={pageNum}>
+                        <PaginationLink
+                          onClick={() => safeSetPage(pageNum)}
+                          isActive={page === pageNum}
+                          className="cursor-pointer"
+                        >
+                          {pageNum}
+                        </PaginationLink>
+                      </PaginationItem>
+                    );
+                  })}
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={() => safeSetPage(p => Math.min(totalPages, p + 1))}
+                      className={page === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            )}
           </div>
         </ProfessionalCard>
         <AuditLogDetailsModal

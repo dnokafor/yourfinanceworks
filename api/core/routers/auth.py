@@ -295,27 +295,80 @@ def send_invite_email(email: str, invite_url: str, inviter_name: str, tenant_nam
     # For now, just print to console
     return True
 
+def get_user_organizations(db: Session, user: MasterUser) -> List[Dict[str, Any]]:
+    """Get all organizations/tenants for a user"""
+    organizations = []
+    
+    # Get user's primary tenant
+    if user.tenant_id:
+        primary_tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+        if primary_tenant:
+            organizations.append({
+                "id": primary_tenant.id,
+                "name": primary_tenant.name,
+                "role": user.role,
+                "is_primary": True
+            })
+    
+    # Get additional tenant memberships from association table
+    from core.models.models import user_tenant_association
+    additional_tenants = db.query(Tenant, user_tenant_association.c.role).join(
+        user_tenant_association, Tenant.id == user_tenant_association.c.tenant_id
+    ).filter(
+        user_tenant_association.c.user_id == user.id,
+        user_tenant_association.c.is_active == True,
+        Tenant.id != user.tenant_id  # Exclude primary tenant
+    ).all()
+    
+    for tenant, role in additional_tenants:
+        organizations.append({
+            "id": tenant.id,
+            "name": tenant.name,
+            "role": role,
+            "is_primary": False
+        })
+    
+    return organizations
+
 @router.post("/register", response_model=Token, status_code=201)
 async def register(user: UserCreate, db: Session = Depends(get_master_db)):
     logger = logging.getLogger("registration")
     logger.info(f"Starting registration for {user.email}")
+    
     # Check if user already exists
-    db_user = db.query(MasterUser).filter(MasterUser.email == user.email).first()
-    if db_user:
-        logger.warning(f"Email already registered: {user.email}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
+    existing_user = db.query(MasterUser).filter(MasterUser.email == user.email).first()
+    is_existing_user = existing_user is not None
+    
+    if is_existing_user:
+        logger.info(f"Existing user creating new organization: {user.email}")
+        # Verify password for existing user
+        if not verify_password(user.password, existing_user.hashed_password):
+            logger.warning(f"Invalid password for existing user: {user.email}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid password for existing user"
+            )
+        
+        # Update user info if provided
+        if user.first_name and not existing_user.first_name:
+            existing_user.first_name = user.first_name
+        if user.last_name and not existing_user.last_name:
+            existing_user.last_name = user.last_name
+        db.commit()
+    else:
+        logger.info(f"New user registration: {user.email}")
     
     # If no tenant_id provided, create a new tenant for this user
     if not user.tenant_id:
         # Use organization_name from request or create default name
         tenant_name = getattr(user, 'organization_name', None)
         if not tenant_name:
-            tenant_name = f"{user.first_name or 'User'}'s Organization"
-            if user.first_name and user.last_name:
-                tenant_name = f"{user.first_name} {user.last_name}'s Organization"
+            # Use existing user's name if available, otherwise fallback
+            first_name = existing_user.first_name if is_existing_user and existing_user.first_name else user.first_name
+            last_name = existing_user.last_name if is_existing_user and existing_user.last_name else user.last_name
+            tenant_name = f"{first_name or 'User'}'s Organization"
+            if first_name and last_name:
+                tenant_name = f"{first_name} {last_name}'s Organization"
 
         # Only set address if provided
         tenant_address = getattr(user, 'organization_address', None) or getattr(user, 'address', None)
@@ -359,7 +412,7 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
                 detail="Failed to create tenant database"
             )
 
-        # Make first user of tenant an admin
+        # Make user an admin for the new tenant they're creating
         user_role = "admin"
     else:
         # Verify tenant exists
@@ -373,29 +426,57 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
         user_role = user.role or "user"
         logger.info(f"Using existing tenant {tenant_id} for {user.email}")
 
-    # Check if this is the first user in the system
-    user_count = db.query(MasterUser).count()
-    is_first_user = user_count == 0
+    # Handle user creation/update
+    if is_existing_user:
+        db_user = existing_user
+        logger.info(f"Using existing user {db_user.id} for {user.email}")
+    else:
+        # Check if this is the first user in the system
+        user_count = db.query(MasterUser).count()
+        is_first_user = user_count == 0
 
-    # Create user in master database
-    logger.info(f"Creating user in master DB: {user.email}")
-    hashed_password = get_password_hash(user.password)
-    db_user = MasterUser(
-        email=user.email,
-        hashed_password=hashed_password,
-        first_name=user.first_name,
-        last_name=user.last_name,
-        tenant_id=tenant_id,
-        role="admin" if is_first_user else user_role,
-        is_active=user.is_active,
-        is_superuser=is_first_user or user.is_superuser,
-        is_verified=True  # Auto-verify new users during registration
-    )
+        # Create user in master database
+        logger.info(f"Creating user in master DB: {user.email}")
+        hashed_password = get_password_hash(user.password)
+        db_user = MasterUser(
+            email=user.email,
+            hashed_password=hashed_password,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            tenant_id=tenant_id,
+            role="admin" if is_first_user else user_role,
+            is_active=user.is_active,
+            is_superuser=is_first_user or user.is_superuser,
+            is_verified=True  # Auto-verify new users during registration
+        )
 
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    logger.info(f"Created user {db_user.id} in master DB for {user.email}")
+        db.add(db_user)
+        db.commit()
+        db.refresh(db_user)
+        logger.info(f"Created user {db_user.id} in master DB for {user.email}")
+
+    # Create user-tenant association for existing users creating new organizations
+    if is_existing_user and tenant_id != existing_user.tenant_id:
+        try:
+            from core.models.models import user_tenant_association
+            db.execute(
+                user_tenant_association.insert().values(
+                    user_id=existing_user.id,
+                    tenant_id=tenant_id,
+                    role=user_role
+                )
+            )
+            db.commit()
+            logger.info(f"Created user-tenant association for user {existing_user.id} with tenant {tenant_id}")
+            
+            # Update user's primary tenant to the new organization
+            existing_user.tenant_id = tenant_id
+            existing_user.role = user_role
+            db.commit()
+            logger.info(f"Updated user's primary tenant to {tenant_id}")
+        except Exception as e:
+            logger.error(f"Failed to create user-tenant association: {str(e)}")
+            # Don't fail the registration, but log the error
 
     # Also create user in tenant database
     from core.models.database import set_tenant_context
@@ -412,18 +493,29 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
             if existing_tenant_user:
                 # Update existing tenant user
                 existing_tenant_user.email = user.email
-                existing_tenant_user.hashed_password = hashed_password
-                existing_tenant_user.first_name = user.first_name
-                existing_tenant_user.last_name = user.last_name
+                if not is_existing_user:
+                    # Only update password if this is a new user registration
+                    existing_tenant_user.hashed_password = db_user.hashed_password
+                if user.first_name:
+                    existing_tenant_user.first_name = user.first_name
+                if user.last_name:
+                    existing_tenant_user.last_name = user.last_name
                 existing_tenant_user.role = user_role
                 existing_tenant_user.is_active = user.is_active
-                existing_tenant_user.is_superuser = user.is_superuser
+                existing_tenant_user.is_superuser = db_user.is_superuser
                 existing_tenant_user.is_verified = True  # Auto-verify new users during registration
                 existing_tenant_user.updated_at = datetime.now(timezone.utc)
                 tenant_db.commit()
                 logger.info(f"Updated existing user {existing_tenant_user.id} in tenant DB {tenant_id} for {user.email}")
             else:
                 # Create new tenant user
+                if is_existing_user:
+                    # Use existing user's hashed password
+                    hashed_password = existing_user.hashed_password
+                else:
+                    # Use new user's hashed password
+                    hashed_password = db_user.hashed_password
+                
                 tenant_user = TenantUser(
                     id=db_user.id,  # Use same ID as master user
                     email=user.email,
@@ -432,7 +524,7 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
                     last_name=user.last_name,
                     role=user_role,
                     is_active=user.is_active,
-                    is_superuser=user.is_superuser,
+                    is_superuser=db_user.is_superuser,
                     is_verified=True  # Auto-verify new users during registration
                 )
 
@@ -448,9 +540,10 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
     except Exception as e:
         logger.error(f"Failed to create/update tenant user for {user.email} in tenant DB {tenant_id}: {str(e)}")
         logger.error(traceback.format_exc())
-        # If tenant user creation fails, rollback master user creation
-        db.delete(db_user)
-        db.commit()
+        # If tenant user creation fails and this was a new user, rollback master user creation
+        if not is_existing_user:
+            db.delete(db_user)
+            db.commit()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create tenant user: {str(e)}"
@@ -462,10 +555,17 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
         data={"sub": db_user.email}, expires_delta=access_token_expires
     )
 
+    # Get user organizations for response
+    organizations = get_user_organizations(db, db_user)
+    
+    # Create user response with organizations
+    user_response = UserRead.model_validate(db_user)
+    user_response.organizations = organizations
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "user": UserRead.model_validate(db_user)
+        "user": user_response
     }
 
 # Intentionally no /signup endpoint; /register is the canonical signup route.
@@ -831,10 +931,17 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_master_db
         data={"sub": user.email}, expires_delta=access_token_expires
     )
 
+    # Get user organizations for response
+    organizations = get_user_organizations(db, user)
+    
+    # Create user response with organizations
+    user_response = UserRead.model_validate(user)
+    user_response.organizations = organizations
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "user": UserRead.model_validate(user)
+        "user": user_response
     }
 
 @router.post("/change-password", response_model=PasswordResetResponse)
@@ -1891,9 +1998,12 @@ async def check_email_availability(
         func.lower(MasterUser.email) == func.lower(email.strip())
     ).first()
     
+    # Always return available: True to allow existing users to create new organizations
+    # The actual validation will happen in the registration endpoint
     return {
-        "available": existing_user is None,
-        "email": email.strip()
+        "available": True,
+        "email": email.strip(),
+        "user_exists": existing_user is not None
     }
 
 @router.post("/request-password-reset", response_model=PasswordResetResponse)

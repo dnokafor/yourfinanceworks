@@ -1882,6 +1882,14 @@ class InvoiceTools:
         offset: int = 0
     ) -> Dict[str, Any]:
         """Get audit logs with optional filters"""
+        # Validate pagination parameters
+        if offset < 0:
+            offset = 0
+        if limit < 1:
+            limit = 100
+        if limit > 10000:  # Prevent excessive load
+            limit = 10000
+            
         try:
             logs = await self.api_client.get_audit_logs(
                 user_id=user_id,

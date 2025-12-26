@@ -6,14 +6,14 @@
 export interface User {
   id: number;
   email: string;
-  role: 'admin' | 'user' | 'viewer';
+  role: 'admin' | 'user' | 'viewer' | 'super_admin';
   first_name?: string;
   last_name?: string;
   tenant_id?: number;
   is_superuser?: boolean;
 }
 
-export type UserRole = 'admin' | 'user' | 'viewer';
+export type UserRole = 'admin' | 'user' | 'viewer' | 'super_admin';
 
 /**
  * Get current user data from localStorage
@@ -78,6 +78,15 @@ export const isAuthenticated = (): boolean => {
  */
 export const isAdmin = (): boolean => {
   return getCurrentUserRole() === 'admin';
+};
+
+/**
+ * Check if current user has super admin role
+ * @returns boolean
+ */
+export const isSuperAdmin = (): boolean => {
+  const user = getCurrentUser();
+  return user?.role === 'super_admin' || user?.is_superuser === true;
 };
 
 /**

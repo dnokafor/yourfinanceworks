@@ -81,11 +81,29 @@ class OrganizationJoinService:
                 MasterUser.email == request_data.email
             ).first()
 
+            # Allow existing users to request to join additional organizations
+            # But check if they're already a member of this organization
             if existing_user:
-                return OrganizationJoinResponse(
-                    success=False,
-                    message="An account with this email already exists. Please login instead."
-                )
+                # Check if user is already a member of this tenant
+                if existing_user.tenant_id == tenant.id:
+                    return OrganizationJoinResponse(
+                        success=False,
+                        message="You are already a member of this organization."
+                    )
+                
+                # Check if user has an existing association with this tenant
+                from core.models.models import user_tenant_association
+                existing_association = self.db.query(user_tenant_association).filter(
+                    user_tenant_association.c.user_id == existing_user.id,
+                    user_tenant_association.c.tenant_id == tenant.id,
+                    user_tenant_association.c.is_active == True
+                ).first()
+                
+                if existing_association:
+                    return OrganizationJoinResponse(
+                        success=False,
+                        message="You are already a member of this organization."
+                    )
 
             # Check if there's already a pending request for this email/tenant
             existing_request = self.db.query(OrganizationJoinRequest).filter(
@@ -213,32 +231,53 @@ class OrganizationJoinService:
                 )
 
             if approval_data.status == "approved":
-                # Create the user account
+                # Create the user account or add existing user to organization
                 approved_role = approval_data.approved_role or join_request.requested_role
 
-                # Create master user
-                new_user = MasterUser(
-                    email=join_request.email,
-                    hashed_password=join_request.hashed_password,
-                    first_name=join_request.first_name,
-                    last_name=join_request.last_name,
-                    role=approved_role,
-                    tenant_id=join_request.tenant_id,
-                    is_active=True,
-                    is_verified=True
-                )
+                # Check if user already exists
+                existing_user = self.db.query(MasterUser).filter(
+                    MasterUser.email == join_request.email
+                ).first()
 
-                self.db.add(new_user)
-                self.db.flush()  # Get the user ID
-
-                # Add user to the user_tenant_association table so they can access this organization
-                from core.models.models import user_tenant_association
-                self.db.execute(
-                    user_tenant_association.insert().values(
-                        user_id=new_user.id,
-                        tenant_id=join_request.tenant_id,
+                if existing_user:
+                    # Add existing user to this organization
+                    user_to_add = existing_user
+                    
+                    # Add user to the user_tenant_association table
+                    from core.models.models import user_tenant_association
+                    self.db.execute(
+                        user_tenant_association.insert().values(
+                            user_id=existing_user.id,
+                            tenant_id=join_request.tenant_id,
+                            role=approved_role
+                        )
                     )
-                )
+                    
+                    logger.info(f"Added existing user {existing_user.id} to organization {join_request.tenant_id}")
+                else:
+                    # Create new master user
+                    user_to_add = MasterUser(
+                        email=join_request.email,
+                        hashed_password=join_request.hashed_password,
+                        first_name=join_request.first_name,
+                        last_name=join_request.last_name,
+                        role=approved_role,
+                        tenant_id=join_request.tenant_id,
+                        is_active=True,
+                        is_verified=True
+                    )
+
+                    self.db.add(user_to_add)
+                    self.db.flush()  # Get the user ID
+
+                    # Add user to the user_tenant_association table so they can access this organization
+                    from core.models.models import user_tenant_association
+                    self.db.execute(
+                        user_tenant_association.insert().values(
+                            user_id=user_to_add.id,
+                            tenant_id=join_request.tenant_id,
+                        )
+                    )
 
                 # Update join request status
                 join_request.status = "approved"
@@ -257,26 +296,39 @@ class OrganizationJoinService:
                     tenant_db = SessionLocal_tenant()
                     
                     try:
-                        tenant_user = TenantUser(
-                            id=new_user.id,
-                            email=new_user.email,
-                            hashed_password=new_user.hashed_password,
-                            first_name=new_user.first_name,
-                            last_name=new_user.last_name,
-                            role=new_user.role,
-                            is_active=True,
-                            is_verified=True
-                        )
-                        tenant_db.add(tenant_user)
-                        tenant_db.commit()
-                        logger.info(f"Created tenant user record for user {new_user.id} in tenant {join_request.tenant_id}")
+                        # Check if tenant user already exists
+                        existing_tenant_user = tenant_db.query(TenantUser).filter(
+                            TenantUser.id == user_to_add.id
+                        ).first()
+
+                        if existing_tenant_user:
+                            # Update existing tenant user with new role for this organization
+                            existing_tenant_user.role = approved_role
+                            existing_tenant_user.is_active = True
+                            tenant_db.commit()
+                            logger.info(f"Updated existing tenant user {user_to_add.id} with role {approved_role}")
+                        else:
+                            # Create new tenant user
+                            tenant_user = TenantUser(
+                                id=user_to_add.id,
+                                email=user_to_add.email,
+                                hashed_password=user_to_add.hashed_password,
+                                first_name=user_to_add.first_name,
+                                last_name=user_to_add.last_name,
+                                role=approved_role,
+                                is_active=True,
+                                is_verified=True
+                            )
+                            tenant_db.add(tenant_user)
+                            tenant_db.commit()
+                            logger.info(f"Created tenant user record for user {user_to_add.id} in tenant {join_request.tenant_id}")
                     finally:
                         tenant_db.close()
                 except Exception as e:
                     logger.error(f"Failed to create tenant user record: {str(e)}")
                     # Don't fail the entire operation if tenant user creation fails
                 
-                logger.info(f"Approved join request {request_id}, created user {new_user.id}")
+                logger.info(f"Approved join request {request_id}, processed user {user_to_add.id}")
                 
                 # Send notification about approval
                 self._send_decision_notification(join_request, "approved", admin_user_id)
@@ -286,7 +338,7 @@ class OrganizationJoinService:
                 
                 return OrganizationJoinResponse(
                     success=True,
-                    message="Join request approved successfully. User account created."
+                    message="Join request approved successfully. User added to organization."
                 )
             
             elif approval_data.status == "rejected":
