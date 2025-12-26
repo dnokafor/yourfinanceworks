@@ -154,6 +154,7 @@
     "expenses": "Dépenses",
     "reminders": "Rappels",
     "reports": "Rapports",
+    "gamification": "Gamification",
     "bank_statements": "Relevés",
     "clients": "Clients",
     "payments": "Paiements",
@@ -907,6 +908,7 @@
       "email_notifications": "Email & Notifications",
       "tax_integration": "Intégration Fiscale",
       "approval_rules": "Règles d'Approbation",
+      "gamification": "Gamification",
       "cookies": "Paramètres des Cookies",
       "export": "Gestion Données",
       "add_rule": "Ajouter une Règle",
@@ -930,6 +932,9 @@
     "approval_rules": {
       "title": "Gestion des Règles d'Approbation",
       "description": "Configurez les workflows et règles d'approbation pour les soumissions de dépenses"
+    },
+    "gamification": {
+      "description": "Activez ou désactivez les fonctionnalités de gamification pour votre expérience de gestion financière. Choisissez comment vos données sont traitées lors du basculement du système."
     },
     "currency_management": "Gestion des Devises",
     "ai_configuration": "Configuration de l'IA",

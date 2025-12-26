@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -24,6 +24,8 @@ import CookieSettings from "@/components/settings/CookieSettings";
 import ExportDestinationsTab from "@/components/settings/ExportDestinationsTab";
 import EmailIntegrationSettings from "@/components/settings/EmailIntegrationSettings";
 import PromptManagement from "./PromptManagement";
+import { GamificationToggle } from "@/components/gamification/GamificationToggle";
+import { GamificationDashboard } from "@/components/gamification/GamificationDashboard";
 import { getCurrentUser } from "@/utils/auth";
 import { useTaxIntegration } from "@/hooks/useTaxIntegration";
 import LicenseManagement from "@/pages/LicenseManagement";
@@ -1292,6 +1294,7 @@ const Settings = () => {
                   <TabsTrigger value="ai-config" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.ai_config')}</TabsTrigger>
                   <TabsTrigger value="prompts" className="text-xs md:text-sm min-w-0 flex-shrink-0">Prompts</TabsTrigger>
                   <TabsTrigger value="api-keys" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.api_keys')}</TabsTrigger>
+                  <TabsTrigger value="gamification" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.gamification')}</TabsTrigger>
                   <TabsTrigger value="search" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.search')}</TabsTrigger>
                   <TabsTrigger value="email-notifications" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.email_notifications')}</TabsTrigger>
                   <TabsTrigger value="email-integration" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('emailIntegration.title')}</TabsTrigger>
@@ -3075,6 +3078,12 @@ const Settings = () => {
             {isAdmin && (
               <TabsContent value="api-keys" className="mt-6">
                 <APIClientManagement />
+              </TabsContent>
+            )}
+
+            {isAdmin && (
+              <TabsContent value="gamification" className="mt-6">
+                <GamificationDashboard />
               </TabsContent>
             )}
           </Tabs>

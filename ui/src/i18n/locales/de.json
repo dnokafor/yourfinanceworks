@@ -147,6 +147,7 @@
     "reminders": "Erinnerungen",
     "bank_statements": "Auszüge",
     "reports": "Berichte",
+    "gamification": "Gamifizierung",
     "clients": "Kunden",
     "payments": "Zahlungen",
     "inventory": "Inventar",
@@ -827,6 +828,7 @@
       "email_notifications": "E-Mail & Benachrichtigungen",
       "tax_integration": "Steuerintegration",
       "approval_rules": "Genehmigungsregeln",
+      "gamification": "Gamifizierung",
       "cookies": "Cookie-Einstellungen",
       "export": "Datenverwaltung",
       "add_rule": "Regel hinzufügen",
@@ -850,6 +852,9 @@
     "approval_rules": {
       "title": "Genehmigungsregeln-Verwaltung",
       "description": "Konfigurieren Sie Genehmigungs-Workflows und Regeln für Spesenabrechnungen"
+    },
+    "gamification": {
+      "description": "Aktivieren oder deaktivieren Sie Gamifizierungsfunktionen für Ihr Finanzmanagement-Erlebnis. Wählen Sie, wie Ihre Daten beim Umschalten des Systems behandelt werden."
     },
     "min_amount": "Mindestbetrag",
     "priority": "Priorität",

@@ -16,6 +16,7 @@ import { CalendarIcon, X, Eye, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useFeatures } from '@/contexts/FeatureContext';
+import { useGamificationContextOptional } from '@/contexts/GamificationContext';
 import { BulkExpenseModal } from '@/components/BulkExpenseModal';
 import { InventoryConsumptionForm } from '@/components/inventory/InventoryConsumptionForm';
 import { ExpenseApprovalStatus } from '@/components/approvals/ExpenseApprovalStatus';
@@ -85,6 +86,7 @@ const defaultNewExpense: Partial<Expense> = {
 const Expenses = () => {
   const { t } = useTranslation();
   const { isFeatureEnabled } = useFeatures();
+  const gamificationContext = useGamificationContextOptional();
   const hasAIExpenseFeature = isFeatureEnabled('ai_expense');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const categoryOptions = EXPENSE_CATEGORY_OPTIONS;
@@ -421,6 +423,21 @@ const Expenses = () => {
       setSelectedNewApproverId('');
       setExpenses(prev => [createdWithReceipt, ...prev]);
       setIsCreateOpen(false);
+
+      // Track expense in gamification system
+      if (gamificationContext) {
+        try {
+          await gamificationContext.trackExpense({
+            amount: createdWithReceipt.amount,
+            category: createdWithReceipt.category,
+            receipt: !!newReceiptFile,
+            description: createdWithReceipt.notes
+          });
+        } catch (err) {
+          console.error('Failed to track expense in gamification:', err);
+          // Don't fail the expense creation if gamification tracking fails
+        }
+      }
     } catch (e: any) {
       toast.error(e?.message || 'Failed to create expense');
     } finally {

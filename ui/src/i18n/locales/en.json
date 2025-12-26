@@ -158,6 +158,7 @@
     "payments": "Payments",
     "inventory": "Inventory",
     "reports": "Reports",
+    "gamification": "Gamification",
     "settings": "Settings",
     "users": "Users",
     "super_admin": "Super Admin",
@@ -921,6 +922,7 @@
       "tax_integration": "Tax Integration",
       "export_destinations": "Export Destinations",
       "approval_rules": "Approval Rules",
+      "gamification": "Gamification",
       "cookies": "Cookie Settings",
       "export": "Data Management",
       "add_rule": "Add Rule",
@@ -944,6 +946,9 @@
     "approval_rules": {
       "title": "Approval Rules Management",
       "description": "Configure approval workflows and rules for expense submissions"
+    },
+    "gamification": {
+      "description": "Enable or disable gamification features for your financial management experience. Choose how your data is handled when toggling the system."
     },
     "min_amount": "Minimum Amount",
     "priority": "Priority",
