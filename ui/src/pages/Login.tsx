@@ -136,6 +136,7 @@ const Login = () => {
                 placeholder={t('auth.email_placeholder')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
                 required
                 className="bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700/50 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:border-primary focus:ring-2 focus:ring-primary/50 transition-all shadow-sm hover:border-slate-400 dark:hover:border-slate-600 h-11 rounded-lg"
               />
@@ -149,6 +150,7 @@ const Login = () => {
                   placeholder={t('auth.password_placeholder')}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
                   required
                   className="bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700/50 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:border-primary focus:ring-2 focus:ring-primary/50 transition-all shadow-sm hover:border-slate-400 dark:hover:border-slate-600 h-11 rounded-lg"
                 />

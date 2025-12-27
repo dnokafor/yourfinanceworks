@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Building2, CheckCircle, XCircle, Loader2 } from 'lucide-react';
-import { authApi, API_BASE_URL } from '@/lib/api';
+import { authApi, API_BASE_URL, getErrorMessage } from '@/lib/api';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { ThemeSwitcher } from '@/components/ui/theme-switcher';
 import { LanguageSwitcher } from '@/components/ui/language-switcher';
 import { ProfessionalCard } from '@/components/ui/professional-card';
@@ -289,7 +290,9 @@ const Signup: React.FC = () => {
         }
       }
     } catch (err: any) {
-      setError(err.message || t('auth.signup.validation.registration_failed'));
+      const errorMessage = getErrorMessage(err, t);
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

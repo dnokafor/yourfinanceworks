@@ -41,15 +41,9 @@ export const getCurrentUserRole = (): UserRole => {
     const user = getCurrentUser();
     const role = user?.role || 'user';
 
-    console.log('getCurrentUserRole:', {
-      user,
-      role,
-      userRole: user?.role
-    });
-
     return role;
   } catch (error) {
-    console.error('Error getting user role:', error);
+    console.error('Error getting current user role:', error);
     return 'user';
   }
 };
