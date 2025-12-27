@@ -348,30 +348,30 @@ export const LicenseManagement: React.FC = () => {
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Deactivate License?</AlertDialogTitle>
+                    <AlertDialogTitle>{t('license.deactivateDialog.title')}</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Are you sure you want to deactivate your license? This will disable all licensed features including:
+                      {t('license.deactivateDialog.description')}
                       <ul className="mt-2 ml-4 list-disc space-y-1">
-                        <li>Prompt Management - AI prompt templates and customization</li>
-                        <li>AI Invoice Processing - Automated invoice data extraction</li>
-                        <li>AI Expense Processing - AI-powered expense categorization</li>
-                        <li>Advanced Reporting - Custom reports and analytics</li>
-                        <li>Approval Workflows - Multi-level approval systems</li>
-                        <li>All other premium features</li>
+                        <li>{t('license.deactivateDialog.featureList.promptManagement')}</li>
+                        <li>{t('license.deactivateDialog.featureList.aiInvoiceProcessing')}</li>
+                        <li>{t('license.deactivateDialog.featureList.aiExpenseProcessing')}</li>
+                        <li>{t('license.deactivateDialog.featureList.advancedReporting')}</li>
+                        <li>{t('license.deactivateDialog.featureList.approvalWorkflows')}</li>
+                        <li>{t('license.deactivateDialog.featureList.allPremiumFeatures')}</li>
                       </ul>
-                      You can reactivate your license at any time by entering a new license key.
+                      {t('license.deactivateDialog.reactivateNote')}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogCancel>{t('license.deactivateDialog.cancel')}</AlertDialogCancel>
                     <AlertDialogAction onClick={confirmDeactivateLicense} disabled={deactivating}>
                       {deactivating ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Deactivating...
+                          {t('license.deactivateDialog.deactivating')}
                         </>
                       ) : (
-                        'Deactivate License'
+                        t('license.deactivateDialog.confirmButton')
                       )}
                     </AlertDialogAction>
                   </AlertDialogFooter>
