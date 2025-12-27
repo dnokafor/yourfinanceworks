@@ -322,7 +322,7 @@ const Signup: React.FC = () => {
               {/* Mode Selection */}
               <div>
                 <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">
-                  How would you like to get started?
+                  {t('auth.signup.how_to_get_started')}
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   <ProfessionalButton
@@ -339,7 +339,7 @@ const Signup: React.FC = () => {
                     }}
                   >
                     <Building2 className="h-4 w-4 mr-2" />
-                    Create Organization
+                    {t('auth.signup.create_organization')}
                   </ProfessionalButton>
                   <ProfessionalButton
                     type="button"
@@ -352,7 +352,7 @@ const Signup: React.FC = () => {
                     }}
                   >
                     <Building2 className="h-4 w-4 mr-2" />
-                    Join Organization
+                    {t('auth.signup.join_organization')}
                   </ProfessionalButton>
                 </div>
               </div>
@@ -360,7 +360,7 @@ const Signup: React.FC = () => {
               {/* Organization Name */}
               <div>
                 <label htmlFor="organization_name" className="block text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2">
-                  {signupMode === 'create' ? 'Organization Name' : 'Organization to Join'}
+                  {t('auth.signup.organization_name')}
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -613,7 +613,7 @@ const Signup: React.FC = () => {
             >
               {loading ?
                 (signupMode === 'create' ? 'Creating Account...' : 'Submitting Request...') :
-                (signupMode === 'create' ? 'Create Account' : 'Request to Join')
+                (signupMode === 'create' ? t('auth.signup.create_account') : 'Request to Join')
               }
             </ProfessionalButton>
           </form>

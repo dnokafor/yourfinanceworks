@@ -94,6 +94,10 @@ export function AppSidebar() {
   const [currentOrgId, setCurrentOrgId] = useState(initialOrgId);
   const [isSwitchingOrg, setIsSwitchingOrg] = useState(false);
 
+  // Get the current organization's role
+  const currentOrgRole = userOrganizations.find(org => org.id.toString() === currentOrgId)?.role || 'user';
+  const isAdminInCurrentOrg = currentOrgRole === 'admin';
+
   // Check super admin status via API
   useEffect(() => {
     const checkSuperAdminStatus = async () => {
@@ -110,6 +114,31 @@ export function AppSidebar() {
 
     checkSuperAdminStatus();
   }, [user?.is_superuser, user?.tenant_id]);
+
+  // Sync currentOrgId with localStorage when it changes
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const stored = localStorage.getItem('selected_tenant_id');
+      if (stored && stored !== currentOrgId) {
+        setCurrentOrgId(stored);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    // Also listen for custom events from OrganizationSwitcher
+    const handleOrgSwitch = () => {
+      const stored = localStorage.getItem('selected_tenant_id');
+      if (stored && stored !== currentOrgId) {
+        setCurrentOrgId(stored);
+      }
+    };
+    window.addEventListener('org-switched', handleOrgSwitch);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('org-switched', handleOrgSwitch);
+    };
+  }, [currentOrgId]);
 
   const [canScrollUp, setCanScrollUp] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
@@ -329,19 +358,19 @@ export function AppSidebar() {
       tourId: 'nav-settings'
     }] : []),
     // User Management section for admins
-    ...((!roleLoading && isAdminEffective) ? [{
+    ...((!roleLoading && isAdminInCurrentOrg) ? [{
       path: '/users',
       label: t('navigation.users'),
       icon: <UserCheck className="w-5 h-5" />
     }] : []),
     // Only show Audit Log for admin or superuser
-    ...((!roleLoading && (isAdminEffective || isSuperUser)) ? [{
+    ...((!roleLoading && (isSuperUser || isAdminInCurrentOrg)) ? [{
       path: '/audit-log',
       label: t('navigation.audit_log'),
       icon: <ListChecks className="w-5 h-5" />
     }] : []),
     // Only show Analytics for admin or superuser if user has enabled it
-    ...((!roleLoading && (isAdminEffective || isSuperUser) && showAnalytics) ? [{
+    ...((!roleLoading && (isSuperUser || isAdminInCurrentOrg) && showAnalytics) ? [{
       path: '/analytics',
       label: 'Analytics',
       icon: <BarChart className="w-5 h-5" />

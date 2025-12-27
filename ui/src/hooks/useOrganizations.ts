@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/utils/auth";
 export type Organization = {
     id: number;
     name: string;
+    role?: string;
 };
 
 export function useOrganizations() {

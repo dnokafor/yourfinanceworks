@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api, superAdminApi, userApi } from "@/lib/api";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,8 @@ import { getErrorMessage } from '@/lib/api';
 import { JoinRequestsTable } from '@/components/JoinRequestsTable';
 import { PageHeader } from '@/components/ui/professional-layout';
 import { ProfessionalCard } from '@/components/ui/professional-card';
+import { getCurrentUser } from '@/utils/auth';
+import { useOrganizations } from '@/hooks/useOrganizations';
 
 const ROLES = ["admin", "user", "viewer"];
 
@@ -76,9 +79,14 @@ type Invite = {
 
 export default function UsersPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const user = getCurrentUser();
+  const { data: userOrganizations = [] } = useOrganizations();
+
   const [users, setUsers] = useState<User[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasAccess, setHasAccess] = useState(false);
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [inviteForm, setInviteForm] = useState({
     email: "",
@@ -97,6 +105,25 @@ export default function UsersPage() {
   const [activating, setActivating] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Check permission to access users page
+  useEffect(() => {
+    // Get current organization ID from localStorage
+    const currentOrgId = localStorage.getItem('selected_tenant_id') || user?.tenant_id?.toString() || '';
+
+    // Find the current organization in the user's organizations
+    const currentOrg = userOrganizations.find(org => org.id.toString() === currentOrgId);
+
+    // Check if user is admin in current organization
+    const isAdminInCurrentOrg = currentOrg?.role === 'admin';
+
+    setHasAccess(isAdminInCurrentOrg);
+
+    // If user doesn't have access, redirect to home
+    if (userOrganizations.length > 0 && !isAdminInCurrentOrg) {
+      navigate('/');
+    }
+  }, [userOrganizations, navigate, user?.tenant_id]);
 
   // User management states
   const [togglingStatus, setTogglingStatus] = useState(false);
@@ -145,14 +172,16 @@ export default function UsersPage() {
   };
 
   useEffect(() => {
-    fetchUsers();
-    fetchInvites();
-  }, []);
+    if (hasAccess) {
+      fetchUsers();
+      fetchInvites();
+    }
+  }, [hasAccess]);
 
   // Refetch data when tenant changes
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'selected_tenant_id') {
+      if (e.key === 'selected_tenant_id' && hasAccess) {
         fetchUsers();
         fetchInvites();
       }
@@ -163,7 +192,7 @@ export default function UsersPage() {
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, []);
+  }, [hasAccess]);
 
   const handleInviteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;

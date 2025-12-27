@@ -1,14 +1,16 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/professional-layout";
 import { ProfessionalCard, MetricCard } from "@/components/ui/professional-card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { BarChart3, TrendingUp, Users, Clock, RefreshCw, Bot, Activity } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { BarChart3, Users, Clock, RefreshCw, Bot } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import { formatDate } from '@/lib/utils';
+import { getCurrentUser, isSuperAdmin } from "@/utils/auth";
+import { useOrganizations } from "@/hooks/useOrganizations";
 
 interface AnalyticsData {
   path_stats: Array<{
@@ -41,11 +43,37 @@ interface AIProviderData {
 }
 
 const Analytics = () => {
+  const navigate = useNavigate();
+  const user = getCurrentUser();
+  const isCurrentUserSuperAdmin = isSuperAdmin();
+  const { data: userOrganizations = [] } = useOrganizations();
+
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [aiData, setAIData] = useState<AIProviderData | null>(null);
   const [loading, setLoading] = useState(true);
   const [aiLoading, setAILoading] = useState(true);
   const [days, setDays] = useState("7");
+  const [hasAccess, setHasAccess] = useState(false);
+
+  // Check permission to access analytics page
+  useEffect(() => {
+    // Get current organization ID from localStorage
+    const currentOrgId = localStorage.getItem('selected_tenant_id') || user?.tenant_id?.toString() || '';
+
+    // Find the current organization in the user's organizations
+    const currentOrg = userOrganizations.find(org => org.id.toString() === currentOrgId);
+
+    // Check if user is admin in current organization or is a superuser
+    const isAdminInCurrentOrg = currentOrg?.role === 'admin';
+    const userHasAccess = isCurrentUserSuperAdmin || isAdminInCurrentOrg;
+
+    setHasAccess(userHasAccess);
+
+    // If user doesn't have access, redirect to home
+    if (userOrganizations.length > 0 && !userHasAccess) {
+      navigate('/');
+    }
+  }, [userOrganizations, isCurrentUserSuperAdmin, navigate, user?.tenant_id]);
 
   const fetchAnalytics = async () => {
     try {
@@ -82,9 +110,11 @@ const Analytics = () => {
   };
 
   useEffect(() => {
-    fetchAnalytics();
-    fetchAIAnalytics();
-  }, [days]);
+    if (hasAccess) {
+      fetchAnalytics();
+      fetchAIAnalytics();
+    }
+  }, [days, hasAccess]);
 
   if (loading) {
     return (

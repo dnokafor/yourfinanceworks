@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -7,13 +8,13 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { CalendarIcon, Filter, X } from 'lucide-react';
 import { format } from 'date-fns';
-import { API_BASE_URL } from '@/lib/api';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
 import { AuditLogDetailsModal } from '@/components/audit/AuditLogDetailsModal';
 import { apiRequest } from '@/lib/api';
 import { PageHeader } from '@/components/ui/professional-layout';
 import { ProfessionalCard } from '@/components/ui/professional-card';
-import { isSuperAdmin } from '@/utils/auth';
+import { isSuperAdmin, getCurrentUser } from '@/utils/auth';
+import { useOrganizations } from '@/hooks/useOrganizations';
 import {
   Pagination,
   PaginationContent,
@@ -50,9 +51,14 @@ type DateOrNull = Date | null;
 
 export default function AuditLogPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const user = getCurrentUser();
+  const { data: userOrganizations = [] } = useOrganizations();
+
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasAccess, setHasAccess] = useState(false);
 
   // Pagination state
   const [page, setPage] = useState(1);
@@ -76,22 +82,44 @@ export default function AuditLogPage() {
   const [endDate, setEndDate] = useState<DateOrNull>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
-  
+
   // Organization state for super admin
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [selectedOrganization, setSelectedOrganization] = useState<string>('current');
   const isCurrentUserSuperAdmin = isSuperAdmin();
 
+  // Check permission to access audit log
   useEffect(() => {
-    fetchLogs(page);
-  }, [page, perPage, action, status, userEmail, resourceType, startDate, endDate, selectedOrganization]);
+    // Get current organization ID from localStorage
+    const currentOrgId = localStorage.getItem('selected_tenant_id') || user?.tenant_id?.toString() || '';
+
+    // Find the current organization in the user's organizations
+    const currentOrg = userOrganizations.find(org => org.id.toString() === currentOrgId);
+
+    // Check if user is admin in current organization or is a superuser
+    const isAdminInCurrentOrg = currentOrg?.role === 'admin';
+    const userHasAccess = isCurrentUserSuperAdmin || isAdminInCurrentOrg;
+
+    setHasAccess(userHasAccess);
+
+    // If user doesn't have access, redirect to home
+    if (userOrganizations.length > 0 && !userHasAccess) {
+      navigate('/');
+    }
+  }, [userOrganizations, isCurrentUserSuperAdmin, navigate, user?.tenant_id]);
+
+  useEffect(() => {
+    if (hasAccess) {
+      fetchLogs(page);
+    }
+  }, [page, perPage, action, status, userEmail, resourceType, startDate, endDate, selectedOrganization, hasAccess]);
 
   // Fetch organizations for super admin
   useEffect(() => {
-    if (isCurrentUserSuperAdmin) {
+    if (isCurrentUserSuperAdmin && hasAccess) {
       fetchOrganizations();
     }
-  }, [isCurrentUserSuperAdmin]);
+  }, [isCurrentUserSuperAdmin, hasAccess]);
 
   const fetchOrganizations = async () => {
     try {
