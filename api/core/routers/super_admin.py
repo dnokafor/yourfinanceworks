@@ -4,6 +4,7 @@ from sqlalchemy import func, text
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 from pydantic import BaseModel
+import logging
 
 from core.models.database import get_master_db
 from core.models.models import (
@@ -18,6 +19,8 @@ from core.routers.auth import get_current_user
 from core.services.tenant_database_manager import tenant_db_manager
 from core.utils.auth import get_password_hash
 from core.utils.rbac import require_superuser
+
+logger = logging.getLogger(__name__)
 from core.utils.audit import log_audit_event, log_audit_event_master
 from core.constants.error_codes import USER_NOT_FOUND, ONLY_SUPERUSERS, FAILED_TO_IMPORT_DATA
 
@@ -34,21 +37,27 @@ class SuperAdminResetPasswordRequest(BaseModel):
 
 def require_super_admin(current_user: MasterUser = Depends(get_current_user)):
     """Require that the current user is a superuser in their primary tenant"""
+    from core.models.database import get_tenant_context
+    current_tenant_id = get_tenant_context()
+
+    logger.info(f"require_super_admin: user={current_user.email}, is_superuser={current_user.is_superuser}, tenant_context={current_tenant_id}, user_tenant={current_user.tenant_id}")
+
     if not current_user.is_superuser:
+        logger.warning(f"require_super_admin: user {current_user.email} is not a super admin")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Super admin access required"
         )
-    
+
     # Check if user is in their primary tenant
-    from core.models.database import get_tenant_context
-    current_tenant_id = get_tenant_context()
     if current_tenant_id and current_tenant_id != current_user.tenant_id:
+        logger.warning(f"require_super_admin: user {current_user.email} is not in primary tenant")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Super admin access restricted to home organization"
         )
-    
+
+    logger.info(f"require_super_admin: user {current_user.email} passed all checks")
     return current_user
 
 # ========== TENANT MANAGEMENT ==========
@@ -181,7 +190,7 @@ async def create_tenant(
     master_db.add(db_tenant)
     master_db.commit()
     master_db.refresh(db_tenant)
-    
+
     # Create tenant database
     success = tenant_db_manager.create_tenant_database(db_tenant.id, db_tenant.name)
     if not success:
@@ -192,17 +201,36 @@ async def create_tenant(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create tenant database"
         )
-    
+
     # Create a user with the tenant's email if provided
     if db_tenant.email:
         try:
+            from core.models.models import user_tenant_association
+
             # Check if user already exists
             existing_user = master_db.query(MasterUser).filter(
                 MasterUser.email == db_tenant.email
             ).first()
-            
-            if not existing_user:
-                # Create user in master database
+
+            if existing_user:
+                # Add existing user to this new organization
+                user_to_add = existing_user
+                hashed_password = existing_user.hashed_password
+
+                # Add user to the user_tenant_association table
+                master_db.execute(
+                    user_tenant_association.insert().values(
+                        user_id=existing_user.id,
+                        tenant_id=db_tenant.id,
+                        role="admin",
+                        is_active=True
+                    )
+                )
+                master_db.commit()
+
+                logger.info(f"Added existing user {existing_user.id} to new organization {db_tenant.id}")
+            else:
+                # Create new user in master database
                 hashed_password = get_password_hash("password123")  # Default password
                 master_user = MasterUser(
                     email=db_tenant.email,
@@ -213,31 +241,49 @@ async def create_tenant(
                     tenant_id=db_tenant.id,
                     is_verified=True
                 )
-                
+
                 master_db.add(master_user)
                 master_db.commit()
                 master_db.refresh(master_user)
-                
-                # Create user in tenant database
-                tenant_session = tenant_db_manager.get_tenant_session(db_tenant.id)()
-                
+
+                user_to_add = master_user
+
+                # Add user to the user_tenant_association table for consistency
+                master_db.execute(
+                    user_tenant_association.insert().values(
+                        user_id=master_user.id,
+                        tenant_id=db_tenant.id,
+                        role="admin",
+                        is_active=True
+                    )
+                )
+                master_db.commit()
+
+            # Create user record in tenant database
+            tenant_session = tenant_db_manager.get_tenant_session(db_tenant.id)()
+
+            try:
                 tenant_user = TenantUser(
-                    id=master_user.id,
+                    id=user_to_add.id,
                     email=db_tenant.email,
                     hashed_password=hashed_password,
-                    first_name=db_tenant.name,
-                    last_name="Admin",
+                    first_name=user_to_add.first_name or db_tenant.name,
+                    last_name=user_to_add.last_name or "Admin",
                     role="admin",
                     is_verified=True
                 )
-                
+
                 tenant_session.add(tenant_user)
                 tenant_session.commit()
+                logger.info(f"Created tenant user record for user {user_to_add.id} in organization {db_tenant.id}")
+            finally:
                 tenant_session.close()
+
         except Exception as e:
             # Don't fail tenant creation if user creation fails
+            logger.error(f"Failed to create/associate user for organization {db_tenant.id}: {str(e)}")
             pass
-    
+
     return db_tenant
 
 @router.put("/tenants/{tenant_id}")
@@ -902,33 +948,84 @@ async def get_database_overview(
     current_user: MasterUser = Depends(require_super_admin)
 ):
     """Get overview of all tenant databases"""
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+
     tenants = master_db.query(Tenant).all()
-    
+
     overview = {
         "total_tenants": len(tenants),
         "databases": []
     }
-    
-    for tenant in tenants:
+
+    def test_tenant_connection(tenant_id: int, tenant_name: str) -> dict:
+        """Test database connection for a single tenant with timeout"""
         db_info = {
-            "tenant_id": tenant.id,
-            "tenant_name": tenant.name,
-            "database_name": f"tenant_{tenant.id}",
+            "tenant_id": tenant_id,
+            "tenant_name": tenant_name,
+            "database_name": f"tenant_{tenant_id}",
             "status": "unknown"
         }
-        
+
         try:
-            # Test database connection
-            tenant_session = tenant_db_manager.get_tenant_session(tenant.id)()
+            # Test database connection with a timeout
+            tenant_session = tenant_db_manager.get_tenant_session(tenant_id)()
             tenant_session.execute(text("SELECT 1"))
             tenant_session.close()
             db_info["status"] = "connected"
         except Exception as e:
             db_info["status"] = "error"
             db_info["error"] = str(e)
-        
-        overview["databases"].append(db_info)
-    
+
+        return db_info
+
+    # Use ThreadPoolExecutor with timeout to prevent hanging
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = []
+        for tenant in tenants:
+            future = executor.submit(test_tenant_connection, tenant.id, tenant.name)
+            futures.append(future)
+
+        # Wait for all futures with a timeout of 30 seconds total
+        for future in futures:
+            try:
+                db_info = future.result(timeout=5)  # 5 second timeout per tenant
+                overview["databases"].append(db_info)
+            except FuturesTimeoutError:
+                # Extract tenant info from the future if possible
+                tenant_id = None
+                tenant_name = "Unknown"
+                for i, tenant in enumerate(tenants):
+                    if futures[i] == future:
+                        tenant_id = tenant.id
+                        tenant_name = tenant.name
+                        break
+
+                overview["databases"].append({
+                    "tenant_id": tenant_id,
+                    "tenant_name": tenant_name,
+                    "database_name": f"tenant_{tenant_id}" if tenant_id else "unknown",
+                    "status": "timeout",
+                    "error": "Database connection test timed out"
+                })
+            except Exception as e:
+                # Handle any other exceptions
+                tenant_id = None
+                tenant_name = "Unknown"
+                for i, tenant in enumerate(tenants):
+                    if futures[i] == future:
+                        tenant_id = tenant.id
+                        tenant_name = tenant.name
+                        break
+
+                overview["databases"].append({
+                    "tenant_id": tenant_id,
+                    "tenant_name": tenant_name,
+                    "database_name": f"tenant_{tenant_id}" if tenant_id else "unknown",
+                    "status": "error",
+                    "error": str(e)
+                })
+
     return overview 
 
 @router.post("/promote", response_model=Dict[str, str])
@@ -943,15 +1040,15 @@ async def promote_to_super_admin(
         raise HTTPException(status_code=404, detail=f"User with email '{request.email}' not found")
     if user.is_superuser:
         return {"message": f"User '{request.email}' is already a super admin."}
-    
+
     # Store old role and superuser status for audit logging
     old_role = user.role
     old_is_superuser = user.is_superuser
-    
+
     user.is_superuser = True
     user.role = 'admin'
     master_db.commit()
-    
+
     # Log audit event in master database
     log_audit_event_master(
         db=master_db,
@@ -973,7 +1070,7 @@ async def promote_to_super_admin(
         tenant_id=current_user.tenant_id,
         status="success"
     )
-    
+
     # Also log audit event in tenant database for visibility in regular audit log
     try:
         tenant_db = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
@@ -1000,7 +1097,7 @@ async def promote_to_super_admin(
     except Exception as e:
         # Log error but don't fail the operation
         print(f"Failed to log promotion to tenant audit log: {e}")
-    
+
     return {"message": f"User '{request.email}' has been promoted to super admin."} 
 
 @router.post("/demote", response_model=Dict[str, str])
@@ -1019,14 +1116,14 @@ async def demote_super_admin(
     super_admin_count = master_db.query(MasterUser).filter(MasterUser.is_superuser == True).count()
     if super_admin_count <= 1:
         raise HTTPException(status_code=400, detail="Cannot demote the last remaining super admin.")
-    
+
     # Store old values for audit logging
     old_role = user.role
     old_is_superuser = user.is_superuser
-    
+
     user.is_superuser = False
     master_db.commit()
-    
+
     # Also update in tenant DB if user exists there
     try:
         tenant_id = user.tenant_id
@@ -1040,7 +1137,7 @@ async def demote_super_admin(
         tenant_session.close()
     except Exception as e:
         pass  # Ignore tenant DB errors
-    
+
     # Log audit event in master database
     log_audit_event_master(
         db=master_db,
@@ -1062,7 +1159,7 @@ async def demote_super_admin(
         tenant_id=current_user.tenant_id,
         status="success"
     )
-    
+
     # Also log audit event in tenant database for visibility in regular audit log
     try:
         tenant_db = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
@@ -1089,5 +1186,5 @@ async def demote_super_admin(
     except Exception as e:
         # Log error but don't fail the operation
         print(f"Failed to log demotion to tenant audit log: {e}")
-    
+
     return {"message": f"User '{request.email}' has been demoted from super admin."}

@@ -123,7 +123,7 @@ async def tenant_context_middleware(request: Request, call_next):
 
     # Skip tenant context for super admin endpoints
     if request.url.path.startswith("/api/v1/super-admin/"):
-        logger.info(f"Skipping tenant context for super admin endpoint: {request.url.path}")
+        logger.warning(f"⚠️ Skipping tenant context for super admin endpoint: {request.url.path}")
         return await call_next(request)
 
     # Skip tenant context for specific endpoints that don't need it or handle it manually

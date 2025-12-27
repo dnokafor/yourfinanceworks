@@ -220,6 +220,17 @@ app = FastAPI(
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 
+def serialize_validation_errors(errors):
+    """Convert Pydantic validation errors to JSON-serializable format"""
+    serialized_errors = []
+    for error in errors:
+        error_copy = error.copy()
+        # Convert any non-serializable objects to strings
+        if 'ctx' in error_copy and 'error' in error_copy['ctx']:
+            error_copy['ctx']['error'] = str(error_copy['ctx']['error'])
+        serialized_errors.append(error_copy)
+    return serialized_errors
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     logger.error(f"Validation error on {request.method} {request.url.path}")
@@ -231,9 +242,11 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         body = b"Unable to read request body"
         logger.error("Could not read request body")
     
+    errors = serialize_validation_errors(exc.errors())
+    
     return JSONResponse(
         status_code=400,
-        content={"detail": exc.errors(), "body": body.decode('utf-8', errors='replace') if body else ""}
+        content={"detail": errors, "body": body.decode('utf-8', errors='replace') if body else ""}
     )
 
 @app.exception_handler(ValidationError)
@@ -241,9 +254,11 @@ async def pydantic_validation_exception_handler(request: Request, exc: Validatio
     logger.error(f"Pydantic validation error on {request.method} {request.url.path}")
     logger.error(f"Validation errors: {exc.errors()}")
     
+    errors = serialize_validation_errors(exc.errors())
+    
     return JSONResponse(
         status_code=400,
-        content={"detail": exc.errors()}
+        content={"detail": errors}
     )
 
 # Serve static files (e.g., for company logos)

@@ -242,7 +242,7 @@ class OrganizationJoinService:
                 if existing_user:
                     # Add existing user to this organization
                     user_to_add = existing_user
-                    
+
                     # Add user to the user_tenant_association table
                     from core.models.models import user_tenant_association
                     self.db.execute(
@@ -252,7 +252,7 @@ class OrganizationJoinService:
                             role=approved_role
                         )
                     )
-                    
+
                     logger.info(f"Added existing user {existing_user.id} to organization {join_request.tenant_id}")
                 else:
                     # Create new master user
@@ -284,17 +284,17 @@ class OrganizationJoinService:
                 join_request.reviewed_by_id = admin_user_id
                 join_request.reviewed_at = datetime.now(timezone.utc)
                 join_request.notes = approval_data.notes
-                
+
                 self.db.commit()
-                
+
                 # Create tenant user record in per-tenant database
                 try:
                     from core.services.tenant_database_manager import tenant_db_manager
                     from core.models.models_per_tenant import User as TenantUser
-                    
+
                     SessionLocal_tenant = tenant_db_manager.get_tenant_session(join_request.tenant_id)
                     tenant_db = SessionLocal_tenant()
-                    
+
                     try:
                         # Check if tenant user already exists
                         existing_tenant_user = tenant_db.query(TenantUser).filter(

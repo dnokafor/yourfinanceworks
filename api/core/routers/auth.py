@@ -28,7 +28,7 @@ from core.services.tenant_database_manager import tenant_db_manager
 from core.middleware.tenant_context_middleware import set_tenant_context
 from core.utils.rbac import require_admin
 from core.utils.audit import log_audit_event, log_audit_event_master
-from core.constants.error_codes import USER_NOT_FOUND, INCORRECT_PASSWORD, INACTIVE_USER, TENANT_CONTEXT_REQUIRED
+from core.constants.error_codes import USER_NOT_FOUND, INCORRECT_PASSWORD, INACTIVE_USER, TENANT_CONTEXT_REQUIRED, INVALID_CREDENTIALS
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -210,25 +210,30 @@ def get_current_user(
 ) -> MasterUser:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail=TENANT_CONTEXT_REQUIRED,
+        detail=INVALID_CREDENTIALS,
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
+            logger.warning("get_current_user: No email in JWT payload")
             raise credentials_exception
-    except JWTError:
+    except JWTError as e:
+        logger.warning(f"get_current_user: JWT decode error: {e}")
         raise credentials_exception
-    
+
     user = db.query(MasterUser).filter(MasterUser.email == email).first()
     if user is None:
+        logger.warning(f"get_current_user: User {email} not found in database")
         raise credentials_exception
-    
+
+    logger.info(f"get_current_user: User {email} authenticated successfully")
+
     # Check if we have a tenant context and if the user's role should be updated from tenant database
     from core.models.database import get_tenant_context
     current_tenant_id = get_tenant_context()
-    
+
     if current_tenant_id and current_tenant_id != user.tenant_id:
         # User is accessing a different tenant, get their role from that tenant's database
         try:
@@ -281,7 +286,7 @@ def get_current_user(
         except Exception as e:
             logger.warning(f"Failed to get tenant-specific role for user {email} in tenant {current_tenant_id}: {e}")
             # Fall back to master user if tenant lookup fails
-    
+
     return user
 
 def generate_invite_token() -> str:
@@ -298,7 +303,7 @@ def send_invite_email(email: str, invite_url: str, inviter_name: str, tenant_nam
 def get_user_organizations(db: Session, user: MasterUser) -> List[Dict[str, Any]]:
     """Get all organizations/tenants for a user"""
     organizations = []
-    
+
     # Get user's primary tenant
     if user.tenant_id:
         primary_tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
@@ -309,7 +314,7 @@ def get_user_organizations(db: Session, user: MasterUser) -> List[Dict[str, Any]
                 "role": user.role,
                 "is_primary": True
             })
-    
+
     # Get additional tenant memberships from association table
     from core.models.models import user_tenant_association
     additional_tenants = db.query(Tenant, user_tenant_association.c.role).join(
@@ -319,7 +324,7 @@ def get_user_organizations(db: Session, user: MasterUser) -> List[Dict[str, Any]
         user_tenant_association.c.is_active == True,
         Tenant.id != user.tenant_id  # Exclude primary tenant
     ).all()
-    
+
     for tenant, role in additional_tenants:
         organizations.append({
             "id": tenant.id,
@@ -327,18 +332,18 @@ def get_user_organizations(db: Session, user: MasterUser) -> List[Dict[str, Any]
             "role": role,
             "is_primary": False
         })
-    
+
     return organizations
 
 @router.post("/register", response_model=Token, status_code=201)
 async def register(user: UserCreate, db: Session = Depends(get_master_db)):
     logger = logging.getLogger("registration")
     logger.info(f"Starting registration for {user.email}")
-    
+
     # Check if user already exists
     existing_user = db.query(MasterUser).filter(MasterUser.email == user.email).first()
     is_existing_user = existing_user is not None
-    
+
     if is_existing_user:
         logger.info(f"Existing user creating new organization: {user.email}")
         # Verify password for existing user
@@ -348,7 +353,7 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid password for existing user"
             )
-        
+
         # Update user info if provided
         if user.first_name and not existing_user.first_name:
             existing_user.first_name = user.first_name
@@ -357,7 +362,7 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
         db.commit()
     else:
         logger.info(f"New user registration: {user.email}")
-    
+
     # If no tenant_id provided, create a new tenant for this user
     if not user.tenant_id:
         # Use organization_name from request or create default name
