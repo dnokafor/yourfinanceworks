@@ -467,7 +467,7 @@ class SearchService:
                             {
                                 'multi_match': {
                                     'query': query,
-                                    'fields': ['searchable_text^2', 'name', 'number', 'description', 'filename'],
+                                    'fields': ['searchable_text^2', 'name', 'number', 'description', 'filename', 'client_name', 'vendor', 'title', 'email', 'phone', 'company', 'sku', 'category', 'payment_method', 'invoice_number', 'original_filename'],
                                     'type': 'best_fields',
                                     'fuzziness': 'AUTO'
                                 }
