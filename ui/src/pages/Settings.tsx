@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2, Download, Database, Upload, Plus, Edit, Trash2, Calculator, CheckCircle, XCircle, Search, MessageSquare } from "lucide-react";
+import { Loader2, Download, Database, Upload, Plus, Edit, Trash2, Calculator, CheckCircle, XCircle, Search, MessageSquare, AlertTriangle } from "lucide-react";
 import { settingsApi, discountRulesApi, aiConfigApi, DiscountRule, DiscountRuleCreate, AIConfig, AIConfigCreate, AIProviderInfo } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -1348,9 +1348,10 @@ const Settings = () => {
                   <TabsTrigger value="search" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.search')}</TabsTrigger>
                   <TabsTrigger value="email-notifications" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.email_notifications')}</TabsTrigger>
                   <TabsTrigger value="email-integration" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('emailIntegration.title')}</TabsTrigger>
-                  {isFeatureEnabled('tax_integration') && (
+                  {/* Tax integration tab hidden - under development */}
+                  {/* {isFeatureEnabled('tax_integration') && (
                     <TabsTrigger value="tax-integration" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.tax_integration')}</TabsTrigger>
-                  )}
+                  )} */}
                   {isFeatureReadOnly('cloud_storage') && (
                     <TabsTrigger value="export-destinations" className="text-xs md:text-sm min-w-0 flex-shrink-0">{t('settings.tabs.export_destinations')}</TabsTrigger>
                   )}
@@ -2659,6 +2660,21 @@ const Settings = () => {
                       </p>
                     </CardHeader>
                     <CardContent className="space-y-6">
+                      {/* Development Notice */}
+                      <div className="p-4 bg-amber-50 border border-amber-200 rounded-md">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="h-5 w-5 text-amber-600" />
+                          <div>
+                            <h4 className="text-sm font-medium text-amber-800">
+                              {t('taxIntegration.developmentNotice')}
+                            </h4>
+                            <p className="text-xs text-amber-700 mt-1">
+                              Configuration settings are for testing purposes only while this integration is being developed.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      
                       {/* Always show configuration fields so users can test before enabling */}
                       <>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -72,6 +72,7 @@
   },
   "taxIntegration": {
     "title": "Integración del Servicio Fiscal",
+    "developmentNotice": "Esta función está actualmente en desarrollo y puede no estar completamente funcional.",
     "sendToTaxService": "Enviar al Servicio Fiscal",
     "tax_send_success": "Factura enviada al servicio fiscal exitosamente",
     "tax_send_error": "Error al enviar al servicio fiscal",

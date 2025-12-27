@@ -64,6 +64,7 @@
   },
   "taxIntegration": {
     "title": "Steuerservice-Integration",
+    "developmentNotice": "Diese Funktion befindet sich derzeit in der Entwicklung und kann nicht vollständig funktionsfähig sein.",
     "sendToTaxService": "An Steuerservice senden",
     "tax_send_success": "Rechnung erfolgreich an Steuerservice gesendet",
     "tax_send_error": "Fehler beim Senden an Steuerservice",

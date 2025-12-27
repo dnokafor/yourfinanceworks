@@ -88,10 +88,12 @@ export const LicenseManagement: React.FC = () => {
       const enabledFeatureIds = statusResponse.enabled_features || [];
       const hasAllFeatures = statusResponse.has_all_features || enabledFeatureIds.includes('all');
 
-      const featuresWithStatus = (featuresResponse.features || []).map(feature => ({
-        ...feature,
-        enabled: hasAllFeatures || enabledFeatureIds.includes(feature.id)
-      }));
+      const featuresWithStatus = (featuresResponse.features || [])
+        .filter(feature => !feature.id.includes('tax') && !feature.name.toLowerCase().includes('tax service integration'))
+        .map(feature => ({
+          ...feature,
+          enabled: hasAllFeatures || enabledFeatureIds.includes(feature.id)
+        }));
 
       setFeatures(featuresWithStatus);
     } catch (error) {

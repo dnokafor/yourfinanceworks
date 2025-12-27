@@ -72,6 +72,7 @@
   },
   "taxIntegration": {
     "title": "Tax Service Integration",
+    "developmentNotice": "This feature is currently under development and may not be fully functional.",
     "sendToTaxService": "Send to Tax Service",
     "tax_send_success": "Invoice sent to tax service successfully",
     "tax_send_error": "Failed to send to tax service",
