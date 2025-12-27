@@ -14,6 +14,7 @@ import { getCurrentUser } from "./utils/auth";
 import { useQuery } from "@tanstack/react-query";
 import { settingsApi } from "@/lib/api";
 import { isAdmin } from "@/utils/auth";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 // Lazy load only page components for code splitting
 const Index = React.lazy(() => import("./pages/Index"));
@@ -117,7 +118,7 @@ const AppContent = () => {
         <FeatureProvider>
           <SearchProvider>
             <OnboardingProvider>
-              <React.Suspense fallback={<div>Loading...</div>}>
+              <React.Suspense fallback={<LoadingSpinner fullScreen />}>
                 <Routes>
                   <Route path="/login" element={<Login />} />
                   <Route path="/oauth-callback" element={<OAuthCallback />} />

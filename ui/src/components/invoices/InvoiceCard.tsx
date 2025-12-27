@@ -19,6 +19,7 @@ interface InvoiceCardProps {
   canPerformActions?: boolean;
   selected?: boolean;
   onSelectionChange?: (selected: boolean) => void;
+  key?: React.Key;
 }
 
 const getStatusConfig = (status: string) => {

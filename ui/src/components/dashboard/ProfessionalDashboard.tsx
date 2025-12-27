@@ -278,13 +278,15 @@ export function ProfessionalDashboard() {
                       if (metric.title.toLowerCase().includes('client')) navigate('/clients/new');
                       else if (metric.title.toLowerCase().includes('income')) navigate('/invoices/new');
                       else if (metric.title.toLowerCase().includes('expense')) navigate('/expenses/new');
+                      else if (metric.title.toLowerCase().includes('pending')) navigate('/invoices');
                     }}
                   >
                     <Plus className="h-3 w-3 mr-1" />
                     {metric.title.toLowerCase().includes('client') ? t('clients.add_client') :
                       metric.title.toLowerCase().includes('income') ? t('invoices.new_invoice') :
                         metric.title.toLowerCase().includes('expense') ? t('expenses.new_expense', 'New Expense') :
-                          t('common.add_data', 'Add Data')}
+                          metric.title.toLowerCase().includes('pending') ? t('navigation.invoices') :
+                            t('common.add_data', 'Add Data')}
                   </ProfessionalButton>
                 </div>
               )}

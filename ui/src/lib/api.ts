@@ -807,7 +807,6 @@ export async function apiRequest<T>(
       const selectedTenantId = localStorage.getItem('selected_tenant_id');
       if (selectedTenantId) {
         tenantId = selectedTenantId;
-        console.log(`🔍 API Request: Using selected tenant ID: ${tenantId} for ${url}`);
       } else {
         // Fallback to user's default tenant
         const userStr = localStorage.getItem('user');
@@ -815,7 +814,6 @@ export async function apiRequest<T>(
           const user = JSON.parse(userStr);
           if (user && user.tenant_id) {
             tenantId = String(user.tenant_id);
-            console.log(`🔍 API Request: Using user's default tenant ID: ${tenantId} for ${url}`);
           }
         }
       }
@@ -850,65 +848,55 @@ export async function apiRequest<T>(
       const numericTenantId = parseInt(tenantId, 10);
       if (!isNaN(numericTenantId)) {
         headers['X-Tenant-ID'] = numericTenantId.toString();
-        console.log(`🔄 API Request: ${requestUrl} with X-Tenant-ID: ${numericTenantId}`);
       } else {
         console.warn(`⚠️ Invalid tenant ID: ${tenantId}`);
       }
     } else if (!config.skipTenant) {
       console.warn(`⚠️ No tenant ID available for request to ${requestUrl}`);
-      console.log('Debug info:', {
-        selectedTenantId: localStorage.getItem('selected_tenant_id'),
-        userTenantId: (() => {
-          try {
-            const user = JSON.parse(localStorage.getItem('user') || '{}');
-            return user.tenant_id;
-          } catch { return 'parse error'; }
-        })()
-      });
     }
     const response = await fetch(requestUrl, {
       ...options,
       headers,
     });
 
-    console.log('API Response status:', response.status);
-    console.log('API Response headers:', Object.fromEntries(response.headers.entries()));
-
     // Log the raw response text for debugging
     const responseText = await response.text();
-    // console.log('API Raw response text:', responseText);
 
     if (!response.ok) {
       // Try to parse error response
       let errorData;
       try {
         errorData = JSON.parse(responseText);
-        console.log('API Error response:', errorData);
       } catch (e) {
         // If JSON parsing fails, use status text
-        console.log('API Error - could not parse JSON:', e);
         throw new Error(`Error: ${response.status} ${response.statusText}`);
       }
 
       // Handle authentication errors
       if (!config.isLogin && response.status === 401) {
-        // Only log out on 401 (unauthorized) - token is invalid/expired
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        localStorage.removeItem('selected_tenant_id');
-        // Show toast and redirect to login only if not already on login page
-        if (!window.location.pathname.includes('/login')) {
-          toast.error('Session expired. Please log in again.');
-          // Use window.location.replace for reliability
-          setTimeout(() => window.location.replace('/login'), 100);
+        // Don't log out for super-admin endpoints - they might fail for other reasons
+        if (!requestUrl.includes('/super-admin/')) {
+          // Only log out on 401 (unauthorized) - token is invalid/expired
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          localStorage.removeItem('selected_tenant_id');
+          // Show toast and redirect to login only if not already on login page
+          if (!window.location.pathname.includes('/login')) {
+            toast.error('Session expired. Please log in again.');
+            // Use window.location.replace for reliability
+            setTimeout(() => window.location.replace('/login'), 100);
+          }
+          throw new Error('Authentication failed. Please log in again.');
+        } else {
+          // For super-admin endpoints, just throw the error without logging out
+          throw new Error(errorData.detail || 'Authentication failed');
         }
-        throw new Error('Authentication failed. Please log in again.');
       }
 
       // Handle 403 (forbidden) errors - could be permission or tenant context issues
       if (response.status === 403) {
-        // Check if it's a tenant context error
-        if (errorData.detail && errorData.detail.includes('Tenant context required')) {
+        // Check if it's a tenant context error (but not for super-admin endpoints)
+        if (!requestUrl.includes('/super-admin/') && errorData.detail && errorData.detail.includes('Tenant context required')) {
           // This is a session/tenant context issue - log out the user
           localStorage.removeItem('token');
           localStorage.removeItem('user');
@@ -918,20 +906,24 @@ export async function apiRequest<T>(
           throw new Error('Session expired. Please log in again.');
         } else {
           // User is authenticated but lacks permissions - don't log out
-          console.log('403 Forbidden - User lacks permissions for this resource');
           throw new Error(errorData.detail || 'Access denied. You do not have permission to access this resource.');
         }
       }
 
       // Handle 400 errors that might be tenant context issues
       if (response.status === 400 && errorData.detail && typeof errorData.detail === 'string' && errorData.detail.includes('Tenant context required')) {
-        // This is a session/tenant context issue - log out the user
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        localStorage.removeItem('selected_tenant_id');
-        toast.error('Session expired. Please log in again.');
-        window.location.replace('/login');
-        throw new Error('Session expired. Please log in again.');
+        // This is a session/tenant context issue - log out the user (but not for super-admin endpoints)
+        if (!requestUrl.includes('/super-admin/')) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          localStorage.removeItem('selected_tenant_id');
+          toast.error('Session expired. Please log in again.');
+          window.location.replace('/login');
+          throw new Error('Session expired. Please log in again.');
+        } else {
+          // For super-admin endpoints, just throw the error
+          throw new Error(errorData.detail || 'Request failed');
+        }
       }
 
       // Better handle validation errors (422)
@@ -963,6 +955,17 @@ export async function apiRequest<T>(
         let errorMessage: string;
         if (typeof errorData.detail === 'string') {
           errorMessage = errorData.detail;
+        } else if (Array.isArray(errorData.detail)) {
+          // Handle FastAPI validation errors format
+          const validationError = errorData.detail[0];
+          if (validationError?.msg) {
+            // Extract the actual error message from "Value error, Organization name must be at least 2 characters long"
+            errorMessage = validationError.msg.replace('Value error, ', '');
+          } else if (validationError?.ctx?.error) {
+            errorMessage = validationError.ctx.error;
+          } else {
+            errorMessage = JSON.stringify(validationError);
+          }
         } else if (typeof errorData.detail === 'object' && errorData.detail !== null) {
           // Handle object error details (e.g., {error: "CODE", message: "text"})
           errorMessage = errorData.detail.message || errorData.detail.error || JSON.stringify(errorData.detail);
@@ -986,7 +989,6 @@ export async function apiRequest<T>(
     try {
       responseData = JSON.parse(responseText) as T;
     } catch (e) {
-      console.log('API Success response is not valid JSON:', e);
       throw new Error('Invalid JSON response from server');
     }
 
@@ -2035,23 +2037,18 @@ export const dashboardApi = {
       const pendingInvoices: Record<string, number> = {};
       const totalExpenses: Record<string, number> = {};
 
-      console.log('Dashboard API - Processing invoices:', invoices.length);
       invoices.forEach(invoice => {
         const currency = invoice.currency || 'USD';
-        console.log(`Invoice ${invoice.number}: status=${invoice.status}, amount=${invoice.amount}, paid_amount=${invoice.paid_amount}, currency=${currency}, payer=${invoice.payer}`);
 
         // Only count income from invoices where the payer is 'Client'
         if ((invoice.status === 'paid' || invoice.status === 'partially_paid') && invoice.payer === 'Client') {
           totalIncome[currency] = (totalIncome[currency] || 0) + invoice.paid_amount;
-          console.log(`Added to totalIncome[${currency}]: ${invoice.paid_amount} (payer: ${invoice.payer})`);
         }
         // Calculate pending amounts for invoices that are not fully paid
         if (invoice.status === 'pending' || invoice.status === 'overdue' || invoice.status === 'partially_paid') {
           const outstandingAmount = invoice.amount - (invoice.paid_amount || 0);
-          console.log(`Outstanding amount for ${invoice.number}: ${outstandingAmount}`);
           if (outstandingAmount > 0) {
             pendingInvoices[currency] = (pendingInvoices[currency] || 0) + outstandingAmount;
-            console.log(`Added to pendingInvoices[${currency}]: ${outstandingAmount}`);
           }
         }
       });
@@ -2059,20 +2056,15 @@ export const dashboardApi = {
       // Fetch and calculate total expenses
       try {
         const expenses = await expenseApi.getExpenses();
-        console.log('Dashboard API - Processing expenses:', expenses.length);
         expenses.forEach(expense => {
           const currency = expense.currency || 'USD';
           const amount = expense.total_amount || expense.amount || 0;
-          console.log(`Expense ${expense.id}: amount=${amount}, currency=${currency}`);
 
           totalExpenses[currency] = (totalExpenses[currency] || 0) + amount;
-          console.log(`Added to totalExpenses[${currency}]: ${amount}`);
         });
       } catch (error) {
         console.error('Failed to fetch expenses for dashboard:', error);
       }
-
-      console.log('Final dashboard stats:', { totalIncome, pendingInvoices, totalExpenses });
 
       const invoicesPaid = (invoices || []).filter(invoice => invoice.status === 'paid').length;
       const invoicesPending = (invoices || []).filter(invoice => invoice.status === 'pending').length;

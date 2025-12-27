@@ -162,7 +162,10 @@ export const JoinRequestsTable: React.FC<JoinRequestsTableProps> = ({
     const config = variants[status] || variants.pending;
 
     return (
-      <Badge variant={config.variant} className="flex items-center gap-1 whitespace-nowrap py-1 px-2 w-fit">
+      <Badge
+        variant={config.variant}
+        className="flex items-center gap-1 whitespace-nowrap py-1 px-2 w-fit"
+      >
         {config.icon}
         {status.charAt(0).toUpperCase() + status.slice(1)}
       </Badge>
