@@ -325,10 +325,26 @@
       "enabled": "Enabled"
     },
     "help": {
-      "title": "Need Help?",
-      "description": "If you have questions about licensing or need assistance, please contact our support team.",
+      "title": "Help",
+      "description": "Need help with your license? Contact our support or check our documentation.",
       "contactSupport": "Contact Support",
       "documentation": "Documentation"
+    },
+    "deactivateDialog": {
+      "title": "Deactivate License?",
+      "description": "Are you sure you want to deactivate your license? This will disable all licensed features including:",
+      "featureList": {
+        "promptManagement": "Prompt Management - AI prompt templates and customization",
+        "aiInvoiceProcessing": "AI Invoice Processing - Automated invoice data extraction",
+        "aiExpenseProcessing": "AI Expense Processing - AI-powered expense categorization",
+        "advancedReporting": "Advanced Reporting - Custom reports and analytics",
+        "approvalWorkflows": "Approval Workflows - Multi-level approval systems",
+        "allPremiumFeatures": "All other premium features"
+      },
+      "reactivateNote": "You can reactivate your license at any time by entering a new license key.",
+      "cancel": "Cancel",
+      "deactivating": "Deactivating...",
+      "confirmButton": "Deactivate License"
     },
     "badges": {
       "expiredGrace": "Expired (Grace Period)",
@@ -350,7 +366,11 @@
       "expired": "Your license has expired. Please renew to continue using all features."
     },
     "loading": "Loading license information...",
-    "failedToLoad": "Failed to load license information"
+    "failedToLoad": "Failed to load license information",
+    "recurrence": {
+      "days": "days"
+    },
+    "upgrade": "Upgrade"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -1937,7 +1957,6 @@
     },
     "loading": "Loading expenses...",
     "status_done": "Done",
-    "status_processing": "Processing",
     "status_queued": "Queued",
     "status_pending": "Pending",
     "none": "None",
@@ -1963,16 +1982,50 @@
     "max_attachments": "Attachments (max 10)",
     "files_selected": "file(s) selected",
     "import_completed": "Import completed",
+    "import_notifications": {
+      "files_uploaded": "Expense Files Uploaded",
+      "files_uploaded_success": "Successfully uploaded {{count}} expense files. Check the Expenses page for AI processing status.",
+      "upload_partial": "Expense Upload Partial",
+      "upload_partial_message": "Uploaded {{success}} files successfully, {{failed}} failed.",
+      "upload_failed": "Expense Upload Failed",
+      "upload_failed_message": "Failed to upload all {{failed}} expense files."
+    },
+    "page": {
+      "title": "Import Expenses",
+      "description": "Select up to 10 PDF or image files to create expenses. Each file becomes a separate expense and will be analyzed by AI. You can check the processing status on the Expenses page after upload.",
+      "back_to_expenses": "Back to Expenses",
+      "start_import": "Start Import",
+      "importing": "Importing...",
+      "select_files": "Select Files",
+      "select_files_description": "Choose expense receipts to import and analyze. Check the Expenses page for AI processing status after upload.",
+      "click_to_upload": "Click to upload",
+      "drag_and_drop": "or drag and drop",
+      "file_types_supported": "Up to 10 files. Supported types: PDF, JPG, PNG",
+      "no_files_selected": "No files selected yet",
+      "selected_files": "Selected Files ({{count}})",
+      "status": {
+        "pending": "Pending",
+        "creating": "Creating",
+        "uploading": "Uploading",
+        "uploaded": "Uploaded",
+        "error": "Error"
+      }
+    },
     "expense_created": "Expense created",
     "expense_updated": "Expense updated",
     "expense_deleted": "Expense deleted",
     "receipt_uploaded": "Receipt uploaded",
+    "ai_license_reminder": {
+      "title": "Note:",
+      "message": "AI-powered receipt analysis is not available in your current plan. Files will be uploaded as attachments only, without automatic data extraction. Please enter expense details manually."
+    },
     "labels_added": "Labels added",
     "labels_removed": "Labels removed",
-    "process_again": "Process Again",
     "reprocessing_started": "Expense reprocessing started",
     "amount_required": "Amount is required unless importing from files",
     "category_required": "Category is required",
+    "create_multiple": "Create Multiple Expenses",
+    "status_processing": "Processing",
     "failed_to_create": "Failed to create expense",
     "failed_to_update": "Failed to update expense",
     "failed_to_delete": "Failed to delete expense",

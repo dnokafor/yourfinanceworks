@@ -326,6 +326,22 @@
       "contactSupport": "Contacter le Support",
       "documentation": "Documentation"
     },
+    "deactivateDialog": {
+      "title": "Désactiver la Licence ?",
+      "description": "Êtes-vous sûr de vouloir désactiver votre licence ? Cela désactivera toutes les fonctionnalités sous licence, y compris :",
+      "featureList": {
+        "promptManagement": "Gestion des Prompts - Modèles et personnalisation des prompts IA",
+        "aiInvoiceProcessing": "Traitement IA des Factures - Extraction automatique des données des factures",
+        "aiExpenseProcessing": "Traitement IA des Dépenses - Catégorisation des dépenses par IA",
+        "advancedReporting": "Rapports Avancés - Rapports personnalisés et analyses",
+        "approvalWorkflows": "Workflows d'Approbation - Systèmes d'approbation multiniveaux",
+        "allPremiumFeatures": "Toutes les autres fonctionnalités premium"
+      },
+      "reactivateNote": "Vous pouvez réactiver votre licence à tout moment en entrant une nouvelle clé de licence.",
+      "cancel": "Annuler",
+      "deactivating": "Désactivation...",
+      "confirmButton": "Désactiver la Licence"
+    },
     "badges": {
       "expiredGrace": "Expiré (Période de Grâce)",
       "expired": "Expiré",
@@ -346,7 +362,11 @@
       "expired": "Votre licence a expiré. Veuillez renouveler pour continuer à utiliser toutes les fonctionnalités."
     },
     "loading": "Chargement des informations de licence...",
-    "failedToLoad": "Échec du chargement des informations de licence"
+    "failedToLoad": "Échec du chargement des informations de licence",
+    "recurrence": {
+      "days": "Jours"
+    },
+    "upgrade": "Mettre à niveau"
   },
   "dashboard": {
     "title": "Tableau de Bord",
@@ -1767,7 +1787,6 @@
     },
     "loading": "Chargement des dépenses...",
     "status_done": "Terminé",
-    "status_processing": "En cours",
     "status_queued": "En file d'attente",
     "status_pending": "En attente",
     "none": "Aucun",
@@ -1799,16 +1818,50 @@
     "max_attachments": "Pièces jointes (max 10)",
     "files_selected": "fichier(s) sélectionné(s)",
     "import_completed": "Importation terminée",
+    "import_notifications": {
+      "files_uploaded": "Fichiers de dépenses téléchargés",
+      "files_uploaded_success": "{{count}} fichiers de dépenses téléchargés avec succès. Vérifiez la page des dépenses pour le statut de traitement IA.",
+      "upload_partial": "Téléchargement de dépenses partiel",
+      "upload_partial_message": "{{success}} fichiers téléchargés avec succès, {{failed}} échoués.",
+      "upload_failed": "Échec du téléchargement des dépenses",
+      "upload_failed_message": "Échec du téléchargement de tous les {{failed}} fichiers de dépenses."
+    },
+    "page": {
+      "title": "Importer des dépenses",
+      "description": "Sélectionnez jusqu'à 10 fichiers PDF ou images pour créer des dépenses. Chaque fichier devient une dépense distincte et sera analysé par IA. Vous pouvez vérifier le statut de traitement sur la page des dépenses après le téléchargement.",
+      "back_to_expenses": "Retour aux dépenses",
+      "start_import": "Commencer l'importation",
+      "importing": "Importation...",
+      "select_files": "Sélectionner les fichiers",
+      "select_files_description": "Choisissez les reçus de dépenses à importer et analyser. Vérifiez la page des dépenses pour le statut de traitement IA après le téléchargement.",
+      "click_to_upload": "Cliquez pour télécharger",
+      "drag_and_drop": "ou glisser-déposer",
+      "file_types_supported": "Jusqu'à 10 fichiers. Types supportés : PDF, JPG, PNG",
+      "no_files_selected": "Aucun fichier sélectionné",
+      "selected_files": "Fichiers sélectionnés ({{count}})",
+      "status": {
+        "pending": "En attente",
+        "creating": "Création",
+        "uploading": "Téléchargement",
+        "uploaded": "Téléchargé",
+        "error": "Erreur"
+      }
+    },
     "expense_created": "Dépense créée",
     "expense_updated": "Dépense mise à jour",
     "expense_deleted": "Dépense supprimée",
     "receipt_uploaded": "Reçu téléversé",
+    "ai_license_reminder": {
+      "title": "Remarque :",
+      "message": "L'analyse de reçus par IA n'est pas disponible dans votre plan actuel. Les fichiers seront téléversés comme pièces jointes uniquement, sans extraction automatique de données. Veuillez entrer les détails de la dépense manuellement."
+    },
     "labels_added": "Étiquettes ajoutées",
     "labels_removed": "Étiquettes supprimées",
-    "process_again": "Traiter à nouveau",
     "reprocessing_started": "Retraitement de la dépense commencé",
-    "amount_required": "Le montant est requis sauf si vous importez depuis des fichiers",
+    "amount_required": "Le montant est requis sauf lors de l'importation de fichiers",
     "category_required": "La catégorie est requise",
+    "create_multiple": "Créer plusieurs dépenses",
+    "status_processing": "En cours",
     "failed_to_create": "Échec de la création de la dépense",
     "failed_to_update": "Échec de la mise à jour de la dépense",
     "failed_to_delete": "Échec de la suppression de la dépense",

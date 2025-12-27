@@ -280,11 +280,89 @@
     "expired_message": "Ihre Lizenz ist abgelaufen. Sie können weiterhin Ihre vorhandenen Daten anzeigen, aber einige Funktionen können eingeschränkt sein. Bitte erneuern Sie Ihre Lizenz, um alle Funktionen weiterhin zu nutzen.",
     "renew": "Lizenz Erneuern",
     "manage": "Lizenz Verwalten",
+    "upgrade": "Aktualisieren",
     "trial_ended": "Ihr Testzeitraum ist beendet. Aktivieren Sie eine Lizenz, um diese Funktion weiterhin zu nutzen.",
     "license_expired_feature": "Ihre Lizenz ist abgelaufen. Bitte erneuern Sie, um diese Funktion weiterhin zu nutzen.",
     "trial_ended_access": "Ihr Testzeitraum ist beendet. Aktivieren Sie eine Lizenz, um auf diese Funktion zuzugreifen.",
     "license_expired_access": "Ihre Lizenz ist abgelaufen. Bitte erneuern Sie, um auf diese Funktion zuzugreifen.",
-    "advanced_search_required": "Erweiterte Suche erfordert eine kommerzielle Lizenz. Aktualisieren Sie, um alle Ihre Daten mit leistungsstarken Filtern zu durchsuchen."
+    "advanced_search_required": "Erweiterte Suche erfordert eine kommerzielle Lizenz. Aktualisieren Sie, um alle Ihre Daten mit leistungsstarken Filtern zu durchsuchen.",
+    "tabTitle": "Lizenz",
+    "status": {
+      "title": "Lizenzstatus",
+      "description": "Aktuelle Lizenzinformationen anzeigen und Abonnement verwalten",
+      "installationId": "Installations-ID",
+      "usageType": "Typ",
+      "trialPeriod": "Testzeitraum",
+      "daysRemaining": "Verbleibende Tage",
+      "expiration": "Lizenzablauf",
+      "licensedTo": "Lizenziert an",
+      "deactivate": "Lizenz deaktivieren",
+      "confirmDeactivate": "Sind Sie sicher, dass Sie Ihre Lizenz deaktivieren möchten? Dies deaktiviert lizenzierte Funktionen.",
+      "deactivateSuccess": "Lizenz erfolgreich deaktiviert",
+      "deactivateError": "Fehler beim Deaktivieren der Lizenz"
+    },
+    "activate": {
+      "title": "Lizenz aktivieren",
+      "description": "Lizenzschlüssel eingeben, um Premium-Funktionen zu aktivieren",
+      "keyLabel": "Lizenzschlüssel",
+      "keyPlaceholder": "Lizenzschlüssel eingeben",
+      "button": "Lizenz aktivieren",
+      "purchase": "Lizenz kaufen",
+      "success": "Lizenz erfolgreich aktiviert!",
+      "error": "Fehler beim Aktivieren der Lizenz",
+      "enterKey": "Bitte geben Sie einen Lizenzschlüssel ein"
+    },
+    "features": {
+      "title": "Verfügbare Funktionen",
+      "description": "Überprüfen Sie, welche Funktionen mit Ihrer aktuellen Lizenz aktiviert sind",
+      "enabled": "Aktiviert"
+    },
+    "badges": {
+      "active": "Aktiv",
+      "expired": "Abgelaufen",
+      "expiringSoon": "Läuft bald ab",
+      "trialActive": "Test aktiv",
+      "trialExpired": "Test abgelaufen",
+      "trialEndingSoon": "Test endet bald",
+      "personalUse": "Core Edition",
+      "noLicense": "Keine Lizenz",
+      "expiredGrace": "Abgelaufen (Karenzzeit)"
+    },
+    "warnings": {
+      "actionRequired": "Aktion erforderlich",
+      "gracePeriod": "Ihre Lizenz ist abgelaufen. Sie befinden sich in einer Karenzzeit. Bitte erneuern Sie Ihre Lizenz, um alle Funktionen weiterhin zu nutzen.",
+      "trialEnded": "Ihr Testzeitraum ist beendet. Aktivieren Sie eine Lizenz, um Premium-Funktionen weiterhin zu nutzen.",
+      "trialEnding": "Ihr Testzeitraum endet in {{days}} Tagen. Aktivieren Sie eine Lizenz, um Unterbrechungen zu vermeiden.",
+      "expiring": "Ihre Lizenz läuft in {{days}} Tagen ab. Bitte erneuern Sie, um Dienstunterbrechungen zu vermeiden.",
+      "expired": "Ihre Lizenz ist abgelaufen. Bitte erneuern Sie, um alle Funktionen weiterhin zu nutzen."
+    },
+    "loading": "Lizenzinformationen werden geladen...",
+    "failedToLoad": "Fehler beim Laden der Lizenzinformationen",
+    "recurrence": {
+      "days": "Tage"
+    },
+    "help": {
+      "title": "Hilfe",
+      "description": "Benötigen Sie Hilfe mit Ihrer Lizenz? Kontaktieren Sie unseren Support oder lesen Sie unsere Dokumentation.",
+      "contactSupport": "Support kontaktieren",
+      "documentation": "Dokumentation"
+    },
+    "deactivateDialog": {
+      "title": "Lizenz deaktivieren?",
+      "description": "Sind Sie sicher, dass Sie Ihre Lizenz deaktivieren möchten? Dies deaktiviert alle lizenzierten Funktionen, einschließlich:",
+      "featureList": {
+        "promptManagement": "Prompt-Management - KI-Prompt-Vorlagen und -Anpassung",
+        "aiInvoiceProcessing": "KI-Rechnungsverarbeitung - Automatisierte Rechnungsdatenextraktion",
+        "aiExpenseProcessing": "KI-Ausgabenverarbeitung - KI-gestützte Ausgabenkategorisierung",
+        "advancedReporting": "Erweiterte Berichterstattung - Benutzerdefinierte Berichte und Analysen",
+        "approvalWorkflows": "Genehmigungs-Workflows - Mehrstufige Genehmigungssysteme",
+        "allPremiumFeatures": "Alle anderen Premium-Funktionen"
+      },
+      "reactivateNote": "Sie können Ihre Lizenz jederzeit durch Eingabe eines neuen Lizenzschlüssels reaktivieren.",
+      "cancel": "Abbrechen",
+      "deactivating": "Wird deaktiviert...",
+      "confirmButton": "Lizenz deaktivieren"
+    }
   },
   "dashboard": {
     "title": "Dashboard",
@@ -1690,7 +1768,6 @@
     },
     "loading": "Ausgaben werden geladen...",
     "status_done": "Erledigt",
-    "status_processing": "Wird verarbeitet",
     "status_queued": "In Warteschlange",
     "status_pending": "Ausstehend",
     "none": "Keine",
@@ -1722,16 +1799,50 @@
     "max_attachments": "Anhänge (max 10)",
     "files_selected": "Datei(en) ausgewählt",
     "import_completed": "Import abgeschlossen",
+    "import_notifications": {
+      "files_uploaded": "Ausgabendateien hochgeladen",
+      "files_uploaded_success": "{{count}} Ausgabendateien erfolgreich hochgeladen. Überprüfen Sie die Ausgabenseite für den KI-Verarbeitungsstatus.",
+      "upload_partial": "Ausgaben-Upload teilweise",
+      "upload_partial_message": "{{success}} Dateien erfolgreich hochgeladen, {{failed}} fehlgeschlagen.",
+      "upload_failed": "Ausgaben-Upload fehlgeschlagen",
+      "upload_failed_message": "Alle {{failed}} Ausgabendateien konnten nicht hochgeladen werden."
+    },
+    "page": {
+      "title": "Ausgaben importieren",
+      "description": "Wählen Sie bis zu 10 PDF- oder Bilddateien aus, um Ausgaben zu erstellen. Jede Datei wird zu einer separaten Ausgabe und wird von KI analysiert. Sie können den Verarbeitungsstatus auf der Ausgabenseite nach dem Upload überprüfen.",
+      "back_to_expenses": "Zurück zu Ausgaben",
+      "start_import": "Import starten",
+      "importing": "Wird importiert...",
+      "select_files": "Dateien auswählen",
+      "select_files_description": "Wählen Sie Ausgabenbelege zum Importieren und Analysieren aus. Überprüfen Sie die Ausgabenseite für den KI-Verarbeitungsstatus nach dem Upload.",
+      "click_to_upload": "Klicken zum Hochladen",
+      "drag_and_drop": "oder ziehen und ablegen",
+      "file_types_supported": "Bis zu 10 Dateien. Unterstützte Typen: PDF, JPG, PNG",
+      "no_files_selected": "Noch keine Dateien ausgewählt",
+      "selected_files": "Ausgewählte Dateien ({{count}})",
+      "status": {
+        "pending": "Ausstehend",
+        "creating": "Wird erstellt",
+        "uploading": "Wird hochgeladen",
+        "uploaded": "Hochgeladen",
+        "error": "Fehler"
+      }
+    },
     "expense_created": "Ausgabe erstellt",
     "expense_updated": "Ausgabe aktualisiert",
     "expense_deleted": "Ausgabe gelöscht",
     "receipt_uploaded": "Beleg hochgeladen",
+    "ai_license_reminder": {
+      "title": "Hinweis:",
+      "message": "KI-gestützte Beleganalyse ist in Ihrem aktuellen Plan nicht verfügbar. Dateien werden nur als Anhänge hochgeladen, ohne automatische Datenextraktion. Bitte geben Sie Ausgabendetails manuell ein."
+    },
     "labels_added": "Labels hinzugefügt",
     "labels_removed": "Labels entfernt",
-    "process_again": "Erneut verarbeiten",
     "reprocessing_started": "Ausgaben-Nachverarbeitung gestartet",
-    "amount_required": "Betrag ist erforderlich, es sei denn, Dateien werden importiert",
+    "amount_required": "Betrag ist erforderlich, außer beim Importieren von Dateien",
     "category_required": "Kategorie ist erforderlich",
+    "create_multiple": "Mehrere Ausgaben erstellen",
+    "status_processing": "Wird verarbeitet",
     "failed_to_create": "Ausgabe konnte nicht erstellt werden",
     "failed_to_update": "Ausgabe konnte nicht aktualisiert werden",
     "failed_to_delete": "Ausgabe konnte nicht gelöscht werden",

@@ -322,9 +322,25 @@
     },
     "help": {
       "title": "¿Necesita Ayuda?",
-      "description": "Si tiene preguntas sobre licencias o necesita asistencia, por favor contacte a nuestro equipo de soporte.",
+      "description": "Si tiene preguntas sobre las licencias o necesita ayuda, contacte a nuestro equipo de soporte.",
       "contactSupport": "Contactar Soporte",
       "documentation": "Documentación"
+    },
+    "deactivateDialog": {
+      "title": "¿Desactivar Licencia?",
+      "description": "¿Está seguro de que desea desactivar su licencia? Esto desactivará todas las funciones con licencia, incluyendo:",
+      "featureList": {
+        "promptManagement": "Gestión de Prompts - Plantillas y personalización de prompts de IA",
+        "aiInvoiceProcessing": "Procesamiento de Facturas con IA - Extracción automática de datos de facturas",
+        "aiExpenseProcessing": "Procesamiento de Gastos con IA - Categorización de gastos por IA",
+        "advancedReporting": "Informes Avanzados - Informes personalizados y análisis",
+        "approvalWorkflows": "Flujos de Aprobación - Sistemas de aprobación multinivel",
+        "allPremiumFeatures": "Todas las demás funciones premium"
+      },
+      "reactivateNote": "Puede reactivar su licencia en cualquier momento ingresando una nueva clave de licencia.",
+      "cancel": "Cancelar",
+      "deactivating": "Desactivando...",
+      "confirmButton": "Desactivar Licencia"
     },
     "badges": {
       "expiredGrace": "Expirado (Período de Gracia)",
@@ -346,7 +362,11 @@
       "expired": "Su licencia ha expirado. Por favor renueve para continuar usando todas las funciones."
     },
     "loading": "Cargando información de licencia...",
-    "failedToLoad": "Error al cargar información de licencia"
+    "failedToLoad": "Error al cargar información de licencia",
+    "recurrence": {
+      "days": "Días"
+    },
+    "upgrade": "Actualizar"
   },
   "dashboard": {
     "title": "Panel de Control",
@@ -1818,7 +1838,6 @@
     },
     "loading": "Cargando gastos...",
     "status_done": "Completado",
-    "status_processing": "Procesando",
     "status_queued": "En cola",
     "status_pending": "Pendiente",
     "none": "Ninguno",
@@ -1850,17 +1869,51 @@
     "max_attachments": "Adjuntos (máx 10)",
     "files_selected": "archivo(s) seleccionado(s)",
     "import_completed": "Importación completada",
+    "import_notifications": {
+      "files_uploaded": "Archivos de gastos subidos",
+      "files_uploaded_success": "{{count}} archivos de gastos subidos exitosamente. Verifique la página de gastos para el estado de procesamiento IA.",
+      "upload_partial": "Subida de gastos parcial",
+      "upload_partial_message": "{{success}} archivos subidos exitosamente, {{failed}} fallaron.",
+      "upload_failed": "Fallo en la subida de gastos",
+      "upload_failed_message": "Falló la subida de todos los {{failed}} archivos de gastos."
+    },
+    "page": {
+      "title": "Importar Gastos",
+      "description": "Seleccione hasta 10 archivos PDF o imágenes para crear gastos. Cada archivo se convierte en un gasto separado y será analizado por IA. Puede verificar el estado de procesamiento en la página de gastos después de la subida.",
+      "back_to_expenses": "Volver a Gastos",
+      "start_import": "Iniciar Importación",
+      "importing": "Importando...",
+      "select_files": "Seleccionar Archivos",
+      "select_files_description": "Elija recibos de gastos para importar y analizar. Verifique la página de gastos para el estado de procesamiento IA después de la subida.",
+      "click_to_upload": "Haz clic para subir",
+      "drag_and_drop": "o arrastrar y soltar",
+      "file_types_supported": "Hasta 10 archivos. Tipos soportados: PDF, JPG, PNG",
+      "no_files_selected": "No se han seleccionado archivos",
+      "selected_files": "Archivos seleccionados ({{count}})",
+      "status": {
+        "pending": "Pendiente",
+        "creating": "Creando",
+        "uploading": "Subiendo",
+        "uploaded": "Subido",
+        "error": "Error"
+      }
+    },
     "expense_created": "Gasto creado",
     "expense_updated": "Gasto actualizado",
     "expense_deleted": "Gasto eliminado",
     "receipt_uploaded": "Recibo subido",
+    "ai_license_reminder": {
+      "title": "Nota:",
+      "message": "El análisis de recibos con IA no está disponible en su plan actual. Los archivos se subirán como adjuntos únicamente, sin extracción automática de datos. Por favor ingrese los detalles del gasto manualmente."
+    },
     "labels_added": "Etiquetas agregadas",
     "labels_removed": "Etiquetas eliminadas",
-    "process_again": "Procesar de Nuevo",
     "reprocessing_started": "Reprocesamiento del gasto iniciado",
-    "amount_required": "El monto es requerido a menos que importes desde archivos",
-    "category_required": "La categoría es requerida",
-    "failed_to_create": "Error al crear el gasto",
+    "amount_required": "Se requiere el monto a menos que se importe desde archivos",
+    "category_required": "Se requiere la categoría",
+    "create_multiple": "Crear múltiples gastos",
+    "status_processing": "Procesando",
+    "failed_to_create": "Error al crear gasto",
     "failed_to_update": "Error al actualizar el gasto",
     "failed_to_delete": "Error al eliminar el gasto",
     "failed_to_upload": "Error al subir el recibo",
