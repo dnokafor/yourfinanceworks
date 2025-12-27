@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -107,16 +107,16 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
   // Add state for recreate database confirmation
   const [dbToRecreate, setDbToRecreate] = useState<DatabaseStatus | null>(null);
 
-  const fetchTenants = async () => {
+  const fetchTenants = useCallback(async () => {
     try {
       const data = await apiRequest<Tenant[]>('/super-admin/tenants', {}, { skipTenant: true });
       setTenants(data);
     } catch (err) {
       setError('Failed to fetch tenants');
     }
-  };
+  }, []);
 
-  const fetchUsers = async (tenantId?: number) => {
+  const fetchUsers = useCallback(async (tenantId?: number) => {
     try {
       const url = tenantId ? `/super-admin/users?tenant_id=${tenantId}` : '/super-admin/users';
       const data = await apiRequest<User[]>(url, {}, { skipTenant: true });
@@ -124,16 +124,16 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
     } catch (err) {
       setError('Failed to fetch users');
     }
-  };
+  }, []);
 
-  const fetchDatabaseOverview = async () => {
+  const fetchDatabaseOverview = useCallback(async () => {
     try {
       const data = await apiRequest<{ databases: DatabaseStatus[] }>('/super-admin/database/overview', {}, { skipTenant: true });
       setDatabases(data.databases || []);
     } catch (err) {
       setError('Failed to fetch database overview');
     }
-  };
+  }, []);
 
   const handleCreateTenant = async () => {
     try {
@@ -150,7 +150,19 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
       fetchDatabaseOverview(); // Refresh databases list to show the new tenant database
     } catch (err: any) {
       const errorMessage = err?.detail || err?.message || 'Failed to create organization';
-      toast.error(errorMessage);
+
+      // Handle validation errors with user-friendly messages
+      if (errorMessage.includes('email') && errorMessage.includes('valid email address')) {
+        toast.error('Please enter a valid email address');
+      } else if (errorMessage.includes('email') && errorMessage.includes('already registered')) {
+        toast.error('Email is already registered. Please use a different email.');
+      } else if (errorMessage.includes('name') && errorMessage.includes('already exists')) {
+        toast.error('Organization name already exists. Please choose a different name.');
+      } else if (errorMessage.startsWith('Validation error:')) {
+        toast.error('Please check your input and try again');
+      } else {
+        toast.error(errorMessage);
+      }
     }
   };
 
@@ -359,15 +371,33 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
     }
   };
 
+  // Load initial data on component mount
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([fetchTenants(), fetchUsers(selectedTenantForUsers?.id), fetchDatabaseOverview()]);
-      setLoading(false);
+      try {
+        await fetchTenants();
+        await fetchUsers();
+        await fetchDatabaseOverview();
+      } catch (err) {
+        console.error('SuperAdmin: Error loading initial data:', err);
+        // Error is already handled by individual fetch functions
+      } finally {
+        setLoading(false);
+      }
     };
 
     loadData();
-  }, [selectedTenantForUsers]);
+  }, []); // Empty dependency array - only run once on mount
+
+  // Load users when selected tenant changes (but not on initial load)
+  useEffect(() => {
+    // Only fetch if selectedTenantForUsers has been explicitly changed by user
+    // Skip the initial null state by checking if loading is complete
+    if (!loading) {
+      fetchUsers(selectedTenantForUsers?.id);
+    }
+  }, [selectedTenantForUsers, loading, fetchUsers]);
 
   if (loading) {
     return (
