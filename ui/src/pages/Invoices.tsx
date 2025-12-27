@@ -103,13 +103,8 @@ const Invoices = () => {
       try {
         const status = statusFilter !== "all" ? statusFilter : undefined;
         const data = await invoiceApi.getInvoices(status);
-        console.log("Invoices data received:", data);
-        data.forEach(invoice => {
-          console.log(`Invoice ${invoice.number}: amount=${invoice.amount}, paid_amount=${invoice.paid_amount}, outstanding=${invoice.amount - (invoice.paid_amount || 0)}`);
-        });
         setInvoices(data);
       } catch (error) {
-        console.error("Failed to fetch invoices:", error);
         toast.error(t('invoices.errors.load_failed'));
       } finally {
         setLoading(false);
@@ -125,7 +120,6 @@ const Invoices = () => {
       const data = await api.get<DeletedInvoice[]>('/invoices/recycle-bin');
       setDeletedInvoices(data);
     } catch (error) {
-      console.error('Failed to fetch deleted invoices:', error);
       toast.error(t('recycleBin.failed_to_load_deleted_invoices'));
     } finally {
       setRecycleBinLoading(false);
@@ -152,7 +146,6 @@ const Invoices = () => {
         fetchDeletedInvoices();
       }
     } catch (error) {
-      console.error('Failed to delete invoice:', error);
       // Extract specific error message from API response
       let errorMessage = error instanceof Error ? error.message : t('invoices.delete_error');
 
@@ -186,7 +179,6 @@ const Invoices = () => {
         fetchDeletedInvoices();
       }
     } catch (error) {
-      console.error('Failed to bulk delete invoices:', error);
       let errorMessage = error instanceof Error ? error.message : 'Failed to delete invoices';
 
       // Check if it's the linked expenses error and use translated version
@@ -210,7 +202,6 @@ const Invoices = () => {
       const data = await invoiceApi.getInvoices(status);
       setInvoices(data);
     } catch (error) {
-      console.error('Failed to restore invoice:', error);
       toast.error('Failed to restore invoice');
     }
   };
@@ -229,7 +220,6 @@ const Invoices = () => {
       toast.success(t('recycleBin.invoice_permanently_deleted'));
       fetchDeletedInvoices();
     } catch (error) {
-      console.error('Failed to permanently delete invoice:', error);
       toast.error('Failed to permanently delete invoice');
     } finally {
       setPermanentDeleteModalOpen(false);
@@ -247,7 +237,6 @@ const Invoices = () => {
       toast.success(response.message || t('recycleBin.recycle_bin_emptied_successfully'));
       fetchDeletedInvoices();
     } catch (error) {
-      console.error('Failed to empty recycle bin:', error);
       toast.error(t('recycleBin.failed_to_empty_recycle_bin'));
     } finally {
       setEmptyRecycleBinModalOpen(false);
@@ -265,7 +254,6 @@ const Invoices = () => {
       // Redirect to edit
       navigate(`/invoices/edit/${newInvoice.id}`);
     } catch (error) {
-      console.error('Failed to clone invoice:', error);
       toast.error('Failed to clone invoice');
     }
   };
@@ -572,23 +560,39 @@ const Invoices = () => {
             ) : filteredInvoices.length > 0 ? (
               viewMode === 'cards' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {filteredInvoices.map((invoice) => (
-                    <InvoiceCard
-                      key={invoice.id}
-                      invoice={invoice}
-                      onClone={handleCloneInvoice}
-                      onDelete={handleDeleteInvoice}
-                      canPerformActions={canPerformAction}
-                      selected={selectedIds.includes(invoice.id)}
-                      onSelectionChange={(selected) => {
+                  {filteredInvoices.map((invoice) => {
+                    const cardProps = {
+                      invoice,
+                      onClone: handleCloneInvoice,
+                      onDelete: handleDeleteInvoice,
+                      canPerformActions: canPerformAction,
+                      selected: selectedIds.includes(invoice.id),
+                      onSelectionChange: (selected: boolean) => {
                         if (selected) {
                           setSelectedIds(prev => Array.from(new Set([...prev, invoice.id])));
                         } else {
                           setSelectedIds(prev => prev.filter(x => x !== invoice.id));
                         }
-                      }}
-                    />
-                  ))}
+                      }
+                    };
+                    return (
+                      <InvoiceCard
+                        key={invoice.id}
+                        invoice={invoice}
+                        onClone={handleCloneInvoice}
+                        onDelete={handleDeleteInvoice}
+                        canPerformActions={canPerformAction}
+                        selected={selectedIds.includes(invoice.id)}
+                        onSelectionChange={(selected) => {
+                          if (selected) {
+                            setSelectedIds(prev => Array.from(new Set([...prev, invoice.id])));
+                          } else {
+                            setSelectedIds(prev => prev.filter(x => x !== invoice.id));
+                          }
+                        }}
+                      />
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="rounded-xl border border-border/50 overflow-hidden shadow-sm">
@@ -647,13 +651,15 @@ const Invoices = () => {
                             </span>
                           </TableCell>
                           <TableCell>
-                            <Badge className={
-                              invoice.status === 'paid' ? 'status-paid' :
-                                invoice.status === 'pending' ? 'status-pending' :
-                                  invoice.status === 'overdue' ? 'status-overdue' :
-                                    invoice.status === 'partially_paid' ? 'status-partially-paid' :
-                                      'bg-muted/50 text-muted-foreground'
-                            }>
+                            <Badge 
+                              className={
+                                invoice.status === 'paid' ? 'status-paid' :
+                                  invoice.status === 'pending' ? 'status-pending' :
+                                    invoice.status === 'overdue' ? 'status-overdue' :
+                                      invoice.status === 'partially_paid' ? 'status-partially-paid' :
+                                        'bg-muted/50 text-muted-foreground'
+                              }
+                            >
                               {formatStatus(invoice.status)}
                             </Badge>
                           </TableCell>

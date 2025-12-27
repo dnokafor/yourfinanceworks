@@ -373,7 +373,7 @@ export default function ExpensesNew() {
                   <SelectValue placeholder={t('expenses.select_category')} />
                 </SelectTrigger>
                 <SelectContent>
-                  {categoryOptions.map(c => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+                  {categoryOptions.map(c => (<SelectItem key={c} value={c}>{t(`expenses.categories.${c}`)}</SelectItem>))}
                 </SelectContent>
               </Select>
             </div>

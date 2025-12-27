@@ -880,7 +880,7 @@ const Expenses = () => {
                 <SelectContent>
                   <SelectItem value="all">{t('expenses.all_categories')}</SelectItem>
                   {categoryOptions.map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                    <SelectItem key={c} value={c}>{t(`expenses.categories.${c}`)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1413,7 +1413,7 @@ const Expenses = () => {
                   </SelectTrigger>
                   <SelectContent>
                     {categoryOptions.map((c) => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                      <SelectItem key={c} value={c}>{t(`expenses.categories.${c}`)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1673,7 +1673,7 @@ const Expenses = () => {
                   </SelectTrigger>
                   <SelectContent>
                     {categoryOptions.map((c) => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                      <SelectItem key={c} value={c}>{t(`expenses.categories.${c}`)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

@@ -1470,7 +1470,7 @@ export default function Statements() {
 
               <div className="flex justify-end gap-2 pt-4">
                 <Button variant="outline" onClick={() => setUploadModalOpen(false)}>
-                  {t('cancel', { defaultValue: 'Cancel' })}
+                  {t('common.cancel', 'Cancel')}
                 </Button>
                 <Button onClick={onUpload} disabled={loading || files.length === 0}>
                   {loading ? (
