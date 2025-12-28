@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Loader2, FileText, Mail } from "lucide-react";
+import { ProfessionalButton } from "@/components/ui/professional-button";
+import { CheckCircle2, ChevronLeft, Save, Loader2, FileText, Mail } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { useTranslation } from "react-i18next";
@@ -456,107 +457,109 @@ export function InvoiceForm({
         </div>
       )}
 
-      <Card className="pt-6">
-        <CardContent>
-          <Form {...invoiceForm.form}>
-            <form onSubmit={invoiceForm.form.handleSubmit(onSubmit, (errors) => {
-              console.error("Form validation errors:", errors);
-              toast.error("Please fix validation errors before submitting");
-              invoiceForm.setSubmitting(false);
-            })} className="space-y-8">
+      <Form {...invoiceForm.form}>
+        <form onSubmit={invoiceForm.form.handleSubmit(onSubmit, (errors) => {
+          console.error("Form validation errors:", errors);
+          toast.error("Please fix validation errors before submitting");
+          invoiceForm.setSubmitting(false);
+        })} className="space-y-12 pb-20">
 
-              {/* Client Section */}
-              <InvoiceClientSection
-                form={invoiceForm.form}
-                clients={invoiceForm.clients}
-                isEdit={isEdit}
-                isInvoicePaid={false}
-                tenantInfo={invoiceForm.tenantInfo}
-                showNewClientDialog={clientManagement.showNewClientDialog}
-                setShowNewClientDialog={clientManagement.setShowNewClientDialog}
-                newClientForm={clientManagement.newClientForm}
-                setNewClientForm={clientManagement.setNewClientForm}
-                resetNewClientForm={clientManagement.resetNewClientForm}
-                handleCreateClient={handleCreateClientWithCallback}
-              />
+          {/* Client Section */}
+          <InvoiceClientSection
+            form={invoiceForm.form}
+            clients={invoiceForm.clients}
+            isEdit={isEdit}
+            isInvoicePaid={false}
+            tenantInfo={invoiceForm.tenantInfo}
+            showNewClientDialog={clientManagement.showNewClientDialog}
+            setShowNewClientDialog={clientManagement.setShowNewClientDialog}
+            newClientForm={clientManagement.newClientForm}
+            setNewClientForm={clientManagement.setNewClientForm}
+            resetNewClientForm={clientManagement.resetNewClientForm}
+            handleCreateClient={handleCreateClientWithCallback}
+          />
 
-              {/* Items Section */}
-              <InvoiceItemsSection
-                form={invoiceForm.form}
-                isEdit={isEdit}
-                isInvoicePaid={false}
-                submitting={invoiceForm.submitting}
-                itemKeyCounter={0}
-                setItemKeyCounter={() => { }}
-              />
+          {/* Items Section */}
+          <InvoiceItemsSection
+            form={invoiceForm.form}
+            isEdit={isEdit}
+            isInvoicePaid={false}
+            submitting={invoiceForm.submitting}
+            itemKeyCounter={0}
+            setItemKeyCounter={() => { }}
+          />
 
-              {/* Discount Section */}
-              <InvoiceDiscountSection
-                form={invoiceForm.form}
-                isEdit={isEdit}
-                isInvoicePaid={false}
-                availableDiscountRules={invoiceForm.availableDiscountRules}
-                appliedDiscountRule={invoiceForm.appliedDiscountRule}
-                calculateSubtotal={invoiceForm.calculateSubtotal}
-                calculateDiscount={invoiceForm.calculateDiscount}
-                calculateTotal={invoiceForm.calculateTotal}
-                applyDiscountRule={invoiceForm.applyDiscountRule}
-              />
+          {/* Discount Section */}
+          <InvoiceDiscountSection
+            form={invoiceForm.form}
+            isEdit={isEdit}
+            isInvoicePaid={false}
+            availableDiscountRules={invoiceForm.availableDiscountRules}
+            appliedDiscountRule={invoiceForm.appliedDiscountRule}
+            calculateSubtotal={invoiceForm.calculateSubtotal}
+            calculateDiscount={invoiceForm.calculateDiscount}
+            calculateTotal={invoiceForm.calculateTotal}
+            applyDiscountRule={invoiceForm.applyDiscountRule}
+          />
 
-              {/* Labels Section */}
-              <InvoiceLabelsSection
-                form={invoiceForm.form}
-              />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Labels Section */}
+            <InvoiceLabelsSection
+              form={invoiceForm.form}
+            />
 
-              {/* Payment Section - Only show for approved invoices or when payment editing is allowed */}
-              {isEdit && (invoice?.status === 'approved' || canEditPayment) && (
-                <InvoicePaymentSection
-                  form={invoiceForm.form}
-                  canEditPayment={canEditPayment}
-                />
-              )}
+            {/* Attachment Section */}
+            <InvoiceAttachmentSection
+              isEdit={isEdit}
+              invoiceAttachment={attachmentManagement.invoiceAttachment}
+              attachmentInfo={attachmentManagement.attachmentInfo}
+              attachmentPreview={attachmentManagement.attachmentPreview}
+              attachmentPreviewLoading={attachmentManagement.attachmentPreviewLoading}
+              onFileSelect={attachmentManagement.handleFileSelect}
+              onPreviewExisting={attachmentManagement.previewExistingAttachment}
+              onPreviewNew={attachmentManagement.previewNewAttachment}
+              onDownload={attachmentManagement.downloadAttachment}
+              onDelete={attachmentManagement.deleteAttachment}
+              onClosePreview={attachmentManagement.closePreview}
+            />
+          </div>
 
-              {/* Attachment Section */}
-              <InvoiceAttachmentSection
-                isEdit={isEdit}
-                invoiceAttachment={attachmentManagement.invoiceAttachment}
-                attachmentInfo={attachmentManagement.attachmentInfo}
-                attachmentPreview={attachmentManagement.attachmentPreview}
-                attachmentPreviewLoading={attachmentManagement.attachmentPreviewLoading}
-                onFileSelect={attachmentManagement.handleFileSelect}
-                onPreviewExisting={attachmentManagement.previewExistingAttachment}
-                onPreviewNew={attachmentManagement.previewNewAttachment}
-                onDownload={attachmentManagement.downloadAttachment}
-                onDelete={attachmentManagement.deleteAttachment}
-                onClosePreview={attachmentManagement.closePreview}
-              />
+          {/* Payment Section - Only show for approved invoices or when payment editing is allowed */}
+          {isEdit && (invoice?.status === 'approved' || canEditPayment) && (
+            <InvoicePaymentSection
+              form={invoiceForm.form}
+              canEditPayment={canEditPayment}
+            />
+          )}
 
-              {/* Form Actions */}
-              {renderButtons && !isEdit && (
-                <div className="flex justify-end gap-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => onFormCancel ? onFormCancel() : navigate('/invoices')}
-                  >
-                    {t('invoices.cancel')}
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={invoiceForm.submitting}
-                  >
-                    {invoiceForm.submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {t('invoices.create_invoice')}
-                  </Button>
-                </div>
-              )}
+          {/* Form Actions */}
+          {renderButtons && !isEdit && (
+            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 p-4 bg-background/80 backdrop-blur-2xl border border-border/50 rounded-3xl shadow-2xl flex items-center gap-6 animate-in slide-in-from-bottom-10 duration-500">
+              <ProfessionalButton
+                type="button"
+                variant="outline"
+                onClick={() => onFormCancel ? onFormCancel() : navigate('/invoices')}
+                leftIcon={<ChevronLeft className="h-4 w-4" />}
+                className="rounded-2xl"
+              >
+                {t('invoices.cancel')}
+              </ProfessionalButton>
+              <ProfessionalButton
+                type="submit"
+                variant="gradient"
+                loading={invoiceForm.submitting}
+                leftIcon={<Save className="h-4 w-4" />}
+                className="rounded-2xl px-8"
+              >
+                {t('invoices.create_invoice')}
+              </ProfessionalButton>
+            </div>
+          )}
 
-              {/* Hidden submit button for external triggering */}
-              <button type="submit" style={{ display: 'none' }} ref={submitButtonRef} />
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
+          {/* Hidden submit button for external triggering */}
+          <button type="submit" style={{ display: 'none' }} ref={submitButtonRef} />
+        </form>
+      </Form>
 
       {/* Client Creation Dialog */}
       <Dialog
