@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -110,6 +110,7 @@ export default function Statements() {
   const [showRecycleBin, setShowRecycleBin] = useState(false);
   const [deletedStatements, setDeletedStatements] = useState<DeletedBankStatement[]>([]);
   const [recycleBinLoading, setRecycleBinLoading] = useState(false);
+  const prevDeletedCount = useRef<number>(0);
   const [statementToPermanentlyDelete, setStatementToPermanentlyDelete] = useState<number | null>(null);
   const [emptyRecycleBinModalOpen, setEmptyRecycleBinModalOpen] = useState(false);
 
@@ -272,6 +273,13 @@ export default function Statements() {
   useEffect(() => {
     loadList();
   }, []);
+
+  useEffect(() => {
+    if (!recycleBinLoading && deletedStatements.length === 0 && showRecycleBin && prevDeletedCount.current > 0) {
+      setShowRecycleBin(false);
+    }
+    prevDeletedCount.current = deletedStatements.length;
+  }, [deletedStatements.length, recycleBinLoading, showRecycleBin]);
 
   const openStatement = async (id: number) => {
     setSelected(id);

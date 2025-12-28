@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Search, Filter, FileText, Loader2, Pencil, Trash2, RotateCcw, ChevronDown, ChevronUp, Upload, Edit, Copy, Grid3X3, List, Eye, Package } from "lucide-react";
@@ -45,6 +45,7 @@ const Invoices = () => {
   const [showRecycleBin, setShowRecycleBin] = useState(false);
   const [deletedInvoices, setDeletedInvoices] = useState<DeletedInvoice[]>([]);
   const [recycleBinLoading, setRecycleBinLoading] = useState(false);
+  const prevDeletedCount = useRef<number>(0);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [invoiceToDelete, setInvoiceToDelete] = useState<number | null>(null);
@@ -96,6 +97,13 @@ const Invoices = () => {
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [currentTenantId]);
+
+  useEffect(() => {
+    if (!recycleBinLoading && deletedInvoices.length === 0 && showRecycleBin && prevDeletedCount.current > 0) {
+      setShowRecycleBin(false);
+    }
+    prevDeletedCount.current = deletedInvoices.length;
+  }, [deletedInvoices.length, recycleBinLoading, showRecycleBin]);
 
   useEffect(() => {
     const fetchInvoices = async () => {
@@ -651,7 +659,7 @@ const Invoices = () => {
                             </span>
                           </TableCell>
                           <TableCell>
-                            <Badge 
+                            <Badge
                               className={
                                 invoice.status === 'paid' ? 'status-paid' :
                                   invoice.status === 'pending' ? 'status-pending' :

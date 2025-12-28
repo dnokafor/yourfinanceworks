@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trash2, RotateCcw } from "lucide-react";
+import { Trash2, RotateCcw, ChevronDown } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { formatDate } from '@/lib/utils';
@@ -27,10 +28,19 @@ const StatementRecycleBin = () => {
   const [permanentDeleteModalOpen, setPermanentDeleteModalOpen] = useState(false);
   const [statementToDelete, setStatementToDelete] = useState<number | null>(null);
   const [emptyRecycleBinModalOpen, setEmptyRecycleBinModalOpen] = useState(false);
+  const [isBinCollapsed, setIsBinCollapsed] = useState(true);
+  const [userInteracted, setUserInteracted] = useState(false);
 
   useEffect(() => {
     fetchDeletedStatements();
   }, []);
+
+  useEffect(() => {
+    // Auto-collapse when bin is empty and not loading, but only if user hasn't interacted
+    if (!loading && deletedStatements.length === 0 && !userInteracted) {
+      setIsBinCollapsed(true);
+    }
+  }, [deletedStatements, loading, userInteracted]);
 
   const fetchDeletedStatements = async () => {
     try {
@@ -82,6 +92,10 @@ const StatementRecycleBin = () => {
     setEmptyRecycleBinModalOpen(true);
   };
 
+  const handleUserInteraction = () => {
+    setUserInteracted(true);
+  };
+
   const confirmEmptyRecycleBin = async () => {
     try {
       await api.post('/statements/recycle-bin/empty');
@@ -118,11 +132,26 @@ const StatementRecycleBin = () => {
           )}
         </div>
 
-        <Card className="slide-in">
-          <CardHeader className="pb-3">
-            <CardTitle>{t('statementRecycleBin.deleted_statements')}</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <Collapsible open={!isBinCollapsed} onOpenChange={(open) => {
+      setIsBinCollapsed(!open);
+      handleUserInteraction();
+    }}>
+          <Card className="slide-in">
+            <CollapsibleTrigger asChild>
+              <CardHeader className="pb-3 cursor-pointer hover:bg-muted/50 transition-colors">
+                <div className="flex items-center justify-between">
+                  <CardTitle>{t('statementRecycleBin.deleted_statements')}</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">
+                      {deletedStatements.length} {t('statementRecycleBin.items', 'items')}
+                    </span>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${isBinCollapsed ? '' : 'rotate-180'}`} />
+                  </div>
+                </div>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent>
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
@@ -202,8 +231,10 @@ const StatementRecycleBin = () => {
                 </TableBody>
               </Table>
             </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
       </div>
 
       {/* Permanent Delete Modal */}

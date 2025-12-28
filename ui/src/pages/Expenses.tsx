@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,6 @@ import { CalendarIcon, X, Eye, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useFeatures } from '@/contexts/FeatureContext';
-import { useGamificationContextOptional } from '@/contexts/GamificationContext';
 import { BulkExpenseModal } from '@/components/BulkExpenseModal';
 import { InventoryConsumptionForm } from '@/components/inventory/InventoryConsumptionForm';
 import { ExpenseApprovalStatus } from '@/components/approvals/ExpenseApprovalStatus';
@@ -41,11 +40,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Link } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { expenseApi, approvalApi, Expense, ExpenseAttachmentMeta, api, linkApi, settingsApi, DeletedExpense } from '@/lib/api';
+import { expenseApi, Expense, ExpenseAttachmentMeta, api, linkApi, settingsApi, DeletedExpense } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { CurrencySelector } from '@/components/ui/currency-selector';
 import { Label } from '@/components/ui/label';
-import { Users } from 'lucide-react';
 import { EXPENSE_CATEGORY_OPTIONS } from '@/constants/expenses';
 import { canPerformActions, canEditExpense, canDeleteExpense, getCurrentUser } from '@/utils/auth';
 import { formatDate } from '@/lib/utils';
@@ -75,18 +73,10 @@ const safeParseDateString = (dateString?: string): Date => {
   }
 };
 
-const defaultNewExpense: Partial<Expense> = {
-  amount: 0,
-  currency: 'USD',
-  expense_date: formatDateToISO(new Date()),
-  category: 'General',
-  status: 'recorded',
-};
 
 const Expenses = () => {
   const { t, i18n } = useTranslation();
   const { isFeatureEnabled } = useFeatures();
-  const gamificationContext = useGamificationContextOptional();
   const hasAIExpenseFeature = isFeatureEnabled('ai_expense');
 
   // Helper function to get locale for date formatting
@@ -119,29 +109,19 @@ const Expenses = () => {
   const [newLabelValueById, setNewLabelValueById] = useState<Record<number, string>>({});
   const [searchParams, setSearchParams] = useSearchParams();
   const [hasNextPage, setHasNextPage] = useState(false);
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [newExpense, setNewExpense] = useState<Partial<Expense>>(defaultNewExpense);
   const [uploadingId, setUploadingId] = useState<number | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editExpense, setEditExpense] = useState<Partial<Expense> & { id?: number }>({});
-  const [newReceiptFile, setNewReceiptFile] = useState<File | null>(null);
   const [editReceiptFile, setEditReceiptFile] = useState<File | null>(null);
   const [attachmentPreviewOpen, setAttachmentPreviewOpen] = useState<{ expenseId: number | null }>({ expenseId: null });
   const [attachments, setAttachments] = useState<Record<number, ExpenseAttachmentMeta[]>>({});
 
-  // Approval workflow state for new expense modal
-  const [submitNewForApproval, setSubmitNewForApproval] = useState(false);
-  const [selectedNewApproverId, setSelectedNewApproverId] = useState<string>('');
-  const [availableNewApprovers, setAvailableNewApprovers] = useState<Array<{ id: number; name: string; email: string }>>([]);
   const [approvalsNotLicensed, setApprovalsNotLicensed] = useState(false);
   const [preview, setPreview] = useState<{ open: boolean; url: string | null; contentType: string | null; filename: string | null }>({ open: false, url: null, contentType: null, filename: null });
   const [previewLoading, setPreviewLoading] = useState<{ expenseId: number; attachmentId: number } | null>(null);
   const [isBulkCreateOpen, setIsBulkCreateOpen] = useState(false);
   const [invoiceOptions, setInvoiceOptions] = useState<Array<{ id: number; number: string; client_name: string }>>([]);
 
-  // Inventory consumption state for new expense
-  const [isNewInventoryConsumption, setIsNewInventoryConsumption] = useState(false);
-  const [newConsumptionItems, setNewConsumptionItems] = useState<any[]>([]);
 
   // Inventory consumption state for edit expense
   const [isEditInventoryConsumption, setIsEditInventoryConsumption] = useState(false);
@@ -150,13 +130,12 @@ const Expenses = () => {
   // Processing lock state for expenses
   const [processingLocks, setProcessingLocks] = useState<Set<number>>(new Set());
 
-  // Creating state for new expense modal
-  const [creating, setCreating] = useState(false);
 
   // Recycle bin state
   const [showRecycleBin, setShowRecycleBin] = useState(false);
   const [deletedExpenses, setDeletedExpenses] = useState<DeletedExpense[]>([]);
   const [recycleBinLoading, setRecycleBinLoading] = useState(false);
+  const prevDeletedCount = useRef<number>(0);
   const [expenseToPermanentlyDelete, setExpenseToPermanentlyDelete] = useState<number | null>(null);
   const [emptyRecycleBinModalOpen, setEmptyRecycleBinModalOpen] = useState(false);
 
@@ -183,13 +162,6 @@ const Expenses = () => {
     })();
   }, []);
 
-  // Calculate amount from consumption items for new expense
-  useEffect(() => {
-    if (isNewInventoryConsumption && newConsumptionItems.length > 0) {
-      const total = newConsumptionItems.reduce((sum, item) => sum + (item.quantity * (item.unit_cost || 0)), 0);
-      setNewExpense(prev => ({ ...prev, amount: total }));
-    }
-  }, [newConsumptionItems, isNewInventoryConsumption]);
 
   // Calculate amount from consumption items for edit expense
   useEffect(() => {
@@ -231,25 +203,12 @@ const Expenses = () => {
   }, [currentTenantId]);
 
   useEffect(() => {
-    const fetchApprovers = async () => {
-      try {
-        const response = await approvalApi.getApprovers();
-        setAvailableNewApprovers(response);
-        setApprovalsNotLicensed(false);
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        // Check if it's a license error (402 Payment Required)
-        if (errorMessage.includes('not included in your current license') || errorMessage.includes('requires a valid license')) {
-          setApprovalsNotLicensed(true);
-          setAvailableNewApprovers([]);
-        } else {
-          console.error('Failed to fetch approvers:', error);
-          setAvailableNewApprovers([]);
-        }
-      }
-    };
-    fetchApprovers();
-  }, []);
+    if (!recycleBinLoading && deletedExpenses.length === 0 && showRecycleBin && prevDeletedCount.current > 0) {
+      setShowRecycleBin(false);
+    }
+    prevDeletedCount.current = deletedExpenses.length;
+  }, [deletedExpenses.length, recycleBinLoading, showRecycleBin]);
+
 
   const fetchExpenses = async () => {
     setLoading(true);
@@ -349,121 +308,7 @@ const Expenses = () => {
     return expenses || [];
   }, [expenses]);
 
-  const openCreate = () => {
-    setNewExpense(defaultNewExpense);
-    setNewReceiptFile(null);
-    setIsNewInventoryConsumption(false);
-    setNewConsumptionItems([]);
-    setSubmitNewForApproval(false);
-    setSelectedNewApproverId('');
-    setIsCreateOpen(true);
-  };
 
-  const handleCreate = async () => {
-    // Prevent multiple submissions
-    if (creating) return;
-
-    setCreating(true);
-    try {
-      if ((!newExpense.amount || Number(newExpense.amount) === 0) && !newReceiptFile) {
-        toast.error('Amount is required unless importing from a file');
-        setCreating(false);
-        return;
-      }
-      if (!newExpense.category) {
-        toast.error('Category is required');
-        setCreating(false);
-        return;
-      }
-      if (isNewInventoryConsumption && (!newConsumptionItems || newConsumptionItems.length === 0)) {
-        toast.error('Inventory consumption must include at least one item');
-        setCreating(false);
-        return;
-      }
-      const payload = {
-        amount: Number(newExpense.amount),
-        currency: newExpense.currency || 'USD',
-        expense_date: newExpense.expense_date,
-        category: newExpense.category,
-        vendor: newExpense.vendor,
-        tax_rate: newExpense.tax_rate,
-        tax_amount: newExpense.tax_amount,
-        total_amount: newExpense.total_amount,
-        payment_method: newExpense.payment_method,
-        reference_number: newExpense.reference_number,
-        status: newExpense.status || 'recorded',
-        notes: newExpense.notes,
-        invoice_id: newExpense.invoice_id ?? null,
-        is_inventory_consumption: isNewInventoryConsumption,
-        consumption_items: isNewInventoryConsumption ? newConsumptionItems : null,
-      } as any;
-      const created = await expenseApi.createExpense({ ...payload, imported_from_attachment: !!newReceiptFile, analysis_status: newReceiptFile ? 'queued' : 'not_started' } as any);
-      // Upload receipt if provided
-      let createdWithReceipt = created;
-      if (newReceiptFile) {
-        const addNotification = (window as any).addAINotification;
-        addNotification?.('processing', 'Processing Expense Receipt', `Analyzing receipt file with AI...`);
-
-        try {
-          setUploadingId(created.id);
-          const uploadResp = await expenseApi.uploadReceipt(created.id, newReceiptFile);
-          createdWithReceipt = { ...created, receipt_filename: uploadResp?.receipt_filename || created.receipt_filename } as Expense;
-
-          addNotification?.('success', 'Expense Receipt Uploaded', `Successfully uploaded receipt file. AI analysis in progress.`);
-          const startPolling = (window as any).startExpensePolling;
-          if (typeof startPolling === 'function') {
-            startPolling(created.id);
-          } else {
-            console.warn('startExpensePolling is not available globally');
-          }
-        } catch (e) {
-          console.error('Receipt upload failed on create:', e);
-          addNotification?.('error', 'Expense Receipt Failed', `Failed to upload receipt: ${e instanceof Error ? e.message : 'Unknown error'}`);
-          toast.error('Receipt upload failed');
-        } finally {
-          setUploadingId(null);
-          setNewReceiptFile(null);
-        }
-      }
-      // Submit for approval if requested
-      if (submitNewForApproval && selectedNewApproverId) {
-        try {
-          await approvalApi.submitForApproval(createdWithReceipt.id, parseInt(selectedNewApproverId), undefined);
-          toast.success('Expense created and submitted for approval');
-        } catch (approvalError) {
-          console.error('Approval submission failed:', approvalError);
-          toast.error('Expense created but failed to submit for approval');
-        }
-      } else {
-        toast.success('Expense created');
-      }
-
-      // Reset approval workflow state
-      setSubmitNewForApproval(false);
-      setSelectedNewApproverId('');
-      setExpenses(prev => [createdWithReceipt, ...prev]);
-      setIsCreateOpen(false);
-
-      // Track expense in gamification system
-      if (gamificationContext) {
-        try {
-          await gamificationContext.trackExpense({
-            amount: createdWithReceipt.amount,
-            category: createdWithReceipt.category,
-            receipt: !!newReceiptFile,
-            description: createdWithReceipt.notes
-          });
-        } catch (err) {
-          console.error('Failed to track expense in gamification:', err);
-          // Don't fail the expense creation if gamification tracking fails
-        }
-      }
-    } catch (e: any) {
-      toast.error(e?.message || 'Failed to create expense');
-    } finally {
-      setCreating(false);
-    }
-  };
 
   const handleDelete = async (id: number) => {
     try {
@@ -1357,275 +1202,6 @@ const Expenses = () => {
           </CardContent>
         </ProfessionalCard>
 
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{t('expenses.new_title')}</DialogTitle>
-            </DialogHeader>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4">
-              <div>
-                <label className="text-sm">{t('expenses.labels.amount')}</label>
-                <Input
-                  type="number"
-                  value={Number(newExpense.amount || 0)}
-                  onChange={e => setNewExpense({ ...newExpense, amount: Number(e.target.value) })}
-                  disabled={isNewInventoryConsumption}
-                  placeholder={isNewInventoryConsumption ? t('expenses.calculated_from_items') : ""}
-                />
-              </div>
-              <div>
-                <label className="text-sm">{t('expenses.labels.currency')}</label>
-                <CurrencySelector
-                  value={newExpense.currency || 'USD'}
-                  onValueChange={(v) => setNewExpense({ ...newExpense, currency: v })}
-                  placeholder={t('expenses.select_currency')}
-                />
-              </div>
-              <div>
-                <label className="text-sm">{t('expenses.labels.date')}</label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start text-left font-normal">
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {newExpense.expense_date ? format(safeParseDateString(newExpense.expense_date as string), 'PPP') : t('expenses.labels.pick_date')}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={newExpense.expense_date ? safeParseDateString(newExpense.expense_date as string) : undefined}
-                      onSelect={(d) => {
-                        if (d) {
-                          const iso = formatDateToISO(d);
-                          setNewExpense({ ...newExpense, expense_date: iso });
-                        }
-                      }}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div>
-                <label className="text-sm">{t('expenses.receipt_time', { defaultValue: 'Receipt Time (HH:MM)' })}</label>
-                <Input
-                  type="time"
-                  value={newExpense.receipt_timestamp ? new Date(newExpense.receipt_timestamp as string).toISOString().substring(11, 16) : ''}
-                  onChange={(e) => {
-                    if (e.target.value && newExpense.expense_date) {
-                      // Combine date with time
-                      const timestamp = `${newExpense.expense_date}T${e.target.value}:00Z`;
-                      setNewExpense({
-                        ...newExpense,
-                        receipt_timestamp: timestamp,
-                        receipt_time_extracted: true
-                      });
-                    } else {
-                      setNewExpense({
-                        ...newExpense,
-                        receipt_timestamp: null,
-                        receipt_time_extracted: false
-                      });
-                    }
-                  }}
-                  placeholder="14:30"
-                />
-              </div>
-              <div>
-                <label className="text-sm">{t('expenses.link_to_invoice')}</label>
-                <Select value={newExpense.invoice_id ? String(newExpense.invoice_id) : undefined} onValueChange={v => setNewExpense({ ...newExpense, invoice_id: v === 'none' ? undefined : Number(v) })}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder={t('expenses.select_invoice')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">{t('expenses.none')}</SelectItem>
-                    {invoiceOptions.map(inv => (
-                      <SelectItem key={inv.id} value={String(inv.id)}>{inv.number} — {inv.client_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm">{t('expenses.labels.category')}</label>
-                <Select
-                  value={(newExpense.category as string) || 'General'}
-                  onValueChange={(v) => setNewExpense({ ...newExpense, category: v })}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder={t('expenses.select_category') as string} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categoryOptions.map((c) => (
-                      <SelectItem key={c} value={c}>{t(`expenses.categories.${c}`)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm">{t('expenses.labels.vendor')}</label>
-                <Input value={newExpense.vendor || ''} onChange={e => setNewExpense({ ...newExpense, vendor: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-sm">{t('expenses.labels.payment_method')}</label>
-                <Input value={newExpense.payment_method || ''} onChange={e => setNewExpense({ ...newExpense, payment_method: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-sm">{t('expenses.labels.reference_number')}</label>
-                <Input value={newExpense.reference_number || ''} onChange={e => setNewExpense({ ...newExpense, reference_number: e.target.value })} />
-              </div>
-
-              {/* Inventory Consumption Section */}
-              <div className="sm:col-span-2">
-                <div className="space-y-3 p-4 border rounded-lg bg-gray-50">
-                  <div className="flex items-center gap-2">
-                    <Package className="h-4 w-4" />
-                    <span className="text-sm font-medium">{t('expenses.inventory_integration')}</span>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="is-new-inventory-consumption"
-                      checked={isNewInventoryConsumption}
-                      onCheckedChange={(checked) => setIsNewInventoryConsumption(checked as boolean)}
-                    />
-                    <label
-                      htmlFor="is-new-inventory-consumption"
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                    >
-                      {t('expenses.this_expense_is_for_consuming_inventory_items')}
-                    </label>
-                  </div>
-
-                  {isNewInventoryConsumption && (
-                    <div className="space-y-4">
-                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                        <div className="flex items-center gap-2 text-orange-800 mb-3">
-                          <Package className="h-4 w-4" />
-                          <span className="text-sm font-medium">{t('expenses.inventory_consumption_details')}</span>
-                        </div>
-                        <p className="text-sm text-orange-700 mb-4">
-                          {t('expenses.select_the_inventory_items_you_consumed')}
-                        </p>
-
-                        <InventoryConsumptionForm
-                          onConsumptionItemsChange={setNewConsumptionItems}
-                          currency={newExpense.currency || 'USD'}
-                        />
-                      </div>
-
-                      {newConsumptionItems.length > 0 && (
-                        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                          <div className="flex items-center gap-2 text-green-800">
-                            <Package className="h-4 w-4" />
-                            <span className="text-sm font-medium">
-                              {t('expenses.ready_to_process', { count: newConsumptionItems.length })}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="text-sm">{t('expenses.labels.notes')}</label>
-                <Input value={newExpense.notes || ''} onChange={e => setNewExpense({ ...newExpense, notes: e.target.value })} />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="text-sm">{t('expenses.labels.receipt')}</label>
-                {!hasAIExpenseFeature && (
-                  <Alert className="mb-3 border-amber-200 bg-amber-50">
-                    <AlertCircle className="h-4 w-4 text-amber-600" />
-                    <AlertDescription className="text-amber-800 text-sm">
-                      <strong>Note:</strong> AI-powered receipt analysis is not available.
-                      Files will be uploaded as attachments only, without automatic data extraction.
-                    </AlertDescription>
-                  </Alert>
-                )}
-                <input
-                  type="file"
-                  accept="application/pdf,image/jpeg,image/png"
-                  onChange={(ev) => setNewReceiptFile(ev.target.files?.[0] || null)}
-                />
-              </div>
-
-              {/* Approval Workflow Section */}
-              <div className="sm:col-span-2 border-t pt-4 mt-4">
-                <h4 className="text-sm font-medium mb-3">{t('expenses.approval_workflow')}</h4>
-                <div className="flex items-center space-x-2 mb-2">
-                  <Checkbox
-                    id="submit-new-for-approval"
-                    checked={submitNewForApproval}
-                    onCheckedChange={(checked) => setSubmitNewForApproval(checked as boolean)}
-                  />
-                  <label
-                    htmlFor="submit-new-for-approval"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    {t('expenses.submit_this_expense_for_approval_after_creation')}
-                  </label>
-                </div>
-                {submitNewForApproval && (
-                  <div className="mt-3 space-y-3">
-                    {approvalsNotLicensed ? (
-                      <Alert className="border-amber-200 bg-amber-50">
-                        <AlertCircle className="h-4 w-4 text-amber-600" />
-                        <AlertDescription className="text-amber-800">
-                          {t('common.feature_not_licensed', {
-                            defaultValue: 'Approval workflows require a commercial license. Please upgrade your license to use this feature.'
-                          })}
-                        </AlertDescription>
-                      </Alert>
-                    ) : (
-                      <>
-                        <div className="p-3 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800/50 rounded-lg">
-                          <p className="text-sm text-blue-700 dark:text-blue-200">
-                            {t('expenses.this_expense_will_be_submitted_for_approval')}
-                          </p>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="new-approver-select" className="flex items-center gap-2 text-sm font-medium">
-                            <Users className="h-4 w-4" />
-                            {t('expenses.select_approver')} *
-                          </Label>
-                          <Select value={selectedNewApproverId} onValueChange={setSelectedNewApproverId}>
-                            <SelectTrigger>
-                              <SelectValue placeholder={t('expenses.choose_an_approver')} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {availableNewApprovers.map((approver) => (
-                                <SelectItem key={approver.id} value={approver.id.toString()}>
-                                  {approver.name} ({approver.email})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="p-4 flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setIsCreateOpen(false)}
-                disabled={creating}
-              >
-                {t('expenses.cancel')}
-              </Button>
-              <Button
-                onClick={handleCreate}
-                disabled={creating || (submitNewForApproval && !selectedNewApproverId)}
-                className={creating ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}
-              >
-                {creating ? t('common.saving') : (submitNewForApproval ? t('expenses.create_and_submit_for_approval') : t('expenses.buttons.create'))}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
           <DialogContent>
             <DialogHeader>
