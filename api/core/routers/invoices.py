@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from sqlalchemy.orm import Session, joinedload, selectinload
-from sqlalchemy import func
-from typing import List, Optional
+from sqlalchemy import func, cast, String
+import sqlalchemy as sa
+from typing import List, Optional, Dict, Any
 import logging
 import traceback
 from datetime import datetime, timezone, timedelta
@@ -18,7 +19,7 @@ from core.models.database import get_db
 from core.models.models_per_tenant import Invoice, Client, User, InvoiceItem, DiscountRule, Settings
 from core.models.models import MasterUser
 from core.routers.payments import Payment
-from core.schemas.invoice import InvoiceCreate, InvoiceUpdate, Invoice as InvoiceSchema, InvoiceWithClient, InvoiceHistory, InvoiceHistoryCreate, RecycleBinResponse, DeletedInvoice, RestoreInvoiceRequest
+from core.schemas.invoice import InvoiceCreate, InvoiceUpdate, Invoice as InvoiceSchema, InvoiceWithClient, InvoiceHistory, InvoiceHistoryCreate, RecycleBinResponse, DeletedInvoice, RestoreInvoiceRequest, PaginatedInvoices
 from core.routers.auth import get_current_user
 from core.services.tenant_database_manager import tenant_db_manager
 from core.services.currency_service import CurrencyService
@@ -157,6 +158,7 @@ async def create_invoice(
             custom_fields=invoice.custom_fields,
             show_discount_in_pdf=invoice.show_discount_in_pdf,
             payer=invoice.payer,
+            labels=invoice.labels,
             created_by_user_id=current_user.id  # User attribution
         )
         
@@ -475,6 +477,7 @@ async def create_invoice(
             "currency": invoice.currency,
             "due_date": invoice.due_date.isoformat() if invoice.due_date else None,
             "status": invoice.status,
+            "labels": invoice.labels,
             "notes": invoice.notes,
             "description": invoice.notes,
             "client_id": invoice.client_id,
@@ -564,7 +567,8 @@ async def clone_invoice(
             recurring_frequency=source_invoice.recurring_frequency,
             custom_fields=source_invoice.custom_fields,
             show_discount_in_pdf=source_invoice.show_discount_in_pdf,
-            payer=source_invoice.payer
+            payer=source_invoice.payer,
+            labels=source_invoice.labels
         )
 
         # If the original has items, recalc subtotal/amount like create endpoint
@@ -696,11 +700,12 @@ async def clone_invoice(
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Failed to clone invoice")
 
-@router.get("/", response_model=List[InvoiceWithClient])
+@router.get("/", response_model=PaginatedInvoices)
 async def read_invoices(
     skip: int = 0,
     limit: int = 100,
     status_filter: Optional[str] = None,
+    label: Optional[str] = None,
     created_by_user_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user)
@@ -724,13 +729,12 @@ async def read_invoices(
             selectinload(Invoice.created_by)
         ).filter(Invoice.is_deleted == False)
 
-        # Apply status filter if provided
-        if status_filter and status_filter != "all":
-            query = query.filter(Invoice.status == status_filter)
+        # Apply label filter if provided
+        if label:
+            query = query.filter(sa.cast(Invoice.labels, sa.String).ilike(f"%{label}%"))
 
-        # Apply creator filter if provided
-        if created_by_user_id is not None:
-            query = query.filter(Invoice.created_by_user_id == created_by_user_id)
+        # Calculate total count before pagination
+        total_count = query.group_by(Invoice.id, Client.name).count()
 
         # Get invoices with client information and payment status
         invoices = query.group_by(
@@ -782,6 +786,7 @@ async def read_invoices(
                 "custom_fields": invoice.custom_fields if invoice.custom_fields is not None else {},
                 "show_discount_in_pdf": invoice.show_discount_in_pdf,
                 "payer": invoice.payer,
+                "labels": invoice.labels,
                 "has_attachment": get_attachment_info(invoice, new_attachments)[0],
                 "attachment_filename": get_attachment_info(invoice, new_attachments)[1],
                 "created_by_user_id": invoice.created_by_user_id,
@@ -790,7 +795,10 @@ async def read_invoices(
             }
             result.append(invoice_dict)
 
-        return result
+        return {
+            "items": result,
+            "total": total_count
+        }
     except Exception as e:
         logger.error(f"Error in read_invoices: {str(e)}")
         logger.error(traceback.format_exc())
@@ -799,7 +807,44 @@ async def read_invoices(
             detail=f"Failed to fetch invoices: {str(e)}"
         )# Recycle Bin Endpoints (must come before /{invoice_id} route)
 
-@router.get("/recycle-bin", response_model=List[DeletedInvoice])
+@router.post("/bulk-labels")
+async def bulk_labels(
+    payload: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Bulk add or remove labels from invoices"""
+    require_non_viewer(current_user, "bulk update invoices")
+    
+    ids = payload.get("ids", [])
+    action = payload.get("action") # "add" or "remove"
+    label = payload.get("label", "").strip()
+    
+    if not ids or action not in ["add", "remove"] or label == "":
+        raise HTTPException(status_code=400, detail="Invalid request payload")
+        
+    try:
+        invoices = db.query(Invoice).filter(Invoice.id.in_(ids)).all()
+        
+        for inv in invoices:
+            current_labels = list(inv.labels or [])
+            if action == "add":
+                if label not in current_labels:
+                    current_labels.append(label)
+            elif action == "remove":
+                if label in current_labels:
+                    current_labels.remove(label)
+            
+            inv.labels = current_labels
+            inv.updated_at = datetime.now(timezone.utc)
+            
+        db.commit()
+        return {"success": True, "count": len(invoices)}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error in bulk_labels: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update labels")
+
 async def get_deleted_invoices(
     skip: int = 0,
     limit: int = 100,
@@ -1269,6 +1314,7 @@ async def read_invoice(
             "currency": invoice.currency,
             "due_date": invoice.due_date.isoformat() if invoice.due_date else None,
             "status": invoice.status,
+            "labels": invoice.labels,
             "notes": invoice.notes,
             "client_id": invoice.client_id,
             "client_name": client_name,

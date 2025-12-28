@@ -16,7 +16,7 @@ from core.utils.rbac import require_non_viewer
 from core.utils.feature_gate import require_feature
 from core.services.statement_service import extract_transactions_from_pdf_paths
 from core.models.models_per_tenant import BankStatement, BankStatementTransaction
-from core.schemas.bank_statement import BankStatementResponse, DeletedBankStatement, RecycleBinStatementResponse, RestoreStatementRequest
+from core.schemas.bank_statement import BankStatementResponse, DeletedBankStatement, RecycleBinStatementResponse, RestoreStatementRequest, PaginatedBankStatements
 from datetime import datetime, timezone
 from fastapi.responses import FileResponse
 from core.services.ocr_service import publish_bank_statement_task
@@ -181,9 +181,12 @@ async def upload_statements(
         pass
 
 
-@router.get("/", response_model=Dict[str, Any])
-@router.get("", response_model=Dict[str, Any])
+@router.get("/", response_model=PaginatedBankStatements)
+@router.get("", response_model=PaginatedBankStatements)
 async def list_statements(
+    skip: int = 0,
+    limit: int = 100,
+    label: Optional[str] = None,
     created_by_user_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user),
@@ -207,31 +210,84 @@ async def list_statements(
     if created_by_user_id is not None:
         query = query.filter(BankStatement.created_by_user_id == created_by_user_id)
 
-    rows = query.order_by(BankStatement.created_at.desc()).all()
+    # Apply label filter if provided
+    if label:
+        import sqlalchemy as sa
+        query = query.filter(sa.cast(BankStatement.labels, sa.String).ilike(f"%{label}%"))
+
+    total_count = query.count()
+    rows = query.order_by(BankStatement.created_at.desc()).offset(skip).limit(limit).all()
+    
+    statements = []
+    for s in rows:
+        statements.append({
+            "id": s.id,
+            "original_filename": s.original_filename,
+            "stored_filename": s.stored_filename,
+            "file_path": s.file_path,
+            "status": s.status,
+            "extracted_count": s.extracted_count,
+            "labels": getattr(s, 'labels', None),
+            "notes": getattr(s, 'notes', None),
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+            "created_by_user_id": s.created_by_user_id,
+            "created_by_username": s.created_by.email if s.created_by else None,
+            "created_by_email": s.created_by.email if s.created_by else None,
+        })
+
     return {
         "success": True,
-        "statements": [
-            {
-                "id": s.id,
-                "original_filename": s.original_filename,
-                "stored_filename": s.stored_filename,
-                "file_path": s.file_path,
-                "status": s.status,
-                "extracted_count": s.extracted_count,
-                "labels": getattr(s, 'labels', None),
-                "notes": getattr(s, 'notes', None),
-                "created_at": s.created_at.isoformat() if s.created_at else None,
-                "created_by_user_id": s.created_by_user_id,
-                "created_by_username": s.created_by.email if s.created_by else None,
-                "created_by_email": s.created_by.email if s.created_by else None,
-            }
-            for s in rows
-        ],
+        "statements": statements,
+        "total": total_count
     }
 
 
 
 # Recycle Bin Endpoints (must come before /{statement_id} route)
+
+@router.post("/bulk-labels")
+async def bulk_labels(
+    payload: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Bulk add or remove labels from bank statements"""
+    require_non_viewer(current_user, "bulk update statements")
+    
+    ids = payload.get("ids", [])
+    action = payload.get("action") # "add" or "remove"
+    label = payload.get("label", "").strip()
+    
+    if not ids or action not in ["add", "remove"] or label == "":
+        raise HTTPException(status_code=400, detail="Invalid request payload")
+        
+    try:
+        # Check tenant context
+        from core.models.database import get_tenant_context
+        tenant_id = get_tenant_context()
+        if tenant_id is None:
+            raise HTTPException(status_code=401, detail="Tenant context required")
+
+        statements = db.query(BankStatement).filter(BankStatement.id.in_(ids), BankStatement.tenant_id == tenant_id).all()
+        
+        for s in statements:
+            current_labels = list(s.labels or [])
+            if action == "add":
+                if label not in current_labels:
+                    current_labels.append(label)
+            elif action == "remove":
+                if label in current_labels:
+                    current_labels.remove(label)
+            
+            s.labels = current_labels
+            s.updated_at = datetime.now(timezone.utc)
+            
+        db.commit()
+        return {"success": True, "count": len(statements)}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error in bulk_labels for statements: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update labels")
 
 @router.get("/recycle-bin", response_model=List[DeletedBankStatement])
 async def get_deleted_statements(

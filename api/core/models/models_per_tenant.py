@@ -55,6 +55,7 @@ class Client(Base):
     balance = Column(Float, default=0.0)  # Keep unencrypted for calculations
     paid_amount = Column(Float, default=0)  # Keep unencrypted for calculations
     preferred_currency = Column(String, nullable=True)  # Optional, fallback to tenant default
+    labels = Column(JSON, nullable=True)  # Multiple labels (tags) stored as JSON array of strings
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -100,6 +101,7 @@ class Invoice(Base):
     payer = Column(String, default="Client", nullable=False)  # Who is paying the invoice: 'You' or 'Client'
     attachment_path = Column(String, nullable=True)  # Path to uploaded attachment file
     attachment_filename = Column(EncryptedColumn(), nullable=True)  # Encrypted for privacy
+    labels = Column(JSON, nullable=True)  # Multiple labels (tags) stored as JSON array of strings
 
     # Soft delete fields for recycle bin functionality
     is_deleted = Column(Boolean, default=False, nullable=False)

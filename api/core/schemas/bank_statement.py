@@ -74,3 +74,8 @@ class RecycleBinStatementResponse(BaseModel):
 class RestoreStatementRequest(BaseModel):
     """Request schema for restoring a statement"""
     new_status: Optional[str] = "processed"  # Status to set when restoring
+
+class PaginatedBankStatements(BaseModel):
+    statements: List[BankStatementResponse]
+    total: int
+    success: bool = True

@@ -54,6 +54,7 @@ class InvoiceBase(BaseModel):
     custom_fields: Optional[Dict[str, Any]] = None
     show_discount_in_pdf: Optional[bool] = True
     payer: str = Field("You", description="Who is paying the invoice: 'You' or 'Client'")
+    labels: Optional[List[str]] = Field(None, description="Invoice labels")
 
 class InvoiceCreate(InvoiceBase):
     number: Optional[str] = Field(None, description="Invoice number (optional - will be auto-generated if not provided)")
@@ -79,6 +80,7 @@ class InvoiceUpdate(BaseModel):
     show_discount_in_pdf: Optional[bool] = None
     attachment_filename: Optional[str] = Field(None, description="Attachment filename; set to null to delete attachment")
     payer: Optional[str] = Field(None, description="Who is paying the invoice: 'You' or 'Client'")
+    labels: Optional[List[str]] = Field(None, description="Invoice labels")
 
 class Invoice(InvoiceBase):
     id: int
@@ -143,3 +145,6 @@ class RecycleBinResponse(BaseModel):
 class RestoreInvoiceRequest(BaseModel):
     """Request schema for restoring an invoice"""
     new_status: Optional[str] = "draft"  # Status to set when restoring 
+class PaginatedInvoices(BaseModel):
+    items: List[InvoiceWithClient]
+    total: int
