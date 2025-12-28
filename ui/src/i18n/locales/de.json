@@ -161,7 +161,10 @@
     "profile": "Profil",
     "audit_log": "Audit-Log",
     "analytics": "Analytics",
-    "dark_mode": "Dunkler Modus"
+    "dark_mode": "Dunkler Modus",
+    "invoice_recycle_bin": "@:recycleBin.title",
+    "expense_recycle_bin": "@:recycleBin.title",
+    "statement_recycle_bin": "@:recycleBin.title"
   },
   "auth": {
     "login": "Anmelden",
@@ -3127,7 +3130,7 @@
     "syncStarted": "Synchronisierung im Hintergrund gestartet..."
   },
   "expenseRecycleBin": {
-    "title": "Ausgaben-Papierkorb",
+    "title": "Papierkorb",
     "description": "Gelöschte Ausgaben verwalten",
     "empty_recycle_bin": "Papierkorb leeren",
     "deleted_expenses": "Gelöschte Ausgaben",
@@ -3160,7 +3163,7 @@
     "permanent_delete": "Endgültig löschen"
   },
   "statementRecycleBin": {
-    "title": "Kontoauszugs-Papierkorb",
+    "title": "Papierkorb",
     "description": "Gelöschte Kontoauszüge verwalten",
     "empty_recycle_bin": "Papierkorb leeren",
     "deleted_statements": "Gelöschte Kontoauszüge",

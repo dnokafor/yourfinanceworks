@@ -169,7 +169,10 @@
     "profile": "Profil",
     "audit_log": "Journal d'Audit",
     "analytics": "Analytiques",
-    "dark_mode": "Mode sombre"
+    "dark_mode": "Mode sombre",
+    "invoice_recycle_bin": "@:recycleBin.title",
+    "expense_recycle_bin": "@:recycleBin.title",
+    "statement_recycle_bin": "@:recycleBin.title"
   },
   "auth": {
     "login": "Connexion",
@@ -3130,7 +3133,7 @@
     "syncStarted": "Synchronisation démarrée en arrière-plan..."
   },
   "expenseRecycleBin": {
-    "title": "Corbeille de Dépenses",
+    "title": "Corbeille",
     "description": "Gérer les dépenses supprimées",
     "empty_recycle_bin": "Vider la Corbeille",
     "deleted_expenses": "Dépenses Supprimées",
@@ -3163,7 +3166,7 @@
     "permanent_delete": "Supprimer Définitivement"
   },
   "statementRecycleBin": {
-    "title": "Corbeille de Relevés",
+    "title": "Corbeille",
     "description": "Gérer les relevés bancaires supprimés",
     "empty_recycle_bin": "Vider la Corbeille",
     "deleted_statements": "Relevés Supprimés",

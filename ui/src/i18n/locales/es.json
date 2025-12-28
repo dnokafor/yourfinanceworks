@@ -169,7 +169,10 @@
     "profile": "Perfil",
     "audit_log": "Registro de Auditoría",
     "analytics": "Analíticas",
-    "dark_mode": "Modo oscuro"
+    "dark_mode": "Modo oscuro",
+    "invoice_recycle_bin": "@:recycleBin.title",
+    "expense_recycle_bin": "@:recycleBin.title",
+    "statement_recycle_bin": "@:recycleBin.title"
   },
   "auth": {
     "login": "Iniciar Sesión",
@@ -3176,7 +3179,7 @@
     "syncStarted": "Sincronización iniciada en segundo plano..."
   },
   "expenseRecycleBin": {
-    "title": "Papelera de Gastos",
+    "title": "Papelera de Reciclaje",
     "description": "Gestionar gastos eliminados",
     "empty_recycle_bin": "Vaciar Papelera",
     "deleted_expenses": "Gastos Eliminados",
@@ -3209,7 +3212,7 @@
     "permanent_delete": "Eliminar Permanentemente"
   },
   "statementRecycleBin": {
-    "title": "Papelera de Estados de Cuenta",
+    "title": "Papelera de Reciclaje",
     "description": "Gestionar estados de cuenta bancarios eliminados",
     "empty_recycle_bin": "Vaciar Papelera",
     "deleted_statements": "Estados de Cuenta Eliminados",

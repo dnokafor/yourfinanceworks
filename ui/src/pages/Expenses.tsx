@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 // removed duplicate useEffect import
-import { Loader2, Plus, Search, Trash2, Upload, ChevronDown, ChevronUp, MoreHorizontal, Edit, Package, RotateCcw, BarChart3, Receipt, Clock } from 'lucide-react';
+import { Loader2, Plus, Minus, Tag, Search, Trash2, Upload, ChevronDown, ChevronUp, MoreHorizontal, Edit, Package, RotateCcw, BarChart3, Receipt, Clock } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Link } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
@@ -799,94 +799,140 @@ const Expenses = () => {
           </div>
 
           <CardContent>
-            <div className="flex flex-col md:flex-row md:items-center gap-2 mb-3 md:justify-between">
-              <div className="text-sm text-muted-foreground">
-                {selectedIds.length > 0 ? `${selectedIds.length} selected` : `${expenses.length} ${t('expenses.results', { defaultValue: 'results' })}`}
-              </div>
-              <div className="flex items-center gap-2 md:ml-auto">
-
-                <Input
-                  placeholder={t('expenses.bulk_label_placeholder', { defaultValue: 'Label' })}
-                  value={bulkLabel}
-                  onChange={(e) => setBulkLabel(e.target.value)}
-                  className="w-full sm:w-[220px]"
-                />
-                <Button
-                  variant="outline"
-                  disabled={!canPerformActions() || selectedIds.length === 0 || !bulkLabel.trim()}
-                  onClick={async () => {
-                    try {
-                      const skip = (page - 1) * pageSize;
-                      await expenseApi.bulkLabels(selectedIds, 'add', bulkLabel.trim());
-                      const data = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip, limit: pageSize, excludeStatus: 'pending_approval' });
-                      setExpenses(data);
-                      setSelectedIds([]);
-                      setBulkLabel('');
-                      toast.success('Labels added');
-                    } catch (e: any) {
-                      toast.error(e?.message || 'Failed to add label');
-                    }
-                  }}
-                >
-                  {t('expenses.add')}
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={!canPerformActions() || selectedIds.length === 0 || !bulkLabel.trim()}
-                  onClick={async () => {
-                    try {
-                      const skip = (page - 1) * pageSize;
-                      await expenseApi.bulkLabels(selectedIds, 'remove', bulkLabel.trim());
-                      const data = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip, limit: pageSize, excludeStatus: 'pending_approval' });
-                      setExpenses(data);
-                      setSelectedIds([]);
-                      setBulkLabel('');
-                      toast.success('Labels removed');
-                    } catch (e: any) {
-                      toast.error(e?.message || 'Failed to remove label');
-                    }
-                  }}
-                >
-                  {t('expenses.remove')}
-                </Button>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
+            {/* Results Count and Selection Toolbar */}
+            <div className="space-y-4 mb-6">
+              {!selectedIds.length ? (
+                <div className="text-sm text-muted-foreground flex items-center gap-2">
+                  <div className="w-1 h-4 bg-primary/20 rounded-full"></div>
+                  {expenses.length} {t('expenses.results', { defaultValue: 'results' })}
+                </div>
+              ) : (
+                <div className="flex flex-col md:flex-row items-center justify-between p-4 bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-xl shadow-sm gap-4 slide-in">
+                  <div className="flex items-center gap-3">
+                    <div className="h-2 w-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(var(--primary),0.5)]"></div>
+                    <span className="text-sm font-bold text-foreground">
+                      {selectedIds.length} {t('expenses.selected', { defaultValue: 'selected' })}
+                    </span>
                     <Button
-                      variant="destructive"
-                      disabled={!canPerformActions() || selectedIds.length === 0}
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedIds([])}
+                      className="h-8 text-xs hover:bg-primary/10 transition-colors"
                     >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      {t('expenses.delete_selected', { defaultValue: 'Delete Selected' })}
+                      {t('common.clear', { defaultValue: 'Clear' })}
                     </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>{selectedIds.length === 1 ? t('expenses.delete_single_title', { defaultValue: 'Delete 1 Expense' }) : t('expenses.delete_multiple_title', { count: selectedIds.length, defaultValue: `Delete ${selectedIds.length} Expenses` })}</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        {selectedIds.length === 1 ? t('expenses.delete_single_description', { defaultValue: 'Are you sure you want to delete 1 expense? This will move the selected expense to the recycle bin where it can be restored or permanently deleted later.' }) : t('expenses.delete_multiple_description', { count: selectedIds.length, defaultValue: `Are you sure you want to delete ${selectedIds.length} expenses? This will move the selected expenses to the recycle bin where they can be restored or permanently deleted later.` })}
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-                      <AlertDialogAction
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
+                    <div className="relative group flex-1 md:flex-initial min-w-[200px]">
+                      <Tag className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                      <Input
+                        placeholder={t('expenses.bulk_label_placeholder', { defaultValue: 'Add or remove label' })}
+                        value={bulkLabel}
+                        onChange={(e) => setBulkLabel(e.target.value)}
+                        className="pl-8 h-9 text-sm border-primary/20 focus:border-primary/40 bg-background/50"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <ProfessionalButton
+                        variant="outline"
+                        size="sm"
+                        disabled={!canPerformActions() || !bulkLabel.trim()}
                         onClick={async () => {
                           try {
-                            await expenseApi.bulkDelete(selectedIds);
-                            const data = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip: (page - 1) * pageSize, limit: pageSize, excludeStatus: 'pending_approval' });
+                            const skip = (page - 1) * pageSize;
+                            await expenseApi.bulkLabels(selectedIds, 'add', bulkLabel.trim());
+                            const data = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip, limit: pageSize, excludeStatus: 'pending_approval' });
                             setExpenses(data);
                             setSelectedIds([]);
-                            toast.success(`Successfully deleted ${selectedIds.length} expense${selectedIds.length > 1 ? 's' : ''}`);
+                            setBulkLabel('');
+                            toast.success('Labels added');
                           } catch (e: any) {
-                            toast.error(e?.message || 'Failed to delete expenses');
+                            toast.error(e?.message || 'Failed to add label');
                           }
                         }}
+                        className="h-9 px-3 gap-1.5"
                       >
-                        {t('common.delete', { defaultValue: 'Delete' })}
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
+                        <Plus className="h-3.5 w-3.5" />
+                        {t('expenses.add')}
+                      </ProfessionalButton>
+
+                      <ProfessionalButton
+                        variant="outline"
+                        size="sm"
+                        disabled={!canPerformActions() || !bulkLabel.trim()}
+                        onClick={async () => {
+                          try {
+                            const skip = (page - 1) * pageSize;
+                            await expenseApi.bulkLabels(selectedIds, 'remove', bulkLabel.trim());
+                            const data = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip, limit: pageSize, excludeStatus: 'pending_approval' });
+                            setExpenses(data);
+                            setSelectedIds([]);
+                            setBulkLabel('');
+                            toast.success('Labels removed');
+                          } catch (e: any) {
+                            toast.error(e?.message || 'Failed to remove label');
+                          }
+                        }}
+                        className="h-9 px-3 gap-1.5"
+                      >
+                        <Minus className="h-3.5 w-3.5" />
+                        {t('expenses.remove')}
+                      </ProfessionalButton>
+                    </div>
+
+                    <div className="w-px h-6 bg-primary/10 hidden md:block mx-1"></div>
+
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <ProfessionalButton
+                          variant="destructive"
+                          size="sm"
+                          disabled={!canPerformActions()}
+                          className="h-9 px-3 gap-1.5 shadow-sm"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          {t('expenses.delete_selected', { defaultValue: 'Delete' })}
+                        </ProfessionalButton>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>
+                            {selectedIds.length === 1
+                              ? t('expenses.delete_single_title', { defaultValue: 'Delete 1 Expense' })
+                              : t('expenses.delete_multiple_title', { count: selectedIds.length, defaultValue: `Delete ${selectedIds.length} Expenses` })}
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            {selectedIds.length === 1
+                              ? t('expenses.delete_single_description', { defaultValue: 'Are you sure you want to delete 1 expense? This will move it to the recycle bin.' })
+                              : t('expenses.delete_multiple_description', { count: selectedIds.length, defaultValue: `Are you sure you want to delete ${selectedIds.length} expenses? They will be moved to the recycle bin.` })}
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                          <AlertDialogAction
+                            className="bg-destructive text-white hover:bg-destructive/90"
+                            onClick={async () => {
+                              try {
+                                await expenseApi.bulkDelete(selectedIds);
+                                const data = await expenseApi.getExpensesFiltered({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip: (page - 1) * pageSize, limit: pageSize, excludeStatus: 'pending_approval' });
+                                setExpenses(data);
+                                setSelectedIds([]);
+                                toast.success(`Successfully deleted ${selectedIds.length} expense${selectedIds.length > 1 ? 's' : ''}`);
+                              } catch (e: any) {
+                                toast.error(e?.message || 'Failed to delete expenses');
+                              }
+                            }}
+                          >
+                            {t('common.delete', { defaultValue: 'Delete' })}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="rounded-md border">
               <Table>

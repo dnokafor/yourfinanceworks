@@ -170,9 +170,9 @@
     "audit_log": "Audit Log",
     "analytics": "Analytics",
     "dark_mode": "Dark Mode",
-    "invoice_recycle_bin": "Invoice Recycle Bin",
-    "expense_recycle_bin": "Expense Recycle Bin",
-    "statement_recycle_bin": "Statement Recycle Bin"
+    "invoice_recycle_bin": "@:recycleBin.title",
+    "expense_recycle_bin": "@:recycleBin.title",
+    "statement_recycle_bin": "@:recycleBin.title"
   },
   "auth": {
     "login": "Login",
@@ -1869,7 +1869,7 @@
     "failed_to_empty_recycle_bin": "Failed to empty recycle bin"
   },
   "expenseRecycleBin": {
-    "title": "Expense Recycle Bin",
+    "title": "Recycle Bin",
     "description": "Manage deleted expenses",
     "empty_recycle_bin": "Empty Recycle Bin",
     "deleted_expenses": "Deleted Expenses",
@@ -1902,7 +1902,7 @@
     "permanent_delete": "Permanently Delete"
   },
   "statementRecycleBin": {
-    "title": "Statement Recycle Bin",
+    "title": "Recycle Bin",
     "description": "Manage deleted bank statements",
     "empty_recycle_bin": "Empty Recycle Bin",
     "deleted_statements": "Deleted Statements",

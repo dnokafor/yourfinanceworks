@@ -119,7 +119,7 @@ const ExpenseRecycleBin = () => {
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2">
               <Trash2 className="h-8 w-8" />
-              {t('expenseRecycleBin.title')}
+              {t('recycleBin.title')}
             </h1>
             <p className="text-muted-foreground">{t('expenseRecycleBin.description')}</p>
           </div>
