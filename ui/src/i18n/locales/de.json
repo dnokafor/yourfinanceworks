@@ -637,6 +637,7 @@
     "date": "Datum",
     "new_client": "Neuer Kunde",
     "no_clients_found": "Keine Kunden gefunden. Bitte fügen Sie zuerst einen Kunden hinzu.",
+    "choose_client_description": "Wählen oder erstellen Sie einen Kunden für diese Rechnung.",
     "name": "Name",
     "email": "E-Mail",
     "phone": "Telefon",
@@ -780,7 +781,27 @@
     "payer": "Zahler",
     "select_payer": "Zahler auswählen",
     "you": "Sie",
-    "client": "Kunde"
+    "client": "Kunde",
+    "items_and_services": "Verwalten Sie die Produkte und Dienstleistungen für diese Rechnung.",
+    "discount_and_summary": "Rabatte anwenden und die Endsummen überprüfen.",
+    "final_total": "Endsumme",
+    "paid_amount_update_note": "Sie können den gezahlten Betrag für diese genehmigte Rechnung aktualisieren, um Teilzahlungen zu erfassen.",
+    "visible_in_pdf_note": "Sichtbar in der PDF-Vorschau und im Download.",
+    "labels_section": {
+      "title": "Labels",
+      "description": "Fügen Sie bis zu 10 Labels hinzu, um Ihre Rechnungen zu organisieren",
+      "no_labels": "Noch keine Labels hinzugefügt...",
+      "add_label": "Label hinzufügen..."
+    },
+    "attachments_section": {
+      "title": "Anhänge",
+      "description": "Dateien hochladen und verwalten, die sich auf diese Rechnung beziehen.",
+      "upload_prompt": "Klicken oder ziehen zum Hochladen"
+    },
+    "payment_status": "Zahlungsstatus",
+    "payment_status_description": "Zahlungen für diese Rechnung verfolgen und erfassen.",
+    "outstanding": "Ausstehend",
+    "edit_page_context": "auf der Rechnungsbearbeitungsseite"
   },
   "clients": {
     "title": "Kunden",

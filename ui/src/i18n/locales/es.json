@@ -635,6 +635,7 @@
     "preferred_currency": "Moneda Preferida (Opcional)",
     "add_new_client": "Agregar Nuevo Cliente",
     "no_clients_found": "No se encontraron clientes. Por favor, agrega un cliente primero.",
+    "choose_client_description": "Elige o crea un cliente para esta factura.",
     "select_preferred_currency": "Selecciona la moneda preferida",
     "add_client": "Agregar Cliente",
     "cancel": "Cancelar",
@@ -799,7 +800,28 @@
     "payer": "Pagador",
     "select_payer": "Seleccionar pagador",
     "you": "Tú",
-    "client": "Cliente"
+    "client": "Cliente",
+    "items_and_services": "Gestiona los productos y servicios para esta factura.",
+    "discount_and_summary": "Aplica descuentos y revisa los totales finales.",
+    "final_total": "Total Final",
+    "paid_amount_update_note": "Puedes actualizar el monto pagado para esta factura aprobada para registrar pagos parciales.",
+    "visible_in_pdf_note": "Visible en la vista previa del PDF y la descarga.",
+    "labels_section": {
+      "title": "Etiquetas",
+      "description": "Agrega hasta 10 etiquetas para organizar tus facturas",
+      "no_labels": "No se han agregado etiquetas aún...",
+      "add_label": "Agregar una etiqueta..."
+    },
+    "attachments_section": {
+      "title": "Adjuntos",
+      "description": "Sube y gestiona archivos relacionados con esta factura.",
+      "upload_prompt": "Haz clic o arrastra para subir"
+    },
+    "payment_status": "Estado de Pago",
+    "payment_status_description": "Rastrea y registra pagos para esta factura.",
+    "outstanding": "Pendiente",
+    "payer": "PAGADOR",
+    "edit_page_context": "en la página de edición de factura"
   },
   "clients": {
     "title": "Clientes",
@@ -829,6 +851,10 @@
     "add_note": "Agregar Nota",
     "note_text": "Texto de la Nota",
     "notes_history": "Historial de Notas",
+    "add_new_note": "Agregar una nueva nota...",
+    "no_notes_for_this_client_yet": "Aún no hay notas para este cliente.",
+    "delete_note": "Eliminar Nota",
+    "delete_note_confirmation": "¿Estás seguro de que quieres eliminar esta nota? Esta acción no se puede deshacer.",
     "client_list": "Lista de Clientes",
     "search_placeholder": "Buscar clientes...",
     "loading": "Cargando clientes...",
@@ -2218,6 +2244,8 @@
     "phonePlaceholder": "(123) 456-7890",
     "address": "Dirección",
     "addressPlaceholder": "Calle Principal 123, Ciudad, Estado, CP",
+    "company": "Empresa",
+    "companyPlaceholder": "Ingrese el nombre de la empresa (opcional)",
     "preferredCurrency": "Moneda Preferida (Opcional)",
     "selectPreferredCurrency": "Selecciona la moneda preferida",
     "createClient": "Crear Cliente",
