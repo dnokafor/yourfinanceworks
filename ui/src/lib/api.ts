@@ -1860,12 +1860,38 @@ export const expenseApi = {
     return apiRequest<Expense[]>(url);
   },
   getExpense: async (id: number) => {
-    const e = await apiRequest<Expense>(`/expenses/${id}`);
-    const validCategories = EXPENSE_CATEGORY_OPTIONS;
-    return {
-      ...e,
-      category: validCategories.includes(e.category) ? e.category : 'General'
-    };
+    const maxRetries = 5;
+    let lastError: any;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const e = await apiRequest<Expense>(`/expenses/${id}`);
+        const validCategories = EXPENSE_CATEGORY_OPTIONS;
+        return {
+          ...e,
+          category: validCategories.includes(e.category) ? e.category : 'General'
+        };
+      } catch (error) {
+        lastError = error;
+        const errorMessage = error instanceof Error ? error.message : String(error);
+
+        // Check if it's a 404 error (expense not found)
+        const is404 = errorMessage.includes('404') || errorMessage.includes('not found');
+
+        // If it's a 404 and we haven't exhausted retries, wait and try again
+        if (is404 && attempt < maxRetries - 1) {
+          // Exponential backoff: 500ms, 1000ms, 1500ms, 2000ms, 2500ms
+          const delayMs = 500 * (attempt + 1);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        } else if (!is404) {
+          // If it's not a 404, don't retry - throw immediately
+          throw error;
+        }
+      }
+    }
+
+    // If all retries failed, throw the last error
+    throw lastError;
   },
   createExpense: (expense: Omit<Expense, 'id' | 'created_at' | 'updated_at' | 'receipt_filename'>) =>
     apiRequest<Expense>(`/expenses/`, {
@@ -1887,7 +1913,8 @@ export const expenseApi = {
       method: 'DELETE',
       body: JSON.stringify({ expense_ids: expenseIds }),
     }),
-  deleteExpense: (id: number) => apiRequest(`/expenses/${id}`, { method: 'DELETE' }),
+  deleteExpense: async (id: number) =>
+    apiRequest(`/expenses/${id}`, { method: 'DELETE' }),
   uploadReceipt: async (expenseId: number, file: File) => {
     const token = localStorage.getItem('token');
     const tenantId = localStorage.getItem('selected_tenant_id') || (() => {
