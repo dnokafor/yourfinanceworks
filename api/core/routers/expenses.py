@@ -155,7 +155,7 @@ async def list_expenses(
         raise HTTPException(status_code=500, detail="Failed to fetch expenses")
 
 
-@router.get("/{expense_id:\\d+}", response_model=ExpenseSchema)
+@router.get("/{expense_id:int}", response_model=ExpenseSchema)
 async def get_expense(
     expense_id: int,
     db: Session = Depends(get_db),
@@ -165,10 +165,20 @@ async def get_expense(
     from core.models.database import set_tenant_context
     set_tenant_context(current_user.tenant_id)
 
+    uvicorn_logger.info(f"Fetching expense {expense_id} for tenant {current_user.tenant_id}")
+
     from sqlalchemy.orm import joinedload
-    expense = db.query(Expense).options(joinedload(Expense.created_by)).filter(Expense.id == expense_id).first()
+    expense = db.query(Expense).options(joinedload(Expense.created_by)).filter(
+        Expense.id == expense_id,
+        Expense.is_deleted == False
+    ).first()
+
     if not expense:
+        uvicorn_logger.warning(f"Expense {expense_id} not found for tenant {current_user.tenant_id}")
         raise HTTPException(status_code=404, detail="Expense not found")
+
+    uvicorn_logger.info(f"Successfully retrieved expense {expense_id}")
+
     try:
         expense.attachments_count = db.query(ExpenseAttachment).filter(ExpenseAttachment.expense_id == expense_id).count()
     except Exception as e:
@@ -369,8 +379,21 @@ async def create_expense(
             updated_at=datetime.now(timezone.utc),
         )
         db.add(db_expense)
+        db.flush()  # Ensure ID is generated
+        expense_id = db_expense.id
+        uvicorn_logger.info(f"Expense flushed with ID: {expense_id}")
+
         db.commit()
-        db.refresh(db_expense)
+        uvicorn_logger.info(f"Expense committed with ID: {expense_id}")
+
+        # After commit, query the expense fresh from the database to ensure we have the latest state
+        # This is critical for multi-session environments
+        db_expense = db.query(Expense).filter(Expense.id == expense_id).first()
+        if not db_expense:
+            uvicorn_logger.error(f"CRITICAL: Expense {expense_id} not found after commit!")
+            raise HTTPException(status_code=500, detail=f"Expense was created but cannot be retrieved (ID: {expense_id})")
+
+        uvicorn_logger.info(f"Successfully created and verified expense with ID: {db_expense.id}")
 
         # Process inventory stock movements for inventory purchases
         if is_inventory_purchase and inventory_items:
@@ -506,7 +529,10 @@ async def bulk_labels_expenses(
         if not payload.label or not isinstance(payload.label, str):
             raise HTTPException(status_code=400, detail="Label is required")
 
-        target_items = db.query(Expense).filter(Expense.id.in_(payload.expense_ids)).all()
+        target_items = db.query(Expense).filter(
+            Expense.id.in_(payload.expense_ids),
+            Expense.is_deleted == False
+        ).all()
         updated = 0
         for item in target_items:
             labels = list(getattr(item, 'labels', []) or [])
@@ -666,7 +692,10 @@ async def bulk_delete_expenses(
             raise HTTPException(status_code=400, detail="Cannot delete more than 100 expenses at once")
         
         # Get all expenses to delete
-        expenses_to_delete = db.query(Expense).filter(Expense.id.in_(payload.expense_ids)).all()
+        expenses_to_delete = db.query(Expense).filter(
+            Expense.id.in_(payload.expense_ids),
+            Expense.is_deleted == False
+        ).all()
         
         if not expenses_to_delete:
             raise HTTPException(status_code=404, detail="No expenses found")
@@ -777,7 +806,7 @@ async def bulk_delete_expenses(
         raise HTTPException(status_code=500, detail="Failed to bulk soft delete expenses")
 
 
-@router.put("/{expense_id:\\d+}", response_model=ExpenseSchema)
+@router.put("/{expense_id:int}", response_model=ExpenseSchema)
 async def update_expense(
     expense_id: int,
     expense: ExpenseUpdate,
@@ -794,7 +823,10 @@ async def update_expense(
     uvicorn_logger.info(f"Updating expense {expense_id} with data: {expense.model_dump(exclude_unset=True)}")
     
     try:
-        db_expense = db.query(Expense).filter(Expense.id == expense_id).first()
+        db_expense = db.query(Expense).filter(
+            Expense.id == expense_id,
+            Expense.is_deleted == False
+        ).first()
         if not db_expense:
             raise HTTPException(status_code=404, detail="Expense not found")
         
@@ -1304,7 +1336,7 @@ async def permanently_delete_expense(
         )
 
 
-@router.delete("/{expense_id:\\d+}", response_model=RecycleBinExpenseResponse)
+@router.delete("/{expense_id:int}", response_model=RecycleBinExpenseResponse)
 async def delete_expense(
     expense_id: int,
     db: Session = Depends(get_db),
@@ -1318,12 +1350,31 @@ async def delete_expense(
     set_tenant_context(current_user.tenant_id)
 
     try:
+        uvicorn_logger.info(f"Attempting to delete expense {expense_id} for tenant {current_user.tenant_id}")
+
+        # First attempt to find the expense
         db_expense = db.query(Expense).filter(
             Expense.id == expense_id,
             Expense.is_deleted == False
         ).first()
+
         if not db_expense:
+            # If not found, try refreshing the session and querying again
+            # This handles cases where the expense was just created and the session hasn't seen it yet
+            try:
+                db.expire_all()  # Clear the session cache
+                db_expense = db.query(Expense).filter(
+                    Expense.id == expense_id,
+                    Expense.is_deleted == False
+                ).first()
+            except Exception as e:
+                uvicorn_logger.warning(f"Error refreshing session for expense {expense_id}: {e}")
+
+        if not db_expense:
+            uvicorn_logger.warning(f"Expense {expense_id} not found for deletion (tenant {current_user.tenant_id})")
             raise HTTPException(status_code=404, detail="Expense not found")
+
+        uvicorn_logger.info(f"Found expense {expense_id}, proceeding with deletion")
 
         # Check if expense can be deleted based on current status
         # Allow admins to bypass this check
@@ -1370,6 +1421,21 @@ async def delete_expense(
         db_expense.updated_at = datetime.now(timezone.utc)
 
         db.commit()
+        uvicorn_logger.info(f"Successfully deleted expense {expense_id}")
+
+        # After commit, verify the deletion was successful by querying fresh from the database
+        # This is critical for multi-session environments
+        db.expire_all()  # Clear the session cache
+        verification_expense = db.query(Expense).filter(
+            Expense.id == expense_id,
+            Expense.is_deleted == True
+        ).first()
+
+        if not verification_expense:
+            uvicorn_logger.error(f"CRITICAL: Expense {expense_id} deletion verification failed - expense not marked as deleted!")
+            raise HTTPException(status_code=500, detail=f"Expense deletion verification failed (ID: {expense_id})")
+
+        uvicorn_logger.info(f"Successfully verified deletion of expense {expense_id}")
 
         # Remove from search index
         try:
@@ -1415,7 +1481,10 @@ async def upload_receipt(
 ):
     require_non_viewer(current_user, "upload receipts")
     try:
-        expense = db.query(Expense).filter(Expense.id == expense_id).first()
+        expense = db.query(Expense).filter(
+            Expense.id == expense_id,
+            Expense.is_deleted == False
+        ).first()
         if not expense:
             raise HTTPException(status_code=404, detail="Expense not found")
 
@@ -1613,7 +1682,10 @@ async def list_expense_attachments(
     db: Session = Depends(get_db),
     current_user: MasterUser = Depends(get_current_user),
 ):
-    expense = db.query(Expense).filter(Expense.id == expense_id).first()
+    expense = db.query(Expense).filter(
+        Expense.id == expense_id,
+        Expense.is_deleted == False
+    ).first()
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
     attachments = db.query(ExpenseAttachment).filter(ExpenseAttachment.expense_id == expense_id).order_by(ExpenseAttachment.uploaded_at.desc()).all()
@@ -1637,7 +1709,10 @@ async def reprocess_expense(
     """Reprocess expense OCR analysis for expenses that can be reprocessed."""
     require_non_viewer(current_user, "reprocess expenses")
     try:
-        expense = db.query(Expense).filter(Expense.id == expense_id).first()
+        expense = db.query(Expense).filter(
+            Expense.id == expense_id,
+            Expense.is_deleted == False
+        ).first()
         if not expense:
             raise HTTPException(status_code=404, detail="Expense not found")
 
@@ -2020,7 +2095,8 @@ async def get_expense_summary(
         # Base query for all expenses in tenant (not pending approval)
         # Note: No user_id filter needed - tenant isolation is provided by the per-tenant database
         base_query = db.query(Expense).filter(
-            Expense.status != 'pending_approval'
+            Expense.status != 'pending_approval',
+            Expense.is_deleted == False
         )
 
         # Determine date range
@@ -2151,7 +2227,8 @@ async def get_expense_trends(
         expenses = db.query(Expense).filter(
             Expense.status != 'pending_approval',
             Expense.expense_date >= start_date,
-            Expense.expense_date <= end_date
+            Expense.expense_date <= end_date,
+            Expense.is_deleted == False
         ).all()
 
         # Group expenses by the requested period
@@ -2252,7 +2329,8 @@ async def get_expense_categories_analytics(
         # Base query for all expenses in tenant (not pending approval)
         # Note: No user_id filter needed - tenant isolation is provided by the per-tenant database
         base_query = db.query(Expense).filter(
-            Expense.status != 'pending_approval'
+            Expense.status != 'pending_approval',
+            Expense.is_deleted == False
         )
 
         # Apply date filters

@@ -30,6 +30,8 @@ from core.utils.rbac import require_admin
 from core.utils.audit import log_audit_event, log_audit_event_master
 from core.constants.error_codes import USER_NOT_FOUND, INCORRECT_PASSWORD, INACTIVE_USER, TENANT_CONTEXT_REQUIRED, INVALID_CREDENTIALS
 
+from core.constants.password import MIN_PASSWORD_LENGTH
+
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
 # JWT settings
@@ -960,8 +962,8 @@ async def change_password(
         raise HTTPException(status_code=401, detail=INCORRECT_PASSWORD)
     if payload.new_password != payload.confirm_password:
         raise HTTPException(status_code=400, detail="Passwords do not match")
-    if len(payload.new_password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters long")
+    if len(payload.new_password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(status_code=400, detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters long")
 
     current_user.hashed_password = get_password_hash(payload.new_password)
     current_user.updated_at = datetime.now(timezone.utc)
@@ -2135,10 +2137,10 @@ async def reset_password(
         )
     
     # Validate password strength
-    if len(request.new_password) < 6:
+    if len(request.new_password) < MIN_PASSWORD_LENGTH:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password must be at least 6 characters long"
+            detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters long"
         )
     
     # Update password

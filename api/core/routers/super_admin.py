@@ -23,6 +23,7 @@ from core.utils.rbac import require_superuser
 logger = logging.getLogger(__name__)
 from core.utils.audit import log_audit_event, log_audit_event_master
 from core.constants.error_codes import USER_NOT_FOUND, ONLY_SUPERUSERS, FAILED_TO_IMPORT_DATA
+from core.constants.password import MIN_PASSWORD_LENGTH
 
 router = APIRouter(prefix="/super-admin", tags=["Super Admin"])
 
@@ -514,21 +515,37 @@ async def create_user(
     for field in required_fields:
         if field not in user_data:
             raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
-    
+
+    # Validate email format
+    email = user_data['email'].strip()
+    if not email or '@' not in email or '.' not in email.split('@')[-1]:
+        raise HTTPException(status_code=400, detail="Invalid email format")
+
+    # Validate password length
+    if len(user_data['password']) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(status_code=400, detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters long")
+
+    # Validate tenant IDs are not empty
+    if not user_data['tenant_ids'] or not all(tid.strip() for tid in user_data['tenant_ids']):
+        raise HTTPException(status_code=400, detail="Please select at least one organization")
+
+    if not user_data['primary_tenant_id'] or not user_data['primary_tenant_id'].strip():
+        raise HTTPException(status_code=400, detail="Please select a primary organization")
+
     tenant_ids = [int(tid) for tid in user_data['tenant_ids']]
     primary_tenant_id = int(user_data['primary_tenant_id'])
     # Optional per-tenant roles mapping coming from UI
     provided_tenant_roles: Dict[str, str] = user_data.get('tenant_roles', {}) or {}
-    
+
     # Validate primary tenant is in tenant list
     if primary_tenant_id not in tenant_ids:
         raise HTTPException(status_code=400, detail="Primary tenant must be in selected tenants")
-    
+
     # Check if tenants exist
     tenants = master_db.query(Tenant).filter(Tenant.id.in_(tenant_ids)).all()
     if len(tenants) != len(tenant_ids):
         raise HTTPException(status_code=404, detail="One or more tenants not found")
-    
+
     # Check if user already exists
     existing_user = master_db.query(MasterUser).filter(
         MasterUser.email == user_data['email']
@@ -538,7 +555,7 @@ async def create_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User already exists"
         )
-    
+
     # Create user in master database
     hashed_password = get_password_hash(user_data['password'])
     primary_role = provided_tenant_roles.get(str(primary_tenant_id), user_data.get('role', 'user'))
@@ -551,11 +568,11 @@ async def create_user(
         tenant_id=int(user_data['primary_tenant_id']),
         is_verified=True
     )
-    
+
     master_db.add(master_user)
     master_db.commit()
     master_db.refresh(master_user)
-    
+
     # Add user to tenant memberships (respect per-tenant roles if provided)
     for tenant_id in tenant_ids:
         role_for_tenant = provided_tenant_roles.get(str(tenant_id), user_data.get('role', 'user'))
@@ -566,7 +583,7 @@ async def create_user(
                 role=role_for_tenant
             )
         )
-        
+
         # Create user in each tenant database
         try:
             tenant_session = tenant_db_manager.get_tenant_session(tenant_id)()
@@ -580,21 +597,21 @@ async def create_user(
                 role=role_for_tenant,
                 is_verified=True
             )
-            
+
             tenant_session.add(tenant_user)
             tenant_session.commit()
             tenant_session.close()
-            
+
         except Exception as e:
             # Continue with other tenants if one fails
             pass
-    
+
     master_db.commit()
-    
+
     user_dict = master_user.__dict__.copy()
     user_dict.pop('_sa_instance_state', None)
     user_dict['tenant_names'] = [t.name for t in tenants]
-    
+
     return user_dict
 
 # Removed global role update endpoint - use tenant-specific endpoint instead
@@ -617,10 +634,10 @@ async def update_user(
     for field in basic_fields:
         if field in user_data and user_data[field]:
             setattr(user, field, user_data[field])
-    
+
     if 'password' in user_data and user_data['password']:
         user.hashed_password = get_password_hash(user_data['password'])
-    
+
     # Normalize primary tenant id and optionally align master role with per-tenant role
     provided_tenant_roles_update: Dict[str, str] = user_data.get('tenant_roles', {}) or {}
     if 'primary_tenant_id' in user_data:
@@ -629,18 +646,18 @@ async def update_user(
         maybe_primary_role = provided_tenant_roles_update.get(str(user.tenant_id))
         if maybe_primary_role:
             user.role = maybe_primary_role
-    
+
     # Handle tenant memberships if provided
     if 'tenant_ids' in user_data:
         tenant_ids = [int(tid) for tid in user_data['tenant_ids']]
-        
+
         # Remove existing memberships
         master_db.execute(
             user_tenant_association.delete().where(
                 user_tenant_association.c.user_id == user_id
             )
         )
-        
+
         # Add new memberships respecting per-tenant roles if provided
         for tenant_id in tenant_ids:
             role_for_tenant = provided_tenant_roles_update.get(str(tenant_id), user_data.get('role', 'user'))
@@ -661,7 +678,7 @@ async def update_user(
                 tenant_session.close()
             except Exception:
                 pass
-    
+
     master_db.commit()
     master_db.refresh(user)
 
@@ -677,33 +694,33 @@ async def delete_user(
     user = master_db.query(MasterUser).filter(MasterUser.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     # Don't allow deleting yourself
     if user.id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot delete yourself"
         )
-    
+
     # Delete from tenant database first
     try:
         tenant_session = tenant_db_manager.get_tenant_session(user.tenant_id)()
         tenant_user = tenant_session.query(TenantUser).filter(
             TenantUser.id == user_id
         ).first()
-        
+
         if tenant_user:
             tenant_session.delete(tenant_user)
             tenant_session.commit()
-        
+
         tenant_session.close()
     except Exception as e:
         pass  # Continue even if tenant deletion fails
-    
+
     # Delete from master database
     master_db.delete(user)
     master_db.commit()
-    
+
     # Log audit event in master database
     log_audit_event_master(
         db=master_db,
@@ -717,7 +734,7 @@ async def delete_user(
         tenant_id=current_user.tenant_id,
         status="success"
     )
-    
+
     return {"message": "User deleted successfully"}
 
 @router.patch("/users/{user_id}/toggle-status")
@@ -730,17 +747,17 @@ async def toggle_user_status(
     user = master_db.query(MasterUser).filter(MasterUser.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     # Don't allow disabling yourself
     if user.id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot disable yourself"
         )
-    
+
     user.is_active = not user.is_active
     master_db.commit()
-    
+
     # Update in tenant database too
     try:
         tenant_session = tenant_db_manager.get_tenant_session(user.tenant_id)()
@@ -751,7 +768,7 @@ async def toggle_user_status(
         tenant_session.close()
     except Exception:
         pass
-    
+
     status_text = "enabled" if user.is_active else "disabled"
     return {"message": f"User {user.email} {status_text} successfully"}
 
@@ -765,8 +782,8 @@ async def super_admin_reset_password(
     current_user: MasterUser = Depends(require_super_admin)
 ):
     """Super admin sets a new password for any user and optionally forces reset on next login."""
-    if len(payload.new_password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters long")
+    if len(payload.new_password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(status_code=400, detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters long")
     if payload.new_password != payload.confirm_password:
         raise HTTPException(status_code=400, detail="Passwords do not match")
 
