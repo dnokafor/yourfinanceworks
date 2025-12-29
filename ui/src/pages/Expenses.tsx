@@ -777,7 +777,7 @@ const Expenses = () => {
 
                 {/* Page Size */}
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">{t('expenses.page_size')}</span>
+                  <span className="text-sm text-muted-foreground">{t('common.page_size', { defaultValue: 'Page Size' })}</span>
                   <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
                     <SelectTrigger className="w-[100px] h-10 rounded-lg border-border/50 bg-muted/30">
                       <SelectValue />

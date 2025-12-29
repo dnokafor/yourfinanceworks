@@ -599,6 +599,7 @@
     "invoice_sent": "Rechnung erfolgreich gesendet",
     "no_invoices": "Keine Rechnungen gefunden",
     "no_invoices_description": "Erstellen Sie Ihre erste professionelle Rechnung, um schneller bezahlt zu werden. Sie können Details manuell eingeben oder KI verwenden, um Daten aus Dokumenten zu extrahieren.",
+    "create_your_first_invoice": "Erstellen Sie Ihre Erste Rechnung",
     "filter_by_status": "Nach Status filtern",
     "filter_by_client": "Nach Kunde filtern",
     "filter_by_date": "Nach Datum filtern",
@@ -837,7 +838,6 @@
     "delete_client": "Kunden löschen",
     "delete_confirm": "Sind Sie sicher, dass Sie {{name}} löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
     "filter_by_label": "Nach Etikett filtern",
-    "page_size": "Seitengröße",
     "bulk_delete_title": "Mehrere Kunden löschen",
     "bulk_delete_confirm": "Sind Sie sicher, dass Sie {{count}} Kunden löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
     "table": {
@@ -1963,7 +1963,6 @@
     "edit": "Bearbeiten",
     "delete": "Löschen",
     "cancel": "Abbrechen",
-    "page_size": "Seitengröße",
     "select_currency": "Währung auswählen",
     "select_category": "Kategorie auswählen",
     "detailed_trend_data": "Detaillierte Trenddaten",

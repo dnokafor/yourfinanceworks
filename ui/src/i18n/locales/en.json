@@ -599,6 +599,7 @@
     "invoice_sent": "Invoice sent successfully",
     "no_invoices": "No invoices found",
     "no_invoices_description": "Create your first professional invoice to get paid faster. You can enter details manually or use AI to extract data from documents.",
+    "create_your_first_invoice": "Create Your First Invoice",
     "filter_by_client": "Filter by Client",
     "filter_by_date": "Filter by Date",
     "export": "Export",
@@ -875,7 +876,6 @@
     "delete_client": "Delete Client",
     "delete_confirm": "Are you sure you want to delete {{name}}? This action cannot be undone.",
     "filter_by_label": "Filter by label",
-    "page_size": "Page Size",
     "bulk_delete_title": "Delete Multiple Clients",
     "bulk_delete_confirm": "Are you sure you want to delete {{count}} clients? This action cannot be undone.",
     "table": {
@@ -2148,7 +2148,6 @@
     "edit": "Edit",
     "delete": "Delete",
     "cancel": "Cancel",
-    "page_size": "Page size",
     "select_currency": "Select currency",
     "select_category": "Select category",
     "detailed_trend_data": "Detailed Trend Data",

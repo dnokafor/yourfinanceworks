@@ -540,7 +540,7 @@ const Invoices = () => {
 
                 {/* Page Size */}
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">{t('invoices.page_size', { defaultValue: 'Page Size' })}</span>
+                  <span className="text-sm text-muted-foreground">{t('common.page_size', { defaultValue: 'Page Size' })}</span>
                   <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
                     <SelectTrigger className="w-[100px] h-10 rounded-lg border-border/50 bg-muted/30">
                       <SelectValue />
@@ -878,7 +878,7 @@ const Invoices = () => {
                   <Link to="/invoices/new">
                     <ProfessionalButton variant="default" size="lg" className="shadow-lg">
                       <Plus className="h-4 w-4" />
-                      Create Your First Invoice
+                      {t('invoices.create_your_first_invoice', { defaultValue: 'Create Your First Invoice' })}
                     </ProfessionalButton>
                   </Link>
                 )}
@@ -887,7 +887,7 @@ const Invoices = () => {
             {/* Pagination */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-6 border-t border-border/50">
               <div className="text-sm text-muted-foreground">
-                Showing <span className="font-medium text-foreground">{invoices.length}</span> of <span className="font-medium text-foreground">{totalInvoices}</span> invoices
+                Showing <span className="font-medium text-foreground">{invoices.length}</span> of <span className="font-medium text-foreground">{totalInvoices}</span> results
               </div>
               <div className="flex items-center gap-2">
                 <ProfessionalButton
@@ -897,7 +897,7 @@ const Invoices = () => {
                   disabled={page === 1}
                   className="h-9 px-4"
                 >
-                  Previous
+                  {t('common.previous')}
                 </ProfessionalButton>
                 <div className="flex items-center gap-1">
                   {Array.from({ length: Math.ceil(totalInvoices / pageSize) }, (_, i) => i + 1)
@@ -923,7 +923,7 @@ const Invoices = () => {
                   disabled={page >= Math.ceil(totalInvoices / pageSize)}
                   className="h-9 px-4"
                 >
-                  Next
+                  {t('common.next')}
                 </ProfessionalButton>
               </div>
             </div>
