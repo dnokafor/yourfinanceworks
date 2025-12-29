@@ -860,6 +860,7 @@
     "delete_client": "Supprimer le Client",
     "delete_confirm": "Êtes-vous sûr de vouloir supprimer {{name}} ? Cette action ne peut pas être annulée.",
     "filter_by_label": "Filtrer par étiquette",
+    "page_size": "Taille de page",
     "bulk_delete_title": "Supprimer Plusieurs Clients",
     "bulk_delete_confirm": "Êtes-vous sûr de vouloir supprimer {{count}} clients ? Cette action ne peut pas être annulée.",
     "delete_success": "Client supprimé avec succès",
@@ -2516,7 +2517,9 @@
     "status_failed": "Échoué",
     "new_statement": "Nouveau relevé",
     "upload_statement": "Téléverser un relevé",
-    "select_provider": "Fournisseur de relevé"
+    "select_provider": "Fournisseur de relevé",
+    "delete": "Supprimer",
+    "actions": "Actions"
   },
   "recommendations": {
     "CONSIDER_STRICTER_PAYMENT_TERMS": "Envisagez de mettre en place des conditions de paiement plus strictes.",

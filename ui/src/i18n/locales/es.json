@@ -861,6 +861,7 @@
     "delete_client": "Eliminar Cliente",
     "delete_confirm": "¿Estás seguro de que quieres eliminar {{name}}? Esta acción no se puede deshacer.",
     "filter_by_label": "Filtrar por etiqueta",
+    "page_size": "Tamaño de página",
     "bulk_delete_title": "Eliminar Múltiples Clientes",
     "bulk_delete_confirm": "¿Estás seguro de que quieres eliminar {{count}} clientes? Esta acción no se puede deshacer.",
     "delete_success": "Cliente eliminado exitosamente",
@@ -2567,7 +2568,9 @@
     "status_failed": "Fallido",
     "new_statement": "Nuevo estado de cuenta",
     "upload_statement": "Subir estado de cuenta",
-    "select_provider": "Proveedor de estado de cuenta"
+    "select_provider": "Proveedor de estado de cuenta",
+    "delete": "Eliminar",
+    "actions": "Acciones"
   },
   "recommendations": {
     "CONSIDER_STRICTER_PAYMENT_TERMS": "Considere implementar condiciones de pago más estrictas.",
@@ -2750,8 +2753,10 @@
     "awaiting_review": "Esperando tu revisión",
     "approved_today": "Aprobados Hoy",
     "expenses_approved_today": "Gastos aprobados hoy",
+    "items_approved_today": "Elementos aprobados hoy",
     "rejected_today": "Rechazados Hoy",
     "expenses_rejected_today": "Gastos rechazados hoy",
+    "items_rejected_today": "Elementos rechazados hoy",
     "overdue": "Vencidos",
     "pending_days": "Pendientes > 3 días",
     "avg_approval_time": "Tiempo Promedio de Aprobación",

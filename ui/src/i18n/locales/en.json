@@ -875,6 +875,7 @@
     "delete_client": "Delete Client",
     "delete_confirm": "Are you sure you want to delete {{name}}? This action cannot be undone.",
     "filter_by_label": "Filter by label",
+    "page_size": "Page Size",
     "bulk_delete_title": "Delete Multiple Clients",
     "bulk_delete_confirm": "Are you sure you want to delete {{count}} clients? This action cannot be undone.",
     "table": {
@@ -2631,7 +2632,9 @@
     "status_failed": "Failed",
     "new_statement": "New Statement",
     "upload_statement": "Upload Statement",
-    "select_provider": "Statement Provider"
+    "select_provider": "Statement Provider",
+    "delete": "Delete",
+    "actions": "Actions"
   },
   "auditLog": {
     "title": "Audit Log",
@@ -2875,8 +2878,10 @@
     "awaiting_review": "Awaiting your review",
     "approved_today": "Approved Today",
     "expenses_approved_today": "Expenses approved today",
+    "items_approved_today": "Items approved today",
     "rejected_today": "Rejected Today",
     "expenses_rejected_today": "Expenses rejected today",
+    "items_rejected_today": "Items rejected today",
     "overdue": "Overdue",
     "pending_days": "Pending > 3 days",
     "avg_approval_time": "Avg. Approval Time",

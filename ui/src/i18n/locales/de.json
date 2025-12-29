@@ -837,6 +837,7 @@
     "delete_client": "Kunden löschen",
     "delete_confirm": "Sind Sie sicher, dass Sie {{name}} löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
     "filter_by_label": "Nach Etikett filtern",
+    "page_size": "Seitengröße",
     "bulk_delete_title": "Mehrere Kunden löschen",
     "bulk_delete_confirm": "Sind Sie sicher, dass Sie {{count}} Kunden löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
     "table": {
@@ -2438,7 +2439,9 @@
     "status_uploaded": "Hochgeladen",
     "status_processing": "Wird verarbeitet",
     "status_processed": "Verarbeitet",
-    "status_failed": "Fehlgeschlagen"
+    "status_failed": "Fehlgeschlagen",
+    "delete": "Löschen",
+    "actions": "Aktionen"
   },
   "auditLog": {
     "title": "Audit-Log",
@@ -2671,8 +2674,10 @@
     "awaiting_review": "Warten auf Ihre Überprüfung",
     "approved_today": "Heute Genehmigt",
     "expenses_approved_today": "Heute genehmigte Ausgaben",
+    "items_approved_today": "Heute genehmigte Elemente",
     "rejected_today": "Heute Abgelehnt",
     "expenses_rejected_today": "Heute abgelehnte Ausgaben",
+    "items_rejected_today": "Heute abgelehnte Elemente",
     "overdue": "Überfällig",
     "pending_days": "Ausstehend > 3 Tage",
     "avg_approval_time": "Durchschn. Genehmigungszeit",
