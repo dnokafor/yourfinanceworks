@@ -1163,6 +1163,313 @@ class InvoiceTools:
         except Exception as e:
             return {"success": False, "error": f"Failed to delete bank statement: {e}"}
     
+    # Recycle Bin Management
+    async def list_deleted_statements(self, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
+        """List all deleted statements in the recycle bin"""
+        try:
+            deleted_statements = await self.api_client.list_deleted_statements(skip=skip, limit=limit)
+            
+            return {
+                "success": True,
+                "data": deleted_statements,
+                "count": len(deleted_statements),
+                "pagination": {"skip": skip, "limit": limit}
+            }
+            
+        except Exception as e:
+            return {"success": False, "error": f"Failed to list deleted statements: {e}"}
+    
+    async def restore_statement(self, statement_id: int) -> Dict[str, Any]:
+        """Restore a deleted statement from the recycle bin"""
+        try:
+            result = await self.api_client.restore_statement(statement_id)
+            return {
+                "success": True, 
+                "data": result, 
+                "message": "Bank statement restored successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to restore bank statement: {e}"}
+    
+    async def permanently_delete_statement(self, statement_id: int) -> Dict[str, Any]:
+        """Permanently delete a statement from the recycle bin"""
+        try:
+            ok = await self.api_client.permanently_delete_statement(statement_id)
+            if not ok:
+                return {"success": False, "error": "Failed to permanently delete bank statement"}
+            return {"success": True, "message": "Bank statement permanently deleted"}
+        except Exception as e:
+            return {"success": False, "error": f"Failed to permanently delete bank statement: {e}"}
+    
+    # Approval Workflow Management
+    async def submit_expense_for_approval(self, expense_id: int, notes: str = None) -> Dict[str, Any]:
+        """Submit an expense for approval workflow"""
+        try:
+            result = await self.api_client.submit_expense_for_approval(expense_id=expense_id, notes=notes)
+            return {
+                "success": True,
+                "data": result,
+                "message": "Expense submitted for approval successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to submit expense for approval: {e}"}
+    
+    async def get_pending_approvals(self, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
+        """Get pending approvals for current user"""
+        try:
+            pending_approvals = await self.api_client.get_pending_approvals(skip=skip, limit=limit)
+            
+            return {
+                "success": True,
+                "data": pending_approvals,
+                "count": len(pending_approvals),
+                "pagination": {"skip": skip, "limit": limit}
+            }
+            
+        except Exception as e:
+            return {"success": False, "error": f"Failed to get pending approvals: {e}"}
+    
+    async def approve_expense(self, approval_id: int, decision: str, notes: str = None) -> Dict[str, Any]:
+        """Approve or reject an expense"""
+        if decision not in ["approved", "rejected"]:
+            return {"success": False, "error": "Decision must be 'approved' or 'rejected'"}
+        
+        try:
+            result = await self.api_client.approve_expense(approval_id=approval_id, decision=decision, notes=notes)
+            return {
+                "success": True,
+                "data": result,
+                "message": f"Expense {decision} successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to process approval decision: {e}"}
+    
+    async def get_approval_history(self, entity_type: str = None, entity_id: int = None, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
+        """Get approval history"""
+        try:
+            history = await self.api_client.get_approval_history(
+                entity_type=entity_type, 
+                entity_id=entity_id, 
+                skip=skip, 
+                limit=limit
+            )
+            
+            return {
+                "success": True,
+                "data": history,
+                "count": len(history),
+                "filters": {"entity_type": entity_type, "entity_id": entity_id},
+                "pagination": {"skip": skip, "limit": limit}
+            }
+            
+        except Exception as e:
+            return {"success": False, "error": f"Failed to get approval history: {e}"}
+    
+    # Reports Generation
+    async def generate_report(self, report_type: str, start_date: str, end_date: str, format: str = "pdf") -> Dict[str, Any]:
+        """Generate a business report"""
+        if format not in ["pdf", "excel", "csv"]:
+            return {"success": False, "error": "Format must be 'pdf', 'excel', or 'csv'"}
+        
+        try:
+            result = await self.api_client.generate_report(
+                report_type=report_type,
+                start_date=start_date,
+                end_date=end_date,
+                format=format
+            )
+            return {
+                "success": True,
+                "data": result,
+                "message": f"Report '{report_type}' generated successfully in {format.upper()} format"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to generate report: {e}"}
+    
+    async def list_report_templates(self) -> Dict[str, Any]:
+        """List available report templates"""
+        try:
+            templates = await self.api_client.list_report_templates()
+            
+            return {
+                "success": True,
+                "data": templates,
+                "count": len(templates)
+            }
+            
+        except Exception as e:
+            return {"success": False, "error": f"Failed to list report templates: {e}"}
+    
+    async def get_report_history(self, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
+        """Get report generation history"""
+        try:
+            history = await self.api_client.get_report_history(skip=skip, limit=limit)
+            
+            return {
+                "success": True,
+                "data": history,
+                "count": len(history),
+                "pagination": {"skip": skip, "limit": limit}
+            }
+            
+        except Exception as e:
+            return {"success": False, "error": f"Failed to get report history: {e}"}
+    
+    # Advanced Search Tools
+    async def global_search(self, query: str, entity_types: List[str] = None, limit: int = 50) -> Dict[str, Any]:
+        """Perform global search across all entities"""
+        if not query or len(query.strip()) < 1:
+            return {"success": False, "error": "Search query cannot be empty"}
+        
+        if limit < 1 or limit > 100:
+            return {"success": False, "error": "Limit must be between 1 and 100"}
+        
+        try:
+            results = await self.api_client.global_search(
+                query=query.strip(),
+                entity_types=entity_types,
+                limit=limit
+            )
+            
+            return {
+                "success": True,
+                "data": results,
+                "query": query,
+                "results_count": len(results.get('results', [])),
+                "total_available": results.get('total', 0),
+                "types_searched": results.get('types_searched', [])
+            }
+            
+        except Exception as e:
+            return {"success": False, "error": f"Search failed: {e}"}
+    
+    async def search_suggestions(self, query: str, limit: int = 10) -> Dict[str, Any]:
+        """Get search suggestions based on partial query"""
+        if not query or len(query.strip()) < 1:
+            return {"success": False, "error": "Query cannot be empty"}
+        
+        if limit < 1 or limit > 20:
+            return {"success": False, "error": "Limit must be between 1 and 20"}
+        
+        try:
+            suggestions = await self.api_client.search_suggestions(
+                query=query.strip(),
+                limit=limit
+            )
+            
+            return {
+                "success": True,
+                "data": suggestions,
+                "query": query,
+                "suggestions_count": len(suggestions.get('suggestions', []))
+            }
+            
+        except Exception as e:
+            return {"success": False, "error": f"Failed to get suggestions: {e}"}
+    
+    async def reindex_all_data(self) -> Dict[str, Any]:
+        """Reindex all data for search (admin only)"""
+        try:
+            result = await self.api_client.reindex_all_data()
+            return {
+                "success": True,
+                "data": result,
+                "message": "Data reindexing completed successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Reindexing failed: {e}"}
+    
+    async def get_search_status(self) -> Dict[str, Any]:
+        """Get search service status"""
+        try:
+            status = await self.api_client.get_search_status()
+            return {
+                "success": True,
+                "data": status,
+                "message": "Search status retrieved successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to get search status: {e}"}
+    
+    # Enhanced Reports Tools
+    async def preview_report(self, report_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Preview a report with limited results"""
+        if not report_config.get("report_type"):
+            return {"success": False, "error": "Report type is required"}
+        
+        try:
+            result = await self.api_client.preview_report(report_config)
+            return {
+                "success": True,
+                "data": result,
+                "message": "Report preview generated successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to preview report: {e}"}
+    
+    async def create_report_template(self, template_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new report template"""
+        required_fields = ["name", "report_type", "description"]
+        for field in required_fields:
+            if not template_data.get(field):
+                return {"success": False, "error": f"Required field missing: {field}"}
+        
+        try:
+            result = await self.api_client.create_report_template(template_data)
+            return {
+                "success": True,
+                "data": result,
+                "message": "Report template created successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to create report template: {e}"}
+    
+    async def get_scheduled_reports(self, skip: int = 0, limit: int = 100, active_only: bool = False) -> Dict[str, Any]:
+        """Get scheduled reports"""
+        if limit < 1 or limit > 1000:
+            return {"success": False, "error": "Limit must be between 1 and 1000"}
+        
+        try:
+            result = await self.api_client.get_scheduled_reports(skip=skip, limit=limit, active_only=active_only)
+            return {
+                "success": True,
+                "data": result,
+                "count": len(result.get("scheduled_reports", [])),
+                "pagination": {"skip": skip, "limit": limit, "active_only": active_only}
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to get scheduled reports: {e}"}
+    
+    async def download_report(self, report_id: int) -> Dict[str, Any]:
+        """Download a generated report file"""
+        if not report_id or report_id <= 0:
+            return {"success": False, "error": "Valid report ID is required"}
+        
+        try:
+            response = await self.api_client.download_report(report_id)
+            
+            # Handle file download response
+            content_disposition = response.headers.get("content-disposition", "")
+            filename = f"report_{report_id}.pdf"
+            if "filename=" in content_disposition:
+                filename = content_disposition.split("filename=")[1].strip('"')
+            
+            content_type = response.headers.get("content-type", "application/pdf")
+            content = await response.aread()
+            
+            return {
+                "success": True,
+                "data": {
+                    "content": content,
+                    "content_type": content_type,
+                    "filename": filename,
+                    "size": len(content)
+                },
+                "message": f"Report '{filename}' downloaded successfully"
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Failed to download report: {e}"}
+    
     # Currency Management
     async def list_currencies(self, active_only: bool = True) -> Dict[str, Any]:
         """List supported currencies"""

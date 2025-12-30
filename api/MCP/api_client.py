@@ -16,18 +16,18 @@ logger = logging.getLogger(__name__)
 
 class InvoiceAPIClient:
     """Client for interacting with the Invoice API"""
-    
+
     def __init__(self, base_url: str = None, email: str = None, password: str = None):
         self.base_url = base_url or config.API_BASE_URL
         self.auth_client = InvoiceAPIAuthClient(base_url, email, password)
         self._client = AsyncClient(timeout=config.REQUEST_TIMEOUT)
-    
+
     async def _make_request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
         """Make authenticated request to the API"""
         try:
             headers = await self.auth_client.get_auth_headers()
             headers.update(kwargs.pop('headers', {}))
-            
+
             response = await self._client.request(
                 method=method,
                 url=f"{self.base_url}{endpoint}",
@@ -36,7 +36,7 @@ class InvoiceAPIClient:
             )
             response.raise_for_status()
             return response.json()
-            
+
         except HTTPStatusError as e:
             if e.response.status_code == 401:
                 raise AuthenticationError("Authentication failed - check credentials")
@@ -47,23 +47,23 @@ class InvoiceAPIClient:
         except Exception as e:
             logger.error(f"Request error: {e}")
             raise Exception(f"Request error: {e}")
-    
+
     # Client Management Methods
     async def list_clients(self, skip: int = 0, limit: int = None) -> List[Dict[str, Any]]:
         """List all clients with pagination"""
         limit = limit or config.DEFAULT_PAGE_SIZE
         limit = min(limit, config.MAX_PAGE_SIZE)
-        
+
         return await self._make_request(
             "GET", 
             "/clients/",
             params={"skip": skip, "limit": limit}
         )
-    
+
     async def get_client(self, client_id: int) -> Dict[str, Any]:
         """Get a specific client by ID"""
         return await self._make_request("GET", f"/clients/{client_id}")
-    
+
     async def search_clients(self, query: str, skip: int = 0, limit: int = None) -> List[Dict[str, Any]]:
         """Search clients by name, email, or other fields"""
         limit = limit or config.DEFAULT_PAGE_SIZE
@@ -71,50 +71,50 @@ class InvoiceAPIClient:
         filtered_clients = []
         current_skip = 0
         batch_size = min(100, config.MAX_PAGE_SIZE)
-        
+
         # Process clients in batches with early termination
         while len(filtered_clients) < skip + limit:
             batch = await self.list_clients(skip=current_skip, limit=batch_size)
             if not batch:
                 break
-                
+
             for client in batch:
                 # Optimized field access with early exit
                 name = client.get('name', '')
                 if query_lower in name.lower():
                     filtered_clients.append(client)
                     continue
-                    
+
                 email = client.get('email', '')
                 if email and query_lower in email.lower():
                     filtered_clients.append(client)
                     continue
-                    
+
                 phone = client.get('phone', '')
                 if phone and query_lower in phone.lower():
                     filtered_clients.append(client)
                     continue
-                    
+
                 address = client.get('address', '')
                 if address and query_lower in address.lower():
                     filtered_clients.append(client)
-            
+
             current_skip += batch_size
-            
+
             # Early termination if we have enough results
             if len(filtered_clients) >= skip + limit:
                 break
-        
+
         return filtered_clients[skip:skip + limit]
     
     async def create_client(self, client_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new client"""
         return await self._make_request("POST", "/clients/", json=client_data)
-    
+
     async def update_client(self, client_id: int, client_data: Dict[str, Any]) -> Dict[str, Any]:
         """Update an existing client"""
         return await self._make_request("PUT", f"/clients/{client_id}", json=client_data)
-    
+
     async def delete_client(self, client_id: int) -> bool:
         """Delete a client"""
         try:
@@ -123,23 +123,23 @@ class InvoiceAPIClient:
         except Exception as e:
             logger.error(f"Failed to delete client {client_id}: {e}")
             return False
-    
+
     # Invoice Management Methods
     async def list_invoices(self, skip: int = 0, limit: int = None) -> List[Dict[str, Any]]:
         """List all invoices with pagination"""
         limit = limit or config.DEFAULT_PAGE_SIZE
         limit = min(limit, config.MAX_PAGE_SIZE)
-        
+
         return await self._make_request(
             "GET", 
             "/invoices/",
             params={"skip": skip, "limit": limit}
         )
-    
+
     async def get_invoice(self, invoice_id: int) -> Dict[str, Any]:
         """Get a specific invoice by ID"""
         return await self._make_request("GET", f"/invoices/{invoice_id}")
-    
+
     async def search_invoices(self, query: str, skip: int = 0, limit: int = None) -> List[Dict[str, Any]]:
         """Search invoices by number, client name, status, or other fields"""
         limit = limit or config.DEFAULT_PAGE_SIZE
@@ -147,45 +147,45 @@ class InvoiceAPIClient:
         filtered_invoices = []
         current_skip = 0
         batch_size = min(100, config.MAX_PAGE_SIZE)
-        
+
         # Process invoices in batches with early termination
         while len(filtered_invoices) < skip + limit:
             batch = await self.list_invoices(skip=current_skip, limit=batch_size)
             if not batch:
                 break
-                
+
             for invoice in batch:
                 # Optimized field access with early exit
                 number = invoice.get('number', '')
                 if query_lower in number.lower():
                     filtered_invoices.append(invoice)
                     continue
-                    
+
                 client_name = invoice.get('client_name', '')
                 if client_name and query_lower in client_name.lower():
                     filtered_invoices.append(invoice)
                     continue
-                    
+
                 status = invoice.get('status', '')
                 if status and query_lower in status.lower():
                     filtered_invoices.append(invoice)
                     continue
-                    
+
                 notes = invoice.get('notes', '')
                 if notes and query_lower in notes.lower():
                     filtered_invoices.append(invoice)
                     continue
-                    
+
                 amount = str(invoice.get('amount', ''))
                 if amount and query_lower in amount.lower():
                     filtered_invoices.append(invoice)
-            
+
             current_skip += batch_size
-            
+
             # Early termination if we have enough results
             if len(filtered_invoices) >= skip + limit:
                 break
-        
+
         return filtered_invoices[skip:skip + limit]
     
     async def create_invoice(self, invoice_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -213,11 +213,11 @@ class InvoiceAPIClient:
             "/currency/supported",
             params={"active_only": active_only}
         )
-    
+
     async def create_currency(self, currency_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a custom currency"""
         return await self._make_request("POST", "/currency/custom", json=currency_data)
-    
+
     async def convert_currency(self, amount: float, from_currency: str, to_currency: str, conversion_date: Optional[str] = None) -> Dict[str, Any]:
         """Convert amount from one currency to another"""
         params = {
@@ -227,29 +227,29 @@ class InvoiceAPIClient:
         }
         if conversion_date:
             params["conversion_date"] = conversion_date
-            
+
         return await self._make_request("POST", "/currency/convert", params=params)
-    
+
     # Payment Management Methods
     async def list_payments(self, skip: int = 0, limit: int = None) -> List[Dict[str, Any]]:
         """List all payments with pagination"""
         limit = limit or config.DEFAULT_PAGE_SIZE
         limit = min(limit, config.MAX_PAGE_SIZE)
-        
+
         return await self._make_request(
             "GET", 
             "/payments/",
             params={"skip": skip, "limit": limit}
         )
-    
+
     async def create_payment(self, payment_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new payment"""
         return await self._make_request("POST", "/payments/", json=payment_data)
-    
+
     async def get_payment(self, payment_id: int) -> Dict[str, Any]:
         """Get a specific payment by ID"""
         return await self._make_request("GET", f"/payments/{payment_id}")
-    
+
     # Expense Management Methods
     async def list_expenses(
         self,
@@ -396,41 +396,142 @@ class InvoiceAPIClient:
         """Download bank statement file"""
         headers = await self.auth_client.get_auth_headers()
         params = {"inline": inline} if inline else {}
-        resp = await self._client.get(
-            url=f"{self.base_url}/statements/{statement_id}/file",
-            headers=headers,
-            params=params,
-        )
-        resp.raise_for_status()
-        content = resp.content
-        content_type = resp.headers.get("content-type", "application/octet-stream")
-        disposition = resp.headers.get("content-disposition", "")
-        filename = None
-        if "filename=" in disposition:
-            try:
-                filename = disposition.split("filename=")[1].strip().strip('"')
-            except Exception:
-                filename = None
+
+        response = await self._make_request("GET", f"/statements/{statement_id}/download", params=params, return_response=True)
+
+        # Handle file download response
+        content_disposition = response.headers.get("content-disposition", "")
+        filename = "statement.pdf"
+        if "filename=" in content_disposition:
+            filename = content_disposition.split("filename=")[1].strip('"')
+
+        content_type = response.headers.get("content-type", "application/pdf")
+        content = await response.aread()
+
         return {"content": content, "content_type": content_type, "filename": filename}
     
+    # Recycle Bin Methods
+    async def list_deleted_statements(self, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
+        """List all deleted statements in recycle bin"""
+        return await self._make_request("GET", "/statements/recycle-bin", params={"skip": skip, "limit": limit})
+
+    async def restore_statement(self, statement_id: int) -> Dict[str, Any]:
+        """Restore a deleted statement from recycle bin"""
+        return await self._make_request("POST", f"/statements/{statement_id}/restore")
+
+    async def permanently_delete_statement(self, statement_id: int) -> bool:
+        """Permanently delete a statement from recycle bin"""
+        try:
+            await self._make_request("DELETE", f"/statements/{statement_id}/permanent")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to permanently delete bank statement {statement_id}: {e}")
+            return False
+
+    # Approval Workflow Methods
+    async def submit_expense_for_approval(self, expense_id: int, notes: str = None) -> Dict[str, Any]:
+        """Submit an expense for approval workflow"""
+        data = {"expense_id": expense_id}
+        if notes:
+            data["notes"] = notes
+        return await self._make_request("POST", "/approvals/submit", json=data)
+
+    async def get_pending_approvals(self, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
+        """Get pending approvals for current user"""
+        return await self._make_request("GET", "/approvals/pending", params={"skip": skip, "limit": limit})
+
+    async def approve_expense(self, approval_id: int, decision: str, notes: str = None) -> Dict[str, Any]:
+        """Approve or reject an expense"""
+        data = {"decision": decision}
+        if notes:
+            data["notes"] = notes
+        return await self._make_request("POST", f"/approvals/{approval_id}/decision", json=data)
+
+    async def get_approval_history(self, entity_type: str = None, entity_id: int = None, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
+        """Get approval history"""
+        params = {"skip": skip, "limit": limit}
+        if entity_type:
+            params["entity_type"] = entity_type
+        if entity_id:
+            params["entity_id"] = entity_id
+        return await self._make_request("GET", "/approvals/history", params=params)
+
+    # Reports Generation Methods
+    async def generate_report(self, report_type: str, start_date: str, end_date: str, format: str = "pdf") -> Dict[str, Any]:
+        """Generate a business report"""
+        params = {
+            "report_type": report_type,
+            "start_date": start_date,
+            "end_date": end_date,
+            "format": format
+        }
+        return await self._make_request("POST", "/reports/generate", json=params)
+
+    async def list_report_templates(self) -> List[Dict[str, Any]]:
+        """List available report templates"""
+        return await self._make_request("GET", "/reports/templates")
+
+    async def get_report_history(self, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
+        """Get report generation history"""
+        return await self._make_request("GET", "/reports/history", params={"skip": skip, "limit": limit})
+
+    # Advanced Search Methods
+    async def global_search(self, query: str, entity_types: List[str] = None, limit: int = 50) -> Dict[str, Any]:
+        """Perform global search across all entities"""
+        params = {"q": query, "limit": limit}
+        if entity_types:
+            params["types"] = ",".join(entity_types)
+        return await self._make_request("GET", "/search", params=params)
+
+    async def search_suggestions(self, query: str, limit: int = 10) -> Dict[str, Any]:
+        """Get search suggestions based on partial query"""
+        params = {"q": query, "limit": limit}
+        return await self._make_request("GET", "/search/suggestions", params=params)
+
+    async def reindex_all_data(self) -> Dict[str, Any]:
+        """Reindex all data for search (admin only)"""
+        return await self._make_request("POST", "/search/reindex")
+
+    async def get_search_status(self) -> Dict[str, Any]:
+        """Get search service status"""
+        return await self._make_request("GET", "/search/status")
+
+    # Enhanced Reports Methods
+    async def preview_report(self, report_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Preview a report with limited results"""
+        return await self._make_request("POST", "/reports/preview", json=report_config)
+
+    async def create_report_template(self, template_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new report template"""
+        return await self._make_request("POST", "/reports/templates", json=template_data)
+
+    async def get_scheduled_reports(self, skip: int = 0, limit: int = 100, active_only: bool = False) -> Dict[str, Any]:
+        """Get scheduled reports"""
+        params = {"skip": skip, "limit": limit, "active_only": active_only}
+        return await self._make_request("GET", "/reports/scheduled", params=params)
+
+    async def download_report(self, report_id: int) -> Dict[str, Any]:
+        """Download a generated report file"""
+        return await self._make_request("GET", f"/reports/download/{report_id}", return_response=True)
+
     # Settings Methods
     async def get_settings(self) -> Dict[str, Any]:
         """Get tenant settings"""
         return await self._make_request("GET", "/settings/")
-    
+
     # Discount Rules Methods
     async def list_discount_rules(self) -> List[Dict[str, Any]]:
         """List all discount rules"""
         return await self._make_request("GET", "/discount-rules/")
-    
+
     async def create_discount_rule(self, rule_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new discount rule"""
         return await self._make_request("POST", "/discount-rules/", json=rule_data)
-    
+
     async def update_discount_rule(self, rule_id: int, rule_data: Dict[str, Any]) -> Dict[str, Any]:
         """Update an existing discount rule"""
         return await self._make_request("PUT", f"/discount-rules/{rule_id}", json=rule_data)
-    
+
     async def delete_discount_rule(self, rule_id: int) -> bool:
         """Delete a discount rule"""
         try:
@@ -439,25 +540,25 @@ class InvoiceAPIClient:
         except Exception as e:
             logger.error(f"Failed to delete discount rule {rule_id}: {e}")
             return False
-    
+
     # CRM Methods
     async def create_client_note(self, client_id: int, note_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a note for a client"""
         return await self._make_request("POST", f"/crm/clients/{client_id}/notes", json=note_data)
-    
+
     async def list_client_notes(self, client_id: int) -> List[Dict[str, Any]]:
         """List notes for a client"""
         return await self._make_request("GET", f"/crm/clients/{client_id}/notes")
-    
+
     # Email Methods
     async def send_invoice_email(self, email_data: Dict[str, Any]) -> Dict[str, Any]:
         """Send an invoice via email"""
         return await self._make_request("POST", "/email/send-invoice", json=email_data)
-    
+
     async def test_email_configuration(self, test_email: str) -> Dict[str, Any]:
         """Test email configuration"""
         return await self._make_request("POST", "/email/test", json={"test_email": test_email})
-    
+
     # AI Configuration Methods
     async def list_ai_configs(self) -> List[Dict[str, Any]]:
         """List all AI configurations"""
@@ -519,7 +620,7 @@ class InvoiceAPIClient:
             limit = 100
         if limit > 10000:  # Prevent excessive load
             limit = 10000
-            
+
         params = {"limit": limit, "offset": offset}
         if user_id is not None:
             params["user_id"] = user_id
