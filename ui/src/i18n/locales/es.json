@@ -863,6 +863,8 @@
     "filter_by_label": "Filtrar por etiqueta",
     "bulk_delete_title": "Eliminar Múltiples Clientes",
     "bulk_delete_confirm": "¿Estás seguro de que quieres eliminar {{count}} clientes? Esta acción no se puede deshacer.",
+    "page_size": "Tamaño de página",
+    "showing_results": "Mostrando {{start}} a {{end}} de {{total}} resultados",
     "delete_success": "Cliente eliminado exitosamente",
     "delete_error": "Error al eliminar cliente",
     "table": {

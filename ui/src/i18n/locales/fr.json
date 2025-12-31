@@ -862,6 +862,8 @@
     "filter_by_label": "Filtrer par étiquette",
     "bulk_delete_title": "Supprimer Plusieurs Clients",
     "bulk_delete_confirm": "Êtes-vous sûr de vouloir supprimer {{count}} clients ? Cette action ne peut pas être annulée.",
+    "page_size": "Taille de page",
+    "showing_results": "Affichage de {{start}} à {{end}} sur {{total}} résultats",
     "delete_success": "Client supprimé avec succès",
     "delete_error": "Échec de la suppression du client",
     "table": {

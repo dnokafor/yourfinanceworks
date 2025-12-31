@@ -840,6 +840,8 @@
     "filter_by_label": "Nach Etikett filtern",
     "bulk_delete_title": "Mehrere Kunden löschen",
     "bulk_delete_confirm": "Sind Sie sicher, dass Sie {{count}} Kunden löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
+    "page_size": "Seitengröße",
+    "showing_results": "Zeige {{start}} bis {{end}} von {{total}} Ergebnissen",
     "table": {
       "name": "Name",
       "email": "E-Mail",

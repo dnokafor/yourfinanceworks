@@ -878,6 +878,8 @@
     "filter_by_label": "Filter by label",
     "bulk_delete_title": "Delete Multiple Clients",
     "bulk_delete_confirm": "Are you sure you want to delete {{count}} clients? This action cannot be undone.",
+    "page_size": "Page Size",
+    "showing_results": "Showing {{start}} to {{end}} of {{total}} results",
     "table": {
       "name": "Name",
       "email": "Email",

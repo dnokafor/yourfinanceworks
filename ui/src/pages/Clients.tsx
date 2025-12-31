@@ -4,7 +4,7 @@ import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Loader2, Pencil, Trash2, Users, Tag, Filter, Minus, X } from "lucide-react";
+import { Plus, Search, Loader2, Pencil, Trash2, Users, Tag, Filter, Minus, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
 import { clientApi, Client, getErrorMessage } from "@/lib/api";
@@ -193,7 +193,7 @@ const Clients = () => {
 
                 {/* Page Size */}
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">{t('clients.page_size', { defaultValue: 'Page Size' })}</span>
+                  <span className="text-sm text-muted-foreground">{t('common.page_size', { defaultValue: 'Page Size' })}</span>
                   <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
                     <SelectTrigger className="w-[100px] h-10 rounded-lg border-border/50 bg-muted/30">
                       <SelectValue />
@@ -462,6 +462,52 @@ const Clients = () => {
                       </Link>
                     </ProfessionalButton>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Pagination */}
+            {filteredClients.length > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-6 border-t border-border/50">
+                <div className="text-sm text-muted-foreground">
+                  Showing <span className="font-medium text-foreground">{filteredClients.length}</span> of <span className="font-medium text-foreground">{totalClients}</span> results
+                </div>
+                <div className="flex items-center gap-2">
+                  <ProfessionalButton
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(prev => Math.max(1, prev - 1))}
+                    disabled={page === 1}
+                    className="h-9 px-4"
+                  >
+                    {t('common.previous')}
+                  </ProfessionalButton>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.ceil(totalClients / pageSize) }, (_, i) => i + 1)
+                      .filter(p => p === 1 || p === Math.ceil(totalClients / pageSize) || Math.abs(p - page) <= 1)
+                      .map((p, i, arr) => (
+                        <div key={p} className="flex items-center">
+                          {i > 0 && arr[i - 1] !== p - 1 && <span className="text-muted-foreground px-1">...</span>}
+                          <ProfessionalButton
+                            variant={page === p ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setPage(p)}
+                            className={`h-9 w-9 p-0 ${page === p ? 'shadow-md shadow-primary/20' : ''}`}
+                          >
+                            {p}
+                          </ProfessionalButton>
+                        </div>
+                      ))}
+                  </div>
+                  <ProfessionalButton
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(prev => Math.min(Math.ceil(totalClients / pageSize), prev + 1))}
+                    disabled={page >= Math.ceil(totalClients / pageSize)}
+                    className="h-9 px-4"
+                  >
+                    {t('common.next')}
+                  </ProfessionalButton>
                 </div>
               </div>
             )}
