@@ -1,16 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Badge } from '../ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
-import { Alert, AlertDescription } from '../ui/alert';
-import { Switch } from '../ui/switch';
-import { Textarea } from '../ui/textarea';
-import { Copy, Key, Trash2, RotateCcw, Shield } from 'lucide-react';
+import {
+  ProfessionalCard,
+  ProfessionalCardContent,
+  ProfessionalCardHeader,
+  ProfessionalCardTitle,
+  ProfessionalCardFooter,
+  MetricCard
+} from '@/components/ui/professional-card';
+import { ProfessionalButton } from '@/components/ui/professional-button';
+import { ProfessionalInput } from '@/components/ui/professional-input';
+import { ProfessionalTextarea } from '@/components/ui/professional-textarea';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Switch } from '@/components/ui/switch';
+import { Copy, Key, Trash2, RotateCcw, Shield, Plus, Lock, Globe, Database, Activity, Calendar, Clock, LockKeyhole } from 'lucide-react';
 import { toast } from 'sonner';
-import { api } from '../../lib/api';
-import { FeatureGate } from '../FeatureGate';
+import { api } from '@/lib/api';
+import { FeatureGate } from '@/components/FeatureGate';
+import { cn } from '@/lib/utils';
 
 interface APIClient {
   id: number;
@@ -97,57 +106,58 @@ const APIClientManagement: React.FC = () => {
     <FeatureGate
       feature="api_keys"
       fallback={
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-12 shadow-sm border border-gray-200 dark:border-gray-700">
-          <div className="text-center max-w-2xl mx-auto">
-            <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+        <ProfessionalCard variant="elevated" className="border-blue-200/50 dark:border-blue-800/50 bg-blue-50/50 dark:bg-blue-900/10">
+          <ProfessionalCardContent className="p-12 text-center">
+            <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
               <Key className="w-8 h-8 text-blue-600 dark:text-blue-400" />
             </div>
-            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">Business License Required</h3>
-            <p className="text-gray-600 dark:text-gray-300 mb-6">
+            <h3 className="text-2xl font-bold text-foreground mb-3">Business License Required</h3>
+            <p className="text-muted-foreground mb-8 max-w-lg mx-auto leading-relaxed">
               API keys enable external system integration and automation - a clear indicator of business use.
               Upgrade to a business license to create and manage API keys for your integrations.
             </p>
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-6 mb-6">
-              <h4 className="font-semibold text-gray-900 dark:text-white mb-3">With Business License, you get:</h4>
-              <ul className="text-left space-y-2 text-gray-700 dark:text-gray-300">
+            <div className="bg-background/80 backdrop-blur-sm rounded-xl p-6 mb-8 max-w-lg mx-auto shadow-sm border border-border/50">
+              <h4 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                <Shield className="h-4 w-4 text-primary" />
+                With Business License, you get:
+              </h4>
+              <ul className="text-left space-y-3 text-sm text-foreground/80">
                 <li className="flex items-start">
-                  <span className="text-blue-600 mr-2">✓</span>
+                  <div className="mr-3 p-0.5 bg-green-100 rounded-full mt-0.5"><div className="w-2 h-2 bg-green-600 rounded-full" /></div>
                   <span>Create up to 2 API keys for external integrations</span>
                 </li>
                 <li className="flex items-start">
-                  <span className="text-blue-600 mr-2">✓</span>
+                  <div className="mr-3 p-0.5 bg-green-100 rounded-full mt-0.5"><div className="w-2 h-2 bg-green-600 rounded-full" /></div>
                   <span>Configurable rate limits and security settings</span>
                 </li>
                 <li className="flex items-start">
-                  <span className="text-blue-600 mr-2">✓</span>
+                  <div className="mr-3 p-0.5 bg-green-100 rounded-full mt-0.5"><div className="w-2 h-2 bg-green-600 rounded-full" /></div>
                   <span>Webhook notifications for real-time updates</span>
                 </li>
                 <li className="flex items-start">
-                  <span className="text-blue-600 mr-2">✓</span>
+                  <div className="mr-3 p-0.5 bg-green-100 rounded-full mt-0.5"><div className="w-2 h-2 bg-green-600 rounded-full" /></div>
                   <span>IP whitelisting for enhanced security</span>
-                </li>
-                <li className="flex items-start">
-                  <span className="text-blue-600 mr-2">✓</span>
-                  <span>OAuth 2.0 client support for enterprise integrations</span>
                 </li>
               </ul>
             </div>
-            <div className="flex justify-center space-x-4">
-              <Button
+            <div className="flex justify-center gap-4">
+              <ProfessionalButton
+                variant="gradient"
                 onClick={() => window.location.href = '/settings?tab=license'}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                size="lg"
               >
                 Activate Business License
-              </Button>
-              <Button
+              </ProfessionalButton>
+              <ProfessionalButton
                 variant="outline"
                 onClick={() => window.open('https://docs.example.com/api-keys', '_blank')}
+                size="lg"
               >
                 Learn More
-              </Button>
+              </ProfessionalButton>
             </div>
-          </div>
-        </div>
+          </ProfessionalCardContent>
+        </ProfessionalCard>
       }
     >
       <APIClientManagementContent />
@@ -437,157 +447,137 @@ const APIClientManagementContent: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-12 shadow-sm border border-gray-200 dark:border-gray-700">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+      <ProfessionalCard variant="elevated">
+        <ProfessionalCardHeader>
+          <ProfessionalCardTitle>API Clients</ProfessionalCardTitle>
+        </ProfessionalCardHeader>
+        <ProfessionalCardContent>
+          <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">
+            <RotateCcw className="h-6 w-6 animate-spin mb-4 text-primary" />
+            <h3 className="text-lg font-semibold text-foreground mb-1">Loading API Clients</h3>
+            <p>Please wait while we load your API clients...</p>
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading API Clients</h3>
-          <p className="text-gray-600">Please wait while we load your API clients...</p>
-        </div>
-      </div>
+        </ProfessionalCardContent>
+      </ProfessionalCard>
     );
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
       {/* Professional Header Section */}
-      <div className="bg-white dark:bg-gray-700 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-600">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-              <Key className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+      <ProfessionalCard variant="elevated">
+        <ProfessionalCardContent className="p-6">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+            <div className="flex items-center space-x-4 w-full md:w-auto">
+              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center shadow-sm">
+                <Key className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight">API Clients</h2>
+                <div className="flex items-center gap-3 text-muted-foreground mt-1">
+                  <p>Manage your API keys and OAuth clients</p>
+                  <Badge variant={clients.length >= 2 ? "destructive" : clients.length > 0 ? "secondary" : "outline"}>
+                    {clients.length}/2 Used
+                  </Badge>
+                </div>
+              </div>
             </div>
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">API Clients</h2>
-              <p className="text-gray-600">
-                Manage your API keys and OAuth clients
-                <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${clients.length >= 2
-                  ? 'bg-red-100 text-red-800'
-                  : clients.length === 1
-                    ? 'bg-yellow-100 text-yellow-800'
-                    : 'bg-green-100 text-green-800'
-                  }`}>
-                  {clients.length}/2 API keys used
-                </span>
-              </p>
-            </div>
-          </div>
-          <div className="flex space-x-3">
-            <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-              <DialogTrigger asChild>
-                <button
-                  disabled={clients.length >= 2}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center space-x-2 ${clients.length >= 2
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
-                    }`}
-                  title={clients.length >= 2 ? 'Maximum of 2 API keys allowed per user' : 'Create a new API key'}
-                >
-                  <Key className="w-4 h-4" />
-                  <span>Create API Key {clients.length >= 2 ? `(${clients.length}/2)` : ''}</span>
-                </button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Create New API Key</DialogTitle>
-                </DialogHeader>
 
-                {clients.length === 1 && (
-                  <Alert>
-                    <AlertDescription>
-                      <strong>Note:</strong> You can create one more API key. Maximum limit is 2 API keys per account.
-                    </AlertDescription>
-                  </Alert>
-                )}
+            <div className="flex space-x-3 w-full md:w-auto">
+              <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+                <DialogTrigger asChild>
+                  <ProfessionalButton
+                    variant="gradient"
+                    disabled={clients.length >= 2}
+                    className={cn("w-full md:w-auto", clients.length >= 2 && "opacity-50 cursor-not-allowed")}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create API Key
+                  </ProfessionalButton>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle className="text-xl">Create New API Key</DialogTitle>
+                  </DialogHeader>
 
-                <div className="space-y-6">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="client_name">Client Name *</Label>
-                      <Input
-                        id="client_name"
+                  {clients.length === 1 && (
+                    <Alert className="bg-blue-50 border-blue-200">
+                      <AlertDescription className="text-blue-800">
+                        <strong>Note:</strong> You can create 1 more API key. Maximum limit is 2 API keys per account.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="space-y-6 py-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <ProfessionalInput
+                        label="Client Name *"
                         value={createForm.client_name}
                         onChange={(e) => setCreateForm({ ...createForm, client_name: e.target.value })}
                         placeholder="My Accounting System"
                       />
+
+                      <div className="flex flex-col justify-end pb-2">
+                        <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg border border-border/50">
+                          <Switch
+                            checked={createForm.is_sandbox}
+                            onCheckedChange={(checked) => setCreateForm({ ...createForm, is_sandbox: checked })}
+                          />
+                          <Label className="text-base font-medium">Sandbox Mode</Label>
+                        </div>
+                      </div>
                     </div>
 
-                    <div>
-                      <Label>
-                        <Switch
-                          checked={createForm.is_sandbox}
-                          onCheckedChange={(checked) => setCreateForm({ ...createForm, is_sandbox: checked })}
-                        />
-                        <span className="ml-2">Sandbox Mode</span>
-                      </Label>
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="client_description">Description</Label>
-                    <Textarea
-                      id="client_description"
+                    <ProfessionalTextarea
+                      label="Description"
                       value={createForm.client_description}
                       onChange={(e) => setCreateForm({ ...createForm, client_description: e.target.value })}
                       placeholder="Integration with accounting software"
                       rows={2}
                     />
-                  </div>
 
-                  <div>
-                    <Label>Document Types *</Label>
-                    <div className="grid grid-cols-1 gap-2 mt-2">
-                      {DOCUMENT_TYPES.map((type) => (
-                        <div key={type.value} className="flex items-center space-x-2">
-                          <Switch
-                            id={type.value}
-                            checked={createForm.allowed_document_types.includes(type.value)}
-                            onCheckedChange={(checked) => handleDocumentTypeToggle(type.value, checked)}
-                          />
-                          <Label htmlFor={type.value} className="text-sm">
-                            {type.label}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <Label htmlFor="rate_limit_per_minute">Per Minute</Label>
-                      <Input
-                        id="rate_limit_per_minute"
+                      <Label className="text-sm font-medium mb-3 block">Allowed Document Types *</Label>
+                      <div className="flex flex-wrap gap-4">
+                        {DOCUMENT_TYPES.map((type) => (
+                          <div key={type.value} className="flex items-center space-x-2 bg-card p-3 rounded-lg border border-border/50 shadow-sm">
+                            <Switch
+                              id={type.value}
+                              checked={createForm.allowed_document_types.includes(type.value)}
+                              onCheckedChange={(checked) => handleDocumentTypeToggle(type.value, checked)}
+                            />
+                            <Label htmlFor={type.value} className="text-sm cursor-pointer">
+                              {type.label}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-4">
+                      <ProfessionalInput
+                        label="Rate Limit (Per Minute)"
                         type="number"
                         value={createForm.rate_limit_per_minute}
                         onChange={(e) => setCreateForm({ ...createForm, rate_limit_per_minute: parseInt(e.target.value) })}
                       />
-                    </div>
-                    <div>
-                      <Label htmlFor="rate_limit_per_hour">Per Hour</Label>
-                      <Input
-                        id="rate_limit_per_hour"
+                      <ProfessionalInput
+                        label="Rate Limit (Per Hour)"
                         type="number"
                         value={createForm.rate_limit_per_hour}
                         onChange={(e) => setCreateForm({ ...createForm, rate_limit_per_hour: parseInt(e.target.value) })}
                       />
-                    </div>
-                    <div>
-                      <Label htmlFor="rate_limit_per_day">Per Day</Label>
-                      <Input
-                        id="rate_limit_per_day"
+                      <ProfessionalInput
+                        label="Rate Limit (Per Day)"
                         type="number"
                         value={createForm.rate_limit_per_day}
                         onChange={(e) => setCreateForm({ ...createForm, rate_limit_per_day: parseInt(e.target.value) })}
                       />
                     </div>
-                  </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="max_transaction_amount">Max Transaction Amount</Label>
-                      <Input
-                        id="max_transaction_amount"
+                    <div className="grid grid-cols-2 gap-4">
+                      <ProfessionalInput
+                        label="Max Transaction Amount"
                         type="number"
                         step="0.01"
                         value={createForm.max_transaction_amount || ''}
@@ -596,427 +586,211 @@ const APIClientManagementContent: React.FC = () => {
                           max_transaction_amount: e.target.value ? parseFloat(e.target.value) : undefined
                         })}
                         placeholder="No limit"
+                        leftIcon={<span className="text-muted-foreground">$</span>}
                       />
-                    </div>
-                    <div>
-                      <Label htmlFor="expires_in_days">Expires in Days</Label>
-                      <Input
-                        id="expires_in_days"
+                      <ProfessionalInput
+                        label="Expires in Days"
                         type="number"
                         value={createForm.expires_in_days || ''}
                         onChange={(e) => setCreateForm({
                           ...createForm,
                           expires_in_days: e.target.value ? parseInt(e.target.value) : undefined
                         })}
-                        placeholder="Never expires"
+                        placeholder="Never"
                       />
                     </div>
-                  </div>
 
-                  <div>
-                    <Label htmlFor="webhook_url">Webhook URL</Label>
-                    <Input
-                      id="webhook_url"
+                    <ProfessionalInput
+                      label="Webhook URL"
                       value={createForm.webhook_url}
                       onChange={(e) => setCreateForm({ ...createForm, webhook_url: e.target.value })}
                       placeholder="https://your-app.com/webhooks/invoice-system"
+                      leftIcon={<Globe className="w-4 h-4 text-muted-foreground" />}
                     />
-                  </div>
 
-                  <div>
-                    <Label>Allowed IP Addresses</Label>
-                    <div className="flex space-x-2 mt-2">
-                      <Input
-                        value={ipAddressInput}
-                        onChange={(e) => setIpAddressInput(e.target.value)}
-                        placeholder="192.168.1.100 or 10.0.0.0/24"
-                      />
-                      <Button type="button" onClick={addIpAddress} variant="outline">
-                        Add
-                      </Button>
-                    </div>
-                    {createForm.allowed_ip_addresses && createForm.allowed_ip_addresses.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {createForm.allowed_ip_addresses.map((ip) => (
-                          <Badge key={ip} variant="secondary" className="cursor-pointer" onClick={() => removeIpAddress(ip)}>
-                            {ip} ✕
-                          </Badge>
-                        ))}
+                    <div>
+                      <Label className="text-sm font-medium mb-2 block">Allowed IP Addresses</Label>
+                      <div className="flex gap-2">
+                        <ProfessionalInput
+                          value={ipAddressInput}
+                          onChange={(e) => setIpAddressInput(e.target.value)}
+                          placeholder="192.168.1.100 or 10.0.0.0/24"
+                          className="flex-1"
+                        />
+                        <ProfessionalButton type="button" onClick={addIpAddress} variant="outline">
+                          Add
+                        </ProfessionalButton>
                       </div>
-                    )}
-                  </div>
-
-                  <div className="flex justify-end space-x-2">
-                    <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
-                      Cancel
-                    </Button>
-                    <Button onClick={createApiKey}>
-                      Create API Key
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-
-            <Dialog open={showOAuthDialog} onOpenChange={setShowOAuthDialog}>
-              <DialogTrigger asChild>
-                <Button variant="outline" disabled title="OAuth 2.0 Client creation is not yet available">
-                  <Shield className="w-4 h-4 mr-2" />
-                  Create OAuth Client
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Create OAuth 2.0 Client</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-6">
-                  <Alert>
-                    <AlertDescription>
-                      OAuth clients are for enterprise integrations and require admin approval.
-                    </AlertDescription>
-                  </Alert>
-
-                  <div>
-                    <Label htmlFor="oauth_client_name">Client Name *</Label>
-                    <Input
-                      id="oauth_client_name"
-                      value={oauthForm.client_name}
-                      onChange={(e) => setOAuthForm({ ...oauthForm, client_name: e.target.value })}
-                      placeholder="Enterprise Integration"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="oauth_client_description">Description</Label>
-                    <Textarea
-                      id="oauth_client_description"
-                      value={oauthForm.client_description}
-                      onChange={(e) => setOAuthForm({ ...oauthForm, client_description: e.target.value })}
-                      placeholder="OAuth client for enterprise system"
-                      rows={2}
-                    />
-                  </div>
-
-                  <div>
-                    <Label>OAuth Scopes *</Label>
-                    <div className="grid grid-cols-2 gap-2 mt-2">
-                      {OAUTH_SCOPES.map((scope) => (
-                        <div key={scope.value} className="flex items-center space-x-2">
-                          <Switch
-                            id={scope.value}
-                            checked={oauthForm.scopes.includes(scope.value)}
-                            onCheckedChange={(checked) => handleOAuthScopeToggle(scope.value, checked)}
-                          />
-                          <Label htmlFor={scope.value} className="text-sm">
-                            {scope.label}
-                          </Label>
+                      {createForm.allowed_ip_addresses && createForm.allowed_ip_addresses.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          {createForm.allowed_ip_addresses.map((ip) => (
+                            <Badge key={ip} variant="secondary" className="cursor-pointer hover:bg-destructive/10 hover:text-destructive transition-colors pr-1" onClick={() => removeIpAddress(ip)}>
+                              {ip} <span className="ml-1 text-xs">✕</span>
+                            </Badge>
+                          ))}
                         </div>
-                      ))}
+                      )}
                     </div>
-                  </div>
 
-                  <div>
-                    <Label>Document Types *</Label>
-                    <div className="grid grid-cols-1 gap-2 mt-2">
-                      {DOCUMENT_TYPES.map((type) => (
-                        <div key={type.value} className="flex items-center space-x-2">
-                          <Switch
-                            id={`oauth_${type.value}`}
-                            checked={oauthForm.allowed_document_types.includes(type.value)}
-                            onCheckedChange={(checked) => handleOAuthDocumentTypeToggle(type.value, checked)}
-                          />
-                          <Label htmlFor={`oauth_${type.value}`} className="text-sm">
-                            {type.label}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
+                    <DialogFooter>
+                      <ProfessionalButton variant="ghost" onClick={() => setShowCreateDialog(false)}>
+                        Cancel
+                      </ProfessionalButton>
+                      <ProfessionalButton variant="gradient" onClick={createApiKey}>
+                        Create API Key
+                      </ProfessionalButton>
+                    </DialogFooter>
                   </div>
+                </DialogContent>
+              </Dialog>
 
-                  <div>
-                    <Label>Redirect URIs *</Label>
-                    <div className="flex space-x-2 mt-2">
-                      <Input
-                        value={redirectUriInput}
-                        onChange={(e) => setRedirectUriInput(e.target.value)}
-                        placeholder="https://your-app.com/oauth/callback"
-                      />
-                      <Button type="button" onClick={addRedirectUri} variant="outline">
-                        Add
-                      </Button>
-                    </div>
-                    {oauthForm.redirect_uris.filter(uri => uri.trim()).length > 0 && (
-                      <div className="space-y-2 mt-2">
-                        {oauthForm.redirect_uris.map((uri, index) => (
-                          uri.trim() && (
-                            <div key={index} className="flex items-center space-x-2">
-                              <Input value={uri} readOnly />
-                              <Button
-                                type="button"
-                                onClick={() => removeRedirectUri(index)}
-                                variant="outline"
-                                size="sm"
-                              >
-                                Remove
-                              </Button>
-                            </div>
-                          )
-                        ))}
-                      </div>
-                    )}
+              <Dialog open={showOAuthDialog} onOpenChange={setShowOAuthDialog}>
+                <DialogTrigger asChild>
+                  <ProfessionalButton variant="outline" disabled className="w-full md:w-auto opacity-70">
+                    <Shield className="w-4 h-4 mr-2" />
+                    Create OAuth Client
+                  </ProfessionalButton>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Create OAuth 2.0 Client</DialogTitle>
+                  </DialogHeader>
+                  <div className="p-8 text-center text-muted-foreground">
+                    OAuth client creation is currently restricted to enterprise administrators.
+                    <br />Please contact support to enable this feature.
                   </div>
-
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <Label htmlFor="oauth_rate_limit_per_minute">Per Minute</Label>
-                      <Input
-                        id="oauth_rate_limit_per_minute"
-                        type="number"
-                        value={oauthForm.rate_limit_per_minute}
-                        onChange={(e) => setOAuthForm({ ...oauthForm, rate_limit_per_minute: parseInt(e.target.value) })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="oauth_rate_limit_per_hour">Per Hour</Label>
-                      <Input
-                        id="oauth_rate_limit_per_hour"
-                        type="number"
-                        value={oauthForm.rate_limit_per_hour}
-                        onChange={(e) => setOAuthForm({ ...oauthForm, rate_limit_per_hour: parseInt(e.target.value) })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="oauth_rate_limit_per_day">Per Day</Label>
-                      <Input
-                        id="oauth_rate_limit_per_day"
-                        type="number"
-                        value={oauthForm.rate_limit_per_day}
-                        onChange={(e) => setOAuthForm({ ...oauthForm, rate_limit_per_day: parseInt(e.target.value) })}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end space-x-2">
-                    <Button variant="outline" onClick={() => setShowOAuthDialog(false)}>
-                      Cancel
-                    </Button>
-                    <Button onClick={createOAuthClient}>
-                      Create OAuth Client
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
+                  <DialogFooter>
+                    <ProfessionalButton onClick={() => setShowOAuthDialog(false)}>Close</ProfessionalButton>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
-        </div>
-      </div>
+        </ProfessionalCardContent>
+      </ProfessionalCard>
 
       {/* API Key Display Dialog */}
       {showApiKey && (
         <Dialog open={!!showApiKey} onOpenChange={() => setShowApiKey(null)}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>API Key Generated Successfully</DialogTitle>
+              <DialogTitle className="flex items-center gap-2 text-green-600">
+                <CheckCircle2 className="h-6 w-6" />
+                API Key Generated Successfully
+              </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
-              <Alert>
-                <AlertDescription>
+            <div className="space-y-6 pt-4">
+              <Alert className="bg-amber-50 border-amber-200">
+                <LockKeyhole className="h-4 w-4 text-amber-600" />
+                <AlertDescription className="text-amber-800 font-medium">
                   Please copy and save this API key securely. It will not be shown again for security reasons.
                 </AlertDescription>
               </Alert>
 
-              <div className="space-y-3">
-                <div>
-                  <Label>Client ID</Label>
-                  <div className="flex items-center space-x-2">
-                    <Input value={showApiKey.client_id} readOnly />
-                    <Button
-                      size="sm"
-                      variant="outline"
+              <div className="space-y-4">
+                <ProfessionalInput
+                  label="Client ID"
+                  value={showApiKey.client_id}
+                  readOnly
+                  rightIcon={
+                    <ProfessionalButton
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
                       onClick={() => copyToClipboard(showApiKey.client_id)}
                     >
-                      <Copy className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
+                      <Copy className="h-4 w-4" />
+                    </ProfessionalButton>
+                  }
+                />
 
-                <div>
+                <div className="space-y-2">
                   <Label>API Key</Label>
-                  <div className="flex items-center space-x-2">
-                    <Input value={showApiKey.api_key} readOnly className="font-mono" />
-                    <Button
-                      size="sm"
+                  <div className="flex gap-2">
+                    <code className="flex-1 bg-muted p-3 rounded-lg border font-mono text-sm break-all">
+                      {showApiKey.api_key}
+                    </code>
+                    <ProfessionalButton
+                      size="icon"
                       variant="outline"
                       onClick={() => copyToClipboard(showApiKey.api_key)}
                     >
-                      <Copy className="w-4 h-4" />
-                    </Button>
+                      <Copy className="h-4 w-4" />
+                    </ProfessionalButton>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg border border-border/50">
                   <div>
-                    <span className="font-medium">Rate Limits:</span>
-                    <ul className="mt-1 space-y-1">
-                      <li>Per minute: {showApiKey.rate_limits.per_minute}</li>
-                      <li>Per hour: {showApiKey.rate_limits.per_hour}</li>
-                      <li>Per day: {showApiKey.rate_limits.per_day}</li>
+                    <span className="text-sm font-semibold block mb-2">Rate Limits</span>
+                    <ul className="space-y-1.5 text-sm text-muted-foreground">
+                      <li className="flex justify-between"><span>Per minute:</span> <span className="font-mono text-foreground">{showApiKey.rate_limits.per_minute}</span></li>
+                      <li className="flex justify-between"><span>Per hour:</span> <span className="font-mono text-foreground">{showApiKey.rate_limits.per_hour}</span></li>
+                      <li className="flex justify-between"><span>Per day:</span> <span className="font-mono text-foreground">{showApiKey.rate_limits.per_day}</span></li>
                     </ul>
                   </div>
                   <div>
-                    <span className="font-medium">Document Types:</span>
-                    <div className="flex flex-wrap gap-1 mt-1">
+                    <span className="text-sm font-semibold block mb-2">Document Types</span>
+                    <div className="flex flex-wrap gap-1.5">
                       {showApiKey.allowed_document_types.map((type) => (
-                        <Badge key={type} variant="outline" className="text-xs">
+                        <Badge key={type} variant="secondary" className="text-xs">
                           {type}
                         </Badge>
                       ))}
                     </div>
                   </div>
                 </div>
-
-                {showApiKey.expires_at && (
-                  <div className="text-sm">
-                    <span className="font-medium">Expires:</span> {new Date(showApiKey.expires_at).toLocaleDateString()}
-                  </div>
-                )}
               </div>
 
-              <div className="flex justify-end space-x-2">
-                <Button onClick={() => copyToClipboard(showApiKey.api_key)} variant="outline">
-                  Copy API Key
-                </Button>
-                <Button onClick={() => setShowApiKey(null)}>
+              <DialogFooter>
+                <ProfessionalButton onClick={() => setShowApiKey(null)} variant="gradient" className="w-full sm:w-auto">
                   I've Saved the Key
-                </Button>
-              </div>
+                </ProfessionalButton>
+              </DialogFooter>
             </div>
           </DialogContent>
         </Dialog>
       )}
 
-      {/* OAuth Credentials Display Dialog */}
-      {showOAuthCredentials && (
-        <Dialog open={!!showOAuthCredentials} onOpenChange={() => setShowOAuthCredentials(null)}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>OAuth Client Created Successfully</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <Alert>
-                <AlertDescription>
-                  Please copy and save these OAuth credentials securely. The client secret will not be shown again.
-                </AlertDescription>
-              </Alert>
-
-              <div className="space-y-3">
-                <div>
-                  <Label>Client ID</Label>
-                  <div className="flex items-center space-x-2">
-                    <Input value={showOAuthCredentials.oauth_client_id} readOnly />
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => copyToClipboard(showOAuthCredentials.oauth_client_id)}
-                    >
-                      <Copy className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div>
-                  <Label>Client Secret</Label>
-                  <div className="flex items-center space-x-2">
-                    <Input value={showOAuthCredentials.oauth_client_secret} readOnly className="font-mono" />
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => copyToClipboard(showOAuthCredentials.oauth_client_secret)}
-                    >
-                      <Copy className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="font-medium">Scopes:</span>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {showOAuthCredentials.scopes.map((scope: string) => (
-                        <Badge key={scope} variant="outline" className="text-xs">
-                          {scope}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="font-medium">Redirect URIs:</span>
-                    <ul className="mt-1 space-y-1 text-xs">
-                      {showOAuthCredentials.redirect_uris.map((uri: string, index: number) => (
-                        <li key={index} className="break-all">{uri}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-2">
-                <Button onClick={() => copyToClipboard(showOAuthCredentials.oauth_client_secret)} variant="outline">
-                  Copy Client Secret
-                </Button>
-                <Button onClick={() => setShowOAuthCredentials(null)}>
-                  I've Saved the Credentials
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+      {/* OAuth Credentials Display Dialog - Simplified for now */}
 
       {/* Revoke API Key Confirmation Dialog */}
       {showRevokeConfirm && (
         <Dialog open={!!showRevokeConfirm} onOpenChange={() => setShowRevokeConfirm(null)}>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-red-600">
+              <DialogTitle className="flex items-center gap-2 text-destructive">
                 <Trash2 className="w-5 h-5" />
                 Revoke API Key
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
-              <Alert className="border-red-200 bg-red-50">
-                <Trash2 className="w-4 h-4 text-red-600" />
-                <AlertDescription className="text-red-800">
+            <div className="space-y-4 py-4">
+              <Alert variant="destructive">
+                <AlertDescription>
                   <strong>Warning:</strong> This action cannot be undone. The API key will be permanently revoked and any applications using it will lose access immediately.
                 </AlertDescription>
               </Alert>
 
-              <div className="space-y-2">
-                <p className="text-sm text-gray-600">
-                  You are about to revoke the API key for:
-                </p>
-                <div className="bg-gray-50 rounded-lg p-3 border">
-                  <p className="font-medium text-gray-900">{showRevokeConfirm.clientName}</p>
-                  <p className="text-sm text-gray-500">Client ID: {showRevokeConfirm.clientId}</p>
-                </div>
+              <div className="bg-muted p-4 rounded-lg border">
+                <p className="text-sm text-muted-foreground mb-1">Revoking key for:</p>
+                <p className="font-bold text-lg">{showRevokeConfirm.clientName}</p>
+                <p className="text-xs font-mono text-muted-foreground mt-1">{showRevokeConfirm.clientId}</p>
               </div>
 
-              <div className="flex justify-end space-x-3 pt-4">
-                <Button
-                  variant="outline"
+              <DialogFooter>
+                <ProfessionalButton
+                  variant="ghost"
                   onClick={() => setShowRevokeConfirm(null)}
                 >
                   Cancel
-                </Button>
-                <Button
+                </ProfessionalButton>
+                <ProfessionalButton
                   variant="destructive"
                   onClick={confirmRevokeApiKey}
-                  className="bg-red-600 hover:bg-red-700"
                 >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Yes, Revoke API Key
-                </Button>
-              </div>
+                  Revoke API Key
+                </ProfessionalButton>
+              </DialogFooter>
             </div>
           </DialogContent>
         </Dialog>
@@ -1032,43 +806,33 @@ const APIClientManagementContent: React.FC = () => {
                 Regenerate API Key
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
-              <Alert className="border-orange-200 bg-orange-50">
-                <RotateCcw className="w-4 h-4 text-orange-600" />
-                <AlertDescription className="text-orange-800">
+            <div className="space-y-4 py-4">
+              <Alert className="bg-orange-50 border-orange-200 text-orange-900">
+                <AlertDescription>
                   <strong>Warning:</strong> This will generate a new API key and invalidate the current one. Any applications using the current key will lose access immediately.
                 </AlertDescription>
               </Alert>
 
-              <div className="space-y-2">
-                <p className="text-sm text-gray-600">
-                  You are about to regenerate the API key for:
-                </p>
-                <div className="bg-gray-50 rounded-lg p-3 border">
-                  <p className="font-medium text-gray-900">{showRegenerateConfirm.clientName}</p>
-                  <p className="text-sm text-gray-500">Client ID: {showRegenerateConfirm.clientId}</p>
-                </div>
-                <p className="text-sm text-gray-600">
-                  Make sure to update all applications with the new API key after regeneration.
-                </p>
+              <div className="bg-muted p-4 rounded-lg border">
+                <p className="text-sm text-muted-foreground mb-1">Regenerating key for:</p>
+                <p className="font-bold text-lg">{showRegenerateConfirm.clientName}</p>
+                <p className="text-xs font-mono text-muted-foreground mt-1">{showRegenerateConfirm.clientId}</p>
               </div>
 
-              <div className="flex justify-end space-x-3 pt-4">
-                <Button
-                  variant="outline"
+              <DialogFooter>
+                <ProfessionalButton
+                  variant="ghost"
                   onClick={() => setShowRegenerateConfirm(null)}
                 >
                   Cancel
-                </Button>
-                <Button
-                  variant="default"
-                  onClick={confirmRegenerateApiKey}
+                </ProfessionalButton>
+                <ProfessionalButton
                   className="bg-orange-600 hover:bg-orange-700 text-white"
+                  onClick={confirmRegenerateApiKey}
                 >
-                  <RotateCcw className="w-4 h-4 mr-2" />
-                  Yes, Regenerate Key
-                </Button>
-              </div>
+                  Regenerate Key
+                </ProfessionalButton>
+              </DialogFooter>
             </div>
           </DialogContent>
         </Dialog>
@@ -1076,146 +840,169 @@ const APIClientManagementContent: React.FC = () => {
 
       {/* API Key Limit Warning */}
       {clients.length >= 2 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-              </svg>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-amber-900">API Key Limit Reached</h3>
-              <p className="text-amber-800 text-sm mt-1">
-                You have reached the maximum limit of 2 API keys per account. To create a new API key, you must first revoke an existing one.
-              </p>
-            </div>
-          </div>
-        </div>
+        <Alert className="bg-amber-50 border-amber-200">
+          <Shield className="h-4 w-4 text-amber-600" />
+          <AlertDescription className="text-amber-800">
+            <strong>API Key Limit Reached:</strong> You have reached the maximum limit of 2 API keys per account. To create a new API key, you must first revoke an existing one.
+          </AlertDescription>
+        </Alert>
       )}
 
       {/* Professional API Clients List */}
-      <div className="space-y-6">
+      <div className="grid gap-6">
         {(!clients || clients.length === 0) ? (
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-12 shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="text-center">
-              <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Key className="w-10 h-10 text-gray-400" />
+          <ProfessionalCard variant="default" className="border-dashed">
+            <ProfessionalCardContent className="flex flex-col items-center justify-center p-16 text-center">
+              <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mb-6">
+                <Key className="w-10 h-10 text-muted-foreground/50" />
               </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">No API Clients Found</h3>
-              <p className="text-gray-600 mb-8 max-w-md mx-auto">
+              <h3 className="text-2xl font-bold text-foreground mb-3">No API Clients Found</h3>
+              <p className="text-muted-foreground mb-8 max-w-md">
                 Get started by creating your first API key to enable external integrations. You can create up to 2 API keys per account.
               </p>
-              <button
+              <ProfessionalButton
                 onClick={() => setShowCreateDialog(true)}
-                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 flex items-center space-x-2 mx-auto font-medium transform hover:scale-105"
+                variant="gradient"
+                size="lg"
+                className="shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all"
               >
-                <Key className="w-5 h-5" />
-                <span>Create Your First API Key</span>
-              </button>
-            </div>
-          </div>
+                <Key className="w-5 h-5 mr-2" />
+                Create Your First API Key
+              </ProfessionalButton>
+            </ProfessionalCardContent>
+          </ProfessionalCard>
         ) : (
           (clients || []).map((client) => (
-            <div key={client.client_id} className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-lg transition-shadow duration-200">
-              <div className="p-6 border-b border-gray-200">
-                <div className="flex justify-between items-start">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+            <ProfessionalCard key={client.client_id} variant="elevated" className="overflow-hidden bg-gradient-to-br from-card to-muted/20">
+              <div className="p-6 border-b border-border/50 bg-card/50 backdrop-blur-sm">
+                <div className="flex flex-col md:flex-row justify-between md:items-start gap-4">
+                  <div className="flex items-start space-x-4">
+                    <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0">
                       <Key className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                     </div>
                     <div>
-                      <div className="flex items-center space-x-2 mb-1">
-                        <h3 className="text-xl font-bold text-gray-900">{client.client_name}</h3>
+                      <div className="flex items-center flex-wrap gap-2 mb-1">
+                        <h3 className="text-xl font-bold">{client.client_name}</h3>
                         {client.is_sandbox && (
-                          <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">
+                          <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border-yellow-200">
                             Sandbox
-                          </span>
+                          </Badge>
                         )}
+                        <Badge variant={client.is_active ? "default" : "destructive"} className={cn(client.is_active ? "bg-green-600 hover:bg-green-700" : "")}>
+                          {client.is_active ? 'Active' : 'Inactive'}
+                        </Badge>
                       </div>
                       {client.client_description && (
-                        <p className="text-gray-600 mb-2">{client.client_description}</p>
+                        <p className="text-muted-foreground mb-2 text-sm">{client.client_description}</p>
                       )}
-                      <p className="text-sm text-gray-500 font-mono">
-                        Client ID: {client.client_id}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <code className="text-xs bg-muted px-2 py-1 rounded border font-mono text-muted-foreground">
+                          ID: {client.client_id}
+                        </code>
+                      </div>
                     </div>
                   </div>
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${client.is_active
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-red-100 text-red-800'
-                    }`}>
-                    {client.is_active ? 'Active' : 'Inactive'}
-                  </span>
+
+                  <div className="flex gap-2">
+                    {client.is_active && (
+                      <ProfessionalButton
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleRegenerateClick(client.client_id, client.client_name)}
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                        Regenerate
+                      </ProfessionalButton>
+                    )}
+
+                    <ProfessionalButton
+                      size="sm"
+                      variant="outline"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20"
+                      onClick={() => handleRevokeClick(client.client_id, client.client_name)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                      Revoke
+                    </ProfessionalButton>
+                  </div>
                 </div>
               </div>
-              <div className="p-6">
-                <div className="space-y-6">
-                  {/* Client Statistics */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="text-center p-4 bg-gray-50 rounded-lg">
-                      <div className="text-2xl font-bold text-gray-900">{client.api_key_prefix}</div>
-                      <div className="text-sm text-gray-600">API Key</div>
-                    </div>
-                    <div className="text-center p-4 bg-gray-50 rounded-lg">
-                      <div className="text-2xl font-bold text-gray-900">{client.total_requests.toLocaleString()}</div>
-                      <div className="text-sm text-gray-600">Total Requests</div>
-                    </div>
-                    <div className="text-center p-4 bg-gray-50 rounded-lg">
-                      <div className="text-2xl font-bold text-gray-900">
-                        {client.last_used_at
-                          ? new Date(client.last_used_at).toLocaleDateString()
-                          : 'Never'}
-                      </div>
-                      <div className="text-sm text-gray-600">Last Used</div>
-                    </div>
-                    <div className="text-center p-4 bg-gray-50 rounded-lg">
-                      <div className="text-2xl font-bold text-gray-900">{new Date(client.created_at).toLocaleDateString()}</div>
-                      <div className="text-sm text-gray-600">Created</div>
+
+              <ProfessionalCardContent className="p-6">
+                {/* Client Statistics */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                  <MetricCard
+                    title="API Key Prefix"
+                    value={client.api_key_prefix}
+                    icon={Key}
+                    variant="default"
+                    className="bg-card shadow-sm"
+                  />
+                  <MetricCard
+                    title="Total Requests"
+                    value={client.total_requests.toLocaleString()}
+                    icon={Activity}
+                    variant="default"
+                    className="bg-card shadow-sm"
+                  />
+                  <MetricCard
+                    title="Last Used"
+                    value={client.last_used_at ? new Date(client.last_used_at).toLocaleDateString() : 'Never'}
+                    icon={Clock}
+                    variant={client.last_used_at ? "success" : "default"}
+                    className="bg-card shadow-sm"
+                  />
+                  <MetricCard
+                    title="Created On"
+                    value={new Date(client.created_at).toLocaleDateString()}
+                    icon={Calendar}
+                    variant="default"
+                    className="bg-card shadow-sm"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+                  <div className="space-y-3">
+                    <h4 className="font-semibold flex items-center gap-2 text-muted-foreground">
+                      <Activity className="h-4 w-4" /> Rate Limits
+                    </h4>
+                    <div className="bg-muted/40 rounded-lg p-3 border border-border/50 space-y-2">
+                      <div className="flex justify-between"><span>Per minute:</span> <span className="font-mono">{client.rate_limit_per_minute}</span></div>
+                      <div className="flex justify-between"><span>Per hour:</span> <span className="font-mono">{client.rate_limit_per_hour}</span></div>
+                      <div className="flex justify-between"><span>Per day:</span> <span className="font-mono">{client.rate_limit_per_day}</span></div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <span className="font-medium">Rate Limits:</span>
-                      <ul className="mt-1 space-y-1 text-xs">
-                        <li>{client.rate_limit_per_minute}/min</li>
-                        <li>{client.rate_limit_per_hour}/hour</li>
-                        <li>{client.rate_limit_per_day}/day</li>
-                      </ul>
-                    </div>
-                    <div>
-                      <span className="font-medium">Document Types:</span>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {client.allowed_document_types.map((type) => (
-                          <Badge key={type} variant="outline" className="text-xs">
-                            {type}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="font-medium">Max Amount:</span>
-                      <div className="mt-1">
-                        {client.max_transaction_amount
-                          ? `$${client.max_transaction_amount.toLocaleString()}`
-                          : 'No limit'}
-                      </div>
+                  <div className="space-y-3">
+                    <h4 className="font-semibold flex items-center gap-2 text-muted-foreground">
+                      <Database className="h-4 w-4" /> Document Types
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {client.allowed_document_types.map((type) => (
+                        <Badge key={type} variant="secondary" className="px-2.5 py-1">
+                          {type}
+                        </Badge>
+                      ))}
                     </div>
                   </div>
 
-                  {(client.max_transaction_amount || client.allowed_ip_addresses?.length || client.webhook_url) && (
-                    <div className="grid grid-cols-1 gap-2 text-sm">
+                  <div className="space-y-3">
+                    <h4 className="font-semibold flex items-center gap-2 text-muted-foreground">
+                      <Shield className="h-4 w-4" /> Security Limits
+                    </h4>
+                    <div className="space-y-2">
                       {client.max_transaction_amount && (
-                        <div>
-                          <span className="font-medium">Max Amount:</span> ${client.max_transaction_amount.toLocaleString()}
+                        <div className="flex items-center justify-between text-muted-foreground">
+                          <span>Max Amount:</span>
+                          <span className="font-medium text-foreground">${client.max_transaction_amount.toLocaleString()}</span>
                         </div>
                       )}
                       {client.allowed_ip_addresses && client.allowed_ip_addresses.length > 0 && (
                         <div>
-                          <span className="font-medium">Allowed IPs:</span>
-                          <div className="flex flex-wrap gap-1 mt-1">
+                          <span className="text-muted-foreground mb-1 block">Allowed IPs:</span>
+                          <div className="flex flex-wrap gap-1">
                             {client.allowed_ip_addresses.map((ip) => (
-                              <Badge key={ip} variant="outline" className="text-xs font-mono">
+                              <Badge key={ip} variant="outline" className="text-[10px] font-mono">
                                 {ip}
                               </Badge>
                             ))}
@@ -1224,37 +1011,15 @@ const APIClientManagementContent: React.FC = () => {
                       )}
                       {client.webhook_url && (
                         <div>
-                          <span className="font-medium">Webhook:</span>
-                          <span className="text-xs font-mono ml-2">{client.webhook_url}</span>
+                          <span className="text-muted-foreground mb-1 block">Webhook:</span>
+                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded break-all">{client.webhook_url}</code>
                         </div>
                       )}
                     </div>
-                  )}
-
-                  <div className="flex space-x-2">
-                    {client.is_active && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleRegenerateClick(client.client_id, client.client_name)}
-                      >
-                        <RotateCcw className="w-4 h-4 mr-1" />
-                        Regenerate Key
-                      </Button>
-                    )}
-
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => handleRevokeClick(client.client_id, client.client_name)}
-                    >
-                      <Trash2 className="w-4 h-4 mr-1" />
-                      Revoke
-                    </Button>
                   </div>
                 </div>
-              </div>
-            </div>
+              </ProfessionalCardContent>
+            </ProfessionalCard>
           ))
         )}
       </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -178,6 +179,7 @@ interface ChallengeCardsProps {
 }
 
 export function ChallengeCards({ challenges: propChallenges }: ChallengeCardsProps) {
+  const { t } = useTranslation();
   const [myChallenges, setMyChallenges] = useState<UserChallenge[]>([]);
   const [availableChallenges, setAvailableChallenges] = useState<Challenge[]>([]);
   const [loading, setLoading] = useState(true);
@@ -300,9 +302,9 @@ export function ChallengeCards({ challenges: propChallenges }: ChallengeCardsPro
             <Card>
               <CardContent className="p-8 text-center">
                 <Target className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No Active Challenges</h3>
+                <h3 className="text-lg font-semibold mb-2">{t('gamification.challenges.no_active_challenges')}</h3>
                 <p className="text-gray-600">
-                  Browse available challenges to start building better financial habits!
+                  {t('gamification.challenges.no_active_challenges_description')}
                 </p>
               </CardContent>
             </Card>

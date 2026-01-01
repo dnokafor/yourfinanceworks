@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from "react-i18next";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import {
+  ProfessionalCard,
+  ProfessionalCardContent,
+  ProfessionalCardHeader,
+  ProfessionalCardTitle,
+  ProfessionalCardFooter
+} from '@/components/ui/professional-card';
+import { ProfessionalButton } from '@/components/ui/professional-button';
+import { ProfessionalInput } from '@/components/ui/professional-input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -17,10 +23,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Loader2, CheckCircle, XCircle, AlertTriangle, Key, Calendar, Shield, ExternalLink } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, AlertTriangle, Key, Calendar, Shield, ExternalLink, Activity, Info, Lock, User, List, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useFeatures } from '@/contexts/FeatureContext';
+import { cn } from '@/lib/utils';
 
 interface LicenseInfo {
   installation_id: string;
@@ -30,7 +37,7 @@ interface LicenseInfo {
   is_licensed: boolean;
   is_personal: boolean;
   is_trial: boolean;
-  license_type: string | null;  // Add license_type from JWT payload
+  license_type: string | null;
   trial_info: {
     is_trial: boolean;
     trial_active: boolean;
@@ -162,34 +169,34 @@ export const LicenseManagement: React.FC = () => {
 
     if (licenseInfo.is_licensed) {
       if (licenseInfo.trial_info.in_grace_period) {
-        return <Badge variant="destructive" className="ml-2">{t('license.badges.expiredGrace')}</Badge>;
+        return <Badge variant="destructive" className="ml-2 shadow-sm">{t('license.badges.expiredGrace')}</Badge>;
       }
       const daysRemaining = getLicenseDaysRemaining();
       if (daysRemaining <= 0) {
-        return <Badge variant="destructive" className="ml-2">{t('license.badges.expired')}</Badge>;
+        return <Badge variant="destructive" className="ml-2 shadow-sm">{t('license.badges.expired')}</Badge>;
       }
       if (daysRemaining <= 30) {
-        return <Badge variant="outline" className="ml-2 border-amber-500 text-amber-700">{t('license.badges.expiringSoon')}</Badge>;
+        return <Badge variant="outline" className="ml-2 border-amber-500 text-amber-700 bg-amber-50 shadow-sm">{t('license.badges.expiringSoon')}</Badge>;
       }
-      return <Badge variant="default" className="ml-2 bg-green-600">{t('license.badges.active')}</Badge>;
+      return <Badge variant="default" className="ml-2 bg-green-600 hover:bg-green-700 shadow-sm">{t('license.badges.active')}</Badge>;
     }
 
     if (licenseInfo.trial_info.trial_active) {
       const daysRemaining = licenseInfo.trial_info.days_remaining;
       if (daysRemaining <= 0) {
-        return <Badge variant="destructive" className="ml-2">{t('license.badges.trialExpired')}</Badge>;
+        return <Badge variant="destructive" className="ml-2 shadow-sm">{t('license.badges.trialExpired')}</Badge>;
       }
       if (daysRemaining <= 7) {
-        return <Badge variant="outline" className="ml-2 border-amber-500 text-amber-700">{t('license.badges.trialEndingSoon')}</Badge>;
+        return <Badge variant="outline" className="ml-2 border-amber-500 text-amber-700 bg-amber-50 shadow-sm">{t('license.badges.trialEndingSoon')}</Badge>;
       }
-      return <Badge variant="secondary" className="ml-2">{t('license.badges.trialActive')}</Badge>;
+      return <Badge variant="secondary" className="ml-2 bg-indigo-100 text-indigo-800 hover:bg-indigo-200 shadow-sm">{t('license.badges.trialActive')}</Badge>;
     }
 
     if (licenseInfo.is_personal) {
-      return <Badge variant="default" className="ml-2 bg-blue-600">{t('license.badges.personalUse')}</Badge>;
+      return <Badge variant="default" className="ml-2 bg-blue-600 hover:bg-blue-700 shadow-sm">{t('license.badges.personalUse')}</Badge>;
     }
 
-    return <Badge variant="outline" className="ml-2">{t('license.badges.noLicense')}</Badge>;
+    return <Badge variant="outline" className="ml-2 bg-muted/50">{t('license.badges.noLicense')}</Badge>;
   };
 
   const formatDate = (dateString?: string) => {
@@ -224,9 +231,8 @@ export const LicenseManagement: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin mr-2" />
-        <span>{t('license.loading')}</span>
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -240,12 +246,12 @@ export const LicenseManagement: React.FC = () => {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Warning Banner */}
       {showWarning && (
-        <Alert variant={licenseInfo.trial_info.in_grace_period || (licenseInfo.trial_info.trial_active && licenseInfo.trial_info.days_remaining <= 0) || (licenseInfo.is_licensed && licenseDaysRemaining <= 0) ? 'destructive' : 'default'} className="border-amber-200 bg-amber-50">
+        <Alert variant={licenseInfo.trial_info.in_grace_period || (licenseInfo.trial_info.trial_active && licenseInfo.trial_info.days_remaining <= 0) || (licenseInfo.is_licensed && licenseDaysRemaining <= 0) ? 'destructive' : 'default'} className="border-amber-200 bg-amber-50 shadow-md">
           <AlertTriangle className="h-4 w-4 text-amber-600" />
-          <AlertTitle className="text-amber-900">{t('license.warnings.actionRequired')}</AlertTitle>
+          <AlertTitle className="text-amber-900 font-semibold">{t('license.warnings.actionRequired')}</AlertTitle>
           <AlertDescription className="text-amber-800">
             {licenseInfo.trial_info.in_grace_period && (
               <p>{t('license.warnings.gracePeriod')}</p>
@@ -267,49 +273,113 @@ export const LicenseManagement: React.FC = () => {
       )}
 
       {/* License Status Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <Shield className="h-5 w-5 mr-2" />
-            {t('license.status.title')}
-            {getLicenseStatusBadge()}
-          </CardTitle>
-          <CardDescription>
-            {t('license.status.description')}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <ProfessionalCard variant="elevated">
+        <ProfessionalCardHeader>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <ProfessionalCardTitle className="flex items-center text-xl">
+                <Shield className="h-6 w-6 mr-3 text-primary" />
+                {t('license.status.title')}
+                <div className="ml-2 transform scale-90 origin-left">
+                  {getLicenseStatusBadge()}
+                </div>
+              </ProfessionalCardTitle>
+              <p className="text-muted-foreground mt-1 ml-9">
+                {t('license.status.description')}
+              </p>
+            </div>
+            {licenseInfo?.is_licensed && (
+              <div className="">
+                <AlertDialog open={showDeactivateDialog} onOpenChange={setShowDeactivateDialog}>
+                  <AlertDialogTrigger asChild>
+                    <ProfessionalButton variant="outline" size="sm" onClick={handleDeactivateLicense}>
+                      <Lock className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                      {t('license.status.deactivate')}
+                    </ProfessionalButton>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>{t('license.deactivateDialog.title')}</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {t('license.deactivateDialog.description')}
+                        <div className="bg-muted p-4 rounded-md my-3 border border-border/50">
+                          <ul className="list-disc space-y-1 ml-4 text-sm">
+                            <li>{t('license.deactivateDialog.featureList.promptManagement')}</li>
+                            <li>{t('license.deactivateDialog.featureList.aiInvoiceProcessing')}</li>
+                            <li>{t('license.deactivateDialog.featureList.aiExpenseProcessing')}</li>
+                            <li>{t('license.deactivateDialog.featureList.advancedReporting')}</li>
+                            <li>{t('license.deactivateDialog.featureList.approvalWorkflows')}</li>
+                            <li>{t('license.deactivateDialog.featureList.allPremiumFeatures')}</li>
+                          </ul>
+                        </div>
+                        <p className="font-medium text-foreground">{t('license.deactivateDialog.reactivateNote')}</p>
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>{t('license.deactivateDialog.cancel')}</AlertDialogCancel>
+                      <AlertDialogAction onClick={confirmDeactivateLicense} disabled={deactivating} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                        {deactivating ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            {t('license.deactivateDialog.deactivating')}
+                          </>
+                        ) : (
+                          t('license.deactivateDialog.confirmButton')
+                        )}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            )}
+          </div>
+        </ProfessionalCardHeader>
+        <ProfessionalCardContent className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-muted/20 p-6 rounded-xl border border-border/50">
             <div className="space-y-2">
-              <Label className="text-sm font-medium text-muted-foreground">{t('license.status.installationId')}</Label>
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1.5">
+                <Key className="h-3.5 w-3.5" />
+                {t('license.status.installationId')}
+              </Label>
               <div className="flex items-center gap-2">
-                <code className="text-sm bg-muted px-2 py-1 rounded">{licenseInfo?.installation_id || 'N/A'}</code>
+                <code className="text-sm font-mono bg-background border border-border px-3 py-1.5 rounded-md shadow-sm select-all">
+                  {licenseInfo?.installation_id || 'N/A'}
+                </code>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm font-medium text-muted-foreground">{t('license.status.usageType')}</Label>
-              <div className="text-sm capitalize">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1.5">
+                <Activity className="h-3.5 w-3.5" />
+                {t('license.status.usageType')}
+              </Label>
+              <div className="text-sm font-medium px-3 py-1.5 bg-background border border-border rounded-md shadow-sm inline-block min-w-[120px]">
                 {licenseInfo?.is_personal ? 'Core' :
-                 licenseInfo?.license_type === 'trial' ? 'Trial' :
-                 licenseInfo?.license_type === 'commercial' ? 'Commercial' :
-                 licenseInfo?.is_trial ? 'Trial' :
-                 licenseInfo?.is_licensed ? 'Commercial' :
-                 'Not Selected'}
+                  licenseInfo?.license_type === 'trial' ? 'Trial' :
+                    licenseInfo?.license_type === 'commercial' ? 'Commercial' :
+                      licenseInfo?.is_trial ? 'Trial' :
+                        licenseInfo?.is_licensed ? 'Commercial' :
+                          'Not Selected'}
               </div>
             </div>
 
             {licenseInfo?.trial_info.trial_active && (
               <>
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-muted-foreground">{t('license.status.trialPeriod')}</Label>
-                  <div className="text-sm">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5" />
+                    {t('license.status.trialPeriod')}
+                  </Label>
+                  <div className="text-sm font-medium px-3 py-1.5 bg-background border border-border rounded-md shadow-sm">
                     {formatDate(licenseInfo.trial_info.trial_start_date || undefined)} - {formatDate(licenseInfo.trial_info.trial_end_date || undefined)}
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-muted-foreground">{t('license.status.daysRemaining')}</Label>
-                  <div className="text-sm font-semibold">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5" />
+                    {t('license.status.daysRemaining')}
+                  </Label>
+                  <div className="text-sm font-bold text-primary px-3 py-1.5 bg-primary/5 border border-primary/10 rounded-md">
                     {licenseInfo.trial_info.days_remaining} {t('license.recurrence.days')}
                   </div>
                 </div>
@@ -319,16 +389,21 @@ export const LicenseManagement: React.FC = () => {
             {licenseInfo?.is_licensed && licenseInfo.license_info.expires_at && (
               <>
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-muted-foreground">{t('license.status.expiration')}</Label>
-                  <div className="text-sm flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5" />
+                    {t('license.status.expiration')}
+                  </Label>
+                  <div className="text-sm font-medium flex items-center gap-2 px-3 py-1.5 bg-background border border-border rounded-md shadow-sm">
                     {formatDate(licenseInfo.license_info.expires_at)}
                   </div>
                 </div>
                 {licenseInfo.license_info.customer_name && (
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium text-muted-foreground">{t('license.status.licensedTo')}</Label>
-                    <div className="text-sm">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1.5">
+                      <User className="h-3.5 w-3.5" />
+                      {t('license.status.licensedTo')}
+                    </Label>
+                    <div className="text-sm font-medium px-3 py-1.5 bg-background border border-border rounded-md shadow-sm text-ellipsis overflow-hidden whitespace-nowrap">
                       {licenseInfo.license_info.customer_name}
                       {licenseInfo.license_info.organization_name && ` (${licenseInfo.license_info.organization_name})`}
                     </div>
@@ -337,125 +412,105 @@ export const LicenseManagement: React.FC = () => {
               </>
             )}
           </div>
-
-          {licenseInfo?.is_licensed && (
-            <div className="pt-4 border-t">
-              <AlertDialog open={showDeactivateDialog} onOpenChange={setShowDeactivateDialog}>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm" onClick={handleDeactivateLicense}>
-                    {t('license.status.deactivate')}
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>{t('license.deactivateDialog.title')}</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {t('license.deactivateDialog.description')}
-                      <ul className="mt-2 ml-4 list-disc space-y-1">
-                        <li>{t('license.deactivateDialog.featureList.promptManagement')}</li>
-                        <li>{t('license.deactivateDialog.featureList.aiInvoiceProcessing')}</li>
-                        <li>{t('license.deactivateDialog.featureList.aiExpenseProcessing')}</li>
-                        <li>{t('license.deactivateDialog.featureList.advancedReporting')}</li>
-                        <li>{t('license.deactivateDialog.featureList.approvalWorkflows')}</li>
-                        <li>{t('license.deactivateDialog.featureList.allPremiumFeatures')}</li>
-                      </ul>
-                      {t('license.deactivateDialog.reactivateNote')}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>{t('license.deactivateDialog.cancel')}</AlertDialogCancel>
-                    <AlertDialogAction onClick={confirmDeactivateLicense} disabled={deactivating}>
-                      {deactivating ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          {t('license.deactivateDialog.deactivating')}
-                        </>
-                      ) : (
-                        t('license.deactivateDialog.confirmButton')
-                      )}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        </ProfessionalCardContent>
+      </ProfessionalCard>
 
       {/* License Activation Card */}
       {(!licenseInfo?.is_licensed || licenseInfo.trial_info.in_grace_period || (licenseInfo.is_licensed && licenseInfo.license_info?.expires_at && new Date(licenseInfo.license_info.expires_at) < new Date())) && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Key className="h-5 w-5 mr-2" />
+        <ProfessionalCard variant="elevated" className="border-primary/20 shadow-lg shadow-primary/5">
+          <ProfessionalCardHeader>
+            <ProfessionalCardTitle className="flex items-center text-xl text-primary">
+              <Key className="h-6 w-6 mr-3" />
               {t('license.activate.title')}
-            </CardTitle>
-            <CardDescription>
+            </ProfessionalCardTitle>
+            <p className="text-muted-foreground mt-1 ml-9">
               {t('license.activate.description')}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="license-key">{t('license.activate.keyLabel')}</Label>
-              <Input
+            </p>
+          </ProfessionalCardHeader>
+          <ProfessionalCardContent className="space-y-6">
+            <div className="grid gap-4 max-w-xl ml-9">
+              <ProfessionalInput
                 id="license-key"
-                type="text"
+                label={t('license.activate.keyLabel')}
                 placeholder={t('license.activate.keyPlaceholder')}
                 value={licenseKey}
                 onChange={(e) => setLicenseKey(e.target.value)}
                 disabled={activating}
+                className="font-mono"
+                leftIcon={<Key className="h-4 w-4 text-muted-foreground" />}
               />
+
+              <div className="flex gap-3 pt-2">
+                <ProfessionalButton
+                  onClick={handleActivateLicense}
+                  disabled={activating || !licenseKey.trim()}
+                  loading={activating}
+                  className="flex-1 sm:flex-none"
+                  variant="gradient"
+                >
+                  {t('license.activate.button')}
+                </ProfessionalButton>
+                <ProfessionalButton variant="outline" asChild className="flex-1 sm:flex-none">
+                  <a href="https://your-pricing-page.com" target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    {t('license.activate.purchase')}
+                  </a>
+                </ProfessionalButton>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <Button onClick={handleActivateLicense} disabled={activating || !licenseKey.trim()}>
-                {activating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {t('license.activate.button')}
-              </Button>
-              <Button variant="outline" asChild>
-                <a href="https://your-pricing-page.com" target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  {t('license.activate.purchase')}
-                </a>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+          </ProfessionalCardContent>
+        </ProfessionalCard>
       )}
 
       {/* Features Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('license.features.title')}</CardTitle>
-          <CardDescription>
+      <ProfessionalCard variant="default">
+        <ProfessionalCardHeader>
+          <ProfessionalCardTitle className="flex items-center">
+            <List className="h-5 w-5 mr-2 text-primary" />
+            {t('license.features.title')}
+          </ProfessionalCardTitle>
+          <p className="text-muted-foreground mt-1 ml-7">
             {t('license.features.description')}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-6">
+          </p>
+        </ProfessionalCardHeader>
+        <ProfessionalCardContent>
+          <div className="space-y-8">
             {Object.entries(groupedFeatures).map(([category, categoryFeatures]) => (
-              <div key={category} className="space-y-3">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              <div key={category} className="space-y-4">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 border-b border-border/50 pb-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-primary/50" />
                   {category}
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {categoryFeatures.map((feature) => (
                     <div
                       key={feature.id}
-                      className="flex items-start gap-3 p-3 rounded-lg border bg-card"
+                      className={cn(
+                        "flex items-start gap-3 p-4 rounded-xl border transition-all duration-200",
+                        feature.enabled
+                          ? "bg-card border-border/50 shadow-sm hover:shadow-md hover:border-primary/20"
+                          : "bg-muted/30 border-transparent opacity-80"
+                      )}
                     >
                       {feature.enabled ? (
-                        <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                        <div className="mt-0.5 p-1 bg-green-100 text-green-700 rounded-full">
+                          <CheckCircle2 className="h-4 w-4" />
+                        </div>
                       ) : (
-                        <XCircle className="h-5 w-5 text-gray-400 flex-shrink-0 mt-0.5" />
+                        <div className="mt-0.5 p-1 bg-muted text-muted-foreground rounded-full">
+                          <XCircle className="h-4 w-4" />
+                        </div>
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium">{feature.name}</p>
+                          <p className={`text-sm font-semibold ${feature.enabled ? 'text-foreground' : 'text-muted-foreground'}`}>
+                            {feature.name}
+                          </p>
                           {feature.enabled && (
-                            <Badge variant="secondary" className="text-xs">{t('license.features.enabled')}</Badge>
+                            <Badge variant="secondary" className="text-[10px] h-5 bg-primary/5 text-primary border-primary/10">{t('license.features.enabled')}</Badge>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">{feature.description}</p>
+                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{feature.description}</p>
                       </div>
                     </div>
                   ))}
@@ -463,33 +518,40 @@ export const LicenseManagement: React.FC = () => {
               </div>
             ))}
           </div>
-        </CardContent>
-      </Card>
+        </ProfessionalCardContent>
+      </ProfessionalCard>
 
       {/* Help Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('license.help.title')}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <p className="text-sm text-muted-foreground">
-            {t('license.help.description')}
-          </p>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <a href="mailto:support@example.com">
-                {t('license.help.contactSupport')}
-              </a>
-            </Button>
-            <Button variant="outline" size="sm" asChild>
-              <a href="https://docs.example.com/licensing" target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="mr-2 h-4 w-4" />
-                {t('license.help.documentation')}
-              </a>
-            </Button>
+      <ProfessionalCard variant="minimal" className="bg-muted/10 border border-border/40">
+        <ProfessionalCardContent className="p-6">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+                <Info className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-base mb-1">{t('license.help.title')}</h3>
+                <p className="text-sm text-muted-foreground max-w-lg">
+                  {t('license.help.description')}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 w-full md:w-auto">
+              <ProfessionalButton variant="outline" size="sm" asChild className="flex-1 md:flex-none">
+                <a href="mailto:support@example.com">
+                  {t('license.help.contactSupport')}
+                </a>
+              </ProfessionalButton>
+              <ProfessionalButton variant="outline" size="sm" asChild className="flex-1 md:flex-none">
+                <a href="https://docs.example.com/licensing" target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  {t('license.help.documentation')}
+                </a>
+              </ProfessionalButton>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </ProfessionalCardContent>
+      </ProfessionalCard>
     </div>
   );
 };

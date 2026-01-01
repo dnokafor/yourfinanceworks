@@ -1174,6 +1174,7 @@
         "available": "Disponible",
         "completed": "Completado",
         "no_active_challenges": "No Hay Desafíos Activos",
+        "no_active_challenges_description": "¡Explora los desafíos disponibles para comenzar a construir mejores hábitos financieros!",
         "no_available_challenges": "No Hay Desafíos Disponibles",
         "join_challenge": "Unirse al Desafío",
         "opt_out": "Optar por No Participar",
@@ -1598,7 +1599,8 @@
         "version": "Versión",
         "active": "Activo",
         "actions": "Acciones"
-      }
+      },
+      "noCustomPrompts": "No se encontraron prompts personalizados. Crea tu primer prompt personalizado para comenzar."
     }
   },
   "users": {

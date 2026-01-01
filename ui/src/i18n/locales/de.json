@@ -1166,6 +1166,7 @@
         "available": "Verfügbar",
         "completed": "Abgeschlossen",
         "no_active_challenges": "Keine aktiven Herausforderungen",
+        "no_active_challenges_description": "Durchsuche verfügbare Herausforderungen, um bessere finanzielle Gewohnheiten zu entwickeln!",
         "no_available_challenges": "Keine verfügbaren Herausforderungen",
         "join_challenge": "Herausforderung beitreten",
         "opt_out": "Austragen",
@@ -1553,7 +1554,8 @@
         "version": "Version",
         "active": "Aktiv",
         "actions": "Aktionen"
-      }
+      },
+      "noCustomPrompts": "Keine benutzerdefinierten Prompts gefunden. Erstellen Sie Ihren ersten benutzerdefinierten Prompt, um zu beginnen."
     }
   },
   "users": {

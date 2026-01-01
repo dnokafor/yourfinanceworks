@@ -1173,6 +1173,7 @@
         "available": "Disponible",
         "completed": "Terminé",
         "no_active_challenges": "Aucun Défi Actif",
+        "no_active_challenges_description": "Parcourez les défis disponibles pour commencer à développer de meilleures habitudes financières !",
         "no_available_challenges": "Aucun Défi Disponible",
         "join_challenge": "Rejoindre le Défi",
         "opt_out": "Se Désinscrire",
@@ -1518,7 +1519,8 @@
         "version": "Version",
         "active": "Actif",
         "actions": "Actions"
-      }
+      },
+      "noCustomPrompts": "Aucun prompt personnalisé trouvé. Créez votre premier prompt personnalisé pour commencer."
     }
   },
   "users": {

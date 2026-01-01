@@ -970,6 +970,8 @@
     "default_currency": "Default Currency",
     "default_terms": "Default Terms & Conditions",
     "default_notes": "Default Notes",
+    "default_footer": "Default Footer",
+    "default_tax_rate": "Default Tax Rate",
     "thank_you": "Thank you for your business!",
     "payment_terms_net30": "Payment due within 30 days from the date of invoice. Late payments are subject to a 1.5% monthly finance charge.",
     "send_copy": "Send Me a Copy",
@@ -1210,6 +1212,7 @@
         "available": "Available",
         "completed": "Completed",
         "no_active_challenges": "No Active Challenges",
+        "no_active_challenges_description": "Browse available challenges to start building better financial habits!",
         "no_available_challenges": "No Available Challenges",
         "join_challenge": "Join Challenge",
         "opt_out": "Opt Out",
@@ -1651,7 +1654,8 @@
         "version": "Version",
         "active": "Active",
         "actions": "Actions"
-      }
+      },
+      "noCustomPrompts": "No custom prompts found. Create your first custom prompt to get started."
     }
   },
   "users": {

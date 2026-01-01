@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from "react-i18next";
 import {
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
-    CardDescription
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+    ProfessionalCard,
+    ProfessionalCardContent,
+    ProfessionalCardHeader,
+    ProfessionalCardTitle
+} from "@/components/ui/professional-card";
+import { ProfessionalInput } from "@/components/ui/professional-input";
+import { ProfessionalButton } from "@/components/ui/professional-button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -19,10 +18,18 @@ import {
     RefreshCw,
     CheckCircle2,
     AlertCircle,
-    Loader2
+    Loader2,
+    Globe,
+    User,
+    Key,
+    Hash,
+    List,
+    Clock,
+    Server
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, getErrorMessage } from "@/lib/api";
+import { FeatureGate } from "@/components/FeatureGate";
 
 interface EmailConfig {
     imap_host: string;
@@ -40,8 +47,6 @@ const PROVIDERS = [
     { id: 'custom', name: 'Custom IMAP', host: '', port: 993 },
     { id: 'gmail', name: 'Gmail', host: 'imap.gmail.com', port: 993 },
 ];
-
-import { FeatureGate } from "@/components/FeatureGate";
 
 const EmailIntegrationSettings: React.FC = () => {
     return (
@@ -80,18 +85,18 @@ const EmailIntegrationSettings: React.FC = () => {
                             </ul>
                         </div>
                         <div className="flex justify-center space-x-4">
-                            <Button
+                            <ProfessionalButton
                                 onClick={() => window.location.href = '/settings?tab=license'}
-                                className="bg-blue-600 hover:bg-blue-700 text-white"
+                                variant="gradient"
                             >
                                 Activate Business License
-                            </Button>
-                            <Button
+                            </ProfessionalButton>
+                            <ProfessionalButton
                                 variant="outline"
                                 onClick={() => window.open('https://docs.example.com/email-integration', '_blank')}
                             >
                                 Learn More
-                            </Button>
+                            </ProfessionalButton>
                         </div>
                     </div>
                 </div>
@@ -236,33 +241,44 @@ const EmailIntegrationSettingsContent: React.FC = () => {
     };
 
     return (
-        <Card>
-            <CardHeader>
-                <div className="flex items-center gap-2">
+        <ProfessionalCard variant="elevated">
+            <ProfessionalCardHeader>
+                <ProfessionalCardTitle className="flex items-center gap-2">
                     <Mail className="h-5 w-5 text-primary" />
-                    <CardTitle>{t('emailIntegration.title')}</CardTitle>
-                </div>
-                <CardDescription>
+                    {t('emailIntegration.title')}
+                </ProfessionalCardTitle>
+                <p className="text-sm text-muted-foreground">
                     {t('emailIntegration.description')}
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
+                </p>
+            </ProfessionalCardHeader>
+            <ProfessionalCardContent className="space-y-6">
 
                 {testResult && (
-                    <Alert variant={testResult.success ? "default" : "destructive"}>
-                        {testResult.success ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-                        <AlertTitle>{testResult.success ? "Success" : "Error"}</AlertTitle>
-                        <AlertDescription>{testResult.message}</AlertDescription>
-                    </Alert>
+                    <div className={`p-4 rounded-xl border flex items-start gap-3 ${testResult.success
+                        ? 'bg-green-50/50 border-green-200/50 text-green-800'
+                        : 'bg-red-50/50 border-red-200/50 text-red-800'
+                        }`}>
+                        {testResult.success ? (
+                            <CheckCircle2 className="h-5 w-5 mt-0.5 shrink-0" />
+                        ) : (
+                            <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
+                        )}
+                        <div>
+                            <h4 className="font-semibold text-sm">{testResult.success ? "Success" : "Error"}</h4>
+                            <p className="text-sm font-medium leading-relaxed opacity-90">{testResult.message}</p>
+                        </div>
+                    </div>
                 )}
 
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center justify-between p-4 bg-muted/20 rounded-xl border border-border/50">
+                    <Label htmlFor="email-enabled" className="text-base font-medium flex-1 cursor-pointer">
+                        {t('emailIntegration.enable')}
+                    </Label>
                     <Switch
                         id="email-enabled"
                         checked={config.enabled}
                         onCheckedChange={(checked) => handleChange('enabled', checked)}
                     />
-                    <Label htmlFor="email-enabled">{t('emailIntegration.enable')}</Label>
                 </div>
 
                 <div className="space-y-2">
@@ -291,7 +307,7 @@ const EmailIntegrationSettingsContent: React.FC = () => {
                         }}
                         disabled={loading}
                     >
-                        <SelectTrigger>
+                        <SelectTrigger className="h-10">
                             <SelectValue placeholder={t('emailIntegration.selectProvider')} />
                         </SelectTrigger>
                         <SelectContent>
@@ -305,143 +321,135 @@ const EmailIntegrationSettingsContent: React.FC = () => {
                 </div>
 
                 {config.imap_host === 'imap.gmail.com' && (
-                    <Alert className="bg-blue-50 border-blue-200 text-blue-800">
-                        <AlertCircle className="h-4 w-4 text-blue-800" />
-                        <AlertTitle>{t('emailIntegration.gmailAlert.title')}</AlertTitle>
-                        <AlertDescription>
-                            {t('emailIntegration.gmailAlert.description')}
-                            <br />
-                            {t('emailIntegration.gmailAlert.step1')}
-                            <br />
-                            <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="underline font-medium">{t('emailIntegration.gmailAlert.step2')}</a>
-                            <br />
-                            {t('emailIntegration.gmailAlert.step3')}
-                        </AlertDescription>
-                    </Alert>
+                    <div className="p-4 bg-blue-50/50 border border-blue-200/50 rounded-xl text-blue-800 flex items-start gap-3">
+                        <AlertCircle className="h-5 w-5 mt-0.5 shrink-0 text-blue-600" />
+                        <div>
+                            <h4 className="font-semibold text-sm mb-1">{t('emailIntegration.gmailAlert.title')}</h4>
+                            <div className="text-sm opacity-90 space-y-1">
+                                <p>{t('emailIntegration.gmailAlert.description')}</p>
+                                <p>1. {t('emailIntegration.gmailAlert.step1')}</p>
+                                <p>2. <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="underline font-medium hover:text-blue-900">{t('emailIntegration.gmailAlert.step2')}</a></p>
+                                <p>3. {t('emailIntegration.gmailAlert.step3')}</p>
+                            </div>
+                        </div>
+                    </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="imap_host">{t('emailIntegration.imapHost')}</Label>
-                        <Input
-                            id="imap_host"
-                            placeholder="imap.gmail.com"
-                            value={config.imap_host}
-                            onChange={(e) => handleChange('imap_host', e.target.value)}
-                            disabled={loading}
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label htmlFor="imap_port">{t('emailIntegration.imapPort')}</Label>
-                        <Input
-                            id="imap_port"
-                            type="number"
-                            value={config.imap_port}
-                            onChange={(e) => handleChange('imap_port', parseInt(e.target.value))}
-                            disabled={loading}
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label htmlFor="username">{t('emailIntegration.username')}</Label>
-                        <Input
-                            id="username"
-                            value={config.username}
-                            onChange={(e) => handleChange('username', e.target.value)}
-                            disabled={loading}
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label htmlFor="password">{t('emailIntegration.password')}</Label>
-                        <Input
-                            id="password"
-                            type="password"
-                            value={config.password}
-                            onChange={(e) => handleChange('password', e.target.value)}
-                            placeholder={config.password ? "********" : t('emailIntegration.passwordPlaceholder')}
-                            disabled={loading}
-                        />
-                        <p className="text-xs text-muted-foreground">{t('emailIntegration.passwordHint')}</p>
-                    </div>
-                </div>
-
-                <div className="space-y-2">
-                    <Label htmlFor="allowed_senders">{t('emailIntegration.allowedSenders')}</Label>
-                    <Input
-                        id="allowed_senders"
-                        value={config.allowed_senders}
-                        onChange={(e) => handleChange('allowed_senders', e.target.value)}
-                        placeholder={t('emailIntegration.allowedSendersPlaceholder')}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <ProfessionalInput
+                        id="imap_host"
+                        label={t('emailIntegration.imapHost')}
+                        placeholder="imap.gmail.com"
+                        value={config.imap_host}
+                        onChange={(e) => handleChange('imap_host', e.target.value)}
                         disabled={loading}
+                        leftIcon={<Globe className="w-4 h-4 text-muted-foreground" />}
                     />
-                    <p className="text-xs text-muted-foreground">{t('emailIntegration.allowedSendersHint')}</p>
+
+                    <ProfessionalInput
+                        id="imap_port"
+                        type="number"
+                        label={t('emailIntegration.imapPort')}
+                        value={config.imap_port}
+                        onChange={(e) => handleChange('imap_port', parseInt(e.target.value))}
+                        disabled={loading}
+                        leftIcon={<Hash className="w-4 h-4 text-muted-foreground" />}
+                    />
+
+                    <ProfessionalInput
+                        id="username"
+                        label={t('emailIntegration.username')}
+                        value={config.username}
+                        onChange={(e) => handleChange('username', e.target.value)}
+                        disabled={loading}
+                        leftIcon={<User className="w-4 h-4 text-muted-foreground" />}
+                    />
+
+                    <ProfessionalInput
+                        id="password"
+                        type="password"
+                        label={t('emailIntegration.password')}
+                        value={config.password}
+                        onChange={(e) => handleChange('password', e.target.value)}
+                        placeholder={config.password ? "********" : t('emailIntegration.passwordPlaceholder')}
+                        disabled={loading}
+                        helperText={t('emailIntegration.passwordHint')}
+                        leftIcon={<Key className="w-4 h-4 text-muted-foreground" />}
+                    />
                 </div>
 
-                <div className="space-y-2">
-                    <Label htmlFor="lookback_days">{t('emailIntegration.lookbackDays')}</Label>
-                    <Input
+                <ProfessionalInput
+                    id="allowed_senders"
+                    label={t('emailIntegration.allowedSenders')}
+                    value={config.allowed_senders}
+                    onChange={(e) => handleChange('allowed_senders', e.target.value)}
+                    placeholder={t('emailIntegration.allowedSendersPlaceholder')}
+                    disabled={loading}
+                    helperText={t('emailIntegration.allowedSendersHint')}
+                    leftIcon={<List className="w-4 h-4 text-muted-foreground" />}
+                />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <ProfessionalInput
                         id="lookback_days"
                         type="number"
                         min={1}
                         max={365}
+                        label={t('emailIntegration.lookbackDays')}
                         value={config.lookback_days}
                         onChange={(e) => handleChange('lookback_days', parseInt(e.target.value))}
                         disabled={loading}
+                        helperText={t('emailIntegration.lookbackDaysHint')}
+                        leftIcon={<Clock className="w-4 h-4 text-muted-foreground" />}
                     />
-                    <p className="text-xs text-muted-foreground">{t('emailIntegration.lookbackDaysHint')}</p>
-                </div>
 
-                {/* TODO: Add i18n keys for max_emails_to_fetch */}
-                <div className="space-y-2">
-                    <Label htmlFor="max_emails_to_fetch">Max Emails to Fetch per Sync</Label>
-                    <Input
+                    <ProfessionalInput
                         id="max_emails_to_fetch"
                         type="number"
                         min={1}
                         max={1000}
+                        label="Max Emails to Fetch per Sync"
                         value={config.max_emails_to_fetch}
                         onChange={(e) => handleChange('max_emails_to_fetch', parseInt(e.target.value))}
                         disabled={loading}
+                        helperText="Limit the number of emails to process in a single sync. A lower number can prevent timeouts on slow servers."
+                        leftIcon={<Server className="w-4 h-4 text-muted-foreground" />}
                     />
-                    <p className="text-xs text-muted-foreground">
-                        Limit the number of emails to process in a single sync. A lower number can prevent timeouts on slow servers.
-                    </p>
                 </div>
 
-                <div className="flex flex-wrap gap-4 pt-4">
-                    <Button
+                <div className="flex flex-wrap gap-4 pt-6 border-t border-border/50">
+                    <ProfessionalButton
                         onClick={handleSave}
+                        loading={loading}
                         disabled={loading || testing}
-                        className="gap-2"
+                        leftIcon={<Save className="h-4 w-4" />}
+                        variant="gradient"
                     >
-                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                         {t('emailIntegration.saveSettings')}
-                    </Button>
+                    </ProfessionalButton>
 
-                    <Button
+                    <ProfessionalButton
                         variant="outline"
                         onClick={handleTestConnection}
+                        loading={testing}
                         disabled={loading || testing || !config.imap_host || !config.username}
-                        className="gap-2"
+                        leftIcon={<CheckCircle2 className="h-4 w-4" />}
                     >
-                        {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                         {t('emailIntegration.testConnection')}
-                    </Button>
+                    </ProfessionalButton>
 
-                    <Button
+                    <ProfessionalButton
                         variant="secondary"
                         onClick={handleSync}
+                        loading={syncing}
                         disabled={loading || testing || syncing || !config.enabled}
-                        className="gap-2"
+                        leftIcon={<RefreshCw className="h-4 w-4" />}
                     >
-                        {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                         {t('emailIntegration.syncNow')}
-                    </Button>
+                    </ProfessionalButton>
                 </div>
-            </CardContent>
-        </Card>
+            </ProfessionalCardContent>
+        </ProfessionalCard>
     );
 };
 

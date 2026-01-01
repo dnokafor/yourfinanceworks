@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import {
+  ProfessionalCard,
+  ProfessionalCardContent,
+  ProfessionalCardHeader,
+  ProfessionalCardTitle
+} from '@/components/ui/professional-card';
+import { ProfessionalButton } from '@/components/ui/professional-button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { ConsentManager } from '@/components/cookie-consent/services/ConsentManager';
-import { Shield, Eye, Target, Settings as SettingsIcon, RefreshCw, Save, Check } from 'lucide-react';
+import { Shield, Eye, Target, Settings as SettingsIcon, RefreshCw, Save, Check, Cookie } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
+import { cn } from '@/lib/utils';
 
 const CookieSettings: React.FC = () => {
   const { t } = useTranslation();
@@ -53,12 +59,12 @@ const CookieSettings: React.FC = () => {
     };
 
     setPreferences(newPreferences);
-    
+
     // Check if there are unsaved changes
-    const hasChanges = 
+    const hasChanges =
       newPreferences.analytics !== originalPreferences.analytics ||
       newPreferences.marketing !== originalPreferences.marketing;
-    
+
     setHasUnsavedChanges(hasChanges);
   };
 
@@ -68,7 +74,7 @@ const CookieSettings: React.FC = () => {
       analytics: true,
       marketing: true
     };
-    
+
     setPreferences(newPreferences);
     setHasUnsavedChanges(true);
   };
@@ -79,14 +85,14 @@ const CookieSettings: React.FC = () => {
       analytics: false,
       marketing: false
     };
-    
+
     setPreferences(newPreferences);
     setHasUnsavedChanges(true);
   };
 
   const handleSave = async () => {
     setIsSaving(true);
-    
+
     try {
       // Update consent manager
       consentManager.setCategoryConsent('analytics', preferences.analytics);
@@ -106,7 +112,7 @@ const CookieSettings: React.FC = () => {
       // Update original preferences to match current
       setOriginalPreferences(preferences);
       setHasUnsavedChanges(false);
-      
+
       toast.success(t('cookieConsent.settings.messages.saveSuccess'));
     } catch (error) {
       console.error('Error saving cookie preferences:', error);
@@ -124,197 +130,225 @@ const CookieSettings: React.FC = () => {
 
   if (isLoading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+      <ProfessionalCard variant="elevated">
+        <ProfessionalCardHeader>
+          <ProfessionalCardTitle className="flex items-center gap-2">
             <SettingsIcon className="w-5 h-5" />
             {t('cookieConsent.settings.title')}
-          </CardTitle>
-          <CardDescription>
+          </ProfessionalCardTitle>
+          <p className="text-muted-foreground ml-7 text-sm">
             {t('cookieConsent.settings.loading')}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center py-8">
-            <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
+          </p>
+        </ProfessionalCardHeader>
+        <ProfessionalCardContent>
+          <div className="flex items-center justify-center py-12">
+            <RefreshCw className="w-6 h-6 animate-spin text-primary" />
           </div>
-        </CardContent>
-      </Card>
+        </ProfessionalCardContent>
+      </ProfessionalCard>
     );
   }
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <SettingsIcon className="w-5 h-5" />
+      <ProfessionalCard variant="elevated">
+        <ProfessionalCardHeader>
+          <ProfessionalCardTitle className="flex items-center gap-2">
+            <Cookie className="w-5 h-5 text-primary" />
             {t('cookieConsent.settings.title')}
-          </CardTitle>
-          <CardDescription>
+          </ProfessionalCardTitle>
+          <p className="text-muted-foreground ml-7 text-sm">
             {t('cookieConsent.settings.description')}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
+          </p>
+        </ProfessionalCardHeader>
+        <ProfessionalCardContent className="space-y-8">
           {/* Quick Actions */}
-          <div className="flex gap-3">
-            <Button onClick={handleAcceptAll} variant="outline" className="flex-1">
+          <div className="flex gap-4 p-4 bg-muted/20 rounded-xl border border-border/50">
+            <ProfessionalButton
+              onClick={handleAcceptAll}
+              variant="outline"
+              className="flex-1 border-primary/20 hover:border-primary/50 text-primary hover:bg-primary/5"
+            >
               {t('cookieConsent.settings.acceptAll')}
-            </Button>
-            <Button onClick={handleRejectAll} variant="outline" className="flex-1">
+            </ProfessionalButton>
+            <ProfessionalButton
+              onClick={handleRejectAll}
+              variant="outline"
+              className="flex-1"
+            >
               {t('cookieConsent.settings.rejectOptional')}
-            </Button>
+            </ProfessionalButton>
           </div>
 
-          <Separator />
+          <Separator className="bg-border/50" />
 
           {/* Cookie Categories */}
           <div className="space-y-6">
             {/* Essential Cookies */}
-            <div className="space-y-3">
+            <div className="flex flex-col gap-3 p-5 rounded-xl border border-border/50 bg-card/50 hover:bg-card transition-colors">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Shield className="w-5 h-5 text-green-600" />
+                <div className="flex items-center gap-4">
+                  <div className="p-2.5 bg-green-50 text-green-600 rounded-lg">
+                    <Shield className="w-5 h-5" />
+                  </div>
                   <div>
-                    <Label className="text-base font-medium">{t('cookieConsent.settings.categories.essential.title')}</Label>
-                    <Badge variant="secondary" className="ml-2">{t('cookieConsent.settings.alwaysActive')}</Badge>
+                    <div className="flex items-center gap-2">
+                      <Label className="text-base font-semibold">{t('cookieConsent.settings.categories.essential.title')}</Label>
+                      <Badge variant="secondary" className="bg-muted text-muted-foreground text-[10px] uppercase tracking-wider">{t('cookieConsent.settings.alwaysActive')}</Badge>
+                    </div>
                   </div>
                 </div>
-                <Switch
-                  checked={preferences.essential}
-                  disabled={true}
-                  aria-label={t('cookieConsent.settings.categories.essential.ariaLabel')}
-                />
+                <div className="flex items-center gap-3">
+                  <Switch
+                    checked={preferences.essential}
+                    disabled={true}
+                    aria-label={t('cookieConsent.settings.categories.essential.ariaLabel')}
+                    className="data-[state=checked]:bg-green-600 opacity-80"
+                  />
+                </div>
               </div>
-              <p className="text-sm text-muted-foreground ml-8">
+              <p className="text-sm text-muted-foreground pl-[52px] leading-relaxed">
                 {t('cookieConsent.settings.categories.essential.description')}
               </p>
             </div>
 
             {/* Analytics Cookies */}
-            <div className="space-y-3">
+            <div className={cn(
+              "flex flex-col gap-3 p-5 rounded-xl border transition-all duration-200",
+              preferences.analytics
+                ? "border-blue-200 bg-blue-50/30"
+                : "border-border/50 bg-card/50 hover:bg-card"
+            )}>
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Eye className="w-5 h-5 text-blue-600" />
+                <div className="flex items-center gap-4">
+                  <div className={cn("p-2.5 rounded-lg", preferences.analytics ? "bg-blue-100 text-blue-600" : "bg-muted text-muted-foreground")}>
+                    <Eye className="w-5 h-5" />
+                  </div>
                   <div>
-                    <Label className="text-base font-medium">{t('cookieConsent.settings.categories.analytics.title')}</Label>
-                    {preferences.analytics && <Badge variant="default" className="ml-2">{t('cookieConsent.settings.enabled')}</Badge>}
+                    <div className="flex items-center gap-2">
+                      <Label className="text-base font-semibold">{t('cookieConsent.settings.categories.analytics.title')}</Label>
+                      {preferences.analytics && <Badge variant="default" className="bg-blue-600 text-[10px] uppercase tracking-wider">{t('cookieConsent.settings.enabled')}</Badge>}
+                    </div>
                   </div>
                 </div>
                 <Switch
                   checked={preferences.analytics}
                   onCheckedChange={(checked) => handlePreferenceChange('analytics', checked)}
                   aria-label={t('cookieConsent.settings.categories.analytics.ariaLabel')}
+                  className="data-[state=checked]:bg-blue-600"
                 />
               </div>
-              <p className="text-sm text-muted-foreground ml-8">
+              <p className="text-sm text-muted-foreground pl-[52px] leading-relaxed">
                 {t('cookieConsent.settings.categories.analytics.description')}
               </p>
             </div>
 
             {/* Marketing Cookies */}
-            <div className="space-y-3">
+            <div className={cn(
+              "flex flex-col gap-3 p-5 rounded-xl border transition-all duration-200",
+              preferences.marketing
+                ? "border-purple-200 bg-purple-50/30"
+                : "border-border/50 bg-card/50 hover:bg-card"
+            )}>
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Target className="w-5 h-5 text-purple-600" />
+                <div className="flex items-center gap-4">
+                  <div className={cn("p-2.5 rounded-lg", preferences.marketing ? "bg-purple-100 text-purple-600" : "bg-muted text-muted-foreground")}>
+                    <Target className="w-5 h-5" />
+                  </div>
                   <div>
-                    <Label className="text-base font-medium">{t('cookieConsent.settings.categories.marketing.title')}</Label>
-                    {preferences.marketing && <Badge variant="default" className="ml-2">{t('cookieConsent.settings.enabled')}</Badge>}
+                    <div className="flex items-center gap-2">
+                      <Label className="text-base font-semibold">{t('cookieConsent.settings.categories.marketing.title')}</Label>
+                      {preferences.marketing && <Badge variant="default" className="bg-purple-600 text-[10px] uppercase tracking-wider">{t('cookieConsent.settings.enabled')}</Badge>}
+                    </div>
                   </div>
                 </div>
                 <Switch
                   checked={preferences.marketing}
                   onCheckedChange={(checked) => handlePreferenceChange('marketing', checked)}
                   aria-label={t('cookieConsent.settings.categories.marketing.ariaLabel')}
+                  className="data-[state=checked]:bg-purple-600"
                 />
               </div>
-              <p className="text-sm text-muted-foreground ml-8">
+              <p className="text-sm text-muted-foreground pl-[52px] leading-relaxed">
                 {t('cookieConsent.settings.categories.marketing.description')}
               </p>
             </div>
-
-
           </div>
 
-          <Separator />
+          <Separator className="bg-border/50" />
 
           {/* Save Actions */}
           {hasUnsavedChanges && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
-                  <span className="text-sm font-medium text-amber-800">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 animate-in slide-in-from-bottom-2 duration-300">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-100 text-amber-600 rounded-full">
+                    <RefreshCw className="w-4 h-4" />
+                  </div>
+                  <span className="font-medium text-amber-900">
                     {t('cookieConsent.settings.unsavedChanges')}
                   </span>
                 </div>
-                <div className="flex gap-2">
-                  <Button 
-                    onClick={handleReset} 
-                    variant="ghost" 
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <ProfessionalButton
+                    onClick={handleReset}
+                    variant="ghost"
                     size="sm"
-                    className="text-amber-700 hover:text-amber-800 hover:bg-amber-100"
+                    className="flex-1 sm:flex-none text-amber-700 hover:text-amber-900 hover:bg-amber-100"
                   >
                     {t('cookieConsent.settings.reset')}
-                  </Button>
-                  <Button 
-                    onClick={handleSave} 
+                  </ProfessionalButton>
+                  <ProfessionalButton
+                    onClick={handleSave}
                     size="sm"
                     disabled={isSaving}
-                    className="bg-amber-600 hover:bg-amber-700 text-white"
+                    loading={isSaving}
+                    className="flex-1 sm:flex-none bg-amber-600 hover:bg-amber-700 text-white shadow-sm border-amber-700/20"
                   >
-                    {isSaving ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                        {t('cookieConsent.settings.saving')}
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-4 h-4 mr-2" />
-                        {t('cookieConsent.settings.saveChanges')}
-                      </>
-                    )}
-                  </Button>
+                    {!isSaving && <Save className="w-4 h-4 mr-2" />}
+                    {t('cookieConsent.settings.saveChanges')}
+                  </ProfessionalButton>
                 </div>
               </div>
             </div>
           )}
 
           {!hasUnsavedChanges && !isLoading && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <div className="flex items-center gap-2">
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3 text-green-800 animate-in fade-in duration-300">
+              <div className="p-1.5 bg-green-100 rounded-full">
                 <Check className="w-4 h-4 text-green-600" />
-                <span className="text-sm font-medium text-green-800">
-                  {t('cookieConsent.settings.upToDate')}
-                </span>
               </div>
+              <span className="font-medium">
+                {t('cookieConsent.settings.upToDate')}
+              </span>
             </div>
           )}
 
-          <Separator />
+          <Separator className="bg-border/50" />
 
           {/* Additional Information */}
-          <div className="space-y-3">
-            <h4 className="font-medium">{t('cookieConsent.settings.additionalInfo')}</h4>
-            <div className="text-sm text-muted-foreground space-y-2">
-              <p>
+          <div className="space-y-4 pt-2">
+            <h4 className="font-semibold text-sm flex items-center gap-2">
+              <SettingsIcon className="h-4 w-4 text-primary" />
+              {t('cookieConsent.settings.additionalInfo')}
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-muted-foreground">
+              <div className="p-3 bg-muted/30 rounded-lg border border-border/30">
                 • {t('cookieConsent.settings.infoPoints.stored')}
-              </p>
-              <p>
+              </div>
+              <div className="p-3 bg-muted/30 rounded-lg border border-border/30">
                 • {t('cookieConsent.settings.infoPoints.changeable')}
-              </p>
-              <p>
+              </div>
+              <div className="p-3 bg-muted/30 rounded-lg border border-border/30">
                 • {t('cookieConsent.settings.infoPoints.functionality')}
-              </p>
-              <p>
+              </div>
+              <div className="p-3 bg-muted/30 rounded-lg border border-border/30">
                 • {t('cookieConsent.settings.infoPoints.compliance')}
-              </p>
+              </div>
             </div>
           </div>
-
-
-        </CardContent>
-      </Card>
+        </ProfessionalCardContent>
+      </ProfessionalCard>
     </div>
   );
 };
