@@ -142,7 +142,7 @@ export function ReminderList({ className }: ReminderListProps) {
     if (dueDateFrom) params.set('due_from', format(dueDateFrom, 'yyyy-MM-dd'));
     if (dueDateTo) params.set('due_to', format(dueDateTo, 'yyyy-MM-dd'));
     if (page > 1) params.set('page', page.toString());
-    if (activeTab !== 'all') params.set('tab', activeTab);
+    if (activeTab !== 'my') params.set('tab', activeTab);
     setSearchParams(params);
   }, [searchQuery, statusFilter, priorityFilter, assignedToFilter, dueDateFrom, dueDateTo, page, activeTab, setSearchParams]);
 
@@ -401,13 +401,13 @@ export function ReminderList({ className }: ReminderListProps) {
     try {
       setBulkDeleteLoading(true);
       const result = await reminderApi.bulkDeleteReminders(Array.from(selectedReminders));
-      
+
       if (result.failed_count > 0) {
         toast.error(`Deleted ${result.updated_count} reminders, ${result.failed_count} failed`);
       } else {
         toast.success(`Successfully deleted ${result.updated_count} reminders`);
       }
-      
+
       setSelectedReminders(new Set());
       setBulkDeleteModalOpen(false);
       loadReminders();
@@ -483,37 +483,51 @@ export function ReminderList({ className }: ReminderListProps) {
         value={activeTab}
         onValueChange={(value) => {
           const params = new URLSearchParams(searchParams);
-          if (value === 'all') {
-            params.delete('tab');
-          } else {
-            params.set('tab', value);
-          }
+          params.set('tab', value);
           setSearchParams(params);
           setPage(1);
         }}
       >
         <TabsList className="grid w-full grid-cols-6 bg-muted/30 border border-border/50 rounded-lg p-1">
-          <TabsTrigger value="all" className="flex items-center gap-2 rounded-md">
+          <TabsTrigger
+            value="all"
+            className="flex items-center gap-2 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all duration-200"
+          >
             <List className="h-4 w-4" />
             {t('reminders.all')} ({counts.all})
           </TabsTrigger>
-          <TabsTrigger value="my" className="flex items-center gap-2 rounded-md">
+          <TabsTrigger
+            value="my"
+            className="flex items-center gap-2 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all duration-200"
+          >
             <Clock className="h-4 w-4" />
             {t('reminders.my_tasks')} ({counts.my})
           </TabsTrigger>
-          <TabsTrigger value="due_today" className="flex items-center gap-2 rounded-md">
+          <TabsTrigger
+            value="due_today"
+            className="flex items-center gap-2 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all duration-200"
+          >
             <Calendar className="h-4 w-4" />
             {t('reminders.due_today')} ({counts.due_today})
           </TabsTrigger>
-          <TabsTrigger value="overdue" className="flex items-center gap-2 rounded-md">
+          <TabsTrigger
+            value="overdue"
+            className="flex items-center gap-2 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all duration-200"
+          >
             <AlertCircle className="h-4 w-4" />
             {t('reminders.overdue')} ({counts.overdue})
           </TabsTrigger>
-          <TabsTrigger value="snoozed" className="flex items-center gap-2 rounded-md">
+          <TabsTrigger
+            value="snoozed"
+            className="flex items-center gap-2 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all duration-200"
+          >
             <Timer className="h-4 w-4" />
             {t('reminders.snoozed')} ({counts.snoozed})
           </TabsTrigger>
-          <TabsTrigger value="completed" className="flex items-center gap-2 rounded-md">
+          <TabsTrigger
+            value="completed"
+            className="flex items-center gap-2 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all duration-200"
+          >
             <CheckCircle className="h-4 w-4" />
             {t('reminders.completed')} ({counts.completed})
           </TabsTrigger>
@@ -741,8 +755,8 @@ export function ReminderList({ className }: ReminderListProps) {
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel disabled={bulkDeleteLoading}>Cancel</AlertDialogCancel>
-              <AlertDialogAction 
-                onClick={handleBulkDelete} 
+              <AlertDialogAction
+                onClick={handleBulkDelete}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 disabled={bulkDeleteLoading}
               >
