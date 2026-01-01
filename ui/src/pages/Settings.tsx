@@ -1252,8 +1252,34 @@ const Settings = () => {
       return;
     }
 
-    if (passwordData.new_password.length < 6) {
-      toast.error(t('auth.password_min_length'));
+    // Validate password strength
+    const passwordRequirements = {
+      minLength: 12,
+      hasUppercase: /[A-Z]/.test(passwordData.new_password),
+      hasLowercase: /[a-z]/.test(passwordData.new_password),
+      hasNumbers: /\d/.test(passwordData.new_password),
+      hasSpecialChars: /[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(passwordData.new_password)
+    };
+
+    const passwordErrors = [];
+    if (passwordData.new_password.length < passwordRequirements.minLength) {
+      passwordErrors.push(`Password must be at least ${passwordRequirements.minLength} characters long`);
+    }
+    if (!passwordRequirements.hasUppercase) {
+      passwordErrors.push('Password must contain at least one uppercase letter');
+    }
+    if (!passwordRequirements.hasLowercase) {
+      passwordErrors.push('Password must contain at least one lowercase letter');
+    }
+    if (!passwordRequirements.hasNumbers) {
+      passwordErrors.push('Password must contain at least one number');
+    }
+    if (!passwordRequirements.hasSpecialChars) {
+      passwordErrors.push('Password must contain at least one special character');
+    }
+
+    if (passwordErrors.length > 0) {
+      toast.error(passwordErrors.join('. '));
       return;
     }
 

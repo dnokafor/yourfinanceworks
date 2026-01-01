@@ -660,7 +660,7 @@ const APIClientManagementContent: React.FC = () => {
 
             <Dialog open={showOAuthDialog} onOpenChange={setShowOAuthDialog}>
               <DialogTrigger asChild>
-                <Button variant="outline">
+                <Button variant="outline" disabled title="OAuth 2.0 Client creation is not yet available">
                   <Shield className="w-4 h-4 mr-2" />
                   Create OAuth Client
                 </Button>

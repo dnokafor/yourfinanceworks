@@ -45,8 +45,33 @@ const ResetPassword: React.FC = () => {
     }
 
     // Validate password strength
-    if (password.length < 6) {
-      setError(t('resetPassword.passwordMinLength'));
+    const passwordRequirements = {
+      minLength: 12,
+      hasUppercase: /[A-Z]/.test(password),
+      hasLowercase: /[a-z]/.test(password),
+      hasNumbers: /\d/.test(password),
+      hasSpecialChars: /[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(password)
+    };
+
+    const passwordErrors = [];
+    if (password.length < passwordRequirements.minLength) {
+      passwordErrors.push(`Password must be at least ${passwordRequirements.minLength} characters long`);
+    }
+    if (!passwordRequirements.hasUppercase) {
+      passwordErrors.push('Password must contain at least one uppercase letter');
+    }
+    if (!passwordRequirements.hasLowercase) {
+      passwordErrors.push('Password must contain at least one lowercase letter');
+    }
+    if (!passwordRequirements.hasNumbers) {
+      passwordErrors.push('Password must contain at least one number');
+    }
+    if (!passwordRequirements.hasSpecialChars) {
+      passwordErrors.push('Password must contain at least one special character');
+    }
+
+    if (passwordErrors.length > 0) {
+      setError(passwordErrors.join('. '));
       setIsLoading(false);
       return;
     }

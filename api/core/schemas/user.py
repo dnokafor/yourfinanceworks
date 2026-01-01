@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, field_validator, ConfigDict
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+from core.utils.password_validation import validate_password_strength
 
 class UserBase(BaseModel):
     email: EmailStr
@@ -17,6 +18,14 @@ class UserCreate(UserBase):
     password: str
     tenant_id: Optional[int] = None  # Optional for signup flow
     organization_name: Optional[str] = None  # For creating new tenant during signup
+    
+    @field_validator('password')
+    @classmethod
+    def validate_password(cls, v):
+        is_valid, errors = validate_password_strength(v)
+        if not is_valid:
+            raise ValueError('; '.join(errors))
+        return v
     
     @field_validator('organization_name')
     @classmethod
@@ -82,6 +91,14 @@ class InviteAccept(BaseModel):
     password: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    
+    @field_validator('password')
+    @classmethod
+    def validate_password(cls, v):
+        is_valid, errors = validate_password_strength(v)
+        if not is_valid:
+            raise ValueError('; '.join(errors))
+        return v
 
 class UserList(BaseModel):
     id: int

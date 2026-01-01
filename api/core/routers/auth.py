@@ -23,6 +23,7 @@ from core.schemas.password_reset import PasswordResetRequest, PasswordResetConfi
 from pydantic import BaseModel
 from core.services.email_service import EmailService, EmailProviderConfig, EmailProvider
 from core.utils.auth import verify_password, get_password_hash
+from core.utils.password_validation import validate_password_strength
 from core.models.models_per_tenant import User as TenantUser
 from core.services.tenant_database_manager import tenant_db_manager
 from core.middleware.tenant_context_middleware import set_tenant_context
@@ -960,8 +961,11 @@ async def change_password(
         raise HTTPException(status_code=401, detail=INCORRECT_PASSWORD)
     if payload.new_password != payload.confirm_password:
         raise HTTPException(status_code=400, detail="Passwords do not match")
-    if len(payload.new_password) < MIN_PASSWORD_LENGTH:
-        raise HTTPException(status_code=400, detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters long")
+    
+    # Validate password strength
+    is_valid, errors = validate_password_strength(payload.new_password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail={"message": "Password does not meet requirements", "errors": errors})
 
     current_user.hashed_password = get_password_hash(payload.new_password)
     current_user.updated_at = datetime.now(timezone.utc)
@@ -2135,10 +2139,11 @@ async def reset_password(
         )
     
     # Validate password strength
-    if len(request.new_password) < MIN_PASSWORD_LENGTH:
+    is_valid, errors = validate_password_strength(request.new_password)
+    if not is_valid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters long"
+            detail={"message": "Password does not meet requirements", "errors": errors}
         )
     
     # Update password

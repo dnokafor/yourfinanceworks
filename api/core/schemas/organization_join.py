@@ -3,6 +3,7 @@ from typing import Optional, List
 from datetime import datetime
 
 from core.constants.password import MIN_PASSWORD_LENGTH
+from core.utils.password_validation import validate_password_strength
 
 class OrganizationJoinRequestBase(BaseModel):
     email: EmailStr
@@ -26,8 +27,9 @@ class OrganizationJoinRequestCreate(OrganizationJoinRequestBase):
     @field_validator('password')
     @classmethod
     def validate_password(cls, v):
-        if len(v) < MIN_PASSWORD_LENGTH:
-            raise ValueError(f'Password must be at least {MIN_PASSWORD_LENGTH} characters long')
+        is_valid, errors = validate_password_strength(v)
+        if not is_valid:
+            raise ValueError('; '.join(errors))
         return v
 
 class OrganizationJoinRequestRead(OrganizationJoinRequestBase):

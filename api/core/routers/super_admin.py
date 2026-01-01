@@ -17,7 +17,8 @@ from core.schemas.user import UserCreate, UserUpdate, UserList, UserRoleUpdate
 from core.schemas.tenant import TenantCreate, TenantUpdate, Tenant as TenantSchema
 from core.routers.auth import get_current_user
 from core.services.tenant_database_manager import tenant_db_manager
-from core.utils.auth import get_password_hash
+from core.utils.auth import verify_password, get_password_hash
+from core.utils.password_validation import validate_password_strength
 from core.utils.rbac import require_superuser
 
 logger = logging.getLogger(__name__)
@@ -521,9 +522,10 @@ async def create_user(
     if not email or '@' not in email or '.' not in email.split('@')[-1]:
         raise HTTPException(status_code=400, detail="Invalid email format")
 
-    # Validate password length
-    if len(user_data['password']) < MIN_PASSWORD_LENGTH:
-        raise HTTPException(status_code=400, detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters long")
+    # Validate password strength
+    is_valid, errors = validate_password_strength(user_data['password'])
+    if not is_valid:
+        raise HTTPException(status_code=400, detail={"message": "Password does not meet requirements", "errors": errors})
 
     # Validate tenant IDs are not empty
     if not user_data['tenant_ids'] or not all(tid.strip() for tid in user_data['tenant_ids']):
@@ -782,8 +784,9 @@ async def super_admin_reset_password(
     current_user: MasterUser = Depends(require_super_admin)
 ):
     """Super admin sets a new password for any user and optionally forces reset on next login."""
-    if len(payload.new_password) < MIN_PASSWORD_LENGTH:
-        raise HTTPException(status_code=400, detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters long")
+    is_valid, errors = validate_password_strength(payload.new_password)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail={"message": "Password does not meet requirements", "errors": errors})
     if payload.new_password != payload.confirm_password:
         raise HTTPException(status_code=400, detail="Passwords do not match")
 

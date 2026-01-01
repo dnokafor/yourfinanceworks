@@ -223,8 +223,33 @@ const Signup: React.FC = () => {
     }
 
     // Validate password strength
-    if (formData.password.length < 6) {
-      setError(t('auth.signup.validation.password_min_length'));
+    const passwordRequirements = {
+      minLength: 12,
+      hasUppercase: /[A-Z]/.test(formData.password),
+      hasLowercase: /[a-z]/.test(formData.password),
+      hasNumbers: /\d/.test(formData.password),
+      hasSpecialChars: /[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(formData.password)
+    };
+
+    const passwordErrors = [];
+    if (formData.password.length < passwordRequirements.minLength) {
+      passwordErrors.push(`Password must be at least ${passwordRequirements.minLength} characters long`);
+    }
+    if (!passwordRequirements.hasUppercase) {
+      passwordErrors.push('Password must contain at least one uppercase letter');
+    }
+    if (!passwordRequirements.hasLowercase) {
+      passwordErrors.push('Password must contain at least one lowercase letter');
+    }
+    if (!passwordRequirements.hasNumbers) {
+      passwordErrors.push('Password must contain at least one number');
+    }
+    if (!passwordRequirements.hasSpecialChars) {
+      passwordErrors.push('Password must contain at least one special character');
+    }
+
+    if (passwordErrors.length > 0) {
+      setError(passwordErrors.join('. '));
       setLoading(false);
       return;
     }
@@ -536,6 +561,34 @@ const Signup: React.FC = () => {
                   )}
                 </button>
               </div>
+              {/* Password Requirements */}
+              {formData.password && (
+                <div className="mt-2 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700/50">
+                  <p className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">Password requirements:</p>
+                  <div className="space-y-1">
+                    <div className={`flex items-center text-xs ${formData.password.length >= 12 ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                      {formData.password.length >= 12 ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
+                      At least 12 characters
+                    </div>
+                    <div className={`flex items-center text-xs ${/[A-Z]/.test(formData.password) ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                      {/[A-Z]/.test(formData.password) ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
+                      One uppercase letter
+                    </div>
+                    <div className={`flex items-center text-xs ${/[a-z]/.test(formData.password) ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                      {/[a-z]/.test(formData.password) ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
+                      One lowercase letter
+                    </div>
+                    <div className={`flex items-center text-xs ${/\d/.test(formData.password) ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                      {/\d/.test(formData.password) ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
+                      One number
+                    </div>
+                    <div className={`flex items-center text-xs ${/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(formData.password) ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                      {/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(formData.password) ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
+                      One special character
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Confirm Password */}
