@@ -43,6 +43,7 @@ const EditInvoice = () => {
   const [livePreviewUrl, setLivePreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [livePreviewLoading, setLivePreviewLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Calculate payment editing permissions when invoice changes
   const canEditPayment = invoice ? canEditInvoicePayment(invoice) : false;
@@ -361,6 +362,7 @@ const EditInvoice = () => {
                   if (submitBtn) submitBtn.click();
                 }}
                 className="shadow-lg"
+                loading={isSubmitting}
                 leftIcon={<CheckCircle className="h-4 w-4" />}
               >
                 {t('editInvoice.saveChanges')}
@@ -412,6 +414,7 @@ const EditInvoice = () => {
             isEdit={true}
             existingApproval={existingApproval}
             canEditPayment={canEditPayment}
+            onSubmitStateChange={setIsSubmitting}
             onInvoiceUpdate={async (updatedInvoice) => {
               console.log("🔍 EDIT INVOICE - Invoice updated via callback:", updatedInvoice);
               setInvoice(updatedInvoice);

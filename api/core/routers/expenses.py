@@ -1700,6 +1700,10 @@ async def list_expense_attachments(
             "content_type": att.content_type,
             "size_bytes": att.size_bytes,
             "uploaded_at": att.uploaded_at.isoformat() if att.uploaded_at else None,
+            "analysis_status": att.analysis_status,
+            "analysis_error": att.analysis_error,
+            "analysis_result": att.analysis_result,
+            "extracted_amount": att.extracted_amount,
         }
         for att in attachments
     ]

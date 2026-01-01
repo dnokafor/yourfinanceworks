@@ -1194,6 +1194,7 @@ async def _run_ocr(file_path: str, custom_prompt: Optional[str] = None, ai_confi
 async def process_attachment_inline(db: Session, expense_id: int, attachment_id: int, file_path: str, tenant_id: int) -> None:
     """Fallback inline processing when Kafka is not configured."""
     logger.info(f"Processing attachment inline: expense_id={expense_id} attachment_id={attachment_id} file={file_path}")
+    is_temp_file = False  # Track if we created a temporary file from cloud storage
 
     # Check if this is a cloud storage file that needs to be downloaded
     if not os.path.exists(file_path):
@@ -1237,6 +1238,7 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
                 # Update file_path to use the temporary file
                 original_file_path = file_path
                 file_path = temp_path
+                is_temp_file = True  # Mark that we created a temporary file
                 logger.info(f"Successfully downloaded cloud file from '{original_file_path}' to '{file_path}' for OCR processing")
             else:
                 raise Exception(f"Failed to retrieve file from cloud storage: {retrieve_result.error_message}")
@@ -1257,7 +1259,7 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
             return
     else:
         logger.info(f"Using local file path: {file_path}")
-    from core.models.models_per_tenant import Expense, AIConfig as AIConfigModel  # local import to avoid circulars
+    from core.models.models_per_tenant import Expense, ExpenseAttachment, AIConfig as AIConfigModel  # local import to avoid circulars
     from core.models.database import set_tenant_context  # Import tenant context management
     
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
@@ -1459,12 +1461,19 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
             expense.currency = expense.currency if expense.currency else None
             expense.expense_date = expense.expense_date if expense.expense_date else None
             expense.category = expense.category if expense.category else None
-            expense.vendor = expense.vendor if expense.vendor else None
-            expense.tax_rate = expense.tax_rate if expense.tax_rate not in (None, 0) else None
-            expense.tax_amount = expense.tax_amount if expense.tax_amount not in (None, 0) else None
-            expense.payment_method = expense.payment_method if expense.payment_method else None
-            expense.reference_number = expense.reference_number if expense.reference_number else None
             expense.notes = expense.notes if expense.notes else None
+
+            # Update attachment result if present
+            if attachment_id:
+                attachment = db.query(ExpenseAttachment).filter(ExpenseAttachment.id == attachment_id).first()
+                if attachment:
+                    attachment.analysis_status = "failed"
+                    attachment.analysis_error = str(result.get("error"))
+                    attachment.analysis_result = {
+                        "error": str(result.get("error")),
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    }
+                    db.commit()
 
             # Ensure NOT NULL fields have valid values
             if expense.amount is None:
@@ -1712,7 +1721,7 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
                 else:
                     logger.warning(f"Invalid category data detected, using default")
                     expense.category = "General"
-            
+
             vend = first_key(extracted, ["vendor", "merchant", "seller", "store", "payee"]) or None
             if vend:
                 # Ensure vendor is clean text, not encrypted data
@@ -1727,30 +1736,57 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
             tr = parse_number(first_key(extracted, ["tax_rate", "vat_rate"]))
             ta = parse_number(first_key(extracted, ["tax_amount", "vat_amount"]))
             tt = parse_number(first_key(extracted, ["total_amount", "total"]))
-            
+
             expense.tax_rate = tr if tr is not None else expense.tax_rate
             expense.tax_amount = ta if ta is not None else expense.tax_amount
-            
+
             # Amount update logic:
-            # 1. If AI extracted a total_amount, use it (most specific)
-            # 2. Otherwise, if AI extracted an amount, use it
-            # 3. If AI didn't extract either, keep the original user input
-            original_amount = expense.amount
-            if tt is not None:
-                # AI found explicit total - override both amount and total_amount
-                logger.info(f"Expense {expense_id}: Updating amount from {original_amount} to {tt} (AI extracted total)")
-                expense.amount = tt
-                expense.total_amount = tt
-            elif extracted_amount is not None:
-                # AI found an amount but no explicit total - override amount
-                logger.info(f"Expense {expense_id}: Updating amount from {original_amount} to {extracted_amount} (AI extracted amount)")
-                expense.amount = extracted_amount
-                # Set total_amount to match if it's not already set
-                if expense.total_amount in (None, 0):
-                    expense.total_amount = extracted_amount
+            # 1. Update individual attachment first
+            # 2. Then sum all attachments to update expense total
+
+            # Use the most specific amount found for this attachment
+            final_attachment_amount = tt if tt is not None else extracted_amount
+            if final_attachment_amount is not None:
+                final_attachment_amount = round(final_attachment_amount, 4)
+
+            if attachment_id:
+                attachment = db.query(ExpenseAttachment).filter(ExpenseAttachment.id == attachment_id).first()
+                if attachment:
+                    attachment.analysis_status = "done"
+                    attachment.extracted_amount = final_attachment_amount
+                    attachment.analysis_result = extracted
+                    attachment.analysis_error = None
+                    db.commit()
+                    logger.info(f"Updated attachment {attachment_id} with extracted amount {final_attachment_amount}")
+
+            # Aggregate all attachments for this expense
+            all_attachments = db.query(ExpenseAttachment).filter(ExpenseAttachment.expense_id == expense_id).all()
+            
+            # Check if this expense was imported from email and has multiple attachments
+            # Or just generally sum up all successful OCR results
+            total_sum = 0
+            any_success = False
+            for att in all_attachments:
+                if att.analysis_status == "done" and att.extracted_amount is not None:
+                    total_sum += att.extracted_amount
+                    any_success = True
+
+            if any_success:
+                total_sum = round(total_sum, 4)
+                logger.info(f"Expense {expense_id}: Aggregated total amount from {len(all_attachments)} attachments: {total_sum}")
+                expense.amount = total_sum
+                expense.total_amount = total_sum
             else:
-                # AI didn't extract amount - keep original user input
-                logger.info(f"Expense {expense_id}: Keeping original amount {original_amount} (AI did not extract amount)")
+                # Fallback to single extraction if aggregation didn't find anything
+                if tt is not None:
+                    tt = round(tt, 4)
+                    expense.amount = tt
+                    expense.total_amount = tt
+                elif extracted_amount is not None:
+                    extracted_amount = round(extracted_amount, 4)
+                    expense.amount = extracted_amount
+                    if expense.total_amount in (None, 0):
+                        expense.total_amount = extracted_amount
 
             # Other details
             pm = first_key(extracted, ["payment_method", "payment", "method"]) or None
@@ -1760,7 +1796,7 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
                     expense.payment_method = payment_str
                 else:
                     logger.warning(f"Invalid payment method data detected, skipping")
-                    
+
             ref = first_key(extracted, ["reference_number", "reference", "ref", "receipt_number", "invoice_number"]) or None
             if ref:
                 ref_str = str(ref).strip()
@@ -1768,7 +1804,7 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
                     expense.reference_number = ref_str
                 else:
                     logger.warning(f"Invalid reference number data detected, skipping")
-                    
+
             notes = first_key(extracted, ["notes", "memo"]) or None
             if notes:
                 notes_str = str(notes).strip()
@@ -1797,7 +1833,7 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
                                 logger.warning(f"Skipping potentially corrupted field {key} in analysis_result")
                         except (TypeError, ValueError) as ve:
                             logger.warning(f"Skipping non-serializable field {key} in analysis_result: {ve}")
-                    
+
                     # Add metadata about extraction method
                     if sanitized_data:
                         sanitized_data["extraction_metadata"] = {
@@ -1809,7 +1845,7 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
                     logger.info(f"Stored sanitized analysis_result with keys: {list(sanitized_data.keys()) if sanitized_data else ['status']}")
                 else:
                     expense.analysis_result = {"items": extracted} if extracted else {"status": "no_data"}
-                    
+
             except Exception as e:
                 logger.error(f"Failed to set analysis_result for expense {expense_id}: {e}")
                 # Store a safe fallback that won't cause encryption issues
@@ -1845,7 +1881,7 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
             db.rollback()
 
     # Clean up temporary files if we downloaded from cloud storage
-    if 'is_temp_file' in locals() and is_temp_file and os.path.exists(file_path):
+    if is_temp_file and os.path.exists(file_path):
         try:
             logger.info(f"Cleaning up temporary file: {file_path}")
             os.remove(file_path)
@@ -1862,7 +1898,7 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
 def queue_or_process_attachment(db: Session, tenant_id: Optional[int], expense_id: int, attachment_id: int, file_path: str) -> None:
     """Publish OCR job to Kafka if available, otherwise process inline in background."""
     from core.models.database import set_tenant_context  # Import tenant context management
-    
+
     # Ensure tenant context is set for the current operation
     if tenant_id:
         logger.info(f"Setting tenant context to {tenant_id} for OCR processing")
@@ -1870,7 +1906,7 @@ def queue_or_process_attachment(db: Session, tenant_id: Optional[int], expense_i
     else:
         logger.warning(f"No tenant_id provided for OCR processing of expense {expense_id}, using default")
         set_tenant_context(1)  # Default fallback
-    
+
     message = {
         "tenant_id": tenant_id,
         "expense_id": expense_id,

@@ -89,6 +89,15 @@ export const formatStatus = (status?: string | null) => {
   ).join(' ');
 };
 
+export interface InvoiceAttachmentMeta {
+  id: number;
+  filename: string;
+  file_size: number;
+  content_type: string;
+  attachment_type: string;
+  created_at: string;
+}
+
 export interface Invoice {
   id: number;
   number: string;
@@ -112,9 +121,11 @@ export interface Invoice {
   discount_value?: number;
   subtotal?: number;
   custom_fields?: Record<string, any>;
-  show_discount_in_pdf?: boolean; // New property added
+  show_discount_in_pdf?: boolean;
   has_attachment?: boolean;
   attachment_filename?: string;
+  attachments?: InvoiceAttachmentMeta[];
+  attachment_count?: number;
   payer?: string;
   labels?: string[];
   // User attribution fields
@@ -448,6 +459,10 @@ export interface ExpenseAttachmentMeta {
   content_type?: string;
   size_bytes?: number;
   uploaded_at?: string;
+  analysis_status?: 'not_started' | 'processing' | 'done' | 'failed';
+  analysis_error?: string;
+  analysis_result?: any;
+  extracted_amount?: number;
 }
 
 export interface BankTransactionEntry {
@@ -1652,6 +1667,8 @@ export const invoiceApi = {
         show_discount_in_pdf: apiResponse.show_discount_in_pdf || false, // Map show_discount_in_pdf from API response
         has_attachment: apiResponse.has_attachment || false,
         attachment_filename: apiResponse.attachment_filename || undefined,
+        attachments: apiResponse.attachments || [],
+        attachment_count: apiResponse.attachment_count || 0,
         payer: apiResponse.payer || 'Client',
         // User attribution fields
         created_by_user_id: apiResponse.created_by_user_id,
@@ -1766,7 +1783,7 @@ export const invoiceApi = {
       throw new Error('Invalid response from server');
     }
   },
-  downloadAttachment: (invoiceId: number) => {
+  downloadAttachment: (invoiceId: number, attachmentId?: number) => {
     const token = localStorage.getItem('token');
     const tenantId = localStorage.getItem('selected_tenant_id') ||
       (() => {
@@ -1788,6 +1805,9 @@ export const invoiceApi = {
     if (tenantId) {
       url.searchParams.set('tenant_id', tenantId);
     }
+    if (attachmentId) {
+      url.searchParams.set('attachment_id', attachmentId.toString());
+    }
     form.action = url.toString();
 
     document.body.appendChild(form);
@@ -1796,7 +1816,7 @@ export const invoiceApi = {
   },
   getAttachmentInfo: (invoiceId: number) =>
     apiRequest<{ has_attachment: boolean; filename?: string; content_type?: string; size_bytes?: number }>(`/invoices/${invoiceId}/attachment-info`),
-  previewAttachmentBlob: async (invoiceId: number): Promise<Blob> => {
+  previewAttachmentBlob: async (invoiceId: number, attachmentId?: number): Promise<Blob> => {
     const token = localStorage.getItem('token');
     const tenantId = localStorage.getItem('selected_tenant_id') || (() => {
       try {
@@ -1809,7 +1829,10 @@ export const invoiceApi = {
     if (token) headers['Authorization'] = `Bearer ${token}`;
     if (tenantId) headers['X-Tenant-ID'] = tenantId;
 
-    const url = `${API_BASE_URL}/invoices/${invoiceId}/preview-attachment`;
+    let url = `${API_BASE_URL}/invoices/${invoiceId}/preview-attachment`;
+    if (attachmentId) {
+      url += `?attachment_id=${attachmentId}`;
+    }
     const resp = await fetch(url, { headers });
     if (!resp.ok) {
       const text = await resp.text();
@@ -1818,6 +1841,8 @@ export const invoiceApi = {
     }
     return await resp.blob();
   },
+  deleteAttachment: (invoiceId: number, attachmentId: number) =>
+    apiRequest(`/invoices/${invoiceId}/attachments/${attachmentId}`, { method: 'DELETE' }),
 
   // Invoice history methods
   getInvoiceHistory: (invoiceId: number) =>
@@ -1868,7 +1893,7 @@ export const expenseApi = {
     if (category && category !== 'all') params.set('category', category);
     if (label) params.set('label', label);
     const query = params.toString() ? `?${params.toString()}` : '';
-    const response = await apiRequest<{success: boolean, expenses: Expense[], total: number}>(`/expenses/${query}`);
+    const response = await apiRequest<{ success: boolean, expenses: Expense[], total: number }>(`/expenses/${query}`);
     // Extract the expenses array from the response
     const list = response.expenses;
     // Ensure list is an array before mapping

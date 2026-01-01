@@ -1841,7 +1841,7 @@
     "view_title": "Voir la dépense",
     "import_title": "Importer les dépenses",
     "import_description": "Sélectionnez jusqu'à 10 fichiers PDF ou images pour créer des dépenses. Chaque fichier devient une dépense séparée et sera analysé par OCR.",
-    "new_description": "Créez une nouvelle dépense et téléversez jusqu'à 5 pièces jointes.",
+    "new_description": "Créez une nouvelle dépense et téléversez jusqu'à 10 pièces jointes.",
     "edit_description": "Mettez à jour cette dépense et gérez les pièces jointes.",
     "view_description": "Examinez les détails de la dépense et prenez des mesures d'approbation.",
     "back_to_expenses": "Retour aux dépenses",

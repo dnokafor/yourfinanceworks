@@ -1893,7 +1893,7 @@
     "view_title": "Ver Gasto",
     "import_title": "Importar Gastos",
     "import_description": "Selecciona hasta 10 archivos PDF o imágenes para crear gastos. Cada archivo se convierte en un gasto separado y será analizado por OCR.",
-    "new_description": "Crea un nuevo gasto y sube hasta 5 adjuntos.",
+    "new_description": "Crea un nuevo gasto y sube hasta 10 adjuntos.",
     "edit_description": "Actualiza este gasto y gestiona los adjuntos.",
     "view_description": "Revisa los detalles del gasto y toma acciones de aprobación.",
     "back_to_expenses": "Volver a Gastos",

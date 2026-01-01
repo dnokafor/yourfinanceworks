@@ -212,12 +212,12 @@ export function InvoiceForm({
         await invoiceApi.updateInvoice(invoice.id, updateData);
 
         // Handle attachment upload for updates
-        if (attachmentManagement.invoiceAttachment) {
+        if (attachmentManagement.invoiceAttachments.length > 0) {
           try {
-            await attachmentManagement.uploadAttachment(invoice.id);
-            toast.success("Invoice updated with attachment successfully!");
+            await attachmentManagement.uploadAttachments(invoice.id);
+            toast.success("Invoice updated with attachments successfully!");
           } catch {
-            toast.success("Invoice updated successfully, but attachment upload failed");
+            toast.success("Invoice updated successfully, but some attachments failed to upload");
           }
         } else {
           toast.success("Invoice updated successfully!");
@@ -281,12 +281,12 @@ export function InvoiceForm({
         const newInvoice = await invoiceApi.createInvoice(invoiceData);
 
         // Handle attachment upload
-        if (attachmentManagement.invoiceAttachment) {
+        if (attachmentManagement.invoiceAttachments.length > 0) {
           try {
-            await attachmentManagement.uploadAttachment(newInvoice.id);
-            toast.success("Invoice created with attachment successfully!");
+            await attachmentManagement.uploadAttachments(newInvoice.id);
+            toast.success("Invoice created with attachments successfully!");
           } catch {
-            toast.success("Invoice created successfully, but attachment upload failed");
+            toast.success("Invoice created successfully, but some attachments failed to upload");
           }
         } else {
           toast.success("Invoice created successfully!");
@@ -441,16 +441,18 @@ export function InvoiceForm({
   return (
     <div className="w-full px-6 py-6 space-y-6">
       {/* Global attachment indicator */}
-      {attachmentManagement.invoiceAttachment && !isEdit && (
+      {attachmentManagement.invoiceAttachments.length > 0 && !isEdit && (
         <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-green-50 border border-blue-200 rounded-lg shadow-sm">
           <div className="flex items-center gap-3">
             <FileText className="h-6 w-6 text-blue-600" />
             <div className="flex-1">
               <h4 className="text-sm font-semibold text-gray-900">
-                📄 PDF Uploaded Successfully
+                📄 {attachmentManagement.invoiceAttachments.length} {attachmentManagement.invoiceAttachments.length === 1 ? 'File' : 'Files'} Ready to Upload
               </h4>
               <p className="text-sm text-gray-600">
-                <span className="font-medium">{attachmentManagement.invoiceAttachment.name}</span>
+                <span className="font-medium">
+                  {attachmentManagement.invoiceAttachments.map(f => f.name).join(', ')}
+                </span>
               </p>
             </div>
           </div>
@@ -511,11 +513,12 @@ export function InvoiceForm({
             {/* Attachment Section */}
             <InvoiceAttachmentSection
               isEdit={isEdit}
-              invoiceAttachment={attachmentManagement.invoiceAttachment}
-              attachmentInfo={attachmentManagement.attachmentInfo}
+              invoiceAttachments={attachmentManagement.invoiceAttachments}
+              existingAttachments={attachmentManagement.existingAttachments}
               attachmentPreview={attachmentManagement.attachmentPreview}
               attachmentPreviewLoading={attachmentManagement.attachmentPreviewLoading}
-              onFileSelect={attachmentManagement.handleFileSelect}
+              onAddFiles={attachmentManagement.addFiles}
+              onRemoveNewFile={attachmentManagement.removeNewFile}
               onPreviewExisting={attachmentManagement.previewExistingAttachment}
               onPreviewNew={attachmentManagement.previewNewAttachment}
               onDownload={attachmentManagement.downloadAttachment}
@@ -560,123 +563,6 @@ export function InvoiceForm({
           <button type="submit" style={{ display: 'none' }} ref={submitButtonRef} />
         </form>
       </Form>
-
-      {/* Client Creation Dialog */}
-      <Dialog
-        open={clientManagement.showNewClientDialog}
-        onOpenChange={(open) => {
-          clientManagement.setShowNewClientDialog(open);
-          if (!open) {
-            clientManagement.resetNewClientForm();
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('invoices.add_new_client')}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">{t('invoices.name')}</label>
-              <input
-                className="w-full p-2 border rounded"
-                value={clientManagement.newClientForm.name}
-                onChange={(e) => clientManagement.setNewClientForm({
-                  ...clientManagement.newClientForm,
-                  name: e.target.value
-                })}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">{t('invoices.email')}</label>
-              <input
-                className="w-full p-2 border rounded"
-                type="email"
-                value={clientManagement.newClientForm.email}
-                onChange={(e) => clientManagement.setNewClientForm({
-                  ...clientManagement.newClientForm,
-                  email: e.target.value
-                })}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">{t('invoices.phone')}</label>
-              <input
-                className="w-full p-2 border rounded"
-                value={clientManagement.newClientForm.phone || ''}
-                onChange={(e) => clientManagement.setNewClientForm({
-                  ...clientManagement.newClientForm,
-                  phone: e.target.value
-                })}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">{t('invoices.address')}</label>
-              <input
-                className="w-full p-2 border rounded"
-                value={clientManagement.newClientForm.address || ''}
-                onChange={(e) => clientManagement.setNewClientForm({
-                  ...clientManagement.newClientForm,
-                  address: e.target.value
-                })}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium">{t('invoices.preferred_currency')}</label>
-              <CurrencySelector
-                value={clientManagement.newClientForm.preferred_currency || invoiceForm.tenantInfo?.default_currency || 'USD'}
-                onValueChange={(val) => clientManagement.setNewClientForm({ ...clientManagement.newClientForm, preferred_currency: val })}
-                placeholder={t('invoices.select_preferred_currency')}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              clientManagement.setShowNewClientDialog(false);
-              clientManagement.resetNewClientForm();
-            }}>
-              {t('invoices.cancel')}
-            </Button>
-            <Button onClick={handleCreateClientWithCallback}>
-              {t('invoices.add_client')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Attachment Preview Modal */}
-      <Dialog
-        open={attachmentManagement.attachmentPreview.open}
-        onOpenChange={(open) => {
-          if (!open) attachmentManagement.closePreview();
-        }}
-      >
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>
-              {attachmentManagement.attachmentPreview.filename || t('invoices.preview')}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="max-h-[70vh] overflow-auto">
-            {attachmentManagement.attachmentPreview.url &&
-              (attachmentManagement.attachmentPreview.contentType || '').startsWith('image/') && (
-                <img
-                  src={attachmentManagement.attachmentPreview.url}
-                  alt={attachmentManagement.attachmentPreview.filename || 'attachment'}
-                  className="max-w-full h-auto"
-                />
-              )}
-            {attachmentManagement.attachmentPreview.url &&
-              attachmentManagement.attachmentPreview.contentType === 'application/pdf' && (
-                <iframe
-                  src={attachmentManagement.attachmentPreview.url}
-                  className="w-full h-[70vh]"
-                  title="PDF Preview"
-                />
-              )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

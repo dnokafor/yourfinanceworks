@@ -281,6 +281,12 @@ class ExpenseAttachment(Base):
     expense = relationship("Expense")
     uploader = relationship("User")
 
+    # OCR / Analysis Fields
+    analysis_status = Column(String, default="not_started")  # not_started, processing, done, failed
+    analysis_result = Column(JSON, nullable=True)  # Raw OCR result
+    analysis_error = Column(Text, nullable=True)
+    extracted_amount = Column(Float, nullable=True)
+
 class Settings(Base):
     __tablename__ = "settings"
 

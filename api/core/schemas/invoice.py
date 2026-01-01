@@ -93,6 +93,16 @@ class Invoice(InvoiceBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+class InvoiceAttachmentSchema(BaseModel):
+    id: int
+    filename: str
+    file_size: int
+    content_type: Optional[str] = None
+    attachment_type: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
 class InvoiceWithClient(Invoice):
     client_name: str
     client_company: Optional[str] = None
@@ -101,6 +111,8 @@ class InvoiceWithClient(Invoice):
     custom_fields: Optional[Dict[str, Any]] = Field(default=None, description="Custom fields for the invoice")
     has_attachment: Optional[bool] = False
     attachment_filename: Optional[str] = None
+    attachments: Optional[List[InvoiceAttachmentSchema]] = []
+    attachment_count: Optional[int] = 0
     description: Optional[str] = None
     # User attribution fields
     created_by_user_id: Optional[int] = None

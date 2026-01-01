@@ -242,31 +242,13 @@ export default function ExpensesView() {
         <ContentSection title={t('expenses.details')}>
           <ProfessionalCard>
             <CardHeader>
-              {(form as any)?.analysis_status && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">{t('expenses.analysis_status', { defaultValue: 'Analysis Status' })}:</span>
-                  {form.analysis_status === 'done' ? (
-                    <Badge variant="success" className="h-6">{t('expenses.status_done')}</Badge>
-                  ) : form.analysis_status === 'processing' || form.analysis_status === 'queued' ? (
-                    <Badge variant="secondary" className="h-6 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800 capitalize">
-                      {form.analysis_status === 'processing' ? t('expenses.status_processing') : t('expenses.status_queued')}
-                    </Badge>
-                  ) : form.analysis_status === 'failed' ? (
-                    <Badge variant="destructive" className="h-6">Failed</Badge>
-                  ) : form.analysis_status === 'cancelled' ? (
-                    <Badge variant="secondary" className="h-6">Cancelled</Badge>
-                  ) : (form as any)?.imported_from_attachment ? (
-                    <Badge variant="outline" className="h-6 border-blue-200 text-blue-700 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
-                      Not Started
-                    </Badge>
-                  ) : null}
-                </div>
-              )}
-              {((form as any)?.analysis_status === 'pending' || (form as any)?.analysis_status === 'queued' || (form as any)?.analysis_status === 'failed') && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={async () => {
+              <div className="flex items-center justify-between">
+                <CardTitle>{t('expenses.details')}</CardTitle>
+                {((form as any)?.analysis_status === 'pending' || (form as any)?.analysis_status === 'queued' || (form as any)?.analysis_status === 'failed' || (form as any)?.analysis_status === 'done') && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
                       try {
                         const addNotification = (window as any).addAINotification;
                         addNotification?.('processing', 'Reprocessing Expense', `Re-analyzing expense receipts with AI...`);
@@ -288,224 +270,269 @@ export default function ExpensesView() {
                     {t('expenses.process_again')}
                   </Button>
                 )}
-            </CardHeader>
-            <CardContent>
-            {(form as any)?.analysis_status && (
-              <div className="mt-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">{t('expenses.analysis_status', { defaultValue: 'Analysis Status' })}:</span>
-                  {form.analysis_status === 'done' ? (
-                    <Badge variant="success" className="h-6">{t('expenses.status_done')}</Badge>
-                  ) : form.analysis_status === 'processing' || form.analysis_status === 'queued' ? (
-                    <Badge variant="secondary" className="h-6 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800 capitalize">
-                      {form.analysis_status === 'processing' ? t('expenses.status_processing') : t('expenses.status_queued')}
-                    </Badge>
-                  ) : form.analysis_status === 'failed' ? (
-                    <Badge variant="destructive" className="h-6">Failed</Badge>
-                  ) : form.analysis_status === 'cancelled' ? (
-                    <Badge variant="secondary" className="h-6">Cancelled</Badge>
-                  ) : (form as any)?.imported_from_attachment ? (
-                    <Badge variant="outline" className="h-6 border-blue-200 text-blue-700 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
-                      Not Started
-                    </Badge>
-                  ) : null}
-                </div>
-                {(form as any)?.analysis_error && (form as any)?.analysis_status === 'failed' && (
-                  <Alert className="border-red-200 bg-red-50">
-                    <AlertCircle className="h-4 w-4 text-red-600" />
-                    <AlertDescription className="text-red-800">
-                      <details className="cursor-pointer">
-                        <summary className="font-medium mb-1">{t('expenses.analysis_failed_click_details', { defaultValue: 'Analysis failed (click for details)' })}</summary>
-                        <div className="mt-2 text-xs font-mono bg-red-100 p-2 rounded border border-red-200 overflow-x-auto">
-                          {(form as any).analysis_error}
-                        </div>
-                      </details>
-                    </AlertDescription>
-                  </Alert>
-                )}
               </div>
-            )}
-          </CardContent>
-          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm">{t('expenses.labels.amount')}</label>
-              <Input
-                type="number"
-                value={Number(form.amount || 0)}
-                disabled={true}
-                placeholder={isInventoryConsumption ? "Calculated from items" : ""}
-              />
-            </div>
-            <div>
-              <label className="text-sm">{t('expenses.link_to_invoice')}</label>
-              <Select value={form.invoice_id ? String(form.invoice_id) : undefined} disabled={true}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t('expenses.select_invoice')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">{t('expenses.none')}</SelectItem>
-                  {invoiceOptions.map(inv => (
-                    <SelectItem key={inv.id} value={String(inv.id)}>{inv.number} — {inv.client_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-sm">{t('expenses.labels.currency')}</label>
-              <CurrencySelector value={form.currency || 'USD'} disabled={true} onValueChange={() => { }} />
-            </div>
-            <div>
-              <label className="text-sm">{t('expenses.labels.date')}</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start text-left font-normal" disabled={true}>
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {form.expense_date ? format(new Date(form.expense_date + 'T00:00:00'), 'PPP') : t('expenses.labels.pick_date')}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={form.expense_date ? new Date(form.expense_date + 'T00:00:00') : undefined}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div>
-              <label className="text-sm">{t('expenses.labels.category')}</label>
-              <Select value={(form.category as string) || 'General'} disabled={true}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t('common.select_category')} />
-                </SelectTrigger>
-                <SelectContent>
-                  {categoryOptions.map(c => (<SelectItem key={c} value={c}>{t(`expenses.categories.${c}`)}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-sm">{t('expenses.labels.vendor')}</label>
-              <Input value={form.vendor || ''} disabled={true} />
-            </div>
-            <div>
-              <label className="text-sm">{t('expenses.labels.payment_method')}</label>
-              <Input value={form.payment_method || ''} disabled={true} />
-            </div>
-            <div>
-              <label className="text-sm">{t('expenses.labels.reference_number')}</label>
-              <Input value={form.reference_number || ''} disabled={true} />
-            </div>
-            {((form as any).created_by_username || (form as any).created_by_email) && (
-              <div>
-                <label className="text-sm">{t('common.created_by')}</label>
-                <Input value={(form as any).created_by_username || (form as any).created_by_email || t('common.unknown')} disabled={true} />
-              </div>
-            )}
-            <div className="sm:col-span-2">
-              <label className="text-sm">{t('common.labels')}</label>
-              <div className="flex flex-wrap items-center gap-2 mt-1">
-                {((form as any).labels || []).slice(0, 10).map((lab: string, idx: number) => {
-                  return (
-                    // @ts-expect-error - React key prop issue with Badge component
-                    <Badge key={`lab-${idx}`} variant="secondary" className="text-xs">
-                      {lab}
-                    </Badge>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Inventory Consumption Section - Only show if this is an inventory expense */}
-            {isInventoryConsumption && (
-              <div className="sm:col-span-2">
-                <div className="space-y-3 p-4 border rounded-lg bg-gray-50">
+              {(form as any)?.analysis_status && (
+                <div className="mt-3 space-y-2">
                   <div className="flex items-center gap-2">
-                    <Package className="h-4 w-4" />
-                    <span className="text-sm font-medium">{t('expenses.inventory_integration')}</span>
+                    <span className="text-sm font-medium">{t('expenses.analysis_status', { defaultValue: 'Analysis Status' })}:</span>
+                    {form.analysis_status === 'done' ? (
+                      <Badge variant="success" className="h-6">{t('expenses.status_done')}</Badge>
+                    ) : form.analysis_status === 'processing' || form.analysis_status === 'queued' ? (
+                      <Badge variant="secondary" className="h-6 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800 capitalize">
+                        {form.analysis_status === 'processing' ? t('expenses.status_processing') : t('expenses.status_queued')}
+                      </Badge>
+                    ) : form.analysis_status === 'failed' ? (
+                      <Badge variant="destructive" className="h-6">Failed</Badge>
+                    ) : form.analysis_status === 'cancelled' ? (
+                      <Badge variant="secondary" className="h-6">Cancelled</Badge>
+                    ) : (form as any)?.imported_from_attachment ? (
+                      <Badge variant="outline" className="h-6 border-blue-200 text-blue-700 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
+                        Not Started
+                      </Badge>
+                    ) : null}
                   </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="is-inventory-consumption"
-                      checked={isInventoryConsumption}
-                      disabled={true}
+                  {(form as any)?.analysis_error && (form as any)?.analysis_status === 'failed' && (
+                    <Alert className="border-red-200 bg-red-50">
+                      <AlertCircle className="h-4 w-4 text-red-600" />
+                      <AlertDescription className="text-red-800">
+                        <details className="cursor-pointer">
+                          <summary className="font-medium mb-1">{t('expenses.analysis_failed_click_details', { defaultValue: 'Analysis failed (click for details)' })}</summary>
+                          <div className="mt-2 text-xs font-mono bg-red-100 p-2 rounded border border-red-200 overflow-x-auto">
+                            {(form as any).analysis_error}
+                          </div>
+                        </details>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+              )}
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm">{t('expenses.labels.amount')}</label>
+                <Input
+                  type="number"
+                  value={Number(form.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4, useGrouping: false })}
+                  disabled={true}
+                  placeholder={isInventoryConsumption ? "Calculated from items" : ""}
+                />
+              </div>
+              <div>
+                <label className="text-sm">{t('expenses.link_to_invoice')}</label>
+                <Select value={form.invoice_id ? String(form.invoice_id) : undefined} disabled={true}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={t('expenses.select_invoice')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t('expenses.none')}</SelectItem>
+                    {invoiceOptions.map(inv => (
+                      <SelectItem key={inv.id} value={String(inv.id)}>{inv.number} — {inv.client_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm">{t('expenses.labels.currency')}</label>
+                <CurrencySelector value={form.currency || 'USD'} disabled={true} onValueChange={() => { }} />
+              </div>
+              <div>
+                <label className="text-sm">{t('expenses.labels.date')}</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-start text-left font-normal" disabled={true}>
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {form.expense_date ? format(new Date(form.expense_date + 'T00:00:00'), 'PPP') : t('expenses.labels.pick_date')}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={form.expense_date ? new Date(form.expense_date + 'T00:00:00') : undefined}
+                      initialFocus
                     />
-                    <label
-                      htmlFor="is-inventory-consumption"
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                    >
-                      {t('expenses.this_expense_is_for_consuming_inventory_items')}
-                    </label>
-                  </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div>
+                <label className="text-sm">{t('expenses.labels.category')}</label>
+                <Select value={(form.category as string) || 'General'} disabled={true}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={t('common.select_category')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categoryOptions.map(c => (<SelectItem key={c} value={c}>{t(`expenses.categories.${c}`)}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm">{t('expenses.labels.vendor')}</label>
+                <Input value={form.vendor || ''} disabled={true} />
+              </div>
+              <div>
+                <label className="text-sm">{t('expenses.labels.payment_method')}</label>
+                <Input value={form.payment_method || ''} disabled={true} />
+              </div>
+              <div>
+                <label className="text-sm">{t('expenses.labels.reference_number')}</label>
+                <Input value={form.reference_number || ''} disabled={true} />
+              </div>
+              {((form as any).created_by_username || (form as any).created_by_email) && (
+                <div>
+                  <label className="text-sm">{t('common.created_by')}</label>
+                  <Input value={(form as any).created_by_username || (form as any).created_by_email || t('common.unknown')} disabled={true} />
+                </div>
+              )}
+              <div className="sm:col-span-2">
+                <label className="text-sm">{t('common.labels')}</label>
+                <div className="flex flex-wrap items-center gap-2 mt-1">
+                  {((form as any).labels || []).slice(0, 10).map((lab: string, idx: number) => {
+                    return (
+                      // @ts-expect-error - React key prop issue with Badge component
+                      <Badge key={`lab-${idx}`} variant="secondary" className="text-xs">
+                        {lab}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              </div>
 
-                  <div className="space-y-4">
-                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                      <div className="flex items-center gap-2 text-orange-800 mb-3">
-                        <Package className="h-4 w-4" />
-                        <span className="text-sm font-medium">{t('expenses.inventory_consumption_details')}</span>
-                      </div>
-                      <p className="text-sm text-orange-700 mb-4">
-                        {t('expenses.viewing_inventory_consumption', { defaultValue: 'This expense consumed the following inventory items:' })}
-                      </p>
-
-                      <InventoryConsumptionForm
-                        onConsumptionItemsChange={setConsumptionItems}
-                        currency={form.currency || 'USD'}
-                        initialConsumptionItems={consumptionItems}
-                      />
+              {/* Inventory Consumption Section - Only show if this is an inventory expense */}
+              {isInventoryConsumption && (
+                <div className="sm:col-span-2">
+                  <div className="space-y-3 p-4 border rounded-lg bg-gray-50">
+                    <div className="flex items-center gap-2">
+                      <Package className="h-4 w-4" />
+                      <span className="text-sm font-medium">{t('expenses.inventory_integration')}</span>
                     </div>
 
-                    {consumptionItems.length > 0 && (
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                        <div className="flex items-center gap-2 text-green-800">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="is-inventory-consumption"
+                        checked={isInventoryConsumption}
+                        disabled={true}
+                      />
+                      <label
+                        htmlFor="is-inventory-consumption"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        {t('expenses.this_expense_is_for_consuming_inventory_items')}
+                      </label>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-orange-800 mb-3">
                           <Package className="h-4 w-4" />
-                          <span className="text-sm font-medium">
-                            {t('expenses.consumed_items_count', { count: consumptionItems.length, defaultValue: `${consumptionItems.length} item(s) consumed` })}
-                          </span>
+                          <span className="text-sm font-medium">{t('expenses.inventory_consumption_details')}</span>
                         </div>
+                        <p className="text-sm text-orange-700 mb-4">
+                          {t('expenses.viewing_inventory_consumption', { defaultValue: 'This expense consumed the following inventory items:' })}
+                        </p>
+
+                        <InventoryConsumptionForm
+                          onConsumptionItemsChange={setConsumptionItems}
+                          currency={form.currency || 'USD'}
+                          initialConsumptionItems={consumptionItems}
+                        />
                       </div>
-                    )}
+
+                      {consumptionItems.length > 0 && (
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                          <div className="flex items-center gap-2 text-green-800">
+                            <Package className="h-4 w-4" />
+                            <span className="text-sm font-medium">
+                              {t('expenses.consumed_items_count', { count: consumptionItems.length, defaultValue: `${consumptionItems.length} item(s) consumed` })}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-
-            <div className="sm:col-span-2">
-              <label className="text-sm">{t('expenses.labels.notes')}</label>
-              <Input value={form.notes || ''} disabled={true} />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="text-sm">{t('expenses.max_attachments')}</label>
-              {(form as any)?.analysis_status === 'done' && (
-                <div className="text-xs text-muted-foreground mt-1">{t('expenses.attachments_cannot_delete', { defaultValue: 'Attachments cannot be deleted after analysis is completed.' })}</div>
               )}
-              <div className="mt-3">
-                <div className="text-sm font-medium mb-2">{t('expenses.existing_attachments', { defaultValue: 'Existing attachments' })}</div>
-                {attachments.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">{t('expenses.none')}</div>
-                ) : (
-                  <ul className="space-y-2">
-                    {attachments.map(att => (
-                      <li key={att.id} className="flex items-center justify-between gap-3 border rounded p-2">
-                        <div className="truncate text-sm">
-                          {att.filename}
-                        </div>
-                        <Button variant="outline" size="sm" onClick={async () => {
-                          const { blob, contentType } = await expenseApi.downloadAttachmentBlob(Number(id), att.id);
-                          const url = URL.createObjectURL(blob);
-                          setPreview({ open: true, url, contentType: contentType || att.content_type || null, filename: att.filename || null });
-                        }}>
-                          <Eye className="w-4 h-4 mr-2" />
-                          {t('common.view')}
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+
+              <div className="sm:col-span-2">
+                <label className="text-sm">{t('expenses.labels.notes')}</label>
+                <Input value={form.notes || ''} disabled={true} />
               </div>
-            </div>
-          </CardContent>
-        </ProfessionalCard>
+              <div className="sm:col-span-2">
+                <label className="text-sm">{t('expenses.max_attachments')}</label>
+                {(form as any)?.analysis_status === 'done' && (
+                  <div className="text-xs text-muted-foreground mt-1">{t('expenses.attachments_cannot_delete', { defaultValue: 'Attachments cannot be deleted after analysis is completed.' })}</div>
+                )}
+                <div className="mt-3">
+                  <div className="text-sm font-medium mb-2">{t('expenses.existing_attachments', { defaultValue: 'Existing attachments' })}</div>
+                  {attachments.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">{t('expenses.none')}</div>
+                  ) : (
+                    <ul className="space-y-3">
+                      {attachments.map(att => (
+                        <li key={att.id} className="flex flex-col gap-2 border rounded-lg p-3 bg-card hover:shadow-sm transition-shadow">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="truncate text-sm font-medium flex items-center gap-2">
+                              {att.filename}
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-2"
+                              onClick={async () => {
+                                try {
+                                  const { blob, contentType } = await expenseApi.downloadAttachmentBlob(Number(id), att.id);
+                                  const url = URL.createObjectURL(blob);
+                                  setPreview({ open: true, url, contentType: contentType || att.content_type || null, filename: att.filename || null });
+                                } catch (e) {
+                                  toast.error('Failed to download attachment');
+                                }
+                              }}
+                            >
+                              <Eye className="w-4 h-4 mr-2" />
+                              {t('common.view')}
+                            </Button>
+                          </div>
+
+                          <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-2 mt-1">
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-1">
+                                <span className="font-semibold uppercase text-[10px] text-muted-foreground/70 tracking-wider">Status:</span>
+                                <Badge
+                                  variant={
+                                    att.analysis_status === 'done' ? 'default' :
+                                      att.analysis_status === 'failed' ? 'destructive' :
+                                        'outline'
+                                  }
+                                  className="h-4 text-[9px] px-1 font-bold tracking-tight"
+                                >
+                                  {att.analysis_status || 'not_started'}
+                                </Badge>
+                              </div>
+                              {att.extracted_amount !== undefined && att.extracted_amount !== null && (
+                                <div className="flex items-center gap-1">
+                                  <span className="font-semibold uppercase text-[10px] text-muted-foreground/70 tracking-wider">Amount:</span>
+                                  <span className="font-bold text-foreground">
+                                    {new Intl.NumberFormat(undefined, { style: 'currency', currency: form.currency || 'USD' }).format(att.extracted_amount)}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                            {att.size_bytes && (
+                              <span>{(att.size_bytes / 1024).toFixed(1)} KB</span>
+                            )}
+                          </div>
+
+                          {att.analysis_error && att.analysis_status === 'failed' && (
+                            <div className="text-[10px] text-destructive bg-destructive/5 p-1.5 rounded border border-destructive/10 mt-1 max-h-12 overflow-y-auto font-mono leading-tight">
+                              {att.analysis_error}
+                            </div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </ProfessionalCard>
         </ContentSection>
 
         <div className="flex gap-2">

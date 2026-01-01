@@ -6,12 +6,13 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ProfessionalCard } from "@/components/ui/professional-card";
 import { ProfessionalButton, ButtonGroup } from "@/components/ui/professional-button";
-import { Paperclip, Download, CloudUpload, AlertCircle, FileText, Eye, Trash } from "lucide-react";
+import { Paperclip, Download, CloudUpload, AlertCircle, FileText, Eye, Trash, Plus } from "lucide-react";
+import { InvoiceAttachmentMeta } from "@/lib/api";
 
 interface InvoiceAttachmentSectionProps {
   isEdit: boolean;
-  invoiceAttachment: File | null;
-  attachmentInfo: { has_attachment: boolean; filename?: string } | null;
+  invoiceAttachments: File[];
+  existingAttachments: InvoiceAttachmentMeta[];
   attachmentPreview: {
     open: boolean;
     url: string | null;
@@ -19,24 +20,26 @@ interface InvoiceAttachmentSectionProps {
     filename: string | null;
   };
   attachmentPreviewLoading: {
-    type: 'existing' | 'new';
+    id: number | string | null;
     loading: boolean;
   };
-  onFileSelect: (file: File | null) => void;
-  onPreviewExisting: () => Promise<void>;
-  onPreviewNew: () => Promise<void>;
-  onDownload: () => Promise<void>;
-  onDelete: (onUpdate?: (updatedInvoice: any) => void) => Promise<void>;
+  onAddFiles: (files: FileList | null) => void;
+  onRemoveNewFile: (index: number) => void;
+  onPreviewExisting: (id: number) => Promise<void>;
+  onPreviewNew: (index: number) => Promise<void>;
+  onDownload: (id: number) => Promise<void>;
+  onDelete: (id: number) => Promise<void>;
   onClosePreview: () => void;
 }
 
 export function InvoiceAttachmentSection({
   isEdit,
-  invoiceAttachment,
-  attachmentInfo,
+  invoiceAttachments,
+  existingAttachments,
   attachmentPreview,
   attachmentPreviewLoading,
-  onFileSelect,
+  onAddFiles,
+  onRemoveNewFile,
   onPreviewExisting,
   onPreviewNew,
   onDownload,
@@ -67,18 +70,15 @@ export function InvoiceAttachmentSection({
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();
-            const file = e.dataTransfer.files?.[0];
-            if (file) onFileSelect(file);
+            onAddFiles(e.dataTransfer.files);
           }}
         >
           <Input
             id="attachment"
             type="file"
+            multiple
             accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              onFileSelect(file || null);
-            }}
+            onChange={(e) => onAddFiles(e.target.files)}
             className="hidden"
           />
           <Label
@@ -99,114 +99,143 @@ export function InvoiceAttachmentSection({
           </Label>
         </div>
 
-        {/* Selected File (New) */}
-        {invoiceAttachment && (
-          <div className="p-4 rounded-2xl bg-primary/5 border border-primary/20 animate-in fade-in slide-in-from-top-2 duration-300">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-primary/10 rounded-xl">
-                <FileText className="h-6 w-6 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-foreground truncate">{invoiceAttachment.name}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                    Ready to upload
-                  </span>
-                  <span className="text-xs text-muted-foreground italic">
-                    {(invoiceAttachment.size / 1024 / 1024).toFixed(2)} MB
-                  </span>
+        {/* Selected Files (New) */}
+        {invoiceAttachments.length > 0 && (
+          <div className="space-y-3">
+            <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider px-2">
+              {t('invoices.new_attachments', 'New Attachments')}
+            </h3>
+            {invoiceAttachments.map((file, index) => (
+              <div key={`new-${index}`} className="p-4 rounded-2xl bg-primary/5 border border-primary/20 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-primary/10 rounded-xl">
+                    <FileText className="h-6 w-6 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-foreground truncate">{file.name}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                        {t('invoices.ready_to_upload', 'Ready to upload')}
+                      </span>
+                      <span className="text-xs text-muted-foreground italic">
+                        {(file.size / 1024 / 1024).toFixed(2)} MB
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <ProfessionalButton
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => onPreviewNew(index)}
+                      loading={attachmentPreviewLoading.id === `new-${index}` && attachmentPreviewLoading.loading}
+                      className="text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-xl"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </ProfessionalButton>
+                    <ProfessionalButton
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => onRemoveNewFile(index)}
+                      className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl"
+                    >
+                      <Trash className="h-4 w-4" />
+                    </ProfessionalButton>
+                  </div>
                 </div>
               </div>
-              <ProfessionalButton
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => onFileSelect(null)}
-                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl"
-              >
-                <Trash className="h-4 w-4" />
-              </ProfessionalButton>
-            </div>
+            ))}
           </div>
         )}
 
-        {/* Existing Attachment (Edit) */}
-        {isEdit && (
-          attachmentInfo?.has_attachment ||
-          attachmentInfo?.filename ||
-          attachmentPreview.filename
-        ) && (
-            <div className="p-6 rounded-3xl bg-secondary/30 border border-border/50 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="flex flex-col md:flex-row items-center gap-6">
-                <div className="p-4 bg-emerald-100 dark:bg-emerald-900/30 rounded-2xl">
-                  <FileText className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
-                </div>
+        {/* Existing Attachments */}
+        {existingAttachments.length > 0 && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider px-2">
+              {t('invoices.existing_attachments', 'Existing Attachments')}
+            </h3>
+            <div className="grid grid-cols-1 gap-4">
+              {existingAttachments.map((att) => (
+                <div key={att.id} className="p-6 rounded-3xl bg-secondary/30 border border-border/50 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <div className="flex flex-col md:flex-row items-center gap-6">
+                    <div className="p-4 bg-emerald-100 dark:bg-emerald-900/30 rounded-2xl">
+                      <FileText className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+                    </div>
 
-                <div className="flex-1 text-center md:text-left min-w-0">
-                  <h4 className="text-lg font-bold text-foreground truncate">
-                    {attachmentInfo?.filename || attachmentPreview.filename}
-                  </h4>
-                  <div className="flex items-center justify-center md:justify-start gap-2 mt-1 italic text-sm text-muted-foreground">
-                    <AlertCircle className="h-3 w-3" />
-                    {t('invoices.attachment_uploaded')}
-                  </div>
-                </div>
+                    <div className="flex-1 text-center md:text-left min-w-0">
+                      <h4 className="text-lg font-bold text-foreground truncate">
+                        {att.filename}
+                      </h4>
+                      <div className="flex items-center justify-center md:justify-start gap-4 mt-1 italic text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          {t('invoices.attachment_uploaded')}
+                        </span>
+                        <span>
+                          {(att.file_size / 1024 / 1024).toFixed(2)} MB
+                        </span>
+                      </div>
+                    </div>
 
-                <ButtonGroup size="sm">
-                  <ProfessionalButton
-                    type="button"
-                    variant="outline"
-                    onClick={onPreviewExisting}
-                    loading={attachmentPreviewLoading.type === 'existing' && attachmentPreviewLoading.loading}
-                    leftIcon={<Eye className="w-4 h-4" />}
-                  >
-                    Preview
-                  </ProfessionalButton>
-
-                  <ProfessionalButton
-                    type="button"
-                    variant="outline"
-                    onClick={onDownload}
-                    leftIcon={<Download className="w-4 h-4" />}
-                  >
-                    {t('invoices.download')}
-                  </ProfessionalButton>
-
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
+                    <ButtonGroup size="sm">
                       <ProfessionalButton
                         type="button"
-                        variant="ghost"
-                        className="text-destructive hover:bg-destructive/10"
-                        leftIcon={<Trash className="h-4 w-4" />}
+                        variant="outline"
+                        onClick={() => onPreviewExisting(att.id)}
+                        loading={attachmentPreviewLoading.id === att.id && attachmentPreviewLoading.loading}
+                        leftIcon={<Eye className="w-4 h-4" />}
                       >
-                        {t('common.delete')}
+                        {t('common.preview', 'Preview')}
                       </ProfessionalButton>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent className="rounded-3xl">
-                      <AlertDialogHeader>
-                        <AlertDialogTitle className="text-2xl font-black">
-                          {t('invoices.delete_attachment_confirm_title', 'Delete Attachment?')}
-                        </AlertDialogTitle>
-                        <AlertDialogDescription className="text-base">
-                          {t('invoices.delete_attachment_confirm_desc', 'This will permanently remove the attachment. This action cannot be undone.')}
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter className="mt-4 gap-3">
-                        <AlertDialogCancel className="rounded-xl">{t('common.cancel')}</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => onDelete()}
-                          className="bg-destructive hover:bg-destructive/90 rounded-xl px-6"
-                        >
-                          {t('common.delete')}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </ButtonGroup>
-              </div>
+
+                      <ProfessionalButton
+                        type="button"
+                        variant="outline"
+                        onClick={() => onDownload(att.id)}
+                        leftIcon={<Download className="w-4 h-4" />}
+                      >
+                        {t('invoices.download')}
+                      </ProfessionalButton>
+
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <ProfessionalButton
+                            type="button"
+                            variant="ghost"
+                            className="text-destructive hover:bg-destructive/10"
+                            leftIcon={<Trash className="h-4 w-4" />}
+                          >
+                            {t('common.delete')}
+                          </ProfessionalButton>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="rounded-3xl">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="text-2xl font-black">
+                              {t('invoices.delete_attachment_confirm_title', 'Delete Attachment?')}
+                            </AlertDialogTitle>
+                            <AlertDialogDescription className="text-base">
+                              {t('invoices.delete_attachment_confirm_desc', 'This will permanently remove the attachment. This action cannot be undone.')}
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter className="mt-4 gap-3">
+                            <AlertDialogCancel className="rounded-xl">{t('common.cancel')}</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => onDelete(att.id)}
+                              className="bg-destructive hover:bg-destructive/90 rounded-xl px-6"
+                            >
+                              {t('common.delete')}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </ButtonGroup>
+                  </div>
+                </div>
+              ))}
             </div>
-          )}
+          </div>
+        )}
       </div>
 
       {/* Attachment Preview Modal */}

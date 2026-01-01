@@ -2003,7 +2003,7 @@
     "view_title": "View Expense",
     "import_title": "Import Expenses",
     "import_description": "Select up to 10 PDF or image files to create expenses. Each file becomes a separate expense and will be analyzed by OCR.",
-    "new_description": "Create a new expense and upload up to 5 attachments.",
+    "new_description": "Create a new expense and upload up to 10 attachments.",
     "edit_description": "Update this expense and manage attachments.",
     "view_description": "Review expense details and take approval actions.",
     "back_to_expenses": "Back to Expenses",

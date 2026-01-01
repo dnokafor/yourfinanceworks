@@ -1818,7 +1818,7 @@
     "view_title": "Ausgabe anzeigen",
     "import_title": "Ausgaben importieren",
     "import_description": "Wählen Sie bis zu 10 PDF- oder Bilddateien aus, um Ausgaben zu erstellen. Jede Datei wird zu einer separaten Ausgabe und wird von OCR analysiert.",
-    "new_description": "Erstellen Sie eine neue Ausgabe und laden Sie bis zu 5 Anhänge hoch.",
+    "new_description": "Erstellen Sie eine neue Ausgabe und laden Sie bis zu 10 Anhänge hoch.",
     "edit_description": "Aktualisieren Sie diese Ausgabe und verwalten Sie Anhänge.",
     "view_description": "Überprüfen Sie Ausgabendetails und ergreifen Sie Genehmigungsmaßnahmen.",
     "back_to_expenses": "Zurück zu Ausgaben",
