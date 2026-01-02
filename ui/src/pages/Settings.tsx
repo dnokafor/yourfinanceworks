@@ -14,7 +14,7 @@ import {
   Trophy, Mail, Send, Cloud, ShieldCheck, Cookie, Receipt, User, Link, Globe, Activity, Bell,
   CreditCard, Package, CircleDollarSign, Shield
 } from "lucide-react";
-import { settingsApi, discountRulesApi, aiConfigApi, AIConfig, AIConfigCreate, AIProviderInfo, DiscountRule, DiscountRuleCreate } from "@/lib/api";
+import { settingsApi, discountRulesApi, aiConfigApi, AIConfig, AIConfigCreate, AIProviderInfo } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -56,7 +56,8 @@ import {
   ProfessionalTableHead,
   StatusBadge,
 } from "@/components/ui/professional-table";
-import { CompanyInfoTab, InvoiceSettingsTab, UserProfileTab } from "@/components/settings";
+import { CompanyInfoTab, InvoiceSettingsTab, UserProfileTab, DiscountRulesTab } from "@/components/settings";
+import type { DiscountRule, DiscountRuleCreate } from "@/components/settings";
 
 const Settings = () => {
   const { t } = useTranslation();
@@ -307,9 +308,9 @@ const Settings = () => {
     }
   }, [activeTab]);
 
-  // Fetch discount rules when tab changes to discount
+  // Fetch discount rules when tab changes to discount-rules
   useEffect(() => {
-    if (activeTab === 'discount' && isAdmin && discountRules.length === 0 && !loadingDiscountRules) {
+    if (activeTab === 'discount-rules' && isAdmin && discountRules.length === 0 && !loadingDiscountRules) {
       const fetchDiscountRules = async () => {
         try {
           setLoadingDiscountRules(true);
@@ -411,8 +412,8 @@ const Settings = () => {
           console.log("Email settings not configured yet");
         }
 
-        // Fetch discount rules - only when discount tab is active
-        if (activeTab === 'discount') {
+        // Fetch discount rules - only when discount-rules tab is active
+        if (activeTab === 'discount-rules') {
           try {
             setLoadingDiscountRules(true);
             const rules = await discountRulesApi.getDiscountRules();
@@ -888,8 +889,6 @@ const Settings = () => {
   const handleDeleteDiscountRule = async (id: number) => {
     // Only allow admin to delete discount rules
     if (!isAdmin) return;
-
-    if (!confirm(t('settings.confirm_delete_discount_rule'))) return;
 
     try {
       await discountRulesApi.deleteDiscountRule(id);
@@ -1542,95 +1541,20 @@ const Settings = () => {
 
             {isAdmin && (
               <TabsContent value="discount-rules" className="mt-6">
-                <ProfessionalCard variant="elevated">
-                  <ProfessionalCardHeader>
-                    <div className="flex items-center justify-between">
-                      <ProfessionalCardTitle className="flex items-center gap-2">
-                        <Percent className="w-5 h-5 text-primary" />
-                        {t('settings.discount_rules')}
-                      </ProfessionalCardTitle>
-                      <ProfessionalButton onClick={openCreateDialog} size="sm" leftIcon={<Plus className="h-4 w-4" />}>
-                        {t('settings.tabs.add_rule')}
-                      </ProfessionalButton>
-                    </div>
-                  </ProfessionalCardHeader>
-                  <ProfessionalCardContent>
-                    {loadingDiscountRules ? (
-                      <div className="flex items-center justify-center py-12">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary mr-3" />
-                        <span className="text-muted-foreground font-medium">{t('settings.loading_discount_rules')}</span>
-                      </div>
-                    ) : discountRules.length === 0 ? (
-                      <div className="text-center py-12 bg-muted/20 rounded-xl border-2 border-dashed border-border">
-                        <Percent className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-20" />
-                        <p className="text-muted-foreground font-medium mb-2">{t('settings.no_discount_rules_configured')}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {t('settings.create_discount_rules_to_apply_discounts')}
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="rounded-xl border border-border/50 overflow-hidden">
-                        <ProfessionalTable>
-                          <ProfessionalTableHeader>
-                            <ProfessionalTableRow>
-                              <ProfessionalTableHead>{t('settings.rule_name')}</ProfessionalTableHead>
-                              <ProfessionalTableHead>{t('settings.discount')}</ProfessionalTableHead>
-                              <ProfessionalTableHead>{t('settings.min_amount')}</ProfessionalTableHead>
-                              <ProfessionalTableHead>{t('settings.priority')}</ProfessionalTableHead>
-                              <ProfessionalTableHead>{t('settings.status')}</ProfessionalTableHead>
-                              <ProfessionalTableHead className="text-right">{t('common.actions')}</ProfessionalTableHead>
-                            </ProfessionalTableRow>
-                          </ProfessionalTableHeader>
-                          <ProfessionalTableBody>
-                            {discountRules.map((rule) => (
-                              <ProfessionalTableRow key={rule.id} interactive>
-                                <ProfessionalTableCell className="font-medium">
-                                  <div className="flex items-center gap-2">
-                                    {rule.name}
-                                    <Badge variant="secondary" className="text-[10px] px-1.5 h-4 uppercase">{rule.currency || "USD"}</Badge>
-                                  </div>
-                                </ProfessionalTableCell>
-                                <ProfessionalTableCell>
-                                  <span className="font-semibold text-primary">
-                                    {rule.discount_type === "percentage" ? `${rule.discount_value}%` : `$${rule.discount_value}`}
-                                  </span>
-                                </ProfessionalTableCell>
-                                <ProfessionalTableCell>${rule.min_amount}</ProfessionalTableCell>
-                                <ProfessionalTableCell>
-                                  <Badge variant="outline" className="font-mono">{rule.priority}</Badge>
-                                </ProfessionalTableCell>
-                                <ProfessionalTableCell>
-                                  <StatusBadge status={rule.is_active ? 'success' : 'neutral'}>
-                                    {rule.is_active ? t('settings.rule_active') : t('settings.rule_inactive')}
-                                  </StatusBadge>
-                                </ProfessionalTableCell>
-                                <ProfessionalTableCell className="text-right">
-                                  <div className="flex justify-end gap-2">
-                                    <ProfessionalButton
-                                      variant="ghost"
-                                      size="icon-sm"
-                                      onClick={() => openEditDialog(rule)}
-                                    >
-                                      <Edit className="h-4 w-4" />
-                                    </ProfessionalButton>
-                                    <ProfessionalButton
-                                      variant="ghost"
-                                      size="icon-sm"
-                                      className="text-destructive hover:bg-destructive/10"
-                                      onClick={() => handleDeleteDiscountRule(rule.id)}
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </ProfessionalButton>
-                                  </div>
-                                </ProfessionalTableCell>
-                              </ProfessionalTableRow>
-                            ))}
-                          </ProfessionalTableBody>
-                        </ProfessionalTable>
-                      </div>
-                    )}
-                  </ProfessionalCardContent>
-                </ProfessionalCard>
+                <DiscountRulesTab
+                  discountRules={discountRules}
+                  loading={loadingDiscountRules}
+                  showDialog={showDiscountRuleDialog}
+                  editingRule={editingDiscountRule}
+                  newRule={newDiscountRule}
+                  onOpenCreateDialog={openCreateDialog}
+                  onOpenEditDialog={openEditDialog}
+                  onCloseDialog={() => setShowDiscountRuleDialog(false)}
+                  onRuleChange={(field, value) => setNewDiscountRule(prev => ({ ...prev, [field]: value }))}
+                  onCreateRule={handleCreateDiscountRule}
+                  onUpdateRule={handleUpdateDiscountRule}
+                  onDeleteRule={handleDeleteDiscountRule}
+                />
               </TabsContent>
             )}
 
@@ -3242,118 +3166,7 @@ const Settings = () => {
           </DialogContent>
         </Dialog >
 
-        {/* Discount Rule Dialog */}
-        < Dialog open={showDiscountRuleDialog} onOpenChange={setShowDiscountRuleDialog} >
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>
-                {editingDiscountRule ? t('settings.edit_discount_rule') : t('settings.create_discount_rule')}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="rule-name">{t('settings.rule_name')}</Label>
-                <Input
-                  id="rule-name"
-                  value={newDiscountRule.name}
-                  onChange={(e) => setNewDiscountRule(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder={t('settings.rule_name_placeholder')}
-                />
-              </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="min-amount">{t('settings.min_amount')}</Label>
-                  <Input
-                    id="min-amount"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={newDiscountRule.min_amount}
-                    onChange={(e) => setNewDiscountRule(prev => ({ ...prev, min_amount: parseFloat(e.target.value) || 0 }))}
-                    placeholder={t('settings.min_amount_placeholder')}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="priority">{t('settings.priority')}</Label>
-                  <Input
-                    id="priority"
-                    type="number"
-                    min="0"
-                    value={newDiscountRule.priority}
-                    onChange={(e) => setNewDiscountRule(prev => ({ ...prev, priority: parseInt(e.target.value) || 0 }))}
-                    placeholder={t('settings.priority_placeholder')}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="discount-type">{t('settings.discount_type')}</Label>
-                  <Select
-                    value={newDiscountRule.discount_type}
-                    onValueChange={(value: 'percentage' | 'fixed') =>
-                      setNewDiscountRule(prev => ({ ...prev, discount_type: value }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="percentage">{t('settings.percentage_discount')}</SelectItem>
-                      <SelectItem value="fixed">{t('settings.fixed_amount_discount')}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="discount-value">{t('settings.discount_value')}</Label>
-                  <Input
-                    id="discount-value"
-                    type="number"
-                    min="0"
-                    step={newDiscountRule.discount_type === "percentage" ? "0.01" : "0.01"}
-                    value={newDiscountRule.discount_value}
-                    onChange={(e) => setNewDiscountRule(prev => ({ ...prev, discount_value: parseFloat(e.target.value) || 0 }))}
-                    placeholder={newDiscountRule.discount_type === "percentage" ? t('settings.percentage_discount_value_placeholder') : t('settings.fixed_amount_discount_value_placeholder')}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="currency">{t('settings.currency')}</Label>
-                <CurrencySelector
-                  value={newDiscountRule.currency || "USD"}
-                  onValueChange={(value) => setNewDiscountRule(prev => ({ ...prev, currency: value }))}
-                />
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="is-active"
-                  checked={newDiscountRule.is_active}
-                  onCheckedChange={(checked) => setNewDiscountRule(prev => ({ ...prev, is_active: checked }))}
-                />
-                <Label htmlFor="is-active">{t('settings.active')}</Label>
-              </div>
-
-              <div className="flex justify-end space-x-2 pt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowDiscountRuleDialog(false)}
-                >
-                  {t('settings.cancel')}
-                </Button>
-                <Button
-                  onClick={editingDiscountRule ? handleUpdateDiscountRule : handleCreateDiscountRule}
-                >
-                  {editingDiscountRule ? t('settings.update_rule') : t('settings.create_rule')}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog >
       </div >
     </>
   );

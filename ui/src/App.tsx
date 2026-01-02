@@ -155,6 +155,7 @@ const AppContent = () => {
                     <Route path="/expenses/edit/:id" element={<RoleProtectedRoute allowedRoles={['admin', 'user']}><ExpensesEdit /></RoleProtectedRoute>} />
                     <Route path="/expenses/:id" element={<ExpenseRedirect />} />
                     <Route path="/expenses" element={<Expenses />} />
+                    <Route path="/payments" element={<Payments />} />
                     <Route path="/reminders" element={<RoleProtectedRoute allowedRoles={['admin', 'user']}><Reminders /></RoleProtectedRoute>} />
                     <Route path="/approvals" element={<ApprovalDashboard />} />
                     <Route path="/approvals/reports" element={<RoleProtectedRoute allowedRoles={['admin', 'user']}><ApprovalReportsPage /></RoleProtectedRoute>} />
