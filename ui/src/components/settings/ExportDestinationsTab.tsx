@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
   ProfessionalCard,
@@ -25,10 +26,9 @@ interface ExportDestinationsTabProps {
   isAdmin: boolean;
 }
 
-const ExportDestinationsTab: React.FC<ExportDestinationsTabProps> = ({ isAdmin }) => {
+export const ExportDestinationsTab: React.FC<ExportDestinationsTabProps> = ({ isAdmin }) => {
   const { t } = useTranslation();
-  const [destinations, setDestinations] = useState<ExportDestination[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showDialog, setShowDialog] = useState(false);
   const [editingDestination, setEditingDestination] = useState<ExportDestination | null>(null);
   const [testingId, setTestingId] = useState<number | null>(null);
@@ -77,27 +77,68 @@ const ExportDestinationsTab: React.FC<ExportDestinationsTabProps> = ({ isAdmin }
 
   const [showPassword, setShowPassword] = useState<Record<string, boolean>>({});
 
-  // Fetch destinations on mount
-  useEffect(() => {
-    if (isAdmin) {
-      fetchDestinations();
-    }
-  }, [isAdmin]);
-
-  const fetchDestinations = async () => {
-    setLoading(true);
-    try {
+  // Queries
+  const { data: destinationsData, isLoading: loading } = useQuery<ExportDestination[]>({
+    queryKey: ['export-destinations'],
+    queryFn: async () => {
       const data = await exportDestinationApi.getDestinations();
-      // API returns { destinations: [...], total: N }
-      const destinationsList = Array.isArray(data) ? data : (data as any).destinations || [];
-      setDestinations(destinationsList);
-    } catch (error) {
-      console.error('Failed to fetch export destinations:', error);
+      return Array.isArray(data) ? data : (data as any).destinations || [];
+    },
+    enabled: isAdmin,
+  });
+
+  const destinations = destinationsData || [];
+
+  // Mutations
+  const saveMutation = useMutation({
+    mutationFn: async (vars: { id?: number, data: ExportDestinationCreate | ExportDestinationUpdate }) => {
+      if (vars.id) {
+        return exportDestinationApi.updateDestination(vars.id, vars.data as ExportDestinationUpdate);
+      } else {
+        return exportDestinationApi.createDestination(vars.data as ExportDestinationCreate);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['export-destinations'] });
+      toast.success(editingDestination ? t('settings.export_destination_updated') : t('settings.export_destination_created'));
+      setShowDialog(false);
+    },
+    onError: (error) => {
+      console.error('Failed to save export destination:', error);
       toast.error(getErrorMessage(error, t));
-    } finally {
-      setLoading(false);
     }
-  };
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => exportDestinationApi.deleteDestination(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['export-destinations'] });
+      toast.success(t('settings.export_destination_deleted'));
+    },
+    onError: (error) => {
+      console.error('Failed to delete export destination:', error);
+      toast.error(getErrorMessage(error, t));
+    }
+  });
+
+  const testConnectionMutation = useMutation({
+    mutationFn: (id: number) => exportDestinationApi.testConnection(id),
+    onSuccess: (result) => {
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
+      queryClient.invalidateQueries({ queryKey: ['export-destinations'] });
+    },
+    onSettled: () => {
+      setTestingId(null);
+    },
+    onError: (error) => {
+      console.error('Failed to test connection:', error);
+      toast.error(getErrorMessage(error, t));
+    }
+  });
 
   const handleCreate = () => {
     setEditingDestination(null);
@@ -122,14 +163,14 @@ const ExportDestinationsTab: React.FC<ExportDestinationsTabProps> = ({ isAdmin }
       is_default: destination.is_default,
     });
 
-    // Populate form fields with masked credentials (non-sensitive fields shown, secrets masked)
+    // Populate form fields with masked credentials
     if (destination.masked_credentials) {
       const masked = destination.masked_credentials;
 
       if (destination.destination_type === 's3') {
         setS3Credentials({
           access_key_id: masked.access_key_id || '',
-          secret_access_key: masked.secret_access_key || '',  // Will show ****XXXX
+          secret_access_key: masked.secret_access_key || '',
           region: masked.region || 'us-east-1',
           bucket_name: masked.bucket_name || '',
           path_prefix: masked.path_prefix || '',
@@ -200,124 +241,88 @@ const ExportDestinationsTab: React.FC<ExportDestinationsTabProps> = ({ isAdmin }
   const handleSave = async () => {
     if (!isAdmin) return;
 
-    try {
-      // Build credentials based on destination type
-      let credentials: Record<string, any> = {};
+    // Build credentials based on destination type
+    let credentials: Record<string, any> = {};
 
-      switch (formData.destination_type) {
-        case 's3':
-          credentials = {
-            access_key_id: s3Credentials.access_key_id.trim(),
-            secret_access_key: s3Credentials.secret_access_key.trim(),
-            region: s3Credentials.region.trim(),
-            bucket_name: s3Credentials.bucket_name.trim(),
-            path_prefix: s3Credentials.path_prefix?.trim() || undefined,
-          };
-          break;
-        case 'azure':
-          if (azureCredentials.auth_type === 'connection_string') {
-            credentials = {
-              connection_string: azureCredentials.connection_string.trim(),
-              container_name: azureCredentials.container_name.trim(),
-              path_prefix: azureCredentials.path_prefix?.trim() || undefined,
-            };
-          } else {
-            credentials = {
-              account_name: azureCredentials.account_name.trim(),
-              account_key: azureCredentials.account_key.trim(),
-              container_name: azureCredentials.container_name.trim(),
-              path_prefix: azureCredentials.path_prefix?.trim() || undefined,
-            };
-          }
-          break;
-        case 'gcs':
-          if (gcsCredentials.auth_type === 'service_account') {
-            credentials = {
-              service_account_json: gcsCredentials.service_account_json.trim(),
-              bucket_name: gcsCredentials.bucket_name.trim(),
-              path_prefix: gcsCredentials.path_prefix?.trim() || undefined,
-            };
-          } else {
-            credentials = {
-              project_id: gcsCredentials.project_id.trim(),
-              credentials: gcsCredentials.credentials.trim(),
-              bucket_name: gcsCredentials.bucket_name.trim(),
-              path_prefix: gcsCredentials.path_prefix?.trim() || undefined,
-            };
-          }
-          break;
-        case 'google_drive':
-          credentials = {
-            oauth_token: googleDriveCredentials.oauth_token.trim(),
-            refresh_token: googleDriveCredentials.refresh_token?.trim() || undefined,
-            folder_id: googleDriveCredentials.folder_id.trim(),
-          };
-          break;
-      }
-
-      if (editingDestination) {
-        // Update existing destination
-        const updateData: ExportDestinationUpdate = {
-          name: formData.name,
-          config: formData.config,
-          is_default: formData.is_default,
+    switch (formData.destination_type) {
+      case 's3':
+        credentials = {
+          access_key_id: s3Credentials.access_key_id.trim(),
+          secret_access_key: s3Credentials.secret_access_key.trim(),
+          region: s3Credentials.region.trim(),
+          bucket_name: s3Credentials.bucket_name.trim(),
+          path_prefix: s3Credentials.path_prefix?.trim() || undefined,
         };
-        // Only include credentials if they were changed
-        if (Object.values(credentials).some(v => v)) {
-          updateData.credentials = credentials;
+        break;
+      case 'azure':
+        if (azureCredentials.auth_type === 'connection_string') {
+          credentials = {
+            connection_string: azureCredentials.connection_string.trim(),
+            container_name: azureCredentials.container_name.trim(),
+            path_prefix: azureCredentials.path_prefix?.trim() || undefined,
+          };
+        } else {
+          credentials = {
+            account_name: azureCredentials.account_name.trim(),
+            account_key: azureCredentials.account_key.trim(),
+            container_name: azureCredentials.container_name.trim(),
+            path_prefix: azureCredentials.path_prefix?.trim() || undefined,
+          };
         }
-        await exportDestinationApi.updateDestination(editingDestination.id, updateData);
-        toast.success(t('settings.export_destination_updated'));
-      } else {
-        // Create new destination
-        const result = await exportDestinationApi.createDestination({
-          ...formData,
-          credentials,
-        });
-        console.log('Created destination:', result);
-        toast.success(t('settings.export_destination_created'));
-      }
+        break;
+      case 'gcs':
+        if (gcsCredentials.auth_type === 'service_account') {
+          credentials = {
+            service_account_json: gcsCredentials.service_account_json.trim(),
+            bucket_name: gcsCredentials.bucket_name.trim(),
+            path_prefix: gcsCredentials.path_prefix?.trim() || undefined,
+          };
+        } else {
+          credentials = {
+            project_id: gcsCredentials.project_id.trim(),
+            credentials: gcsCredentials.credentials.trim(),
+            bucket_name: gcsCredentials.bucket_name.trim(),
+            path_prefix: gcsCredentials.path_prefix?.trim() || undefined,
+          };
+        }
+        break;
+      case 'google_drive':
+        credentials = {
+          oauth_token: googleDriveCredentials.oauth_token.trim(),
+          refresh_token: googleDriveCredentials.refresh_token?.trim() || undefined,
+          folder_id: googleDriveCredentials.folder_id.trim(),
+        };
+        break;
+      case 'local':
+        // Local might not need credentials or handled differently
+        break;
+    }
 
-      setShowDialog(false);
-      await fetchDestinations();
-    } catch (error) {
-      console.error('Failed to save export destination:', error);
-      toast.error(getErrorMessage(error, t));
+    if (editingDestination) {
+      const updateData: ExportDestinationUpdate = {
+        name: formData.name,
+        config: formData.config,
+        is_default: formData.is_default,
+      };
+      if (Object.values(credentials).some(v => v)) {
+        updateData.credentials = credentials;
+      }
+      saveMutation.mutate({ id: editingDestination.id, data: updateData });
+    } else {
+      saveMutation.mutate({ data: { ...formData, credentials } });
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = (id: number) => {
     if (!isAdmin) return;
     if (!confirm(t('settings.confirm_delete_export_destination'))) return;
-
-    try {
-      await exportDestinationApi.deleteDestination(id);
-      toast.success(t('settings.export_destination_deleted'));
-      fetchDestinations();
-    } catch (error) {
-      console.error('Failed to delete export destination:', error);
-      toast.error(getErrorMessage(error, t));
-    }
+    deleteMutation.mutate(id);
   };
 
-  const handleTestConnection = async (id: number) => {
+  const handleTestConnection = (id: number) => {
     if (!isAdmin) return;
     setTestingId(id);
-
-    try {
-      const result = await exportDestinationApi.testConnection(id);
-      if (result.success) {
-        toast.success(result.message);
-      } else {
-        toast.error(result.message);
-      }
-      fetchDestinations(); // Refresh to show updated test status
-    } catch (error) {
-      console.error('Failed to test connection:', error);
-      toast.error(getErrorMessage(error, t));
-    } finally {
-      setTestingId(null);
-    }
+    testConnectionMutation.mutate(id);
   };
 
   const getDestinationTypeLabel = (type: string) => {
@@ -408,8 +413,8 @@ const ExportDestinationsTab: React.FC<ExportDestinationsTabProps> = ({ isAdmin }
 
                     {destination.last_test_success !== null && (
                       <div className={`flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${destination.last_test_success
-                          ? 'bg-green-50 text-green-700'
-                          : 'bg-red-50 text-red-700'
+                        ? 'bg-green-50 text-green-700'
+                        : 'bg-red-50 text-red-700'
                         }`}>
                         {destination.last_test_success ? (
                           <CheckCircle className="h-3 w-3" />
@@ -912,3 +917,4 @@ const ExportDestinationsTab: React.FC<ExportDestinationsTabProps> = ({ isAdmin }
 };
 
 export default ExportDestinationsTab;
+

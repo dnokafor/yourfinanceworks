@@ -1,8 +1,8 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Building2, Plus } from "lucide-react";
+import { Building2, Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     ProfessionalCard,
@@ -13,42 +13,147 @@ import {
 import { ProfessionalButton } from "@/components/ui/professional-button";
 import { ProfessionalInput } from "@/components/ui/professional-input";
 import { ProfessionalTextarea } from "@/components/ui/professional-textarea";
-
-interface CompanyInfo {
-    name: string;
-    email: string;
-    phone: string;
-    address: string;
-    tax_id: string;
-    logo: string;
-}
+import { settingsApi, CompanyInfo } from "@/lib/api";
+import { toast } from "sonner";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 interface CompanyInfoTabProps {
-    companyInfo: CompanyInfo;
-    timezone: string;
-    logoFile: File | null;
-    logoPreview: string;
-    uploadingLogo: boolean;
-    saving: boolean;
-    onCompanyChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
-    onTimezoneChange: (timezone: string) => void;
-    onLogoFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    onSave: () => void;
+    isAdmin: boolean;
 }
 
 export const CompanyInfoTab: React.FC<CompanyInfoTabProps> = ({
-    companyInfo,
-    timezone,
-    logoFile,
-    logoPreview,
-    uploadingLogo,
-    saving,
-    onCompanyChange,
-    onTimezoneChange,
-    onLogoFileChange,
-    onSave,
+    isAdmin,
 }) => {
     const { t } = useTranslation();
+    const queryClient = useQueryClient();
+
+    const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({
+        name: "",
+        email: "",
+        phone: "",
+        address: "",
+        tax_id: "",
+        logo: "",
+    });
+    const [timezone, setTimezone] = useState("UTC");
+    const [logoFile, setLogoFile] = useState<File | null>(null);
+    const [logoPreview, setLogoPreview] = useState<string>("");
+    const [uploadingLogo, setUploadingLogo] = useState(false);
+
+    const { data: settings, isLoading } = useQuery({
+        queryKey: ['settings'],
+        queryFn: () => settingsApi.getSettings(),
+        enabled: isAdmin,
+    });
+
+    useEffect(() => {
+        if (settings) {
+            if (settings.company_info) {
+                setCompanyInfo(settings.company_info);
+            }
+            if (settings.timezone) {
+                setTimezone(settings.timezone);
+            }
+        }
+    }, [settings]);
+
+    const updateSettingsMutation = useMutation({
+        mutationFn: (data: any) => settingsApi.updateSettings(data),
+        onSuccess: () => {
+            toast.success(t('settings.settings_saved_successfully'));
+            queryClient.invalidateQueries({ queryKey: ['settings'] });
+            setLogoFile(null);
+            setLogoPreview("");
+        },
+        onError: (error) => {
+            console.error("Failed to save company info:", error);
+            toast.error(t('settings.failed_to_save_settings'));
+        }
+    });
+
+    const handleCompanyChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const { name, value } = e.target;
+        if (name === 'email') return; // Email is usually non-editable here
+        setCompanyInfo((prev) => ({ ...prev, [name]: value }));
+    };
+
+    const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setLogoFile(file);
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                setLogoPreview(e.target?.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const uploadLogo = async (): Promise<string | null> => {
+        if (!logoFile) return null;
+
+        setUploadingLogo(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', logoFile);
+
+            const response = await fetch(`${import.meta.env.VITE_API_URL || '/api/v1'}/settings/upload-logo`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                },
+                body: formData,
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to upload logo');
+            }
+
+            const result = await response.json();
+            return result.url;
+        } catch (error) {
+            console.error('Failed to upload logo:', error);
+            toast.error(t('settings.failed_to_upload_logo'));
+            return null;
+        } finally {
+            setUploadingLogo(false);
+        }
+    };
+
+    const handleSave = async () => {
+        if (!isAdmin) return;
+
+        try {
+            let currentLogo = companyInfo.logo;
+
+            if (logoFile) {
+                const uploadedUrl = await uploadLogo();
+                if (uploadedUrl) {
+                    currentLogo = uploadedUrl;
+                }
+            }
+
+            updateSettingsMutation.mutate({
+                company_info: {
+                    ...companyInfo,
+                    logo: currentLogo
+                },
+                timezone: timezone
+            });
+        } catch (error) {
+            console.error("Failed to save company info:", error);
+            toast.error(t('settings.failed_to_save_settings'));
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <div className="flex justify-center py-12">
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            </div>
+        );
+    }
+
 
     return (
         <ProfessionalCard variant="elevated">
@@ -65,14 +170,14 @@ export const CompanyInfoTab: React.FC<CompanyInfoTabProps> = ({
                         id="name"
                         name="name"
                         value={companyInfo.name}
-                        onChange={onCompanyChange}
+                        onChange={handleCompanyChange}
                     />
                     <ProfessionalInput
                         label={t('settings.tax_id')}
                         id="tax_id"
                         name="tax_id"
                         value={companyInfo.tax_id}
-                        onChange={onCompanyChange}
+                        onChange={handleCompanyChange}
                     />
                 </div>
 
@@ -83,16 +188,16 @@ export const CompanyInfoTab: React.FC<CompanyInfoTabProps> = ({
                         name="email"
                         type="email"
                         value={companyInfo.email}
-                        onChange={onCompanyChange}
+                        onChange={handleCompanyChange}
                         disabled
-                        helperText="Company email cannot be changed here."
+                        helperText={t('settings.email_readonly_hint', 'Company email cannot be changed here.')}
                     />
                     <ProfessionalInput
                         label={t('settings.company_phone')}
                         id="phone"
                         name="phone"
                         value={companyInfo.phone}
-                        onChange={onCompanyChange}
+                        onChange={handleCompanyChange}
                     />
                 </div>
 
@@ -102,12 +207,12 @@ export const CompanyInfoTab: React.FC<CompanyInfoTabProps> = ({
                     name="address"
                     rows={3}
                     value={companyInfo.address}
-                    onChange={onCompanyChange}
+                    onChange={handleCompanyChange}
                 />
 
                 <div className="space-y-2">
                     <Label htmlFor="timezone" className="text-sm font-medium">{t('settings.timezone')}</Label>
-                    <Select value={timezone} onValueChange={onTimezoneChange}>
+                    <Select value={timezone} onValueChange={setTimezone}>
                         <SelectTrigger id="timezone" className="rounded-lg">
                             <SelectValue placeholder="Select timezone" />
                         </SelectTrigger>
@@ -176,7 +281,7 @@ export const CompanyInfoTab: React.FC<CompanyInfoTabProps> = ({
                                 type="file"
                                 accept="image/*"
                                 className="hidden"
-                                onChange={onLogoFileChange}
+                                onChange={handleLogoFileChange}
                                 disabled={uploadingLogo}
                             />
                             <Button
@@ -201,7 +306,7 @@ export const CompanyInfoTab: React.FC<CompanyInfoTabProps> = ({
                 </div>
 
                 <div className="flex justify-end pt-4">
-                    <ProfessionalButton onClick={onSave} loading={saving} variant="gradient" size="lg">
+                    <ProfessionalButton onClick={handleSave} loading={updateSettingsMutation.isPending} variant="gradient" size="lg">
                         {t('settings.save_changes')}
                     </ProfessionalButton>
                 </div>

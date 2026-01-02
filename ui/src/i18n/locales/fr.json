@@ -934,6 +934,7 @@
     "company_address": "Adresse de l'Entreprise",
     "tax_id": "Numéro de TVA / EIN",
     "company_logo": "Logo de l'Entreprise",
+    "company_email_cannot_be_changed": "L'e-mail de l'entreprise ne peut pas être modifié ici.",
     "logo_preview": "Aperçu du Logo",
     "upload_logo": "Télécharger le Logo",
     "uploading_logo": "Téléchargement...",
@@ -966,6 +967,7 @@
     "settings_saved": "Paramètres enregistrés avec succès",
     "settings_error": "Échec de l'enregistrement des paramètres",
     "tabs": {
+      "profile": "Profil",
       "company": "Info Entreprise",
       "invoices": "Param. Factures",
       "currencies": "Devises",

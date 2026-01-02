@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ProfessionalCard,
   ProfessionalCardContent,
@@ -16,39 +17,65 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 
-const CookieSettings: React.FC = () => {
+export const CookieSettingsTab: React.FC = () => {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [consentManager] = useState(() => new ConsentManager());
   const [preferences, setPreferences] = useState({
     essential: true, // Always true, cannot be disabled
     analytics: false,
     marketing: false
   });
-  const [originalPreferences, setOriginalPreferences] = useState({
-    essential: true,
-    analytics: false,
-    marketing: false
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-  useEffect(() => {
-    // Load current preferences
-    const loadPreferences = () => {
-      const currentPrefs = {
-        essential: true, // Always true
+  // Queries
+  const { data: originalPreferences, isLoading } = useQuery({
+    queryKey: ['cookie-preferences'],
+    queryFn: () => {
+      const prefs = {
+        essential: true,
         analytics: consentManager.getCategoryConsent('analytics'),
         marketing: consentManager.getCategoryConsent('marketing')
       };
-      setPreferences(currentPrefs);
-      setOriginalPreferences(currentPrefs);
-      setHasUnsavedChanges(false);
-      setIsLoading(false);
-    };
+      return prefs;
+    },
+    staleTime: Infinity, // Preferences only change when updated
+  });
 
-    loadPreferences();
-  }, [consentManager]);
+  useEffect(() => {
+    if (originalPreferences) {
+      setPreferences(originalPreferences);
+    }
+  }, [originalPreferences]);
+
+  // Mutations
+  const saveMutation = useMutation({
+    mutationFn: async (newPrefs: typeof preferences) => {
+      consentManager.setCategoryConsent('analytics', newPrefs.analytics);
+      consentManager.setCategoryConsent('marketing', newPrefs.marketing);
+
+      // Dispatch event for other components to react to changes
+      window.dispatchEvent(new CustomEvent('cookieConsentChange', {
+        detail: {
+          preferences: {
+            essential: true,
+            analytics: newPrefs.analytics,
+            marketing: newPrefs.marketing
+          }
+        }
+      }));
+      return newPrefs;
+    },
+    onSuccess: (newPrefs) => {
+      queryClient.setQueryData(['cookie-preferences'], newPrefs);
+      setHasUnsavedChanges(false);
+      toast.success(t('cookieConsent.settings.messages.saveSuccess'));
+    },
+    onError: (error) => {
+      console.error('Error saving cookie preferences:', error);
+      toast.error(t('cookieConsent.settings.messages.saveError'));
+    }
+  });
 
   const handlePreferenceChange = (category: string, enabled: boolean) => {
     if (category === 'essential') return; // Cannot disable essential cookies
@@ -68,7 +95,7 @@ const CookieSettings: React.FC = () => {
     setHasUnsavedChanges(hasChanges);
   };
 
-  const handleAcceptAll = async () => {
+  const handleAcceptAll = () => {
     const newPreferences = {
       essential: true,
       analytics: true,
@@ -76,10 +103,14 @@ const CookieSettings: React.FC = () => {
     };
 
     setPreferences(newPreferences);
-    setHasUnsavedChanges(true);
+
+    const hasChanges =
+      newPreferences.analytics !== originalPreferences.analytics ||
+      newPreferences.marketing !== originalPreferences.marketing;
+    setHasUnsavedChanges(hasChanges);
   };
 
-  const handleRejectAll = async () => {
+  const handleRejectAll = () => {
     const newPreferences = {
       essential: true,
       analytics: false,
@@ -87,39 +118,15 @@ const CookieSettings: React.FC = () => {
     };
 
     setPreferences(newPreferences);
-    setHasUnsavedChanges(true);
+
+    const hasChanges =
+      newPreferences.analytics !== originalPreferences.analytics ||
+      newPreferences.marketing !== originalPreferences.marketing;
+    setHasUnsavedChanges(hasChanges);
   };
 
-  const handleSave = async () => {
-    setIsSaving(true);
-
-    try {
-      // Update consent manager
-      consentManager.setCategoryConsent('analytics', preferences.analytics);
-      consentManager.setCategoryConsent('marketing', preferences.marketing);
-
-      // Dispatch event for other components to react to changes
-      window.dispatchEvent(new CustomEvent('cookieConsentChange', {
-        detail: {
-          preferences: {
-            essential: true,
-            analytics: preferences.analytics,
-            marketing: preferences.marketing
-          }
-        }
-      }));
-
-      // Update original preferences to match current
-      setOriginalPreferences(preferences);
-      setHasUnsavedChanges(false);
-
-      toast.success(t('cookieConsent.settings.messages.saveSuccess'));
-    } catch (error) {
-      console.error('Error saving cookie preferences:', error);
-      toast.error(t('cookieConsent.settings.messages.saveError'));
-    } finally {
-      setIsSaving(false);
-    }
+  const handleSave = () => {
+    saveMutation.mutate(preferences);
   };
 
   const handleReset = () => {
@@ -127,6 +134,8 @@ const CookieSettings: React.FC = () => {
     setHasUnsavedChanges(false);
     toast.info(t('cookieConsent.settings.messages.resetInfo'));
   };
+
+  const isSaving = saveMutation.isPending;
 
   if (isLoading) {
     return (
@@ -352,5 +361,3 @@ const CookieSettings: React.FC = () => {
     </div>
   );
 };
-
-export default CookieSettings;

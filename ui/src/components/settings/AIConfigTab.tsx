@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Cpu, Plus, Edit, Trash2, Loader2, ShieldCheck } from "lucide-react";
+import { Cpu as CpuIcon, Plus, Edit, Trash2, Loader2, ShieldCheck } from "lucide-react";
+
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -34,56 +35,193 @@ import {
     ProfessionalTableHead,
     StatusBadge,
 } from "@/components/ui/professional-table";
-import { AIConfig, AIConfigCreate, AIProviderInfo } from "@/lib/api";
+import { aiConfigApi, settingsApi, AIConfig, AIConfigCreate, AIProviderInfo } from "@/lib/api";
+import { toast } from "sonner";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useFeatures } from "@/contexts/FeatureContext";
 
 interface AIConfigTabProps {
-    aiAssistantEnabled: boolean;
-    aiConfigs: AIConfig[];
-    loadingAiConfigs: boolean;
-    showAIConfigDialog: boolean;
-    editingAIConfig: AIConfig | null;
-    supportedProviders: Record<string, AIProviderInfo>;
-    newAIConfig: AIConfigCreate;
-    testingNewConfig: boolean;
-    testResult: { success: boolean; message: string } | null;
-    isFeatureEnabled: (feature: string) => boolean;
-    onAIAssistantToggle: (checked: boolean) => void;
-    onOpenCreateDialog: () => void;
-    onOpenEditDialog: (config: AIConfig) => void;
-    onDeleteAIConfig: (id: number) => void;
-    onCloseDialog: () => void;
-    onAIConfigChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    onAIConfigToggleChange: (field: string, checked: boolean) => void;
-    onTestConfig: () => void;
-    onCreateConfig: () => void;
-    onUpdateConfig: () => void;
+    isAdmin: boolean;
 }
 
 export const AIConfigTab: React.FC<AIConfigTabProps> = ({
-    aiAssistantEnabled,
-    aiConfigs,
-    loadingAiConfigs,
-    showAIConfigDialog,
-    editingAIConfig,
-    supportedProviders,
-    newAIConfig,
-    testingNewConfig,
-    testResult,
-    isFeatureEnabled,
-    onAIAssistantToggle,
-    onOpenCreateDialog,
-    onOpenEditDialog,
-    onDeleteAIConfig,
-    onCloseDialog,
-    onAIConfigChange,
-    onAIConfigToggleChange,
-    onTestConfig,
-    onCreateConfig,
-    onUpdateConfig,
+    isAdmin,
 }) => {
     const { t } = useTranslation();
-    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
-    const [configToDelete, setConfigToDelete] = React.useState<number | null>(null);
+    const queryClient = useQueryClient();
+    const { isFeatureEnabled } = useFeatures();
+
+    const [aiAssistantEnabled, setAiAssistantEnabled] = useState(false);
+    const [showAIConfigDialog, setShowAIConfigDialog] = useState(false);
+    const [editingAIConfig, setEditingAIConfig] = useState<AIConfig | null>(null);
+    const [newAIConfig, setNewAIConfig] = useState<AIConfigCreate>({
+        provider_name: "openai",
+        provider_url: "",
+        api_key: "",
+        model_name: "gpt-4",
+        is_active: true,
+        is_default: false,
+        ocr_enabled: false,
+    });
+    const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [configToDelete, setConfigToDelete] = useState<number | null>(null);
+
+    const { data: configs = [], isLoading: isLoadingConfigs } = useQuery({
+        queryKey: ['aiConfigs'],
+        queryFn: () => aiConfigApi.getAIConfigs(),
+        enabled: isAdmin,
+    });
+
+    const { data: providersData } = useQuery({
+        queryKey: ['aiProviders'],
+        queryFn: () => aiConfigApi.getSupportedProviders(),
+        enabled: isAdmin,
+    });
+
+    const { data: generalSettings } = useQuery({
+        queryKey: ['settings'],
+        queryFn: () => settingsApi.getSettings(),
+        enabled: isAdmin,
+    });
+
+    useEffect(() => {
+        if (generalSettings) {
+            setAiAssistantEnabled(generalSettings.enable_ai_assistant ?? false);
+        }
+    }, [generalSettings]);
+
+    const supportedProviders = providersData?.providers || {};
+
+    const toggleAssistantMutation = useMutation({
+        mutationFn: (checked: boolean) => settingsApi.updateSettings({ enable_ai_assistant: checked }),
+        onSuccess: (data, checked) => {
+            setAiAssistantEnabled(checked);
+            toast.success(checked ? t('settings.ai_assistant_enabled') : t('settings.ai_assistant_disabled'));
+            queryClient.invalidateQueries({ queryKey: ['settings'] });
+        },
+        onError: () => {
+            toast.error(t('settings.failed_to_update_settings'));
+        }
+    });
+
+    const createConfigMutation = useMutation({
+        mutationFn: (data: AIConfigCreate) => aiConfigApi.createAIConfig(data),
+        onSuccess: () => {
+            toast.success(t('settings.ai_config_created'));
+            queryClient.invalidateQueries({ queryKey: ['aiConfigs'] });
+            handleCloseDialog();
+        },
+        onError: () => {
+            toast.error(t('settings.failed_to_create_ai_config'));
+        }
+    });
+
+    const updateConfigMutation = useMutation({
+        mutationFn: ({ id, data }: { id: number; data: AIConfigCreate }) => aiConfigApi.updateAIConfig(id, data),
+        onSuccess: () => {
+            toast.success(t('settings.ai_config_updated'));
+            queryClient.invalidateQueries({ queryKey: ['aiConfigs'] });
+            handleCloseDialog();
+        },
+        onError: () => {
+            toast.error(t('settings.failed_to_update_ai_config'));
+        }
+    });
+
+    const deleteConfigMutation = useMutation({
+        mutationFn: (id: number) => aiConfigApi.deleteAIConfig(id),
+        onSuccess: () => {
+            toast.success(t('settings.ai_config_deleted'));
+            queryClient.invalidateQueries({ queryKey: ['aiConfigs'] });
+        },
+        onError: () => {
+            toast.error(t('settings.failed_to_delete_ai_config'));
+        }
+    });
+
+    const testConfigMutation = useMutation({
+        mutationFn: (data: Partial<AIConfigCreate>) => aiConfigApi.testAIConfigWithOverrides({
+            provider_name: data.provider_name!,
+            provider_url: data.provider_url,
+            api_key: data.api_key,
+            model_name: data.model_name!,
+        }),
+        onSuccess: (result) => {
+            setTestResult({
+                success: result.success,
+                message: result.message || (result.success ? "Connection successful" : "Connection failed")
+            });
+        },
+        onError: (error) => {
+            setTestResult({
+                success: false,
+                message: error instanceof Error ? error.message : "Unknown error during testing"
+            });
+        }
+    });
+
+    const handleAIAssistantToggle = (checked: boolean) => {
+        if (!isAdmin) return;
+        toggleAssistantMutation.mutate(checked);
+    };
+
+    const handleOpenCreateDialog = () => {
+        setEditingAIConfig(null);
+        setNewAIConfig({
+            provider_name: "openai",
+            provider_url: "",
+            api_key: "",
+            model_name: "gpt-4",
+            is_active: true,
+            is_default: false,
+            ocr_enabled: false,
+        });
+        setTestResult(null);
+        setShowAIConfigDialog(true);
+    };
+
+    const handleOpenEditDialog = (config: AIConfig) => {
+        setEditingAIConfig(config);
+        setNewAIConfig({
+            provider_name: config.provider_name,
+            provider_url: config.provider_url,
+            api_key: "", // Don't show existing API key for security
+            model_name: config.model_name,
+            is_active: config.is_active,
+            is_default: config.is_default,
+            ocr_enabled: config.ocr_enabled,
+        });
+        setTestResult(null);
+        setShowAIConfigDialog(true);
+    };
+
+    const handleCloseDialog = () => {
+        setShowAIConfigDialog(false);
+        setEditingAIConfig(null);
+        setTestResult(null);
+    };
+
+    const handleAIConfigChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setNewAIConfig(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleAIConfigToggleChange = (field: string, value: any) => {
+        setNewAIConfig(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleTestConfig = () => {
+        testConfigMutation.mutate(newAIConfig);
+    };
+
+    const handleSaveConfig = () => {
+        if (editingAIConfig) {
+            updateConfigMutation.mutate({ id: editingAIConfig.id, data: newAIConfig });
+        } else {
+            createConfigMutation.mutate(newAIConfig);
+        }
+    };
 
     const handleDeleteClick = (id: number) => {
         setConfigToDelete(id);
@@ -92,9 +230,12 @@ export const AIConfigTab: React.FC<AIConfigTabProps> = ({
 
     const confirmDelete = () => {
         if (configToDelete !== null) {
-            onDeleteAIConfig(configToDelete);
-            setIsDeleteDialogOpen(false);
-            setConfigToDelete(null);
+            deleteConfigMutation.mutate(configToDelete, {
+                onSettled: () => {
+                    setIsDeleteDialogOpen(false);
+                    setConfigToDelete(null);
+                }
+            });
         }
     };
 
@@ -108,7 +249,7 @@ export const AIConfigTab: React.FC<AIConfigTabProps> = ({
             <ProfessionalCard variant="elevated">
                 <ProfessionalCardHeader>
                     <ProfessionalCardTitle className="flex items-center gap-2">
-                        <Cpu className="w-5 h-5 text-primary" />
+                        <CpuIcon className="w-5 h-5 text-primary" />
                         {t('settings.ai_config.ai_configuration')}
                     </ProfessionalCardTitle>
                 </ProfessionalCardHeader>
@@ -129,8 +270,8 @@ export const AIConfigTab: React.FC<AIConfigTabProps> = ({
                             <Switch
                                 id="ai_assistant"
                                 checked={aiAssistantEnabled}
-                                onCheckedChange={onAIAssistantToggle}
-                                disabled={!isFeatureEnabled('ai_chat') && !aiAssistantEnabled}
+                                onCheckedChange={handleAIAssistantToggle}
+                                disabled={(!isFeatureEnabled('ai_chat') && !aiAssistantEnabled) || toggleAssistantMutation.isPending}
                             />
                         </div>
                     </div>
@@ -144,18 +285,18 @@ export const AIConfigTab: React.FC<AIConfigTabProps> = ({
                                 </h3>
                                 <p className="text-sm text-muted-foreground">{t('settings.ai_config.ai_provider_configurations_description')}</p>
                             </div>
-                            <ProfessionalButton onClick={onOpenCreateDialog} leftIcon={<Plus className="h-4 w-4" />}>
+                            <ProfessionalButton onClick={handleOpenCreateDialog} leftIcon={<Plus className="h-4 w-4" />}>
                                 {t('settings.ai_config.add_provider')}
                             </ProfessionalButton>
                         </div>
 
-                        {loadingAiConfigs ? (
+                        {isLoadingConfigs ? (
                             <div className="flex justify-center py-12">
                                 <Loader2 className="h-10 w-10 animate-spin text-primary" />
                             </div>
-                        ) : aiConfigs.length === 0 ? (
+                        ) : configs.length === 0 ? (
                             <div className="text-center py-12 bg-muted/10 rounded-xl border-2 border-dashed border-border">
-                                <Cpu className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-20" />
+                                <CpuIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-20" />
                                 <p className="text-muted-foreground font-medium">{t('settings.ai_config.no_ai_configurations')}</p>
                                 <p className="text-sm text-muted-foreground mt-2">
                                     {t('settings.ai_config.add_ai_providers_hint')}
@@ -173,12 +314,12 @@ export const AIConfigTab: React.FC<AIConfigTabProps> = ({
                                         </ProfessionalTableRow>
                                     </ProfessionalTableHeader>
                                     <ProfessionalTableBody>
-                                        {aiConfigs.map((config) => (
+                                        {configs.map((config: AIConfig) => (
                                             <ProfessionalTableRow key={config.id} interactive>
                                                 <ProfessionalTableCell className="font-medium">
                                                     <div className="flex items-center gap-3">
                                                         <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                                                            <Cpu className="w-4 h-4 text-primary" />
+                                                            <CpuIcon className="w-4 h-4 text-primary" />
                                                         </div>
                                                         <div className="flex flex-col">
                                                             <span>{config.provider_name}</span>
@@ -201,7 +342,7 @@ export const AIConfigTab: React.FC<AIConfigTabProps> = ({
                                                         <ProfessionalButton
                                                             variant="ghost"
                                                             size="icon-sm"
-                                                            onClick={() => onOpenEditDialog(config)}
+                                                            onClick={() => handleOpenEditDialog(config)}
                                                         >
                                                             <Edit className="h-4 w-4" />
                                                         </ProfessionalButton>
@@ -226,7 +367,7 @@ export const AIConfigTab: React.FC<AIConfigTabProps> = ({
             </ProfessionalCard>
 
             {/* AI Provider Config Dialog */}
-            <Dialog open={showAIConfigDialog} onOpenChange={onCloseDialog}>
+            <Dialog open={showAIConfigDialog} onOpenChange={handleCloseDialog}>
                 <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>
@@ -240,7 +381,7 @@ export const AIConfigTab: React.FC<AIConfigTabProps> = ({
                                 <Label htmlFor="provider_name">{t('settings.ai_config.provider')}</Label>
                                 <Select
                                     value={newAIConfig.provider_name}
-                                    onValueChange={(value) => onAIConfigToggleChange('provider_name', value as any)}
+                                    onValueChange={(value) => handleAIConfigToggleChange('provider_name', value as any)}
                                 >
                                     <SelectTrigger>
                                         <SelectValue />
@@ -261,7 +402,7 @@ export const AIConfigTab: React.FC<AIConfigTabProps> = ({
                                     id="model_name"
                                     name="model_name"
                                     value={newAIConfig.model_name}
-                                    onChange={onAIConfigChange}
+                                    onChange={handleAIConfigChange}
                                     placeholder={
                                         newAIConfig.provider_name === "openai" ? t('settings.ai_config.openai_model_example') :
                                             newAIConfig.provider_name === "openrouter" ? "openai/gpt-4, anthropic/claude-3-sonnet" :
@@ -288,7 +429,7 @@ export const AIConfigTab: React.FC<AIConfigTabProps> = ({
                                 id="provider_url"
                                 name="provider_url"
                                 value={newAIConfig.provider_url || ""}
-                                onChange={onAIConfigChange}
+                                onChange={handleAIConfigChange}
                                 placeholder={t('settings.ai_config.provider_url_placeholder')}
                             />
                             <p className="text-sm text-muted-foreground">
@@ -308,7 +449,7 @@ export const AIConfigTab: React.FC<AIConfigTabProps> = ({
                                 name="api_key"
                                 type="password"
                                 value={newAIConfig.api_key || ""}
-                                onChange={onAIConfigChange}
+                                onChange={handleAIConfigChange}
                                 placeholder={
                                     providerRequiresApiKey(newAIConfig.provider_name)
                                         ? t('settings.ai_config.enter_api_key')
@@ -322,7 +463,7 @@ export const AIConfigTab: React.FC<AIConfigTabProps> = ({
                                 <Switch
                                     id="is_active"
                                     checked={newAIConfig.is_active}
-                                    onCheckedChange={(checked) => onAIConfigToggleChange('is_active', checked)}
+                                    onCheckedChange={(checked) => handleAIConfigToggleChange('is_active', checked)}
                                 />
                                 <Label htmlFor="is_active">{t('settings.ai_config.active')}</Label>
                             </div>
@@ -331,25 +472,16 @@ export const AIConfigTab: React.FC<AIConfigTabProps> = ({
                                 <Switch
                                     id="is_default"
                                     checked={newAIConfig.is_default}
-                                    onCheckedChange={(checked) => onAIConfigToggleChange('is_default', checked)}
+                                    onCheckedChange={(checked) => handleAIConfigToggleChange('is_default', checked)}
                                 />
                                 <Label htmlFor="is_default">{t('settings.ai_config.default_provider')}</Label>
                             </div>
 
                             <div className="flex items-center space-x-2">
                                 <Switch
-                                    id="tested"
-                                    checked={newAIConfig.tested || false}
-                                    onCheckedChange={(checked) => onAIConfigToggleChange('tested', checked)}
-                                />
-                                <Label htmlFor="tested">{t('settings.ai_config.mark_as_tested')}</Label>
-                            </div>
-
-                            <div className="flex items-center space-x-2">
-                                <Switch
                                     id="ocr_enabled"
                                     checked={newAIConfig.ocr_enabled || false}
-                                    onCheckedChange={(checked) => onAIConfigToggleChange('ocr_enabled', checked)}
+                                    onCheckedChange={(checked) => handleAIConfigToggleChange('ocr_enabled', checked)}
                                 />
                                 <Label htmlFor="ocr_enabled">OCR Enabled</Label>
                             </div>
@@ -373,15 +505,15 @@ export const AIConfigTab: React.FC<AIConfigTabProps> = ({
                     </div>
 
                     <DialogFooter className="gap-2 sm:gap-0">
-                        <Button variant="outline" onClick={onCloseDialog}>
+                        <Button variant="outline" onClick={handleCloseDialog}>
                             {t('settings.ai_config.cancel')}
                         </Button>
                         <Button
                             variant="outline"
-                            onClick={onTestConfig}
-                            disabled={testingNewConfig || !newAIConfig.model_name || (providerRequiresApiKey(newAIConfig.provider_name) && !newAIConfig.api_key)}
+                            onClick={handleTestConfig}
+                            disabled={testConfigMutation.isPending || !newAIConfig.model_name || (providerRequiresApiKey(newAIConfig.provider_name) && !newAIConfig.api_key)}
                         >
-                            {testingNewConfig ? (
+                            {testConfigMutation.isPending ? (
                                 <>
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                     {t('common.loading')}
@@ -391,9 +523,14 @@ export const AIConfigTab: React.FC<AIConfigTabProps> = ({
                             )}
                         </Button>
                         <Button
-                            onClick={editingAIConfig ? onUpdateConfig : onCreateConfig}
+                            onClick={handleSaveConfig}
+                            disabled={createConfigMutation.isPending || updateConfigMutation.isPending}
                         >
-                            {editingAIConfig ? t('settings.update') : t('settings.ai_config.create')}
+                            {createConfigMutation.isPending || updateConfigMutation.isPending ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                editingAIConfig ? t('settings.update') : t('settings.ai_config.create')
+                            )}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -412,9 +549,14 @@ export const AIConfigTab: React.FC<AIConfigTabProps> = ({
                         <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={confirmDelete}
+                            disabled={deleteConfigMutation.isPending}
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         >
-                            {t('common.delete')}
+                            {deleteConfigMutation.isPending ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                t('common.delete')
+                            )}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

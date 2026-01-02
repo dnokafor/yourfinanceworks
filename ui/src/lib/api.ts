@@ -658,6 +658,7 @@ export interface Settings {
   invoice_settings: InvoiceSettings;
   enable_ai_assistant?: boolean;
   timezone?: string;
+  email_settings?: any;
 }
 
 // AI Configuration types
@@ -1518,6 +1519,16 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ token, new_password: newPassword }),
     }),
+  changePassword: (data: any) =>
+    apiRequest<{ message: string; success: boolean }>(`/auth/change-password`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateCurrentUser: (data: any) =>
+    apiRequest<any>(`/auth/me`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
   activateUser: (inviteId: number, activationData: { password?: string; first_name?: string; last_name?: string }) =>
     apiRequest<any>(`/auth/invites/${inviteId}/activate`, {
       method: 'POST',
@@ -2324,6 +2335,14 @@ export const settingsApi = {
       method: 'PUT',
       body: JSON.stringify(settings),
     }),
+  getNotificationSettings: () => apiRequest<any>("/notifications/settings"),
+  updateNotificationSettings: (settings: any) =>
+    apiRequest<any>("/notifications/settings", {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    }),
+  testNotification: () => apiRequest<any>("/notifications/test", { method: 'POST' }),
+  testEmailConfiguration: () => apiRequest<any>("/email/test", { method: 'POST' }),
   exportData: async () => {
     const token = localStorage.getItem('token');
     const response = await fetch(`${API_BASE_URL}/settings/export-data`, {

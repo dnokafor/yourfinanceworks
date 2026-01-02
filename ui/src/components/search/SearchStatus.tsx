@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import {
   ProfessionalCard,
   ProfessionalCardContent,
@@ -8,11 +7,12 @@ import {
 } from '@/components/ui/professional-card';
 import { ProfessionalButton } from '@/components/ui/professional-button';
 import { Badge } from '@/components/ui/badge';
-import { RefreshCw, Search, AlertCircle, CheckCircle, Database, Server, Activity, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Search, AlertCircle, CheckCircle, Database, Server, Activity, ShieldCheck } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 interface SearchStatusData {
   opensearch_enabled: boolean;
@@ -27,43 +27,33 @@ interface SearchStatusData {
 }
 
 export function SearchStatus() {
-  const [status, setStatus] = useState<SearchStatusData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [reindexing, setReindexing] = useState(false);
+  const queryClient = useQueryClient();
 
-  const fetchStatus = async () => {
-    try {
-      setLoading(true);
-      const response = await apiClient.get<SearchStatusData>('/search/status');
-      setStatus(response);
-    } catch (error) {
-      console.error('Error fetching search status:', error);
-      toast.error('Failed to fetch search status');
-      setStatus(null);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: status, isLoading, isError, refetch } = useQuery({
+    queryKey: ['searchStatus'],
+    queryFn: () => apiClient.get<SearchStatusData>('/search/status'),
+  });
 
-  const handleReindex = async () => {
-    setReindexing(true);
-    try {
-      await apiClient.post('/search/reindex');
+  const reindexMutation = useMutation({
+    mutationFn: () => apiClient.post('/search/reindex'),
+    onSuccess: () => {
       toast.success('Search data reindexed successfully');
-      await fetchStatus(); // Refresh status
-    } catch (error) {
-      console.error('Error reindexing:', error);
+      queryClient.invalidateQueries({ queryKey: ['searchStatus'] });
+    },
+    onError: () => {
       toast.error('Failed to reindex search data');
-    } finally {
-      setReindexing(false);
     }
+  });
+
+  const handleRefresh = () => {
+    refetch();
   };
 
-  useEffect(() => {
-    fetchStatus();
-  }, []);
+  const handleReindex = () => {
+    reindexMutation.mutate();
+  };
 
-  if (loading && !status) {
+  if (isLoading && !status) {
     return (
       <ProfessionalCard variant="elevated">
         <ProfessionalCardContent className="flex flex-col items-center justify-center p-12">
@@ -74,7 +64,7 @@ export function SearchStatus() {
     );
   }
 
-  if (!status) {
+  if (isError || !status) {
     return (
       <ProfessionalCard variant="elevated" className="border-red-200 bg-red-50 dark:bg-red-900/10 dark:border-red-900/30">
         <ProfessionalCardContent className="flex flex-col items-center justify-center p-12 text-center">
@@ -83,7 +73,7 @@ export function SearchStatus() {
           </div>
           <h3 className="text-lg font-semibold text-red-900 dark:text-red-400 mb-2">Service Unavailable</h3>
           <p className="text-red-700 dark:text-red-300 mb-6">Failed to load search service status. Please check your connection.</p>
-          <ProfessionalButton onClick={fetchStatus} variant="outline" className="border-red-300 text-red-700 hover:bg-red-100">
+          <ProfessionalButton onClick={handleRefresh} variant="outline" className="border-red-300 text-red-700 hover:bg-red-100">
             <RefreshCw className="h-4 w-4 mr-2" />
             Retry Connection
           </ProfessionalButton>
@@ -240,13 +230,13 @@ export function SearchStatus() {
 
             <div className="flex items-center gap-3 w-full md:w-auto">
               <ProfessionalButton
-                onClick={fetchStatus}
+                onClick={handleRefresh}
                 variant="outline"
                 size="sm"
-                disabled={loading}
+                disabled={isLoading}
                 className="w-full md:w-auto"
               >
-                <RefreshCw className={cn("h-3.5 w-3.5 mr-2", loading && "animate-spin")} />
+                <RefreshCw className={cn("h-3.5 w-3.5 mr-2", isLoading && "animate-spin")} />
                 Refresh Status
               </ProfessionalButton>
 
@@ -254,12 +244,12 @@ export function SearchStatus() {
                 onClick={handleReindex}
                 variant="gradient"
                 size="sm"
-                disabled={reindexing || loading || (!status.opensearch_enabled && !status.fallback_available)}
-                loading={reindexing}
+                disabled={reindexMutation.isPending || isLoading || (!status.opensearch_enabled && !status.fallback_available)}
+                loading={reindexMutation.isPending}
                 className="w-full md:w-auto"
               >
-                {!reindexing && <Database className="h-3.5 w-3.5 mr-2" />}
-                {reindexing ? 'Reindexing...' : 'Reindex Data'}
+                {!reindexMutation.isPending && <Database className="h-3.5 w-3.5 mr-2" />}
+                {reindexMutation.isPending ? 'Reindexing...' : 'Reindex Data'}
               </ProfessionalButton>
             </div>
           </div>

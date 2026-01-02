@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ProfessionalCard,
   ProfessionalCardContent,
@@ -12,10 +13,10 @@ import { ProfessionalInput } from '@/components/ui/professional-input';
 import { ProfessionalTextarea } from '@/components/ui/professional-textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
-import { Copy, Key, Trash2, RotateCcw, Shield, Plus, Lock, Globe, Database, Activity, Calendar, Clock, LockKeyhole } from 'lucide-react';
+import { Copy, Key, Trash2, RotateCcw, Shield, Plus, Lock, Globe, Database, Activity, Calendar, Clock, LockKeyhole, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { FeatureGate } from '@/components/FeatureGate';
@@ -101,7 +102,7 @@ const OAUTH_SCOPES = [
   { value: 'transactions:write', label: 'Write Transactions' }
 ];
 
-const APIClientManagement: React.FC = () => {
+export const APIClientManagementTab: React.FC = () => {
   return (
     <FeatureGate
       feature="api_keys"
@@ -166,8 +167,7 @@ const APIClientManagement: React.FC = () => {
 };
 
 const APIClientManagementContent: React.FC = () => {
-  const [clients, setClients] = useState<APIClient[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showOAuthDialog, setShowOAuthDialog] = useState(false);
   const [showApiKey, setShowApiKey] = useState<APIKeyResponse | null>(null);
@@ -206,48 +206,20 @@ const APIClientManagementContent: React.FC = () => {
   const [ipAddressInput, setIpAddressInput] = useState('');
   const [redirectUriInput, setRedirectUriInput] = useState('');
 
-  useEffect(() => {
-    loadClients();
-  }, []);
+  // Fetch clients
+  const { data: clientsData, isLoading: loading } = useQuery<APIClient[]>({
+    queryKey: ['api-clients'],
+    queryFn: () => api.get('/external-auth/api-keys'),
+  });
 
-  const loadClients = async () => {
-    try {
-      setLoading(true);
-      const clients: APIClient[] = await api.get('/external-auth/api-keys');
-      setClients(clients || []);
-    } catch (error) {
-      console.error('Failed to load API clients:', error);
-      toast.error('Failed to load API clients');
-      setClients([]); // Ensure clients is always an array
-    } finally {
-      setLoading(false);
-    }
-  };
+  const clients = clientsData || [];
 
-  const createApiKey = async () => {
-    try {
-      // Check API key limit
-      if (clients.length >= 2) {
-        toast.error('Maximum of 2 API keys allowed per user');
-        return;
-      }
-
-      if (!createForm.client_name.trim()) {
-        toast.error('Client name is required');
-        return;
-      }
-
-      if (createForm.allowed_document_types.length === 0) {
-        toast.error('At least one document type is required');
-        return;
-      }
-
-      const apiKeyResponse: APIKeyResponse = await api.post('/external-auth/api-keys', createForm);
-
+  // Mutations
+  const createApiKeyMutation = useMutation({
+    mutationFn: (data: APIKeyCreateRequest) => api.post('/external-auth/api-keys', data),
+    onSuccess: (data: APIKeyResponse) => {
       setShowCreateDialog(false);
-      setShowApiKey(apiKeyResponse);
-
-      // Reset form
+      setShowApiKey(data);
       setCreateForm({
         client_name: '',
         client_description: '',
@@ -261,50 +233,20 @@ const APIClientManagementContent: React.FC = () => {
         is_sandbox: false,
         expires_in_days: undefined
       });
-
-      // Reload clients list
-      await loadClients();
-
+      queryClient.invalidateQueries({ queryKey: ['api-clients'] });
       toast.success('API key created successfully');
-    } catch (error) {
+    },
+    onError: (error) => {
       console.error('Failed to create API key:', error);
       toast.error('Failed to create API key');
     }
-  };
+  });
 
-  const createOAuthClient = async () => {
-    try {
-      if (!oauthForm.client_name.trim()) {
-        toast.error('Client name is required');
-        return;
-      }
-
-      if (oauthForm.allowed_document_types.length === 0) {
-        toast.error('At least one document type is required');
-        return;
-      }
-
-      if (oauthForm.redirect_uris.filter(uri => uri.trim()).length === 0) {
-        toast.error('At least one redirect URI is required');
-        return;
-      }
-
-      if (oauthForm.scopes.length === 0) {
-        toast.error('At least one scope is required');
-        return;
-      }
-
-      const cleanedForm = {
-        ...oauthForm,
-        redirect_uris: oauthForm.redirect_uris.filter(uri => uri.trim())
-      };
-
-      const response: any = await api.post('/external-auth/oauth/clients', cleanedForm);
-
+  const createOAuthClientMutation = useMutation({
+    mutationFn: (data: OAuthClientCreateRequest) => api.post('/external-auth/oauth/clients', data),
+    onSuccess: (data: any) => {
       setShowOAuthDialog(false);
-      setShowOAuthCredentials(response);
-
-      // Reset form
+      setShowOAuthCredentials(data);
       setOAuthForm({
         client_name: '',
         client_description: '',
@@ -315,49 +257,106 @@ const APIClientManagementContent: React.FC = () => {
         rate_limit_per_hour: 2000,
         rate_limit_per_day: 20000
       });
-
+      queryClient.invalidateQueries({ queryKey: ['api-clients'] });
       toast.success('OAuth client created successfully');
-    } catch (error) {
+    },
+    onError: (error) => {
       console.error('Failed to create OAuth client:', error);
       toast.error('Failed to create OAuth client');
     }
+  });
+
+  const revokeApiKeyMutation = useMutation({
+    mutationFn: (clientId: string) => api.delete(`/external-auth/api-keys/${clientId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['api-clients'] });
+      toast.success('API key revoked successfully');
+      setShowRevokeConfirm(null);
+    },
+    onError: (error) => {
+      console.error('Failed to revoke API key:', error);
+      toast.error('Failed to revoke API key');
+    }
+  });
+
+  const regenerateApiKeyMutation = useMutation({
+    mutationFn: (clientId: string) => api.post(`/external-auth/api-keys/${clientId}/regenerate`),
+    onSuccess: (data: APIKeyResponse) => {
+      setShowApiKey(data);
+      queryClient.invalidateQueries({ queryKey: ['api-clients'] });
+      toast.success('API key regenerated successfully');
+      setShowRegenerateConfirm(null);
+    },
+    onError: (error) => {
+      console.error('Failed to regenerate API key:', error);
+      toast.error('Failed to regenerate API key');
+    }
+  });
+
+  const createApiKey = () => {
+    if (clients.length >= 2) {
+      toast.error('Maximum of 2 API keys allowed per user');
+      return;
+    }
+
+    if (!createForm.client_name.trim()) {
+      toast.error('Client name is required');
+      return;
+    }
+
+    if (createForm.allowed_document_types.length === 0) {
+      toast.error('At least one document type is required');
+      return;
+    }
+
+    createApiKeyMutation.mutate(createForm);
+  };
+
+  const createOAuthClient = () => {
+    if (!oauthForm.client_name.trim()) {
+      toast.error('Client name is required');
+      return;
+    }
+
+    if (oauthForm.allowed_document_types.length === 0) {
+      toast.error('At least one document type is required');
+      return;
+    }
+
+    if (oauthForm.redirect_uris.filter(uri => uri.trim()).length === 0) {
+      toast.error('At least one redirect URI is required');
+      return;
+    }
+
+    if (oauthForm.scopes.length === 0) {
+      toast.error('At least one scope is required');
+      return;
+    }
+
+    const cleanedForm = {
+      ...oauthForm,
+      redirect_uris: oauthForm.redirect_uris.filter(uri => uri.trim())
+    };
+
+    createOAuthClientMutation.mutate(cleanedForm);
   };
 
   const handleRevokeClick = (clientId: string, clientName: string) => {
     setShowRevokeConfirm({ clientId, clientName });
   };
 
-  const confirmRevokeApiKey = async () => {
+  const confirmRevokeApiKey = () => {
     if (!showRevokeConfirm) return;
-
-    try {
-      await api.delete(`/external-auth/api-keys/${showRevokeConfirm.clientId}`);
-      loadClients();
-      toast.success('API key revoked successfully');
-      setShowRevokeConfirm(null);
-    } catch (error) {
-      console.error('Failed to revoke API key:', error);
-      toast.error('Failed to revoke API key');
-    }
+    revokeApiKeyMutation.mutate(showRevokeConfirm.clientId);
   };
 
   const handleRegenerateClick = (clientId: string, clientName: string) => {
     setShowRegenerateConfirm({ clientId, clientName });
   };
 
-  const confirmRegenerateApiKey = async () => {
+  const confirmRegenerateApiKey = () => {
     if (!showRegenerateConfirm) return;
-
-    try {
-      const apiKeyResponse: APIKeyResponse = await api.post(`/external-auth/api-keys/${showRegenerateConfirm.clientId}/regenerate`);
-      setShowApiKey(apiKeyResponse);
-      loadClients();
-      toast.success('API key regenerated successfully');
-      setShowRegenerateConfirm(null);
-    } catch (error) {
-      console.error('Failed to regenerate API key:', error);
-      toast.error('Failed to regenerate API key');
-    }
+    regenerateApiKeyMutation.mutate(showRegenerateConfirm.clientId);
   };
 
   const copyToClipboard = async (text: string) => {
@@ -498,6 +497,9 @@ const APIClientManagementContent: React.FC = () => {
                 <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle className="text-xl">Create New API Key</DialogTitle>
+                    <DialogDescription>
+                      Create a new API key for programmatic access to the invoice system.
+                    </DialogDescription>
                   </DialogHeader>
 
                   {clients.length === 1 && (
@@ -654,6 +656,9 @@ const APIClientManagementContent: React.FC = () => {
                 <DialogContent className="max-w-2xl">
                   <DialogHeader>
                     <DialogTitle>Create OAuth 2.0 Client</DialogTitle>
+                    <DialogDescription>
+                      Create an OAuth 2.0 client for secure third-party application access.
+                    </DialogDescription>
                   </DialogHeader>
                   <div className="p-8 text-center text-muted-foreground">
                     OAuth client creation is currently restricted to enterprise administrators.
@@ -678,6 +683,9 @@ const APIClientManagementContent: React.FC = () => {
                 <CheckCircle2 className="h-6 w-6" />
                 API Key Generated Successfully
               </DialogTitle>
+              <DialogDescription>
+                Your new API key has been generated. Please copy and save it securely as it won't be shown again.
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-6 pt-4">
               <Alert className="bg-amber-50 border-amber-200">
@@ -763,6 +771,9 @@ const APIClientManagementContent: React.FC = () => {
                 <Trash2 className="w-5 h-5" />
                 Revoke API Key
               </DialogTitle>
+              <DialogDescription>
+                This action cannot be undone. The API key will be immediately disabled and cannot be recovered.
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <Alert variant="destructive">
@@ -805,6 +816,9 @@ const APIClientManagementContent: React.FC = () => {
                 <RotateCcw className="w-5 h-5" />
                 Regenerate API Key
               </DialogTitle>
+              <DialogDescription>
+                This will create a new API key and invalidate the current one. Make sure to update any applications using the old key.
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <Alert className="bg-orange-50 border-orange-200 text-orange-900">
@@ -1026,5 +1040,3 @@ const APIClientManagementContent: React.FC = () => {
     </div>
   );
 };
-
-export default APIClientManagement;

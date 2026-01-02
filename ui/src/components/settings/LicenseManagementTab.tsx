@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from "react-i18next";
 import {
   ProfessionalCard,
@@ -66,103 +67,94 @@ interface FeatureInfo {
   enabled: boolean;
 }
 
-export const LicenseManagement: React.FC = () => {
+export const LicenseManagementTab: React.FC = () => {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(true);
-  const [activating, setActivating] = useState(false);
-  const [deactivating, setDeactivating] = useState(false);
+  const queryClient = useQueryClient();
   const [showDeactivateDialog, setShowDeactivateDialog] = useState(false);
-  const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
-  const [features, setFeatures] = useState<FeatureInfo[]>([]);
   const [licenseKey, setLicenseKey] = useState('');
-  const { refetch } = useFeatures();
+  const { refetch: refetchFeaturesContext } = useFeatures();
 
-  useEffect(() => {
-    fetchLicenseStatus();
-  }, []);
+  // Queries
+  const { data: licenseStatus = null, isLoading: loadingStatus } = useQuery<LicenseInfo>({
+    queryKey: ['license-status'],
+    queryFn: () => api.get<LicenseInfo>('/license/status'),
+  });
 
-  const fetchLicenseStatus = async () => {
-    try {
-      setLoading(true);
-      const [statusResponse, featuresResponse] = await Promise.all([
-        api.get<LicenseInfo>('/license/status'),
-        api.get<{ features: FeatureInfo[] }>('/license/features'),
-      ]);
+  const { data: featuresData = { features: [] }, isLoading: loadingFeatures } = useQuery<{ features: FeatureInfo[] }>({
+    queryKey: ['license-features'],
+    queryFn: () => api.get<{ features: FeatureInfo[] }>('/license/features'),
+  });
 
-      setLicenseInfo(statusResponse);
+  const features = (featuresData.features || [])
+    .filter(feature => !feature.id.includes('tax') && !feature.name.toLowerCase().includes('tax service integration'))
+    .map(feature => {
+      const enabledFeatureIds = licenseStatus?.enabled_features || [];
+      const hasAllFeatures = licenseStatus?.has_all_features || enabledFeatureIds.includes('all');
+      return {
+        ...feature,
+        enabled: hasAllFeatures || enabledFeatureIds.includes(feature.id)
+      };
+    });
 
-      // Map features with actual enabled status from license
-      const enabledFeatureIds = statusResponse.enabled_features || [];
-      const hasAllFeatures = statusResponse.has_all_features || enabledFeatureIds.includes('all');
-
-      const featuresWithStatus = (featuresResponse.features || [])
-        .filter(feature => !feature.id.includes('tax') && !feature.name.toLowerCase().includes('tax service integration'))
-        .map(feature => ({
-          ...feature,
-          enabled: hasAllFeatures || enabledFeatureIds.includes(feature.id)
-        }));
-
-      setFeatures(featuresWithStatus);
-    } catch (error) {
-      console.error('Failed to fetch license status:', error);
-      toast.error(t('license.failedToLoad'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleActivateLicense = async () => {
-    if (!licenseKey.trim()) {
-      toast.error(t('license.activate.enterKey'));
-      return;
-    }
-
-    try {
-      setActivating(true);
-      const response = await api.post<{ success: boolean; message: string }>('/license/activate', {
-        license_key: licenseKey.trim(),
-      });
-
+  // Mutations
+  const activateMutation = useMutation({
+    mutationFn: (key: string) => api.post<{ success: boolean; message: string }>('/license/activate', { license_key: key }),
+    onSuccess: (response) => {
       if (response.success) {
         toast.success(t('license.activate.success'));
         setLicenseKey('');
-        await fetchLicenseStatus();
-        await refetch(); // Refresh feature flags
+        queryClient.invalidateQueries({ queryKey: ['license-status'] });
+        queryClient.invalidateQueries({ queryKey: ['license-features'] });
+        refetchFeaturesContext();
       } else {
         toast.error(response.message || t('license.activate.error'));
       }
-    } catch (error: any) {
+    },
+    onError: (error: any) => {
       console.error('Failed to activate license:', error);
       toast.error(error.message || t('license.activate.error'));
-    } finally {
-      setActivating(false);
     }
-  };
+  });
 
-  const handleDeactivateLicense = async () => {
-    setShowDeactivateDialog(true);
-  };
-
-  const confirmDeactivateLicense = async () => {
-    try {
-      setDeactivating(true);
-      const response = await api.post<{ success: boolean; message: string }>('/license/deactivate');
-
+  const deactivateMutation = useMutation({
+    mutationFn: () => api.post<{ success: boolean; message: string }>('/license/deactivate'),
+    onSuccess: (response) => {
       if (response.success) {
         toast.success(t('license.status.deactivateSuccess'));
-        await fetchLicenseStatus();
-        await refetch(); // Refresh feature flags
+        queryClient.invalidateQueries({ queryKey: ['license-status'] });
+        queryClient.invalidateQueries({ queryKey: ['license-features'] });
+        refetchFeaturesContext();
         setShowDeactivateDialog(false);
       } else {
         toast.error(response.message || t('license.status.deactivateError'));
       }
-    } catch (error: any) {
+    },
+    onError: (error: any) => {
       console.error('Failed to deactivate license:', error);
       toast.error(error.message || t('license.status.deactivateError'));
-    } finally {
-      setDeactivating(false);
     }
+  });
+
+  const handleActivateLicense = () => {
+    if (!licenseKey.trim()) {
+      toast.error(t('license.activate.enterKey'));
+      return;
+    }
+    activateMutation.mutate(licenseKey.trim());
   };
+
+  const handleDeactivateLicense = () => {
+    setShowDeactivateDialog(true);
+  };
+
+  const confirmDeactivateLicense = () => {
+    deactivateMutation.mutate();
+  };
+
+  const loading = loadingStatus || loadingFeatures;
+  const activating = activateMutation.isPending;
+  const deactivating = deactivateMutation.isPending;
+  const licenseInfo = licenseStatus;
 
   const getLicenseStatusBadge = () => {
     if (!licenseInfo) return null;
@@ -555,5 +547,3 @@ export const LicenseManagement: React.FC = () => {
     </div>
   );
 };
-
-export default LicenseManagement;

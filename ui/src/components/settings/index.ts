@@ -1,9 +1,14 @@
-export { CompanyInfoTab } from './CompanyInfoTab';
+export * from "./CompanyInfoTab";
 export * from "./InvoiceSettingsTab";
 export * from "./UserProfileTab";
 export * from "./DiscountRulesTab";
 export * from "./AIConfigTab";
-export { default as NotificationsTab } from './NotificationsTab';
-
-export { DiscountRulesTab } from './DiscountRulesTab';
-export type { DiscountRule, DiscountRuleCreate } from './DiscountRulesTab';
+export * from "./NotificationsTab";
+export * from "./DataManagementTab";
+export * from "./CurrenciesTab";
+export * from "./SearchSettingsTab";
+export * from './LicenseManagementTab';
+export * from './APIClientManagementTab';
+export * from './CookieSettingsTab';
+export * from './EmailIntegrationSettingsTab';
+export * from './ExportDestinationsTab';

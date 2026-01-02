@@ -935,6 +935,7 @@
     "company_address": "Dirección de la Empresa",
     "tax_id": "ID Fiscal / EIN",
     "company_logo": "Logo de la Empresa",
+    "company_email_cannot_be_changed": "El email de la empresa no se puede cambiar aquí.",
     "logo_preview": "Vista Previa del Logo",
     "upload_logo": "Subir Logo",
     "uploading_logo": "Subiendo...",
@@ -966,6 +967,7 @@
     "settings_saved": "Configuración guardada exitosamente",
     "settings_error": "Error al guardar la configuración",
     "tabs": {
+      "profile": "Perfil",
       "company": "Info de Empresa",
       "invoices": "Config. de Facturas",
       "currencies": "Monedas",

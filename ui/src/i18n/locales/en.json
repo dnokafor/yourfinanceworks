@@ -951,6 +951,7 @@
     "company_address": "Company Address",
     "tax_id": "Tax ID / EIN",
     "company_logo": "Company Logo",
+    "company_email_cannot_be_changed": "Company email cannot be changed here.",
     "logo_preview": "Logo Preview",
     "upload_logo": "Upload Logo",
     "uploading_logo": "Uploading...",
@@ -990,6 +991,7 @@
     "settings_saved": "Settings saved successfully",
     "settings_error": "Failed to save settings",
     "tabs": {
+      "profile": "Profile",
       "company": "Company Info",
       "invoices": "Invoice Settings",
       "currencies": "Currencies",

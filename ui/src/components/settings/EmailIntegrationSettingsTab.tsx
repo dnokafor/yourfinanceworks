@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from "react-i18next";
 import {
     ProfessionalCard,
@@ -48,7 +49,7 @@ const PROVIDERS = [
     { id: 'gmail', name: 'Gmail', host: 'imap.gmail.com', port: 993 },
 ];
 
-const EmailIntegrationSettings: React.FC = () => {
+export const EmailIntegrationSettingsTab: React.FC = () => {
     return (
         <FeatureGate
             feature="email_integration"
@@ -109,6 +110,8 @@ const EmailIntegrationSettings: React.FC = () => {
 
 const EmailIntegrationSettingsContent: React.FC = () => {
     const { t } = useTranslation();
+    const queryClient = useQueryClient();
+
     const [config, setConfig] = useState<EmailConfig>({
         imap_host: '',
         imap_port: 993,
@@ -120,124 +123,109 @@ const EmailIntegrationSettingsContent: React.FC = () => {
         lookback_days: 30,
         max_emails_to_fetch: 100,
     });
-    const [loading, setLoading] = useState(false);
-    const [testing, setTesting] = useState(false);
-    const [syncing, setSyncing] = useState(false);
+
     const [testResult, setTestResult] = useState<{ success: boolean, message: string } | null>(null);
     const [hasExistingPassword, setHasExistingPassword] = useState(false);
 
+    // Fetch config
+    const { data: queryData, isLoading: queryLoading } = useQuery({
+        queryKey: ['email-config'],
+        queryFn: () => api.get<EmailConfig>('/email-integration/config'),
+    });
+
     useEffect(() => {
-        // Check if there's an ongoing sync from localStorage
-        const syncState = localStorage.getItem('email_sync_state');
-        if (syncState) {
-            const { timestamp } = JSON.parse(syncState);
-            // If sync was started less than 5 minutes ago, assume it might still be running
-            if (Date.now() - timestamp < 5 * 60 * 1000) {
-                setSyncing(true);
-                // Poll to check if sync is complete
-                // checkSyncStatus(); // Handled by useEffect now
-            } else {
-                // Clear stale sync state
-                localStorage.removeItem('email_sync_state');
+        if (queryData) {
+            setConfig(prev => ({ ...prev, ...queryData, password: '' }));
+            setHasExistingPassword(!!queryData.username);
+        }
+    }, [queryData]);
+
+    // Mutations
+    const saveMutation = useMutation({
+        mutationFn: (data: EmailConfig) => api.post('/email-integration/config', data),
+        onSuccess: () => {
+            toast.success(t('settings.save_success'));
+            setHasExistingPassword(true);
+            queryClient.invalidateQueries({ queryKey: ['email-config'] });
+        },
+        onError: (error) => {
+            toast.error(getErrorMessage(error, (k) => k));
+        },
+    });
+
+    const testMutation = useMutation({
+        mutationFn: (data: EmailConfig) => api.post('/email-integration/test', data),
+        onSuccess: () => {
+            setTestResult({ success: true, message: t('emailIntegration.connectionSuccessful') });
+            toast.success(t('emailIntegration.connectionSuccessful'));
+        },
+        onError: (error) => {
+            const msg = getErrorMessage(error, (k) => k);
+            setTestResult({ success: false, message: msg });
+            toast.error(t('emailIntegration.connectionFailed'));
+        },
+    });
+
+    const syncMutation = useMutation({
+        mutationFn: () => api.post('/email-integration/sync'),
+        onSuccess: () => {
+            toast.info(t('emailIntegration.syncStarted'));
+            localStorage.setItem('email_sync_state', JSON.stringify({ timestamp: Date.now() }));
+        },
+        onError: (error) => {
+            toast.error(getErrorMessage(error, (k) => k));
+        },
+    });
+
+    // Check sync status polling
+    const { data: syncStatus, isLoading: isCheckingSync } = useQuery({
+        queryKey: ['email-sync-status'],
+        queryFn: () => api.get<{ status: string, message: string, downloaded: number, processed: number }>('/email-integration/sync/status'),
+        enabled: !!localStorage.getItem('email_sync_state'),
+        refetchInterval: (query) => {
+            const data = query.state.data as any;
+            if (data?.status === 'completed' || data?.status === 'failed') {
+                return false;
             }
-        }
-        fetchConfig();
-    }, []);
+            return 2000;
+        },
+    });
 
     useEffect(() => {
-        let interval: NodeJS.Timeout;
-        if (syncing) {
-            interval = setInterval(async () => {
-                try {
-                    const data = await api.get<{ status: string, message: string, downloaded: number, processed: number }>('/email-integration/sync/status');
-
-                    if (data.status === 'completed') {
-                        setSyncing(false);
-                        toast.success(data.message || t('emailIntegration.syncComplete'));
-                        localStorage.removeItem('email_sync_state');
-                    } else if (data.status === 'failed') {
-                        setSyncing(false);
-                        toast.error(data.message || t('emailIntegration.syncFailed'));
-                        localStorage.removeItem('email_sync_state');
-                    }
-                    // If running or starting, just keep polling
-                } catch (error) {
-                    console.error('Error checking sync status:', error);
-                }
-            }, 2000);
+        if (syncStatus?.status === 'completed') {
+            toast.success(syncStatus.message || t('emailIntegration.syncComplete'));
+            localStorage.removeItem('email_sync_state');
+            queryClient.invalidateQueries({ queryKey: ['email-sync-status'] });
+        } else if (syncStatus?.status === 'failed') {
+            toast.error(syncStatus.message || t('emailIntegration.syncFailed'));
+            localStorage.removeItem('email_sync_state');
+            queryClient.invalidateQueries({ queryKey: ['email-sync-status'] });
         }
-        return () => clearInterval(interval);
-    }, [syncing]);
+    }, [syncStatus, t, queryClient]);
 
-    const fetchConfig = async () => {
-        setLoading(true);
-        try {
-            const data = await api.get<EmailConfig>('/email-integration/config');
-            setConfig(prev => ({ ...prev, ...data, password: '' })); // Don't show password
-            // Check if password exists in the saved config
-            setHasExistingPassword(!!data.username); // If username exists, assume password exists too
-        } catch (error) {
-            console.error('Failed to fetch config', error);
-            // toast.error("Failed to load email settings");
-        } finally {
-            setLoading(false);
-        }
-    };
+    const loading = queryLoading || saveMutation.isPending;
+    const testing = testMutation.isPending;
+    const syncing = syncMutation.isPending || (syncStatus?.status === 'running' || syncStatus?.status === 'starting');
 
     const handleChange = (field: keyof EmailConfig, value: any) => {
         setConfig(prev => ({ ...prev, [field]: value }));
-        // If password is being changed, mark that we have a new password
         if (field === 'password' && value) {
             setHasExistingPassword(true);
         }
     };
 
-    const handleSave = async () => {
-        setLoading(true);
+    const handleSave = () => {
         setTestResult(null);
-        try {
-            await api.post('/email-integration/config', config);
-            toast.success(t('settings.save_success'));
-            // After save, mark that password exists
-            setHasExistingPassword(true);
-        } catch (error) {
-            toast.error(getErrorMessage(error, (k) => k));
-        } finally {
-            setLoading(false);
-        }
+        saveMutation.mutate(config);
     };
 
-    const handleTestConnection = async () => {
-        setTesting(true);
+    const handleTestConnection = () => {
         setTestResult(null);
-        try {
-            // If password field is empty but we have an existing password, 
-            // the backend will use the saved one
-            await api.post('/email-integration/test', config);
-            setTestResult({ success: true, message: t('emailIntegration.connectionSuccessful') });
-            toast.success(t('emailIntegration.connectionSuccessful'));
-        } catch (error) {
-            const msg = getErrorMessage(error, (k) => k);
-            setTestResult({ success: false, message: msg });
-            toast.error(t('emailIntegration.connectionFailed'));
-        } finally {
-            setTesting(false);
-        }
+        testMutation.mutate(config);
     };
 
-    const handleSync = async () => {
-        setSyncing(true);
-        // Store sync state in localStorage
-        localStorage.setItem('email_sync_state', JSON.stringify({ timestamp: Date.now() }));
-
-        try {
-            await api.post('/email-integration/sync');
-            toast.info(t('emailIntegration.syncStarted'));
-        } catch (error) {
-            setSyncing(false);
-            localStorage.removeItem('email_sync_state');
-            toast.error(getErrorMessage(error, (k) => k));
-        }
+    const handleSync = () => {
+        syncMutation.mutate();
     };
 
     return (
@@ -378,43 +366,45 @@ const EmailIntegrationSettingsContent: React.FC = () => {
                     />
                 </div>
 
-                <ProfessionalInput
-                    id="allowed_senders"
-                    label={t('emailIntegration.allowedSenders')}
-                    value={config.allowed_senders}
-                    onChange={(e) => handleChange('allowed_senders', e.target.value)}
-                    placeholder={t('emailIntegration.allowedSendersPlaceholder')}
-                    disabled={loading}
-                    helperText={t('emailIntegration.allowedSendersHint')}
-                    leftIcon={<List className="w-4 h-4 text-muted-foreground" />}
-                />
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <ProfessionalInput
-                        id="lookback_days"
-                        type="number"
-                        min={1}
-                        max={365}
-                        label={t('emailIntegration.lookbackDays')}
-                        value={config.lookback_days}
-                        onChange={(e) => handleChange('lookback_days', parseInt(e.target.value))}
+                        id="allowed_senders"
+                        label={t('emailIntegration.allowedSenders')}
+                        value={config.allowed_senders}
+                        onChange={(e) => handleChange('allowed_senders', e.target.value)}
+                        placeholder={t('emailIntegration.allowedSendersPlaceholder')}
                         disabled={loading}
-                        helperText={t('emailIntegration.lookbackDaysHint')}
-                        leftIcon={<Clock className="w-4 h-4 text-muted-foreground" />}
+                        helperText={t('emailIntegration.allowedSendersHint')}
+                        leftIcon={<List className="w-4 h-4 text-muted-foreground" />}
                     />
 
-                    <ProfessionalInput
-                        id="max_emails_to_fetch"
-                        type="number"
-                        min={1}
-                        max={1000}
-                        label="Max Emails to Fetch per Sync"
-                        value={config.max_emails_to_fetch}
-                        onChange={(e) => handleChange('max_emails_to_fetch', parseInt(e.target.value))}
-                        disabled={loading}
-                        helperText="Limit the number of emails to process in a single sync. A lower number can prevent timeouts on slow servers."
-                        leftIcon={<Server className="w-4 h-4 text-muted-foreground" />}
-                    />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <ProfessionalInput
+                            id="lookback_days"
+                            type="number"
+                            min={1}
+                            max={365}
+                            label={t('emailIntegration.lookbackDays')}
+                            value={config.lookback_days}
+                            onChange={(e) => handleChange('lookback_days', parseInt(e.target.value))}
+                            disabled={loading}
+                            helperText={t('emailIntegration.lookbackDaysHint')}
+                            leftIcon={<Clock className="w-4 h-4 text-muted-foreground" />}
+                        />
+
+                        <ProfessionalInput
+                            id="max_emails_to_fetch"
+                            type="number"
+                            min={1}
+                            max={1000}
+                            label="Max Emails per Sync"
+                            value={config.max_emails_to_fetch}
+                            onChange={(e) => handleChange('max_emails_to_fetch', parseInt(e.target.value))}
+                            disabled={loading}
+                            helperText="Limit per sync to avoid timeouts."
+                            leftIcon={<Server className="w-4 h-4 text-muted-foreground" />}
+                        />
+                    </div>
                 </div>
 
                 <div className="flex flex-wrap gap-4 pt-6 border-t border-border/50">

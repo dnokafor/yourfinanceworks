@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -66,49 +67,100 @@ interface PromptUsageStats {
 
 const PromptManagement = () => {
   const { t } = useTranslation();
-  const [prompts, setPrompts] = useState<PromptTemplate[]>([]);
-  const [defaultPrompts, setDefaultPrompts] = useState<PromptTemplate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [selectedPrompt, setSelectedPrompt] = useState<PromptTemplate | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [testVariables, setTestVariables] = useState('{}');
   const [testResult, setTestResult] = useState<string>('');
-  const [usageStats, setUsageStats] = useState<PromptUsageStats | null>(null);
-  const [isTesting, setIsTesting] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
   const [promptVersions, setPromptVersions] = useState<PromptVersion[]>([]);
+
+  // Queries
+  const { data: prompts = [], isLoading: loadingPrompts } = useQuery<PromptTemplate[]>({
+    queryKey: ['prompts'],
+    queryFn: () => api.get('/prompts/'),
+  });
+
+  const { data: defaultPrompts = [] } = useQuery<PromptTemplate[]>({
+    queryKey: ['default-prompts'],
+    queryFn: () => api.get('/prompts/defaults/list'),
+  });
+
+  const { data: usageStats = null } = useQuery<PromptUsageStats>({
+    queryKey: ['prompt-usage-stats'],
+    queryFn: () => api.get('/prompts/usage-stats?days=30'),
+  });
+
+  // Mutations
+  const saveMutation = useMutation({
+    mutationFn: (prompt: PromptTemplate) =>
+      prompt.id ? api.put(`/prompts/${prompt.name}`, prompt) : api.post('/prompts/', prompt),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['prompts'] });
+      toast.success(t('settings.promptManagement.messages.promptSavedSuccessfully'));
+      setIsEditing(false);
+      setSelectedPrompt(null);
+    },
+    onError: (error) => {
+      toast.error(t('settings.promptManagement.messages.failedToSavePrompt'));
+      console.error('Error saving prompt:', error);
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (promptName: string) => api.delete(`/prompts/${promptName}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['prompts'] });
+      toast.success(t('settings.promptManagement.messages.promptDeletedSuccessfully'));
+    },
+    onError: (error) => {
+      toast.error(t('settings.promptManagement.messages.failedToDeletePrompt'));
+      console.error('Error deleting prompt:', error);
+    }
+  });
+
+  const resetMutation = useMutation({
+    mutationFn: (promptName: string) => api.post(`/prompts/${promptName}/reset`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['prompts'] });
+      toast.success(t('settings.promptManagement.messages.promptResetSuccessfully'));
+    },
+    onError: (error) => {
+      toast.error(t('settings.promptManagement.messages.failedToResetPrompt'));
+      console.error('Error resetting prompt:', error);
+    }
+  });
+
+  const restoreVersionMutation = useMutation({
+    mutationFn: ({ promptName, version }: { promptName: string, version: number }) =>
+      api.post(`/prompts/${promptName}/versions/${version}/restore`),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['prompts'] });
+      toast.success(t('settings.promptManagement.messages.versionRestoredSuccessfully', { version: variables.version }));
+      loadPromptVersions(variables.promptName);
+    },
+    onError: (error) => {
+      toast.error(t('settings.promptManagement.messages.failedToRestoreVersion'));
+      console.error('Error restoring version:', error);
+    }
+  });
+
+  const testMutation = useMutation({
+    mutationFn: (params: { promptName: string, variables: string }) =>
+      api.post<{ result: string }>(`/prompts/${params.promptName}/test`, { variables: params.variables }),
+    onSuccess: (data) => {
+      setTestResult(data.result);
+      toast.success(t('settings.promptManagement.messages.promptTestedSuccessfully'));
+    },
+    onError: (error) => {
+      toast.error(t('settings.promptManagement.messages.failedToTestPrompt'));
+      console.error('Error testing prompt:', error);
+    }
+  });
 
   // Helper function to format category names
   const formatCategoryName = (category: string) => {
     return t(`settings.promptManagement.categories.${category}`);
-  };
-
-  useEffect(() => {
-    loadPrompts();
-    loadDefaultPrompts();
-    loadUsageStats();
-  }, []);
-
-  const loadPrompts = async () => {
-    try {
-      setLoading(true);
-      const response = await api.get<PromptTemplate[]>('/prompts/');
-      setPrompts(response);
-    } catch (error) {
-      toast.error(t('settings.promptManagement.messages.failedToLoadPrompts'));
-      console.error('Error loading prompts:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadDefaultPrompts = async () => {
-    try {
-      const response = await api.get<PromptTemplate[]>('/prompts/defaults/list');
-      setDefaultPrompts(response);
-    } catch (error) {
-      console.error('Error loading default prompts:', error);
-    }
   };
 
   const loadPromptVersions = async (promptName: string) => {
@@ -125,103 +177,37 @@ const PromptManagement = () => {
     }
   };
 
-  const handleResetPrompt = async (promptName: string) => {
+  const handleResetPrompt = (promptName: string) => {
     if (!window.confirm(t('settings.promptManagement.messages.confirmResetPrompt'))) {
       return;
     }
-
-    try {
-      setLoading(true);
-      await api.post(`/prompts/${promptName}/reset`);
-      toast.success(t('settings.promptManagement.messages.promptResetSuccessfully'));
-      await loadPrompts();
-    } catch (error) {
-      toast.error(t('settings.promptManagement.messages.failedToResetPrompt'));
-      console.error('Error resetting prompt:', error);
-    } finally {
-      setLoading(false);
-    }
+    resetMutation.mutate(promptName);
   };
 
-  const handleRestoreVersion = async (promptName: string, version: number) => {
+  const handleRestoreVersion = (promptName: string, version: number) => {
     if (!window.confirm(t('settings.promptManagement.messages.confirmRestoreVersion', { version }))) {
       return;
     }
-
-    try {
-      setLoading(true);
-      await api.post(`/prompts/${promptName}/versions/${version}/restore`);
-      toast.success(t('settings.promptManagement.messages.versionRestoredSuccessfully', { version }));
-      await loadPrompts();
-      await loadPromptVersions(promptName);
-    } catch (error) {
-      toast.error(t('settings.promptManagement.messages.failedToRestoreVersion'));
-      console.error('Error restoring version:', error);
-    } finally {
-      setLoading(false);
-    }
+    restoreVersionMutation.mutate({ promptName, version });
   };
 
-  const loadUsageStats = async () => {
-    try {
-      const response = await api.get<PromptUsageStats>('/prompts/usage-stats?days=30');
-      setUsageStats(response);
-    } catch (error) {
-      console.error('Error loading usage stats:', error);
-    }
+  const handleSavePrompt = (prompt: PromptTemplate) => {
+    saveMutation.mutate(prompt);
   };
 
-  const handleSavePrompt = async (prompt: PromptTemplate) => {
-    try {
-      setLoading(true);
-      if (prompt.id) {
-        await api.put(`/prompts/${prompt.name}`, prompt);
-        toast.success(t('settings.promptManagement.messages.promptUpdatedSuccessfully'));
-      } else {
-        await api.post('/prompts/', prompt);
-        toast.success(t('settings.promptManagement.messages.promptCreatedSuccessfully'));
-      }
-      await loadPrompts();
-      setIsEditing(false);
-      setSelectedPrompt(null);
-    } catch (error) {
-      toast.error(t('settings.promptManagement.messages.failedToSavePrompt'));
-      console.error('Error saving prompt:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeletePrompt = async (promptName: string) => {
+  const handleDeletePrompt = (promptName: string) => {
     if (!window.confirm(t('settings.promptManagement.messages.confirmDeletePrompt'))) {
       return;
     }
-
-    try {
-      await api.delete(`/prompts/${promptName}`);
-      toast.success(t('settings.promptManagement.messages.promptDeletedSuccessfully'));
-      await loadPrompts();
-    } catch (error) {
-      toast.error(t('settings.promptManagement.messages.failedToDeletePrompt'));
-      console.error('Error deleting prompt:', error);
-    }
+    deleteMutation.mutate(promptName);
   };
 
-  const handleTestPrompt = async (prompt: PromptTemplate) => {
-    try {
-      setIsTesting(true);
-      const response = await api.post<{ result: string }>(`/prompts/${prompt.name}/test`, {
-        variables: testVariables
-      });
-      setTestResult(response.result);
-      toast.success(t('settings.promptManagement.messages.promptTestedSuccessfully'));
-    } catch (error) {
-      toast.error(t('settings.promptManagement.messages.failedToTestPrompt'));
-      console.error('Error testing prompt:', error);
-    } finally {
-      setIsTesting(false);
-    }
+  const handleTestPrompt = (prompt: PromptTemplate) => {
+    testMutation.mutate({ promptName: prompt.name, variables: testVariables });
   };
+
+  const loading = loadingPrompts || saveMutation.isPending || resetMutation.isPending || restoreVersionMutation.isPending;
+  const isTesting = testMutation.isPending;
 
   const renderPromptEditor = () => {
     if (!selectedPrompt) return null;
@@ -463,7 +449,9 @@ const PromptManagement = () => {
                       <Badge variant="secondary" className="font-mono text-xs">v{prompt.version}</Badge>
                     </ProfessionalTableCell>
                     <ProfessionalTableCell>
-                      <StatusBadge status={prompt.is_active ? 'active' : 'inactive'} />
+                      <StatusBadge status={prompt.is_active ? 'success' : 'neutral'}>
+                        {prompt.is_active ? t('common.active') : t('common.inactive')}
+                      </StatusBadge>
                     </ProfessionalTableCell>
                     <ProfessionalTableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">

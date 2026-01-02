@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     Mail,
@@ -11,6 +11,7 @@ import {
     Send,
     Loader2
 } from "lucide-react";
+import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -28,6 +29,8 @@ import {
 } from "@/components/ui/professional-card";
 import { ProfessionalInput } from "@/components/ui/professional-input";
 import { ProfessionalButton } from "@/components/ui/professional-button";
+import { settingsApi, getErrorMessage } from "@/lib/api";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 interface EmailSettings {
     provider: string;
@@ -83,43 +86,168 @@ interface NotificationSettings {
 }
 
 interface NotificationsTabProps {
-    emailSettings: EmailSettings;
-    notificationSettings: NotificationSettings;
-    saving: boolean;
-    savingNotifications: boolean;
-    loadingNotifications: boolean;
     isAdmin: boolean;
-    onEmailChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
-    onEmailToggleChange: (name: string, checked: boolean) => void;
-    onEmailProviderChange: (provider: string) => void;
-    onTestEmailConfiguration: () => void;
-    onNotificationToggle: (setting: string, checked: boolean) => void;
-    onNotificationEmailChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    onSaveNotifications: () => void;
-    onTestNotification: () => void;
-    onSave: () => void;
-    onSetEmailSettings: React.Dispatch<React.SetStateAction<EmailSettings>>;
 }
 
-const NotificationsTab: React.FC<NotificationsTabProps> = ({
-    emailSettings,
-    notificationSettings,
-    saving,
-    savingNotifications,
-    loadingNotifications,
-    isAdmin,
-    onEmailChange,
-    onEmailToggleChange,
-    onEmailProviderChange,
-    onTestEmailConfiguration,
-    onNotificationToggle,
-    onNotificationEmailChange,
-    onSaveNotifications,
-    onTestNotification,
-    onSave,
-    onSetEmailSettings
+export const NotificationsTab: React.FC<NotificationsTabProps> = ({
+    isAdmin
 }) => {
     const { t } = useTranslation();
+    const queryClient = useQueryClient();
+
+    const [emailSettings, setEmailSettings] = useState<EmailSettings>({
+        provider: 'aws_ses',
+        from_name: '',
+        from_email: '',
+        enabled: false,
+        aws_access_key_id: '',
+        aws_secret_access_key: '',
+        aws_region: 'us-east-1',
+        azure_connection_string: '',
+        mailgun_api_key: '',
+        mailgun_domain: ''
+    });
+
+    const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
+        user_created: false,
+        user_updated: false,
+        user_deleted: false,
+        user_login: false,
+        client_created: false,
+        client_updated: false,
+        client_deleted: false,
+        invoice_created: false,
+        invoice_updated: false,
+        invoice_deleted: false,
+        invoice_sent: false,
+        invoice_paid: false,
+        invoice_overdue: false,
+        payment_created: false,
+        payment_updated: false,
+        payment_deleted: false,
+        expense_created: false,
+        expense_updated: false,
+        expense_deleted: false,
+        expense_approved: false,
+        expense_rejected: false,
+        expense_submitted: false,
+        inventory_created: false,
+        inventory_updated: false,
+        inventory_deleted: false,
+        inventory_low_stock: false,
+        inventory_out_of_stock: false,
+        statement_generated: false,
+        statement_sent: false,
+        statement_overdue: false,
+        reminder_created: false,
+        reminder_sent: false,
+        reminder_overdue: false,
+        settings_updated: false,
+        notification_email: '',
+        daily_summary: false,
+        weekly_summary: false
+    });
+
+    const { data: generalSettings, isLoading: isLoadingGeneral } = useQuery({
+        queryKey: ['settings'],
+        queryFn: () => settingsApi.getSettings(),
+        enabled: isAdmin,
+    });
+
+    const { data: notificationsData, isLoading: isLoadingNotifications } = useQuery({
+        queryKey: ['notificationSettings'],
+        queryFn: () => settingsApi.getNotificationSettings(),
+        enabled: isAdmin,
+    });
+
+    useEffect(() => {
+        if (generalSettings?.email_settings) {
+            setEmailSettings(generalSettings.email_settings);
+        }
+    }, [generalSettings]);
+
+    useEffect(() => {
+        if (notificationsData) {
+            setNotificationSettings(notificationsData);
+        }
+    }, [notificationsData]);
+
+    const updateEmailMutation = useMutation({
+        mutationFn: (data: EmailSettings) => settingsApi.updateSettings({ email_settings: data }),
+        onSuccess: () => {
+            toast.success(t('settings.settings_saved_successfully'));
+            queryClient.invalidateQueries({ queryKey: ['settings'] });
+        },
+        onError: (error) => {
+            toast.error(getErrorMessage(error, t));
+        }
+    });
+
+    const updateNotificationsMutation = useMutation({
+        mutationFn: (data: NotificationSettings) => settingsApi.updateNotificationSettings(data),
+        onSuccess: () => {
+            toast.success(t('settings.notification_settings_updated_successfully'));
+            queryClient.invalidateQueries({ queryKey: ['notificationSettings'] });
+        },
+        onError: (error) => {
+            toast.error(getErrorMessage(error, t));
+        }
+    });
+
+    const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const { name, value } = e.target;
+        setEmailSettings(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleEmailToggleChange = (name: string, checked: boolean) => {
+        setEmailSettings(prev => ({ ...prev, [name]: checked }));
+    };
+
+    const handleEmailProviderChange = (provider: string) => {
+        setEmailSettings(prev => ({ ...prev, provider }));
+    };
+
+    const handleTestEmailConfiguration = async () => {
+        try {
+            await settingsApi.testEmailConfiguration();
+            toast.success(t('settings.test_email_sent_successfully'));
+        } catch (error) {
+            toast.error(getErrorMessage(error, t));
+        }
+    };
+
+    const handleNotificationToggle = (setting: keyof NotificationSettings, checked: boolean) => {
+        setNotificationSettings(prev => ({ ...prev, [setting]: checked }));
+    };
+
+    const handleNotificationEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setNotificationSettings(prev => ({ ...prev, notification_email: e.target.value }));
+    };
+
+    const handleSaveNotifications = () => {
+        updateNotificationsMutation.mutate(notificationSettings);
+    };
+
+    const handleTestNotification = async () => {
+        try {
+            await settingsApi.testNotification();
+            toast.success(t('settings.test_notification_sent_successfully'));
+        } catch (error) {
+            toast.error(getErrorMessage(error, t));
+        }
+    };
+
+    const handleSaveEmailSettings = () => {
+        updateEmailMutation.mutate(emailSettings);
+    };
+
+    if (isLoadingGeneral || isLoadingNotifications) {
+        return (
+            <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -142,7 +270,7 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                         <Switch
                             id="email_enabled"
                             checked={emailSettings.enabled}
-                            onCheckedChange={(checked) => onEmailToggleChange('enabled', checked)}
+                            onCheckedChange={(checked) => handleEmailToggleChange('enabled', checked)}
                         />
                     </div>
 
@@ -150,7 +278,7 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                         <>
                             <div className="space-y-2">
                                 <Label htmlFor="provider">{t('settings.email_provider')}</Label>
-                                <Select value={emailSettings.provider} onValueChange={onEmailProviderChange}>
+                                <Select value={emailSettings.provider} onValueChange={handleEmailProviderChange}>
                                     <SelectTrigger className="h-10">
                                         <SelectValue placeholder={t('settings.select_email_provider')} />
                                     </SelectTrigger>
@@ -168,7 +296,7 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                                     name="from_name"
                                     label={t('settings.from_name')}
                                     value={emailSettings.from_name}
-                                    onChange={onEmailChange}
+                                    onChange={handleEmailChange}
                                     placeholder="e.g. Acme Corp"
                                     leftIcon={<User className="w-4 h-4 text-muted-foreground" />}
                                 />
@@ -179,7 +307,7 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                                     type="email"
                                     label={t('settings.from_email')}
                                     value={emailSettings.from_email}
-                                    onChange={onEmailChange}
+                                    onChange={handleEmailChange}
                                     placeholder="noreply@example.com"
                                     leftIcon={<Mail className="w-4 h-4 text-muted-foreground" />}
                                 />
@@ -198,7 +326,7 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                                             type="password"
                                             label={t('settings.aws_access_key_id')}
                                             value={emailSettings.aws_access_key_id}
-                                            onChange={onEmailChange}
+                                            onChange={handleEmailChange}
                                             leftIcon={<Key className="w-4 h-4 text-muted-foreground" />}
                                         />
                                         <ProfessionalInput
@@ -207,7 +335,7 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                                             type="password"
                                             label={t('settings.aws_secret_access_key')}
                                             value={emailSettings.aws_secret_access_key}
-                                            onChange={onEmailChange}
+                                            onChange={handleEmailChange}
                                             leftIcon={<Key className="w-4 h-4 text-muted-foreground" />}
                                         />
                                     </div>
@@ -215,7 +343,7 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                                         <Label htmlFor="aws_region">{t('settings.aws_region')}</Label>
                                         <Select
                                             value={emailSettings.aws_region}
-                                            onValueChange={(value) => onSetEmailSettings(prev => ({ ...prev, aws_region: value }))}
+                                            onValueChange={(value) => setEmailSettings(prev => ({ ...prev, aws_region: value }))}
                                         >
                                             <SelectTrigger className="h-10">
                                                 <SelectValue />
@@ -244,7 +372,7 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                                             type="password"
                                             label={t('settings.azure_connection_string')}
                                             value={emailSettings.azure_connection_string}
-                                            onChange={onEmailChange}
+                                            onChange={handleEmailChange}
                                             leftIcon={<Globe className="w-4 h-4 text-muted-foreground" />}
                                         />
                                     </div>
@@ -264,7 +392,7 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                                             type="password"
                                             label={t('settings.mailgun_api_key')}
                                             value={emailSettings.mailgun_api_key}
-                                            onChange={onEmailChange}
+                                            onChange={handleEmailChange}
                                             leftIcon={<Key className="w-4 h-4 text-muted-foreground" />}
                                         />
                                         <ProfessionalInput
@@ -272,7 +400,7 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                                             name="mailgun_domain"
                                             label={t('settings.mailgun_domain')}
                                             value={emailSettings.mailgun_domain}
-                                            onChange={onEmailChange}
+                                            onChange={handleEmailChange}
                                             leftIcon={<Globe className="w-4 h-4 text-muted-foreground" />}
                                         />
                                     </div>
@@ -283,14 +411,14 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                                 <ProfessionalButton
                                     type="button"
                                     variant="outline"
-                                    onClick={onTestEmailConfiguration}
+                                    onClick={handleTestEmailConfiguration}
                                     leftIcon={<Activity className="w-4 h-4" />}
                                 >
                                     {t('settings.test_configuration')}
                                 </ProfessionalButton>
                                 <ProfessionalButton
-                                    onClick={onSave}
-                                    loading={saving}
+                                    onClick={handleSaveEmailSettings}
+                                    loading={updateEmailMutation.isPending}
                                     variant="gradient"
                                 >
                                     {t('settings.save_email_settings')}
@@ -301,7 +429,6 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                 </ProfessionalCardContent>
             </ProfessionalCard>
 
-            {/* Notification Settings Section */}
             <ProfessionalCard variant="elevated">
                 <ProfessionalCardHeader>
                     <ProfessionalCardTitle className="flex items-center gap-2">
@@ -313,464 +440,244 @@ const NotificationsTab: React.FC<NotificationsTabProps> = ({
                     </p>
                 </ProfessionalCardHeader>
                 <ProfessionalCardContent className="space-y-8">
-                    {loadingNotifications ? (
-                        <div className="flex items-center justify-center py-12">
-                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                            <span className="sr-only">{t('settings.loading_notification_settings')}</span>
+                    <div className="p-6 bg-muted/20 rounded-xl border border-border/50 space-y-4">
+                        <ProfessionalInput
+                            id="notification_email"
+                            type="email"
+                            label="Notification Email (Optional)"
+                            value={notificationSettings.notification_email}
+                            onChange={handleNotificationEmailChange}
+                            placeholder="Leave empty to use your account email"
+                            helperText="If specified, notifications will be sent to this email instead of your account email"
+                            leftIcon={<Mail className="w-4 h-4 text-muted-foreground" />}
+                        />
+                    </div>
+
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-semibold">User Operations</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {[
+                                { key: 'user_created', label: 'User Created', desc: 'When a new user is added' },
+                                { key: 'user_updated', label: 'User Updated', desc: 'When user info is modified' },
+                                { key: 'user_deleted', label: 'User Deleted', desc: 'When a user is removed' },
+                                { key: 'user_login', label: 'User Login', desc: 'When a user logs in' }
+                            ].map((op) => (
+                                <div key={op.key} className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label>{op.label}</Label>
+                                        <p className="text-sm text-muted-foreground">{op.desc}</p>
+                                    </div>
+                                    <Switch
+                                        checked={notificationSettings[op.key as keyof NotificationSettings] as boolean}
+                                        onCheckedChange={(checked) => handleNotificationToggle(op.key as keyof NotificationSettings, checked)}
+                                    />
+                                </div>
+                            ))}
                         </div>
-                    ) : (
-                        <>
-                            {/* Custom notification email */}
-                            <div className="p-6 bg-muted/20 rounded-xl border border-border/50 space-y-4">
-                                <ProfessionalInput
-                                    id="notification_email"
-                                    type="email"
-                                    label="Notification Email (Optional)"
-                                    value={notificationSettings.notification_email}
-                                    onChange={onNotificationEmailChange}
-                                    placeholder="Leave empty to use your account email"
-                                    helperText="If specified, notifications will be sent to this email instead of your account email"
-                                    leftIcon={<Mail className="w-4 h-4 text-muted-foreground" />}
-                                />
-                            </div>
+                    </div>
 
-                            {/* User Operations */}
-                            <div className="space-y-4">
-                                <h3 className="text-lg font-semibold">User Operations</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>User Created</Label>
-                                            <p className="text-sm text-muted-foreground">When a new user is added</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.user_created}
-                                            onCheckedChange={(checked) => onNotificationToggle('user_created', checked)}
-                                        />
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-semibold">Client Operations</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {[
+                                { key: 'client_created', label: 'Client Created', desc: 'When a new client is added' },
+                                { key: 'client_updated', label: 'Client Updated', desc: 'When client info is modified' },
+                                { key: 'client_deleted', label: 'Client Deleted', desc: 'When a client is removed' }
+                            ].map((op) => (
+                                <div key={op.key} className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label>{op.label}</Label>
+                                        <p className="text-sm text-muted-foreground">{op.desc}</p>
                                     </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>User Updated</Label>
-                                            <p className="text-sm text-muted-foreground">When user info is modified</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.user_updated}
-                                            onCheckedChange={(checked) => onNotificationToggle('user_updated', checked)}
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>User Deleted</Label>
-                                            <p className="text-sm text-muted-foreground">When a user is removed</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.user_deleted}
-                                            onCheckedChange={(checked) => onNotificationToggle('user_deleted', checked)}
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>User Login</Label>
-                                            <p className="text-sm text-muted-foreground">When a user logs in</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.user_login}
-                                            onCheckedChange={(checked) => onNotificationToggle('user_login', checked)}
-                                        />
-                                    </div>
+                                    <Switch
+                                        checked={notificationSettings[op.key as keyof NotificationSettings] as boolean}
+                                        onCheckedChange={(checked) => handleNotificationToggle(op.key as keyof NotificationSettings, checked)}
+                                    />
                                 </div>
-                            </div>
+                            ))}
+                        </div>
+                    </div>
 
-                            {/* Client Operations */}
-                            <div className="space-y-4">
-                                <h3 className="text-lg font-semibold">Client Operations</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>Client Created</Label>
-                                            <p className="text-sm text-muted-foreground">When a new client is added</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.client_created}
-                                            onCheckedChange={(checked) => onNotificationToggle('client_created', checked)}
-                                        />
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-semibold">Invoice Operations</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {[
+                                { key: 'invoice_created', label: 'Invoice Created', desc: 'When a new invoice is created' },
+                                { key: 'invoice_updated', label: 'Invoice Updated', desc: 'When invoice is modified' },
+                                { key: 'invoice_deleted', label: 'Invoice Deleted', desc: 'When an invoice is deleted' },
+                                { key: 'invoice_sent', label: 'Invoice Sent', desc: 'When invoice is sent to client' },
+                                { key: 'invoice_paid', label: 'Invoice Paid', desc: 'When invoice is marked as paid' },
+                                { key: 'invoice_overdue', label: 'Invoice Overdue', desc: 'When invoice becomes overdue' }
+                            ].map((op) => (
+                                <div key={op.key} className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label>{op.label}</Label>
+                                        <p className="text-sm text-muted-foreground">{op.desc}</p>
                                     </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>Client Updated</Label>
-                                            <p className="text-sm text-muted-foreground">When client info is modified</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.client_updated}
-                                            onCheckedChange={(checked) => onNotificationToggle('client_updated', checked)}
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>Client Deleted</Label>
-                                            <p className="text-sm text-muted-foreground">When a client is removed</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.client_deleted}
-                                            onCheckedChange={(checked) => onNotificationToggle('client_deleted', checked)}
-                                        />
-                                    </div>
+                                    <Switch
+                                        checked={notificationSettings[op.key as keyof NotificationSettings] as boolean}
+                                        onCheckedChange={(checked) => handleNotificationToggle(op.key as keyof NotificationSettings, checked)}
+                                    />
                                 </div>
-                            </div>
+                            ))}
+                        </div>
+                    </div>
 
-                            {/* Invoice Operations */}
-                            <div className="space-y-4">
-                                <h3 className="text-lg font-semibold">Invoice Operations</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>Invoice Created</Label>
-                                            <p className="text-sm text-muted-foreground">When a new invoice is created</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.invoice_created}
-                                            onCheckedChange={(checked) => onNotificationToggle('invoice_created', checked)}
-                                        />
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-semibold">Payment Operations</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {[
+                                { key: 'payment_created', label: 'Payment Created', desc: 'When a payment is recorded' },
+                                { key: 'payment_updated', label: 'Payment Updated', desc: 'When payment is modified' },
+                                { key: 'payment_deleted', label: 'Payment Deleted', desc: 'When a payment is removed' }
+                            ].map((op) => (
+                                <div key={op.key} className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label>{op.label}</Label>
+                                        <p className="text-sm text-muted-foreground">{op.desc}</p>
                                     </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>Invoice Updated</Label>
-                                            <p className="text-sm text-muted-foreground">When invoice is modified</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.invoice_updated}
-                                            onCheckedChange={(checked) => onNotificationToggle('invoice_updated', checked)}
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>Invoice Deleted</Label>
-                                            <p className="text-sm text-muted-foreground">When an invoice is deleted</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.invoice_deleted}
-                                            onCheckedChange={(checked) => onNotificationToggle('invoice_deleted', checked)}
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>Invoice Sent</Label>
-                                            <p className="text-sm text-muted-foreground">When invoice is sent to client</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.invoice_sent}
-                                            onCheckedChange={(checked) => onNotificationToggle('invoice_sent', checked)}
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>Invoice Paid</Label>
-                                            <p className="text-sm text-muted-foreground">When invoice is marked as paid</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.invoice_paid}
-                                            onCheckedChange={(checked) => onNotificationToggle('invoice_paid', checked)}
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>Invoice Overdue</Label>
-                                            <p className="text-sm text-muted-foreground">When invoice becomes overdue</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.invoice_overdue}
-                                            onCheckedChange={(checked) => onNotificationToggle('invoice_overdue', checked)}
-                                        />
-                                    </div>
+                                    <Switch
+                                        checked={notificationSettings[op.key as keyof NotificationSettings] as boolean}
+                                        onCheckedChange={(checked) => handleNotificationToggle(op.key as keyof NotificationSettings, checked)}
+                                    />
                                 </div>
-                            </div>
+                            ))}
+                        </div>
+                    </div>
 
-                            {/* Payment Operations */}
-                            <div className="space-y-4">
-                                <h3 className="text-lg font-semibold">Payment Operations</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>Payment Created</Label>
-                                            <p className="text-sm text-muted-foreground">When a payment is recorded</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.payment_created}
-                                            onCheckedChange={(checked) => onNotificationToggle('payment_created', checked)}
-                                        />
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-semibold">{t('settings.expense_operations')}</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {[
+                                { key: 'expense_created', label: t('settings.expense_created'), desc: t('settings.expense_created_description') },
+                                { key: 'expense_updated', label: t('settings.expense_updated'), desc: t('settings.expense_updated_description') },
+                                { key: 'expense_deleted', label: t('settings.expense_deleted'), desc: t('settings.expense_deleted_description') },
+                                { key: 'expense_approved', label: t('settings.expense_approved'), desc: t('settings.expense_approved_description') },
+                                { key: 'expense_rejected', label: t('settings.expense_rejected'), desc: t('settings.expense_rejected_description') },
+                                { key: 'expense_submitted', label: t('settings.expense_submitted'), desc: t('settings.expense_submitted_description') }
+                            ].map((op) => (
+                                <div key={op.key} className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label>{op.label}</Label>
+                                        <p className="text-sm text-muted-foreground">{op.desc}</p>
                                     </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>Payment Updated</Label>
-                                            <p className="text-sm text-muted-foreground">When payment is modified</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.payment_updated}
-                                            onCheckedChange={(checked) => onNotificationToggle('payment_updated', checked)}
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>Payment Deleted</Label>
-                                            <p className="text-sm text-muted-foreground">When a payment is removed</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.payment_deleted}
-                                            onCheckedChange={(checked) => onNotificationToggle('payment_deleted', checked)}
-                                        />
-                                    </div>
+                                    <Switch
+                                        checked={notificationSettings[op.key as keyof NotificationSettings] as boolean}
+                                        onCheckedChange={(checked) => handleNotificationToggle(op.key as keyof NotificationSettings, checked)}
+                                    />
                                 </div>
-                            </div>
+                            ))}
+                        </div>
+                    </div>
 
-                            {/* Expense Operations */}
-                            <div className="space-y-4">
-                                <h3 className="text-lg font-semibold">{t('settings.expense_operations')}</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>{t('settings.expense_created')}</Label>
-                                            <p className="text-sm text-muted-foreground">{t('settings.expense_created_description')}</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.expense_created}
-                                            onCheckedChange={(checked) => onNotificationToggle('expense_created', checked)}
-                                        />
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-semibold">{t('settings.inventory_operations')}</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {[
+                                { key: 'inventory_created', label: t('settings.inventory_created'), desc: t('settings.inventory_created_description') },
+                                { key: 'inventory_updated', label: t('settings.inventory_updated'), desc: t('settings.inventory_updated_description') },
+                                { key: 'inventory_deleted', label: t('settings.inventory_deleted'), desc: t('settings.inventory_deleted_description') },
+                                { key: 'inventory_low_stock', label: t('settings.inventory_low_stock'), desc: t('settings.inventory_low_stock_description') },
+                                { key: 'inventory_out_of_stock', label: t('settings.inventory_out_of_stock'), desc: t('settings.inventory_out_of_stock_description') }
+                            ].map((op) => (
+                                <div key={op.key} className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label>{op.label}</Label>
+                                        <p className="text-sm text-muted-foreground">{op.desc}</p>
                                     </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>{t('settings.expense_updated')}</Label>
-                                            <p className="text-sm text-muted-foreground">{t('settings.expense_updated_description')}</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.expense_updated}
-                                            onCheckedChange={(checked) => onNotificationToggle('expense_updated', checked)}
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>{t('settings.expense_deleted')}</Label>
-                                            <p className="text-sm text-muted-foreground">{t('settings.expense_deleted_description')}</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.expense_deleted}
-                                            onCheckedChange={(checked) => onNotificationToggle('expense_deleted', checked)}
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>{t('settings.expense_approved')}</Label>
-                                            <p className="text-sm text-muted-foreground">{t('settings.expense_approved_description')}</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.expense_approved}
-                                            onCheckedChange={(checked) => onNotificationToggle('expense_approved', checked)}
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>{t('settings.expense_rejected')}</Label>
-                                            <p className="text-sm text-muted-foreground">{t('settings.expense_rejected_description')}</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.expense_rejected}
-                                            onCheckedChange={(checked) => onNotificationToggle('expense_rejected', checked)}
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>{t('settings.expense_submitted')}</Label>
-                                            <p className="text-sm text-muted-foreground">{t('settings.expense_submitted_description')}</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.expense_submitted}
-                                            onCheckedChange={(checked) => onNotificationToggle('expense_submitted', checked)}
-                                        />
-                                    </div>
+                                    <Switch
+                                        checked={notificationSettings[op.key as keyof NotificationSettings] as boolean}
+                                        onCheckedChange={(checked) => handleNotificationToggle(op.key as keyof NotificationSettings, checked)}
+                                    />
                                 </div>
-                            </div>
+                            ))}
+                        </div>
+                    </div>
 
-                            {/* Inventory Operations */}
-                            <div className="space-y-4">
-                                <h3 className="text-lg font-semibold">{t('settings.inventory_operations')}</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>{t('settings.inventory_created')}</Label>
-                                            <p className="text-sm text-muted-foreground">{t('settings.inventory_created_description')}</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.inventory_created}
-                                            onCheckedChange={(checked) => onNotificationToggle('inventory_created', checked)}
-                                        />
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-semibold">{t('settings.statement_operations')}</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {[
+                                { key: 'statement_generated', label: t('settings.statement_generated'), desc: t('settings.statement_generated_description') },
+                                { key: 'statement_sent', label: t('settings.statement_sent'), desc: t('settings.statement_sent_description') },
+                                { key: 'statement_overdue', label: t('settings.statement_overdue'), desc: t('settings.statement_overdue_description') }
+                            ].map((op) => (
+                                <div key={op.key} className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label>{op.label}</Label>
+                                        <p className="text-sm text-muted-foreground">{op.desc}</p>
                                     </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>{t('settings.inventory_updated')}</Label>
-                                            <p className="text-sm text-muted-foreground">{t('settings.inventory_updated_description')}</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.inventory_updated}
-                                            onCheckedChange={(checked) => onNotificationToggle('inventory_updated', checked)}
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>{t('settings.inventory_deleted')}</Label>
-                                            <p className="text-sm text-muted-foreground">{t('settings.inventory_deleted_description')}</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.inventory_deleted}
-                                            onCheckedChange={(checked) => onNotificationToggle('inventory_deleted', checked)}
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>{t('settings.inventory_low_stock')}</Label>
-                                            <p className="text-sm text-muted-foreground">{t('settings.inventory_low_stock_description')}</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.inventory_low_stock}
-                                            onCheckedChange={(checked) => onNotificationToggle('inventory_low_stock', checked)}
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>{t('settings.inventory_out_of_stock')}</Label>
-                                            <p className="text-sm text-muted-foreground">{t('settings.inventory_out_of_stock_description')}</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.inventory_out_of_stock}
-                                            onCheckedChange={(checked) => onNotificationToggle('inventory_out_of_stock', checked)}
-                                        />
-                                    </div>
+                                    <Switch
+                                        checked={notificationSettings[op.key as keyof NotificationSettings] as boolean}
+                                        onCheckedChange={(checked) => handleNotificationToggle(op.key as keyof NotificationSettings, checked)}
+                                    />
                                 </div>
-                            </div>
+                            ))}
+                        </div>
+                    </div>
 
-                            {/* Statement Operations */}
-                            <div className="space-y-4">
-                                <h3 className="text-lg font-semibold">{t('settings.statement_operations')}</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>{t('settings.statement_generated')}</Label>
-                                            <p className="text-sm text-muted-foreground">{t('settings.statement_generated_description')}</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.statement_generated}
-                                            onCheckedChange={(checked) => onNotificationToggle('statement_generated', checked)}
-                                        />
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-semibold">{t('settings.reminder_operations')}</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {[
+                                { key: 'reminder_created', label: t('settings.reminder_created'), desc: t('settings.reminder_created_description') },
+                                { key: 'reminder_sent', label: t('settings.reminder_sent'), desc: t('settings.reminder_sent_description') },
+                                { key: 'reminder_overdue', label: t('settings.reminder_overdue'), desc: t('settings.reminder_overdue_description') }
+                            ].map((op) => (
+                                <div key={op.key} className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label>{op.label}</Label>
+                                        <p className="text-sm text-muted-foreground">{op.desc}</p>
                                     </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>{t('settings.statement_sent')}</Label>
-                                            <p className="text-sm text-muted-foreground">{t('settings.statement_sent_description')}</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.statement_sent}
-                                            onCheckedChange={(checked) => onNotificationToggle('statement_sent', checked)}
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>{t('settings.statement_overdue')}</Label>
-                                            <p className="text-sm text-muted-foreground">{t('settings.statement_overdue_description')}</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.statement_overdue}
-                                            onCheckedChange={(checked) => onNotificationToggle('statement_overdue', checked)}
-                                        />
-                                    </div>
+                                    <Switch
+                                        checked={notificationSettings[op.key as keyof NotificationSettings] as boolean}
+                                        onCheckedChange={(checked) => handleNotificationToggle(op.key as keyof NotificationSettings, checked)}
+                                    />
                                 </div>
-                            </div>
+                            ))}
+                        </div>
+                    </div>
 
-                            {/* Reminder Operations */}
-                            <div className="space-y-4">
-                                <h3 className="text-lg font-semibold">{t('settings.reminder_operations')}</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>{t('settings.reminder_created')}</Label>
-                                            <p className="text-sm text-muted-foreground">{t('settings.reminder_created_description')}</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.reminder_created}
-                                            onCheckedChange={(checked) => onNotificationToggle('reminder_created', checked)}
-                                        />
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-semibold">Summary Notifications</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {[
+                                { key: 'daily_summary', label: t('settings.daily_summary'), desc: t('settings.daily_summary_description') },
+                                { key: 'weekly_summary', label: t('settings.weekly_summary'), desc: t('settings.weekly_summary_description') }
+                            ].map((op) => (
+                                <div key={op.key} className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label>{op.label}</Label>
+                                        <p className="text-sm text-muted-foreground">{op.desc}</p>
                                     </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>{t('settings.reminder_sent')}</Label>
-                                            <p className="text-sm text-muted-foreground">{t('settings.reminder_sent_description')}</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.reminder_sent}
-                                            onCheckedChange={(checked) => onNotificationToggle('reminder_sent', checked)}
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>{t('settings.reminder_overdue')}</Label>
-                                            <p className="text-sm text-muted-foreground">{t('settings.reminder_overdue_description')}</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.reminder_overdue}
-                                            onCheckedChange={(checked) => onNotificationToggle('reminder_overdue', checked)}
-                                        />
-                                    </div>
+                                    <Switch
+                                        checked={notificationSettings[op.key as keyof NotificationSettings] as boolean}
+                                        onCheckedChange={(checked) => handleNotificationToggle(op.key as keyof NotificationSettings, checked)}
+                                    />
                                 </div>
-                            </div>
+                            ))}
+                        </div>
+                    </div>
 
-                            {/* Summary Notifications */}
-                            <div className="space-y-4">
-                                <h3 className="text-lg font-semibold">Summary Notifications</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>{t('settings.daily_summary')}</Label>
-                                            <p className="text-sm text-muted-foreground">{t('settings.daily_summary_description')}</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.daily_summary}
-                                            onCheckedChange={(checked) => onNotificationToggle('daily_summary', checked)}
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label>{t('settings.weekly_summary')}</Label>
-                                            <p className="text-sm text-muted-foreground">{t('settings.weekly_summary_description')}</p>
-                                        </div>
-                                        <Switch
-                                            checked={notificationSettings.weekly_summary}
-                                            onCheckedChange={(checked) => onNotificationToggle('weekly_summary', checked)}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Action buttons */}
-                            <div className="flex justify-between pt-6 border-t border-border/50">
-                                <ProfessionalButton
-                                    type="button"
-                                    variant="outline"
-                                    onClick={onTestNotification}
-                                    leftIcon={<Send className="w-4 h-4" />}
-                                >
-                                    {t('settings.send_test_notification')}
-                                </ProfessionalButton>
-                                <ProfessionalButton
-                                    onClick={onSaveNotifications}
-                                    loading={savingNotifications}
-                                    variant="gradient"
-                                >
-                                    {t('settings.save_notification_settings')}
-                                </ProfessionalButton>
-                            </div>
-                        </>
-                    )}
+                    <div className="flex justify-between pt-6 border-t border-border/50">
+                        <ProfessionalButton
+                            type="button"
+                            variant="outline"
+                            onClick={handleTestNotification}
+                            leftIcon={<Send className="w-4 h-4" />}
+                        >
+                            {t('settings.send_test_notification')}
+                        </ProfessionalButton>
+                        <ProfessionalButton
+                            onClick={handleSaveNotifications}
+                            loading={updateNotificationsMutation.isPending}
+                            variant="gradient"
+                        >
+                            {t('settings.save_notification_settings')}
+                        </ProfessionalButton>
+                    </div>
                 </ProfessionalCardContent>
             </ProfessionalCard>
         </div>
     );
 };
-
-export default NotificationsTab;

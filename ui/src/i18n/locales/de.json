@@ -913,6 +913,7 @@
     "company_address": "Firmenadresse",
     "tax_id": "Steuernummer / EIN",
     "company_logo": "Firmenlogo",
+    "company_email_cannot_be_changed": "Die Firmen-E-Mail kann hier nicht geändert werden.",
     "logo_preview": "Logovorschau",
     "upload_logo": "Logo hochladen",
     "uploading_logo": "Logo wird hochgeladen...",
@@ -945,6 +946,7 @@
     "settings_saved": "Einstellungen erfolgreich gespeichert",
     "settings_error": "Fehler beim Speichern der Einstellungen",
     "tabs": {
+      "profile": "Profil",
       "company": "Firmeninfo",
       "invoices": "Rechnungseinstellungen",
       "currencies": "Währungen",
