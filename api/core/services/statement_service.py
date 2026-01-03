@@ -488,7 +488,9 @@ JSON:"""
                         continue
 
             # If no JSON found, try to extract transaction-like patterns
-            return self._extract_with_regex(response)
+            # If no JSON found, log and return empty. Do NOT fall back to regex silently.
+            logger.warning("No JSON content found in LLM response")
+            return []
 
         except Exception as e:
             logger.error(f"Error parsing LLM response: {e}")
@@ -1453,7 +1455,9 @@ JSON:"""
                         continue
 
             # If no JSON found, try to extract transaction-like patterns
-            return self._extract_with_regex(response)
+            # If no JSON found, log and return empty. Do NOT fall back to regex silently.
+            logger.warning("No JSON content found in LLM response")
+            return []
 
         except Exception as e:
             logger.error(f"Error parsing Ollama response: {e}")
@@ -2086,25 +2090,12 @@ def process_bank_pdf_with_llm(pdf_path: str, ai_config: Optional[Dict[str, Any]]
                         return []
                     ext = _P(safe_path).suffix.lower()
                     if ext == ".csv":
-                        txns = _parse_csv_file_basic(safe_path)
+                        return _parse_csv_file_basic(safe_path)
                     else:
-                        try:
-                            from pypdf import PdfReader
-                        except ImportError:
-                            logger.error("pypdf not available for fallback extraction")
-                            return []
-                        texts = []
-                        with open(safe_path, "rb") as f:
-                            reader = PdfReader(f)
-                            for page in reader.pages:
-                                texts.append(page.extract_text() or "")
-                        raw_text = "\n\n".join(texts)
-                        text = _preprocess_bank_text(raw_text)
-                        txns = _enhanced_regex_extraction(text)
-                    return txns
+                        raise BankLLMUnavailableError(f"LLM extraction failed for non-CSV file: {pdf_path}")
                 except Exception as fallback_e:
                     logger.error(f"Fallback extraction failed: {fallback_e}")
-                    return []
+                    raise BankLLMUnavailableError(f"LLM extraction failed and no transactions found: {fallback_e}")
         else:
             # Fallback to environment variables - create ai_config from env vars
             model_name = os.getenv("OLLAMA_MODEL", "gpt-oss:latest")
@@ -2129,9 +2120,8 @@ def process_bank_pdf_with_llm(pdf_path: str, ai_config: Optional[Dict[str, Any]]
                     request_timeout=120
                 )
             except Exception as e:
-                logger.warning(f"Failed to initialize BankTransactionExtractor: {e}")
-                logger.info("Falling back to legacy regex extraction")
-                # Fallback to simple PDF loading and regex extraction
+                logger.warning(f"Failed to initialize UniversalBankTransactionExtractor: {e}")
+                # Fallback to simple PDF loading or CSV parsing
                 try:
                     from pathlib import Path as _P
                     try:
@@ -2142,31 +2132,17 @@ def process_bank_pdf_with_llm(pdf_path: str, ai_config: Optional[Dict[str, Any]]
                     ext = _P(safe_path).suffix.lower()
                     if ext == ".csv":
                         # Robust CSV fallback parser that skips preamble lines
-                        txns = _parse_csv_file_basic(safe_path)
+                        return _parse_csv_file_basic(safe_path)
                     else:
-                        # Simple fallback PDF loader
-                        try:
-                            from pypdf import PdfReader
-                        except ImportError:
-                            logger.error("pypdf not available for fallback extraction")
-                            raise BankLLMUnavailableError("LLM not reachable and fallback unavailable")
-                        texts = []
-                        with open(safe_path, "rb") as f:
-                            reader = PdfReader(f)
-                            for page in reader.pages:
-                                texts.append(page.extract_text() or "")
-                        raw_text = "\n\n".join(texts)
-                        text = _preprocess_bank_text(raw_text)
-                        txns = _enhanced_regex_extraction(text)
-                    if not txns:
-                        # Signal to caller to retry later
-                        raise BankLLMUnavailableError("LLM not reachable; no transactions via fallback")
-                    return txns
+                        # For PDF files, we no longer fall back to regex.
+                        # Signal to caller to retry later or mark as failed.
+                        logger.warning(f"LLM initialization failed for {pdf_path}; regex fallback disabled.")
+                        raise BankLLMUnavailableError(f"LLM initialization failed for non-CSV file: {e}")
                 except BankLLMUnavailableError:
                     raise
                 except Exception as fallback_e:
-                    logger.error(f"Fallback extraction also failed: {fallback_e}")
-                    raise BankLLMUnavailableError("LLM not reachable and fallback failed")
+                    logger.error(f"Fallback check failed: {fallback_e}")
+                    raise BankLLMUnavailableError(f"LLM initialization failed and fallback check failed: {fallback_e}")
         
         # Dispatch based on file extension (supports PDF and CSV)
         from pathlib import Path as _P
@@ -2266,7 +2242,7 @@ def process_bank_pdf_with_llm(pdf_path: str, ai_config: Optional[Dict[str, Any]]
         except ImportError:
             logger.error(f"Processing failed: {e}")
         
-        # Final fallback to regex extraction
+        # Final fallback check
         try:
             from pathlib import Path as _P
             # Validate pdf_path to prevent path traversal
@@ -2280,23 +2256,14 @@ def process_bank_pdf_with_llm(pdf_path: str, ai_config: Optional[Dict[str, Any]]
                 # Robust CSV fallback
                 return _parse_csv_file_basic(safe_path)
             else:
-                try:
-                    from pypdf import PdfReader
-                except ImportError:
-                    logger.error("pypdf not available for final fallback extraction")
-                    return []
-                # safe_path already validated above
-
-                texts = []
-                with open(safe_path, "rb") as f:
-                    reader = PdfReader(f)
-                    for page in reader.pages:
-                        texts.append(page.extract_text() or "")
-                raw_text = "\n\n".join(texts)
-                text = _preprocess_bank_text(raw_text)
-                return _enhanced_regex_extraction(text)
+                # For PDF files, strictly require LLM or fail.
+                # Signal to caller that PDF extraction failed.
+                logger.warning(f"PDF extraction failed for {pdf_path}; LLM and OCR both failed/unavailable.")
+                raise BankLLMUnavailableError("PDF extraction failed (LLM and OCR failed/unavailable). Silent regex fallback disabled.")
+        except BankLLMUnavailableError:
+            raise
         except Exception as final_e:
-            logger.error(f"Final fallback extraction failed: {final_e}")
+            logger.error(f"Final fallback check failed: {final_e}")
             return []
 
 
@@ -2348,8 +2315,9 @@ def extract_transactions_from_pdf_paths(pdf_paths: List[str]) -> List[Dict[str, 
                             texts.append(page.extract_text() or "")
                     raw_text = "\n\n".join(texts)
                     text = _preprocess_bank_text(raw_text)
-                    transactions = _enhanced_regex_extraction(text)
-                    all_transactions.extend(transactions)
+                    # Removed automatic regex fallback for PDFs.
+                    logger.warning(f"Failed to process {pdf_path} with LLM; regex fallback disabled.")
+                    continue
                 except Exception as regex_e:
                     logger.error(f"Regex fallback also failed for {pdf_path}: {regex_e}")
                     continue
@@ -2379,8 +2347,9 @@ def extract_transactions_from_pdf_paths(pdf_paths: List[str]) -> List[Dict[str, 
                         texts.append(page.extract_text() or "")
                 raw_text = "\n\n".join(texts)
                 text = _preprocess_bank_text(raw_text)
-                transactions = _enhanced_regex_extraction(text)
-                all_transactions.extend(transactions)
+                # Removed automatic regex fallback for PDFs.
+                logger.warning(f"Failed to process {pdf_path}; regex fallback disabled.")
+                continue
             except Exception as file_e:
                 logger.error(f"Failed to process {pdf_path}: {file_e}")
                 continue

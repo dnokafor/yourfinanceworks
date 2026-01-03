@@ -439,8 +439,12 @@ class BankStatement(Base):
     stored_filename = Column(String, nullable=False)
     file_path = Column(String, nullable=False)
     cloud_file_url = Column(String, nullable=True)  # Cloud storage URL (S3, etc.)
-    status = Column(String, default="processed", nullable=False)  # uploaded|processing|processed|failed
+    status = Column(String, default="processing", nullable=False)  # uploaded|processing|processed|failed
     extracted_count = Column(Integer, default=0, nullable=False)
+    extraction_method = Column(String, nullable=True)  # llm|regex|csv
+    analysis_error = Column(Text, nullable=True)
+    analysis_updated_at = Column(DateTime(timezone=True), nullable=True)
+    local_cache_path = Column(String, nullable=True)
     notes = Column(Text, nullable=True)
     labels = Column(JSON, nullable=True)
     created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # User attribution

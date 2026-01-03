@@ -9,12 +9,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { CalendarIcon, Upload, ArrowLeft, Eye, Download, ExternalLink, Trash2, FileText, Plus, Copy, X, Edit, MoreHorizontal, Loader2, ChevronDown, ChevronUp, RotateCcw, Search, Tag, Minus, Filter, Save } from 'lucide-react';
+import { CalendarIcon, Upload, ArrowLeft, Eye, Download, ExternalLink, Trash2, FileText, Plus, Copy, X, Edit, MoreHorizontal, Loader2, ChevronDown, ChevronUp, RotateCcw, Search, Tag, Minus, Filter, Save, AlertCircle } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
 import { bankStatementApi, BankTransactionEntry, BankStatementDetail, BankStatementSummary, expenseApi, invoiceApi, clientApi, formatStatus, DeletedBankStatement } from '@/lib/api';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -43,6 +44,41 @@ const STATEMENT_PROVIDERS = [
 ];
 
 type BankRow = BankTransactionEntry & { id?: number; invoice_id?: number | null; expense_id?: number | null; backend_id?: number | null };
+
+// Helper component to display analysis status consistently
+function StatusBadge({
+  status,
+  extraction_method,
+  analysis_error
+}: {
+  status?: string;
+  extraction_method?: string;
+  analysis_error?: string | null;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <div className="flex flex-col gap-1">
+      <Badge
+        variant="outline"
+        className={`
+          font-medium capitalize h-6 px-3
+          ${status === 'processed' ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-800' : ''}
+          ${status === 'processing' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-800 animate-pulse' : ''}
+          ${status === 'failed' ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 border-red-200 dark:border-red-800' : ''}
+          ${status === 'uploaded' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800' : ''}
+        `}
+      >
+        {status === 'processed' ? t('common.done', 'Done') : t(`common.${status || 'unknown'}`, status || 'Unknown')}
+      </Badge>
+      {status === 'processed' && extraction_method && (
+        <span className="text-[10px] text-muted-foreground ml-1 uppercase font-bold tracking-tighter">
+          via {extraction_method}
+        </span>
+      )}
+    </div>
+  );
+}
 
 // Statement Upload Button with feature gating
 function StatementUploadButton({ onUpload }: { onUpload: () => void }) {
@@ -970,8 +1006,14 @@ export default function Statements() {
                             />
                           </div>
                         </TableCell>
-                        <TableCell>{formatStatus(s.status)}</TableCell>
-                        <TableCell>{s.extracted_count}</TableCell>
+                        <TableCell>
+                          <StatusBadge
+                            status={s.status}
+                            extraction_method={s.extraction_method}
+                            analysis_error={s.analysis_error}
+                          />
+                        </TableCell>
+                        <TableCell className="text-center font-medium">{s.extracted_count}</TableCell>
                         <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                           {s.created_by_username || s.created_by_email || t('common.unknown')}
                         </TableCell>
@@ -980,6 +1022,38 @@ export default function Statements() {
                           <Button size="sm" variant="outline" onClick={() => openStatement(s.id)}>
                             <Eye className="w-4 h-4" />
                           </Button>
+                          {(s.status === 'failed' || s.status === 'processed') && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={async () => {
+                                if (reprocessingLocks.has(s.id)) return;
+                                try {
+                                  setReprocessingLocks(prev => new Set([...prev, s.id]));
+                                  await bankStatementApi.reprocess(s.id);
+                                  toast.success('Reprocessing started');
+                                  await loadList();
+                                  setTimeout(() => {
+                                    setReprocessingLocks(prev => {
+                                      const next = new Set(prev);
+                                      next.delete(s.id);
+                                      return next;
+                                    });
+                                  }, 30000);
+                                } catch (e: any) {
+                                  setReprocessingLocks(prev => {
+                                    const next = new Set(prev);
+                                    next.delete(s.id);
+                                    return next;
+                                  });
+                                  toast.error(e?.message || 'Failed to reprocess');
+                                }
+                              }}
+                              disabled={reprocessingLocks.has(s.id)}
+                            >
+                              {reprocessingLocks.has(s.id) ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="outline"
@@ -987,14 +1061,9 @@ export default function Statements() {
                             disabled={previewLoading === s.id}
                           >
                             {previewLoading === s.id ? (
-                              <>
-                                <div className="w-4 h-4 mr-1 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                Loading...
-                              </>
+                              <Loader2 className="w-4 h-4 animate-spin" />
                             ) : (
-                              <>
-                                <ExternalLink className="w-4 h-4" />
-                              </>
+                              <ExternalLink className="w-4 h-4" />
                             )}
                           </Button>
                           <Button size="sm" variant="outline" onClick={() => handleDownload(s.id, s.original_filename)}>
@@ -1129,14 +1198,9 @@ export default function Statements() {
                       <ArrowLeft className="h-4 w-4" />
                     </ProfessionalButton>
 
-                    <div className="flex items-center gap-2">
-                      <Badge variant="default" className="px-3 py-1 font-medium bg-green-100 text-green-800 hover:bg-green-100/90 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800">
-                        {detail?.status ? t(`statements.status.${detail.status}`, formatStatus(detail.status)) : 'Unknown'}
-                      </Badge>
-                      <Badge variant="secondary" className="px-3 py-1 font-mono font-medium">
-                        #{selected}
-                      </Badge>
-                    </div>
+                    <Badge variant="secondary" className="px-3 py-1 font-mono font-medium self-start h-6">
+                      #{selected}
+                    </Badge>
                   </div>
                   <h1 className="text-4xl font-bold tracking-tight text-foreground">
                     {detail?.original_filename || t('statements.statement_detail', { defaultValue: 'Statement Detail' })}
@@ -1294,6 +1358,66 @@ export default function Statements() {
                 </div>
               </ProfessionalCard>
             </div>
+
+            {/* Details Card */}
+            <ProfessionalCard>
+              <CardHeader>
+                <CardTitle>{t('statements.details', { defaultValue: 'Details' })}</CardTitle>
+                {detail && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{t('statements.analysis_status', { defaultValue: 'Analysis Status' })}:</span>
+                      {detail.status === 'processed' ? (
+                        <Badge variant="success" className="h-6">{t('common.done', 'Done')}</Badge>
+                      ) : detail.status === 'processing' ? (
+                        <Badge variant="secondary" className="h-6 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800 capitalize">
+                          {t('common.processing', 'Processing')}
+                        </Badge>
+                      ) : detail.status === 'failed' ? (
+                        <Badge variant="destructive" className="h-6">Failed</Badge>
+                      ) : detail.status === 'uploaded' ? (
+                        <Badge variant="secondary" className="h-6 bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800 capitalize">
+                          {t('common.uploaded', 'Uploaded')}
+                        </Badge>
+                      ) : null}
+                    </div>
+                    {detail.analysis_error && detail.status === 'failed' && (
+                      <Alert className="border-red-200 bg-red-50">
+                        <AlertCircle className="h-4 w-4 text-red-600" />
+                        <AlertDescription className="text-red-800">
+                          <details className="cursor-pointer">
+                            <summary className="font-medium mb-1">{t('statements.analysis_failed_click_details', { defaultValue: 'Analysis failed (click for details)' })}</summary>
+                            <div className="mt-2 text-xs font-mono bg-red-100 p-2 rounded border border-red-200 overflow-x-auto">
+                              {detail.analysis_error}
+                            </div>
+                          </details>
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+                )}
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm">{t('statements.original_filename', { defaultValue: 'Original Filename' })}</label>
+                  <Input value={detail?.original_filename || ''} disabled={true} />
+                </div>
+                <div>
+                  <label className="text-sm">{t('statements.uploaded_at', { defaultValue: 'Uploaded At' })}</label>
+                  <Input value={detail?.created_at ? new Date(detail.created_at).toLocaleString() : ''} disabled={true} />
+                </div>
+                {((detail as any)?.created_by_username || (detail as any)?.created_by_email) && (
+                  <div>
+                    <label className="text-sm">{t('common.created_by')}</label>
+                    <Input value={(detail as any).created_by_username || (detail as any).created_by_email || t('common.unknown')} disabled={true} />
+                  </div>
+                )}
+                <div>
+                  <label className="text-sm">{t('statements.extracted_count', { defaultValue: 'Extracted Transactions' })}</label>
+                  <Input value={detail?.extracted_count || 0} disabled={true} />
+                </div>
+              </CardContent>
+            </ProfessionalCard>
 
             {/* Details Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1817,7 +1941,7 @@ export default function Statements() {
                   <div className="text-sm text-muted-foreground mb-2">
                     {files.length > 0
                       ? `${files.length} file(s) selected`
-                      : 'Drop files here or click to browse'
+                      : t('statements.drop_files_here')
                     }
                   </div>
                   <input
@@ -1836,10 +1960,10 @@ export default function Statements() {
                     className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium cursor-pointer hover:bg-primary/90 transition-colors"
                   >
                     <Upload className="w-4 h-4 mr-2" />
-                    Choose Files
+                    {t('statements.choose_files')}
                   </label>
                   <div className="text-xs text-muted-foreground mt-2">
-                    Supports PDF, CSV, and image files (JPG, PNG, WebP) (max 12 files)
+                    {t('statements.supported_formats')}
                   </div>
                 </div>
                 {files.length > 0 && (

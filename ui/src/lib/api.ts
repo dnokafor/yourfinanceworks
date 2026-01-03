@@ -484,6 +484,9 @@ export interface BankStatementSummary {
   file_path: string;
   status: string;
   extracted_count: number;
+  extraction_method?: string | null;
+  analysis_error?: string | null;
+  analysis_updated_at?: string | null;
   labels?: string[] | null;
   notes?: string | null;
   created_at?: string;

@@ -558,6 +558,15 @@ class BankStatementMessageHandler(BaseMessageHandler):
                     # Get AI config
                     ai_conf = await self._get_ai_config(db)
                     
+                    # Ensure file is local
+                    try:
+                        file_path = await self._ensure_local_statement_file(db, stmt, file_path, tenant_id)
+                    except Exception as e:
+                        self.logger.error(f"Failed to ensure local file for batch statement: {e}")
+                        # Continue with original path if download fails? Or fail?
+                        # process_attachment_inline in expense handler fails the expense.
+                        raise e
+
                     # Try unified OCR first, fallback to legacy
                     try:
                         ocr_config = OCRConfig(
@@ -580,6 +589,10 @@ class BankStatementMessageHandler(BaseMessageHandler):
                     except ImportError:
                         # Fallback to legacy service
                         txns = process_bank_pdf_with_llm(file_path, ai_conf, db)
+                    
+                    # Update statement with final transactions
+                    statement.extracted_count = len(txns) if txns else 0
+                    statement.local_cache_path = statement.local_cache_path # Ensure it's tracked
                     
                     # Get cloud file URL from batch file record
                     from core.models.models_per_tenant import BatchFileProcessing
@@ -682,7 +695,7 @@ class BankStatementMessageHandler(BaseMessageHandler):
     async def _process_single_statement(self, consumer, message, payload: Dict[str, Any]) -> ProcessingResult:
         """Process single bank statement"""
         statement_id = int(payload.get("statement_id"))
-        file_path = str(payload.get("file_path"))
+        original_file_path = str(payload.get("file_path"))
         tenant_id = self.extract_tenant_id(payload)
         attempt = int(payload.get("attempt", 0))
         
@@ -702,6 +715,15 @@ class BankStatementMessageHandler(BaseMessageHandler):
                     if not stmt:
                         return ProcessingResult(success=True, committed=True)
                     
+                    # Update status to processing
+                    await self._handle_processing_status(db, stmt, ProcessingStatus.PROCESSING.value)
+
+                    # Ensure file is local
+                    try:
+                        file_path = await self._ensure_local_statement_file(db, stmt, original_file_path, tenant_id)
+                    except Exception as e:
+                        return await self._handle_statement_error(consumer, message, db, stmt, e, attempt, payload)
+
                     # Check LLM availability and process
                     try:
                         llm_ok = is_bank_llm_reachable(ai_conf)
@@ -715,18 +737,22 @@ class BankStatementMessageHandler(BaseMessageHandler):
                             await self._handle_zero_transactions(db, stmt)
                             return ProcessingResult(success=True, committed=True)
                         
+                        # Detect extraction method
+                        ext = file_path.lower().split('.')[-1]
+                        method = "csv" if ext == "csv" else "llm"
+                        
                         # Save transactions
-                        await self._save_transactions(db, stmt, txns)
+                        await self._save_transactions(db, stmt, txns, method)
                         return ProcessingResult(success=True, committed=True)
                         
                     except Exception as e:
-                        return await self._handle_statement_error(consumer, message, stmt, e, attempt, payload)
+                        return await self._handle_statement_error(consumer, message, db, stmt, e, attempt, payload)
                         
         except Exception as e:
             self.logger.error(f"Failed to process bank statement {statement_id}: {e}")
             return ProcessingResult(success=False, error_message=str(e))
     
-    async def _handle_statement_error(self, consumer, message, stmt, error: Exception, attempt: int, payload: Dict[str, Any]) -> ProcessingResult:
+    async def _handle_statement_error(self, consumer, message, db, stmt, error: Exception, attempt: int, payload: Dict[str, Any]) -> ProcessingResult:
         """Handle bank statement processing errors"""
         from core.services.ocr_service import publish_bank_statement_task
         
@@ -736,14 +762,18 @@ class BankStatementMessageHandler(BaseMessageHandler):
         # Check for specific error types
         error_name = error.__class__.__name__
         if error_name == "BankLLMUnavailableError":
-            if attempt >= self.config.max_attempts:
+            # Fail fast for LLM unavailable - if service is down, retrying won't help
+            # User can manually reprocess once they restart the LLM service
+            if attempt >= 1:  # Fail after first attempt instead of max_attempts (5)
                 self.logger.error(f"Bank LLM unavailable after {attempt+1} attempts for statement_id={statement_id}")
-                stmt.status = ProcessingStatus.FAILED.value
-                stmt.error_message = str(error)
+                stmt.status = "failed"
+                stmt.analysis_error = str(error)
+                stmt.extraction_method = "failed"
+                stmt.analysis_updated_at = datetime.now(timezone.utc)
                 try:
-                    stmt.db.commit()
+                    db.commit()
                 except Exception:
-                    stmt.db.rollback()
+                    db.rollback()
                 await self._commit_message(consumer, message)
                 return ProcessingResult(success=False, committed=True)
             else:
@@ -752,20 +782,79 @@ class BankStatementMessageHandler(BaseMessageHandler):
                 await asyncio.sleep(retry_delay / 1000.0)
                 payload.update({"attempt": attempt + 1})
                 await publish_bank_statement_task(payload)
-                await self._handle_processing_status(stmt, ProcessingStatus.PROCESSING.value)
+                await self._handle_processing_status(db, stmt, ProcessingStatus.PROCESSING.value)
                 await self._commit_message(consumer, message)
                 return ProcessingResult(success=False, should_retry=True, retry_count=attempt + 1)
         
         # Generic error handling
         self.logger.error(f"Failed processing bank statement: {error}")
-        stmt.status = ProcessingStatus.FAILED.value
-        stmt.error_message = str(error)
+        stmt.status = "failed"
+        stmt.analysis_error = str(error)
+        stmt.extraction_method = "failed"
+        stmt.analysis_updated_at = datetime.now(timezone.utc)
         try:
-            stmt.db.commit()
+            db.commit()
         except Exception:
-            stmt.db.rollback()
+            db.rollback()
         await self._commit_message(consumer, message)
         return ProcessingResult(success=False, committed=True)
+    
+    async def _ensure_local_statement_file(self, db, stmt, file_path: str, tenant_id: int) -> str:
+        """
+        Ensure the statement file is available locally. 
+        Downloads from cloud storage if missing and caches the local path.
+        """
+        if os.path.exists(file_path):
+            self.logger.info(f"Using local file path: {file_path}")
+            return file_path
+
+        self.logger.info(f"File path '{file_path}' doesn't exist locally - attempting cloud storage download for statement {stmt.id}...")
+
+        # 1. Check for cached local file
+        if stmt.local_cache_path and os.path.exists(stmt.local_cache_path) and os.path.getsize(stmt.local_cache_path) > 0:
+            self.logger.info(f"Using cached local file from previous download: {stmt.local_cache_path}")
+            return stmt.local_cache_path
+
+        # 2. Download from cloud storage
+        try:
+            from commercial.cloud_storage.service import CloudStorageService
+            from commercial.cloud_storage.config import get_cloud_storage_config
+            import tempfile
+
+            cloud_config = get_cloud_storage_config()
+            cloud_storage_service = CloudStorageService(db, cloud_config)
+
+            # Retrieve from cloud
+            # Use file_path as key (this is how it's stored in upload_statements)
+            retrieve_result = await cloud_storage_service.retrieve_file(
+                file_key=file_path,
+                tenant_id=str(tenant_id),
+                user_id=1,  # System user
+                generate_url=False
+            )
+
+            if retrieve_result.success and retrieve_result.metadata and 'content' in retrieve_result.metadata:
+                # Save to temp file
+                suffix = f"_{stmt.id}_{os.path.basename(file_path)}"
+                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+                    temp_file.write(retrieve_result.metadata['content'])
+                    temp_path = temp_file.name
+
+                # Cache the local path
+                stmt.local_cache_path = temp_path
+                db.commit()
+                self.logger.info(f"Successfully downloaded and cached cloud file to {temp_path}")
+                return temp_path
+            else:
+                error_msg = retrieve_result.error_message or "Unknown cloud storage error"
+                raise Exception(f"Failed to retrieve file from cloud: {error_msg}")
+
+        except ImportError:
+            self.logger.warning("Commercial CloudStorageService not found, using original path")
+            return file_path
+        except Exception as e:
+            self.logger.error(f"Cloud download failed: {e}")
+            raise
     
     async def _get_ai_config(self, db) -> Optional[Dict[str, Any]]:
         """Get AI configuration from database"""
@@ -798,7 +887,7 @@ class BankStatementMessageHandler(BaseMessageHandler):
         db.commit()
         self.logger.info(f"Bank statement processed with 0 transactions: id={stmt.id}")
     
-    async def _save_transactions(self, db, stmt, transactions: List[Dict[str, Any]]):
+    async def _save_transactions(self, db, stmt, transactions: List[Dict[str, Any]], method: str = "unknown"):
         """Save extracted transactions to database"""
         from core.models.models_per_tenant import BankStatementTransaction
         from datetime import datetime as dt
@@ -831,21 +920,24 @@ class BankStatementMessageHandler(BaseMessageHandler):
             ))
             count += 1
         
-        stmt.status = ProcessingStatus.DONE.value
+        stmt.status = "processed"
         stmt.extracted_count = count
+        stmt.extraction_method = method
+        stmt.analysis_error = None
+        stmt.analysis_updated_at = datetime.now(timezone.utc)
         db.commit()
         self.logger.info(f"Bank statement processed: id={stmt.id}, transactions={count}")
         
         # Release processing lock
         await self._release_processing_lock("bank_statement", stmt.id)
     
-    async def _handle_processing_status(self, stmt, status: str):
+    async def _handle_processing_status(self, db, stmt, status: str):
         """Update processing status"""
         try:
             stmt.status = status
-            stmt.db.commit()
+            db.commit()
         except Exception:
-            stmt.db.rollback()
+            db.rollback()
     
     async def _release_processing_lock(self, lock_type: str, item_id: Union[int, str]):
         """Release processing lock"""

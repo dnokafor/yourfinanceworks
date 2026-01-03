@@ -227,11 +227,14 @@ async def list_statements(
             "file_path": s.file_path,
             "status": s.status,
             "extracted_count": s.extracted_count,
+            "extraction_method": getattr(s, 'extraction_method', None),
+            "analysis_error": getattr(s, 'analysis_error', None),
+            "analysis_updated_at": s.analysis_updated_at.isoformat() if getattr(s, 'analysis_updated_at', None) else None,
             "labels": getattr(s, 'labels', None),
             "notes": getattr(s, 'notes', None),
             "created_at": s.created_at.isoformat() if s.created_at else None,
             "created_by_user_id": s.created_by_user_id,
-            "created_by_username": s.created_by.email if s.created_by else None,
+            "created_by_username": (f"{s.created_by.first_name or ''} {s.created_by.last_name or ''}".strip() or s.created_by.email) if s.created_by else None,
             "created_by_email": s.created_by.email if s.created_by else None,
         })
 
@@ -487,6 +490,9 @@ async def get_statement(
             "file_path": s.file_path,
             "status": s.status,
             "extracted_count": s.extracted_count,
+            "extraction_method": getattr(s, 'extraction_method', None),
+            "analysis_error": getattr(s, 'analysis_error', None),
+            "analysis_updated_at": s.analysis_updated_at.isoformat() if getattr(s, 'analysis_updated_at', None) else None,
             "labels": getattr(s, 'labels', None),
             "notes": getattr(s, 'notes', None),
             "created_at": s.created_at.isoformat() if s.created_at else None,
@@ -980,6 +986,62 @@ async def permanently_delete_statement(
         statement_id=statement_id,
         action="permanently_deleted"
     )
+
+
+@router.post("/{statement_id}/reprocess", response_model=Dict[str, Any])
+@require_feature("ai_bank_statement")
+async def reprocess_statement(
+    statement_id: int,
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user),
+):
+    """Reprocess a bank statement's analysis."""
+    require_non_viewer(current_user, "reprocess statement")
+    
+    try:
+        from core.models.database import get_tenant_context
+        tenant_id = get_tenant_context()
+    except Exception:
+        tenant_id = None
+    if tenant_id is None:
+        raise HTTPException(status_code=401, detail="Tenant context required")
+
+    s = db.query(BankStatement).filter(
+        BankStatement.id == statement_id, 
+        BankStatement.tenant_id == tenant_id,
+        BankStatement.is_deleted == False
+    ).first()
+    
+    if not s:
+        raise HTTPException(status_code=404, detail="Statement not found")
+
+    # Update status to processing
+    s.status = "processing"
+    s.analysis_error = None
+    s.analysis_updated_at = datetime.now(timezone.utc)
+    db.commit()
+
+    # Enqueue processing task
+    await publish_bank_statement_task({
+        "statement_id": s.id,
+        "file_path": s.file_path,
+        "tenant_id": tenant_id,
+        "attempt": 0
+    })
+
+    await log_audit_event(
+        db,
+        "statement_reprocess",
+        f"Reprocessed statement: {s.original_filename}",
+        current_user.id,
+        {"statement_id": s.id}
+    )
+
+    return {
+        "success": True,
+        "message": "Statement reprocessing started",
+        "status": "processing"
+    }
 
 
 @router.delete("/{statement_id}", response_model=RecycleBinStatementResponse)
