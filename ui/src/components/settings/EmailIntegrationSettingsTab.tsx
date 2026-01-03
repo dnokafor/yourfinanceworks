@@ -443,4 +443,4 @@ const EmailIntegrationSettingsContent: React.FC = () => {
     );
 };
 
-export default EmailIntegrationSettings;
+export default EmailIntegrationSettingsTab;
