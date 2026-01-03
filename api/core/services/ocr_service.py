@@ -1195,53 +1195,86 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
     """Fallback inline processing when Kafka is not configured."""
     logger.info(f"Processing attachment inline: expense_id={expense_id} attachment_id={attachment_id} file={file_path}")
     is_temp_file = False  # Track if we created a temporary file from cloud storage
+    original_cloud_path = None  # Track the original cloud storage path
 
     # Check if this is a cloud storage file that needs to be downloaded
     if not os.path.exists(file_path):
         logger.info(f"File path '{file_path}' doesn't exist locally - attempting cloud storage download...")
 
         try:
-            # Use the cloud storage service to retrieve the file
-            # Use the cloud storage service to retrieve the file
-            try:
-                from commercial.cloud_storage.service import CloudStorageService
-                from commercial.cloud_storage.config import get_cloud_storage_config
-                
-                # Initialize cloud storage service
-                cloud_config = get_cloud_storage_config()
-                cloud_storage_service = CloudStorageService(db, cloud_config)
+            # First, check if attachment has a cached local file path from a previous download
+            from core.models.models_per_tenant import ExpenseAttachment
+            attachment = db.query(ExpenseAttachment).filter(ExpenseAttachment.id == attachment_id).first()
 
-                # Try to retrieve the file using the stored file_path as the key
-                retrieve_result = await cloud_storage_service.retrieve_file(
-                    file_key=file_path,
-                    tenant_id=str(tenant_id),
-                    user_id=1,  # System user for OCR processing
-                    generate_url=False  # We want the actual file content
-                )
-            except ImportError:
-                logger.warning("Commercial CloudStorageService not found, cannot download cloud file")
-                raise Exception("Cloud storage service not available")
+            if not attachment:
+                logger.error(f"Attachment {attachment_id} not found in database for expense {expense_id}")
+                raise Exception(f"Attachment {attachment_id} not found")
 
-            from core.models.database import get_tenant_context
-            import tempfile
+            cached_local_path = None
+            if hasattr(attachment, 'local_cache_path') and attachment.local_cache_path:
+                cached_local_path = attachment.local_cache_path
+                if os.path.exists(cached_local_path) and os.path.getsize(cached_local_path) > 0:
+                    logger.info(f"Using cached local file from previous download: {cached_local_path}")
+                    file_path = cached_local_path
+                    is_temp_file = True
+                else:
+                    logger.warning(f"Cached local path exists but file is missing or empty: {cached_local_path}")
+                    # Clear the invalid cache
+                    attachment.local_cache_path = None
+                    db.commit()
 
-            if retrieve_result.success and retrieve_result.metadata and 'content' in retrieve_result.metadata:
-                # Create temporary file with the downloaded content
-                with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{attachment_id}_{os.path.basename(file_path)}") as temp_file:
-                    temp_file.write(retrieve_result.metadata['content'])
-                    temp_path = temp_file.name
+            # If no valid cache, download from cloud storage
+            if not is_temp_file:
+                # Use the cloud storage service to retrieve the file
+                try:
+                    from commercial.cloud_storage.service import CloudStorageService
+                    from commercial.cloud_storage.config import get_cloud_storage_config
 
-                # Verify the file was created
-                if not os.path.exists(temp_path) or os.path.getsize(temp_path) == 0:
-                    raise Exception(f"Failed to create temporary file or empty content: {temp_path}")
+                    # Initialize cloud storage service
+                    cloud_config = get_cloud_storage_config()
+                    cloud_storage_service = CloudStorageService(db, cloud_config)
 
-                # Update file_path to use the temporary file
-                original_file_path = file_path
-                file_path = temp_path
-                is_temp_file = True  # Mark that we created a temporary file
-                logger.info(f"Successfully downloaded cloud file from '{original_file_path}' to '{file_path}' for OCR processing")
-            else:
-                raise Exception(f"Failed to retrieve file from cloud storage: {retrieve_result.error_message}")
+                    # Try to retrieve the file using the stored file_path as the key
+                    retrieve_result = await cloud_storage_service.retrieve_file(
+                        file_key=file_path,
+                        tenant_id=str(tenant_id),
+                        user_id=1,  # System user for OCR processing
+                        generate_url=False  # We want the actual file content
+                    )
+                except ImportError:
+                    logger.warning("Commercial CloudStorageService not found, cannot download cloud file")
+                    raise Exception("Cloud storage service not available")
+
+                from core.models.database import get_tenant_context
+                import tempfile
+
+                if retrieve_result.success and retrieve_result.metadata and 'content' in retrieve_result.metadata:
+                    # Create temporary file with the downloaded content
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{attachment_id}_{os.path.basename(file_path)}") as temp_file:
+                        temp_file.write(retrieve_result.metadata['content'])
+                        temp_path = temp_file.name
+
+                    # Verify the file was created
+                    if not os.path.exists(temp_path) or os.path.getsize(temp_path) == 0:
+                        raise Exception(f"Failed to create temporary file or empty content: {temp_path}")
+
+                    # Store the original cloud path and update file_path to use the temporary file
+                    original_cloud_path = file_path
+                    file_path = temp_path
+                    is_temp_file = True
+
+                    # Cache the local path in the attachment record to avoid re-downloading on retry
+                    try:
+                        attachment.local_cache_path = temp_path
+                        db.commit()
+                        logger.info(f"Cached local file path for attachment {attachment_id}: {temp_path}")
+                    except Exception as cache_error:
+                        logger.warning(f"Failed to cache local file path for attachment {attachment_id}: {cache_error}")
+                        db.rollback()
+
+                    logger.info(f"Successfully downloaded cloud file from '{original_cloud_path}' to '{file_path}' for OCR processing")
+                else:
+                    raise Exception(f"Failed to retrieve file from cloud storage: {retrieve_result.error_message}")
 
         except Exception as e:
             logger.error(f"Failed to download cloud storage file {file_path}: {e}")
@@ -1261,7 +1294,7 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
         logger.info(f"Using local file path: {file_path}")
     from core.models.models_per_tenant import Expense, ExpenseAttachment, AIConfig as AIConfigModel  # local import to avoid circulars
     from core.models.database import set_tenant_context  # Import tenant context management
-    
+
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
         logger.warning(f"Expense {expense_id} not found, skipping OCR")
@@ -1269,13 +1302,13 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
     if expense.manual_override:
         logger.info(f"Expense {expense_id} manually overridden; skipping OCR.")
         return
-    
+
     # Set tenant context for encryption - determine tenant from database connection
     try:
         # In this multi-tenant setup, the tenant_id is determined by which database we're connected to
         # Since we're connected to tenant_1 database, the tenant_id is 1
         # We can infer this from the database connection or use a more robust method
-        
+
         # Check if expense has direct tenant_id (if the model supports it)
         if hasattr(expense, 'tenant_id') and expense.tenant_id:
             tenant_id = expense.tenant_id
@@ -1284,7 +1317,7 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
             # In this case, we're connected to tenant_1, so tenant_id = 1
             # This avoids the circular dependency of accessing user data
             tenant_id = 1  # This should be determined from the database connection context
-        
+
         logger.info(f"Setting tenant context to {tenant_id} for expense {expense_id} OCR processing")
         set_tenant_context(tenant_id)
     except Exception as e:
@@ -1352,7 +1385,7 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
             logger.warning("No AI configuration available from database or environment variables")
 
     logger.info(f"Processing attachment inline: expense_id={expense_id} attachment_id={attachment_id} file={file_path}")
-    
+
     # Use UnifiedOCRService for expense processing
     result = None
     ai_extraction_attempted = False
@@ -1406,7 +1439,7 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
         if isinstance(result, dict):
             # Count total characters in all string values
             text_length = sum(len(str(v)) for v in result.values() if isinstance(v, str))
-        
+
         # Track OCR-specific usage with metadata
         track_ocr_usage(
             db=db,

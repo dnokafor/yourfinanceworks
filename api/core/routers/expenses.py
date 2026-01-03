@@ -1727,15 +1727,15 @@ async def reprocess_expense(
         if expense.analysis_status not in ["not_started", "pending", "queued", "failed", "cancelled", "done"]:
             raise HTTPException(status_code=400, detail=f"Cannot reprocess expense with status: {expense.analysis_status}")
         
-        # Find the most recent attachment
-        att = (
+        # Get all attachments for this expense
+        attachments = (
             db.query(ExpenseAttachment)
             .filter(ExpenseAttachment.expense_id == expense_id)
             .order_by(ExpenseAttachment.uploaded_at.desc())
-            .first()
+            .all()
         )
-        if not att or not getattr(att, "file_path", None):
-            raise HTTPException(status_code=400, detail="No attachment found to reprocess")
+        if not attachments or not any(getattr(att, "file_path", None) for att in attachments):
+            raise HTTPException(status_code=400, detail="No attachments found to reprocess")
 
         # Import ProcessingLock model
         from core.models.processing_lock import ProcessingLock
@@ -1792,15 +1792,18 @@ async def reprocess_expense(
             expense.updated_at = datetime.now(timezone.utc)
             db.commit()
 
-            queue_or_process_attachment(
-                db=db,
-                tenant_id=tenant_id,
-                expense_id=expense_id,
-                attachment_id=att.id,
-                file_path=str(att.file_path),
-            )
+            # Queue all attachments for reprocessing
+            for att in attachments:
+                if getattr(att, "file_path", None):
+                    queue_or_process_attachment(
+                        db=db,
+                        tenant_id=tenant_id,
+                        expense_id=expense_id,
+                        attachment_id=att.id,
+                        file_path=str(att.file_path),
+                    )
 
-            logger.info(f"Reprocess started for expense {expense_id} by user {current_user.id} (request_id: {request_id})")
+            logger.info(f"Reprocess started for expense {expense_id} with {len([a for a in attachments if getattr(a, 'file_path', None)])} attachment(s) by user {current_user.id} (request_id: {request_id})")
             return {"message": "Expense reprocessing started", "status": "queued", "request_id": request_id}
 
         except Exception as e:

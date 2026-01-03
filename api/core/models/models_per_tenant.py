@@ -287,6 +287,10 @@ class ExpenseAttachment(Base):
     analysis_error = Column(Text, nullable=True)
     extracted_amount = Column(Float, nullable=True)
 
+    # Cloud Storage Cache - stores local path after downloading from cloud storage
+    # This prevents re-downloading the same file on retries
+    local_cache_path = Column(String, nullable=True)
+
 class Settings(Base):
     __tablename__ = "settings"
 
