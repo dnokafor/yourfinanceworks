@@ -392,46 +392,12 @@ export function AppSidebar() {
     <>
       <Sidebar data-tour="sidebar" className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border-r border-slate-700/50 shadow-2xl backdrop-blur-xl">
         <SidebarHeader className="py-4 px-4 border-b border-slate-700/30 bg-gradient-to-r from-slate-800/30 to-slate-700/30 backdrop-blur-sm">
-          {/* Enhanced Company Branding Section */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              {companyLogoUrl ? (
-                <img
-                  src={companyLogoUrl.startsWith('http') ? companyLogoUrl : `${API_BASE_URL}${companyLogoUrl}`}
-                  alt={`${companyName} Logo`}
-                  className="h-10 w-10 object-contain rounded-xl shadow-lg ring-2 ring-blue-500/20 bg-white/10 p-1 backdrop-blur-sm"
-                  onError={(e) => {
-                    console.error('Failed to load company logo:', e);
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
-              ) : (
-                <div className="h-10 w-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg ring-2 ring-blue-500/20">
-                  <Building className="h-5 w-5 text-white" />
-                </div>
-              )}
-              <div className="flex flex-col leading-tight">
-                <span className="text-base font-bold text-white truncate max-w-[140px] tracking-tight">
-                  {companyName}
-                </span>
-                <span className="text-xs text-slate-300 font-medium">
-                  YourFinanceWORKS
-                </span>
-              </div>
-            </div>
-            <SidebarTrigger>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Toggle sidebar"
-                className="text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg h-8 w-8 transition-all duration-200"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-            </SidebarTrigger>
+          {/* Organization Switcher (Topmost) */}
+          <div className="mb-4">
+            <OrganizationSwitcher />
           </div>
 
-          {/* Enhanced User Profile Section */}
+          {/* User Profile Section */}
           <div className="bg-slate-800/30 rounded-xl p-3 border border-slate-700/20 backdrop-blur-sm">
             <div className="flex items-center gap-3">
               <Avatar className="h-8 w-8 ring-2 ring-slate-600/30">
@@ -463,10 +429,7 @@ export function AppSidebar() {
             </div>
           </div>
         </SidebarHeader>
-        {/* Organization Switcher - Fixed, doesn't scroll */}
-        <div className="px-3 py-3 border-b border-slate-700/30">
-          <OrganizationSwitcher />
-        </div>
+
 
 
 

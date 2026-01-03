@@ -1536,6 +1536,7 @@ export const authApi = {
     }),
   getCurrentUser: () => apiRequest<any>('/auth/me', {}, { skipTenant: true }),
   getSSOStatus: () => apiRequest<{ google: boolean; microsoft: boolean; has_sso: boolean }>('/auth/sso-status', {}, { skipTenant: true }),
+  getPasswordRequirements: () => apiRequest<{ min_length: number; complexity: any; requirements: string[] }>('/auth/password-requirements', {}, { skipTenant: true }),
 };
 
 // User API methods

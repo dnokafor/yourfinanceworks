@@ -2247,3 +2247,15 @@ async def get_sso_status():
         "microsoft": azure_enabled,
         "has_sso": google_enabled or azure_enabled
     }
+
+@router.get("/password-requirements")
+async def get_password_requirements():
+    """Get password requirements for frontend validation (public endpoint)"""
+    from core.constants.password import MIN_PASSWORD_LENGTH, PASSWORD_COMPLEXITY
+    from core.utils.password_validation import get_password_requirements
+    
+    return {
+        "min_length": MIN_PASSWORD_LENGTH,
+        "complexity": PASSWORD_COMPLEXITY,
+        "requirements": get_password_requirements()
+    }

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, superAdminApi, userApi } from "@/lib/api";
+import { api, superAdminApi, userApi, authApi } from "@/lib/api";
 import { toast } from "@/components/ui/sonner";
 import {
   Select,
@@ -100,6 +100,7 @@ export default function UsersPage() {
   const [activating, setActivating] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [passwordRequirements, setPasswordRequirements] = useState<any>(null);
 
   // Check permission to access users page
   useEffect(() => {
@@ -113,6 +114,31 @@ export default function UsersPage() {
       navigate('/');
     }
   }, [userOrganizations, navigate, user?.tenant_id]);
+
+  // Fetch password requirements
+  useEffect(() => {
+    const fetchPasswordRequirements = async () => {
+      try {
+        const requirements = await authApi.getPasswordRequirements();
+        setPasswordRequirements(requirements);
+      } catch (error) {
+        console.error('Failed to fetch password requirements:', error);
+        // Fallback to default requirements
+        setPasswordRequirements({
+          min_length: 8,
+          complexity: {
+            require_uppercase: true,
+            require_lowercase: true,
+            require_numbers: true,
+            require_special_chars: true,
+            special_chars: "!@#$%^&*()_+-=[]{}|;:,.<>?"
+          }
+        });
+      }
+    };
+
+    fetchPasswordRequirements();
+  }, []);
 
   // User management states
   const [togglingStatus, setTogglingStatus] = useState(false);
@@ -324,8 +350,13 @@ export default function UsersPage() {
     e.preventDefault();
     if (!userToReset) return;
 
-    if (newPassword.length < 6) {
-      toast.error(t('users.passwordTooShort'));
+    if (!passwordRequirements) {
+      toast.error('Password requirements not loaded. Please try again.');
+      return;
+    }
+
+    if (newPassword.length < passwordRequirements.min_length) {
+      toast.error(t('users.passwordTooShort', { min_length: passwordRequirements.min_length }));
       return;
     }
 
@@ -682,9 +713,9 @@ export default function UsersPage() {
                     {t('users.inviteWillBeSent') || 'Leave blank to send invite email'}
                   </div>
                 )}
-                {activationForm.password && activationForm.password.length > 0 && activationForm.password.length < 6 && (
+                {passwordRequirements && activationForm.password && activationForm.password.length > 0 && activationForm.password.length < passwordRequirements.min_length && (
                   <div className="text-xs text-destructive">
-                    {t('users.passwordTooShort') || 'Password must be at least 6 characters long'}
+                    {t('users.passwordTooShort', { min_length: passwordRequirements.min_length }) || `Password must be at least ${passwordRequirements.min_length} characters long`}
                   </div>
                 )}
               </div>
@@ -697,7 +728,7 @@ export default function UsersPage() {
               <ProfessionalButton
                 type="submit"
                 variant="gradient"
-                disabled={activating || (activationForm.password && activationForm.password.length > 0 && activationForm.password.length < 6)}
+                disabled={activating || (passwordRequirements && activationForm.password && activationForm.password.length > 0 && activationForm.password.length < passwordRequirements.min_length)}
               >
                 {activationForm.password ? (t('users.activateWithPassword') || 'Activate & Set Password') : (t('users.sendInvite') || 'Send Invite Email')}
               </ProfessionalButton>
@@ -740,9 +771,9 @@ export default function UsersPage() {
                   required
                 />
               </div>
-              {newPassword && newPassword.length > 0 && newPassword.length < 6 && (
+              {passwordRequirements && newPassword && newPassword.length > 0 && newPassword.length < passwordRequirements.min_length && (
                 <div className="text-xs text-destructive">
-                  {t('users.passwordTooShort')}
+                  {t('users.passwordTooShort', { min_length: passwordRequirements.min_length })}
                 </div>
               )}
               {newPassword && confirmPassword && newPassword !== confirmPassword && (
@@ -757,7 +788,7 @@ export default function UsersPage() {
               </AlertDialogCancel>
               <AlertDialogAction
                 type="submit"
-                disabled={resettingPassword || !newPassword || !confirmPassword || newPassword !== confirmPassword || newPassword.length < 6}
+                disabled={resettingPassword || !newPassword || !confirmPassword || newPassword !== confirmPassword || (passwordRequirements && newPassword.length < passwordRequirements.min_length)}
                 className="bg-primary hover:bg-primary/90"
               >
                 {resettingPassword ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

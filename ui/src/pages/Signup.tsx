@@ -18,6 +18,18 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
+interface PasswordRequirements {
+  min_length: number;
+  complexity: {
+    require_uppercase: boolean;
+    require_lowercase: boolean;
+    require_numbers: boolean;
+    require_special_chars: boolean;
+    special_chars: string;
+  };
+  requirements: string[];
+}
+
 const Signup: React.FC = () => {
   const { t } = useTranslation();
   const [formData, setFormData] = useState({
@@ -56,6 +68,7 @@ const Signup: React.FC = () => {
   const [ssoStatus, setSsoStatus] = useState<{ google: boolean; microsoft: boolean; has_sso: boolean } | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [passwordRequirements, setPasswordRequirements] = useState<PasswordRequirements | null>(null);
   const navigate = useNavigate();
 
   // Debounced organization name availability check
@@ -181,7 +194,7 @@ const Signup: React.FC = () => {
     return () => clearTimeout(timeoutId);
   }, [formData.email, checkEmailAvailability]);
 
-  // Fetch SSO status on component mount
+  // Fetch SSO status and password requirements on component mount
   useEffect(() => {
     const fetchSSOStatus = async () => {
       try {
@@ -194,7 +207,29 @@ const Signup: React.FC = () => {
       }
     };
 
+    const fetchPasswordRequirements = async () => {
+      try {
+        const requirements = await authApi.getPasswordRequirements();
+        setPasswordRequirements(requirements);
+      } catch (error) {
+        console.error('Failed to fetch password requirements:', error);
+        // Fallback to default requirements
+        setPasswordRequirements({
+          min_length: 8,
+          complexity: {
+            require_uppercase: true,
+            require_lowercase: true,
+            require_numbers: true,
+            require_special_chars: true,
+            special_chars: "!@#$%^&*()_+-=[]{}|;:,.<>?"
+          },
+          requirements: ['At least 8 characters long', 'At least one uppercase letter', 'At least one lowercase letter', 'At least one number', 'At least one special character']
+        });
+      }
+    };
+
     fetchSSOStatus();
+    fetchPasswordRequirements();
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -223,28 +258,33 @@ const Signup: React.FC = () => {
     }
 
     // Validate password strength
-    const passwordRequirements = {
-      minLength: 12,
+    if (!passwordRequirements) {
+      setError('Password requirements not loaded. Please try again.');
+      setLoading(false);
+      return;
+    }
+
+    const passwordValidation = {
       hasUppercase: /[A-Z]/.test(formData.password),
       hasLowercase: /[a-z]/.test(formData.password),
       hasNumbers: /\d/.test(formData.password),
-      hasSpecialChars: /[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(formData.password)
+      hasSpecialChars: new RegExp(`[${passwordRequirements.complexity.special_chars.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}]`).test(formData.password)
     };
 
     const passwordErrors = [];
-    if (formData.password.length < passwordRequirements.minLength) {
-      passwordErrors.push(`Password must be at least ${passwordRequirements.minLength} characters long`);
+    if (formData.password.length < passwordRequirements.min_length) {
+      passwordErrors.push(t('auth.signup.validation.password_min_length', { min_length: passwordRequirements.min_length }));
     }
-    if (!passwordRequirements.hasUppercase) {
+    if (passwordRequirements.complexity.require_uppercase && !passwordValidation.hasUppercase) {
       passwordErrors.push('Password must contain at least one uppercase letter');
     }
-    if (!passwordRequirements.hasLowercase) {
+    if (passwordRequirements.complexity.require_lowercase && !passwordValidation.hasLowercase) {
       passwordErrors.push('Password must contain at least one lowercase letter');
     }
-    if (!passwordRequirements.hasNumbers) {
+    if (passwordRequirements.complexity.require_numbers && !passwordValidation.hasNumbers) {
       passwordErrors.push('Password must contain at least one number');
     }
-    if (!passwordRequirements.hasSpecialChars) {
+    if (passwordRequirements.complexity.require_special_chars && !passwordValidation.hasSpecialChars) {
       passwordErrors.push('Password must contain at least one special character');
     }
 
@@ -562,30 +602,38 @@ const Signup: React.FC = () => {
                 </button>
               </div>
               {/* Password Requirements */}
-              {formData.password && (
+              {formData.password && passwordRequirements && (
                 <div className="mt-2 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700/50">
                   <p className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">Password requirements:</p>
                   <div className="space-y-1">
-                    <div className={`flex items-center text-xs ${formData.password.length >= 12 ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                      {formData.password.length >= 12 ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
-                      At least 12 characters
+                    <div className={`flex items-center text-xs ${formData.password.length >= passwordRequirements.min_length ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                      {formData.password.length >= passwordRequirements.min_length ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
+                      At least {passwordRequirements.min_length} characters
                     </div>
-                    <div className={`flex items-center text-xs ${/[A-Z]/.test(formData.password) ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                      {/[A-Z]/.test(formData.password) ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
-                      One uppercase letter
-                    </div>
-                    <div className={`flex items-center text-xs ${/[a-z]/.test(formData.password) ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                      {/[a-z]/.test(formData.password) ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
-                      One lowercase letter
-                    </div>
-                    <div className={`flex items-center text-xs ${/\d/.test(formData.password) ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                      {/\d/.test(formData.password) ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
-                      One number
-                    </div>
-                    <div className={`flex items-center text-xs ${/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(formData.password) ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                      {/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(formData.password) ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
-                      One special character
-                    </div>
+                    {passwordRequirements.complexity.require_uppercase && (
+                      <div className={`flex items-center text-xs ${/[A-Z]/.test(formData.password) ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                        {/[A-Z]/.test(formData.password) ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
+                        One uppercase letter
+                      </div>
+                    )}
+                    {passwordRequirements.complexity.require_lowercase && (
+                      <div className={`flex items-center text-xs ${/[a-z]/.test(formData.password) ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                        {/[a-z]/.test(formData.password) ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
+                        One lowercase letter
+                      </div>
+                    )}
+                    {passwordRequirements.complexity.require_numbers && (
+                      <div className={`flex items-center text-xs ${/\d/.test(formData.password) ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                        {/\d/.test(formData.password) ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
+                        One number
+                      </div>
+                    )}
+                    {passwordRequirements.complexity.require_special_chars && (
+                      <div className={`flex items-center text-xs ${new RegExp(`[${passwordRequirements.complexity.special_chars.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}]`).test(formData.password) ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                        {new RegExp(`[${passwordRequirements.complexity.special_chars.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}]`).test(formData.password) ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
+                        One special character
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
