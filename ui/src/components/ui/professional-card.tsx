@@ -108,7 +108,7 @@ ProfessionalCardFooter.displayName = "ProfessionalCardFooter"
 
 interface MetricCardProps {
   title: string;
-  value: string | number;
+  value: React.ReactNode;
   change?: {
     value: number;
     type: 'increase' | 'decrease' | 'neutral';

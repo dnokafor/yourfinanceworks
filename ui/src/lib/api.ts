@@ -75,7 +75,7 @@ export interface InvoiceItem {
   };
 }
 
-export const INVOICE_STATUSES = ["draft", "pending", "paid", "overdue", "partially_paid", "cancelled", "pending_approval", "approved", "rejected"] as const;
+export const INVOICE_STATUSES = ["draft", "pending", "paid", "overdue", "partially_paid", "cancelled", "pending_approval", "approved", "rejected", "sent"] as const;
 export type InvoiceStatus = typeof INVOICE_STATUSES[number];
 
 export const isValidInvoiceStatus = (status: string): status is InvoiceStatus => {

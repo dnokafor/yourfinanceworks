@@ -190,10 +190,17 @@ const ReportDetail: React.FC = () => {
                 <PageHeader
                     title={selectedTypeConfig.name}
                     description={selectedTypeConfig.description}
-                    backButton={{
-                        onClick: () => navigate('/reports'),
-                        label: 'Back to Reports'
-                    }}
+                    actions={
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => navigate('/reports')}
+                            className="flex items-center gap-2"
+                        >
+                            <ArrowLeft className="h-4 w-4" />
+                            Back to Reports
+                        </Button>
+                    }
                 />
 
                 <ContentSection className="slide-in">

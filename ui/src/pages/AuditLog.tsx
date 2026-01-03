@@ -266,7 +266,7 @@ export default function AuditLogPage() {
     else if (deleteAction.some(s => action.toLowerCase().includes(s))) variant = 'danger';
 
     return (
-      <StatusBadge status={variant} variant="subtle">
+      <StatusBadge status={variant} variant="soft">
         {toCamelCase(action)}
       </StatusBadge>
     );

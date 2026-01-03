@@ -7,9 +7,6 @@ import { InvoiceHistoryDetailsModal } from "@/components/invoices/InvoiceHistory
 import { InvoicePDF } from "@/components/invoices/InvoicePDF";
 import { invoiceApi, Invoice, getErrorMessage, expenseApi, Expense, inventoryApi, approvalApi, InvoiceHistory, clientApi } from "@/lib/api";
 import { canEditInvoice, canEditInvoicePayment } from "@/utils/auth";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -250,7 +247,8 @@ const EditInvoice = () => {
     // Fetch client data for resolving client_id in history
     let clients: Array<{ id: number; name: string; email?: string }> = [];
     try {
-      clients = await clientApi.getClients();
+      const clientsResponse = await clientApi.getClients();
+      clients = clientsResponse.items;
     } catch (error) {
       console.warn("Failed to fetch clients for history modal:", error);
     }
@@ -688,9 +686,9 @@ const EditInvoice = () => {
                           )}
                         </div>
                       </div>
-                      <Button variant="ghost" size="sm" className="ml-2">
+                      <ProfessionalButton variant="ghost" size="sm" className="ml-2">
                         View Details
-                      </Button>
+                      </ProfessionalButton>
                     </div>
                   ))}
                 </div>
@@ -743,7 +741,7 @@ const EditInvoice = () => {
             </div>
             {livePreviewUrl && (
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => {
+                <ProfessionalButton variant="outline" onClick={() => {
                   const a = document.createElement('a');
                   a.href = livePreviewUrl;
                   a.download = `invoice-${invoice.number || 'preview'}.pdf`;
@@ -752,7 +750,7 @@ const EditInvoice = () => {
                   document.body.removeChild(a);
                 }}>
                   Download PDF
-                </Button>
+                </ProfessionalButton>
               </div>
             )}
           </DialogContent>

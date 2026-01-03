@@ -133,7 +133,7 @@ export default function Statements() {
     const loadClients = async () => {
       try {
         const clientList = await clientApi.getClients();
-        setClients(clientList);
+        setClients(clientList.items);
       } catch (e) {
         console.error('Failed to load clients:', e);
       }

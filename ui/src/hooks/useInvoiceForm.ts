@@ -336,7 +336,7 @@ export function useInvoiceForm({
   const refreshClientList = useCallback(async () => {
     try {
       const clientsData = await clientApi.getClients();
-      setClients(clientsData);
+      setClients(clientsData.items);
     } catch (error) {
       console.error("Failed to refresh client list:", error);
     }

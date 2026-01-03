@@ -12,3 +12,4 @@ export * from './APIClientManagementTab';
 export * from './CookieSettingsTab';
 export * from './EmailIntegrationSettingsTab';
 export * from './ExportDestinationsTab';
+export * from './GamificationTab';

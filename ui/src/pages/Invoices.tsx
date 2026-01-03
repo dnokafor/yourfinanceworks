@@ -613,7 +613,7 @@ const Invoices = () => {
                         try {
                           await invoiceApi.bulkLabels(selectedIds, 'add', bulkLabel.trim());
                           const data = await invoiceApi.getInvoices(statusFilter !== 'all' ? statusFilter : undefined, labelFilter || undefined);
-                          setInvoices(data);
+                          setInvoices(data.items);
                           setSelectedIds([]);
                           setBulkLabel('');
                           toast.success('Labels added');
@@ -635,7 +635,7 @@ const Invoices = () => {
                         try {
                           await invoiceApi.bulkLabels(selectedIds, 'remove', bulkLabel.trim());
                           const data = await invoiceApi.getInvoices(statusFilter !== 'all' ? statusFilter : undefined, labelFilter || undefined);
-                          setInvoices(data);
+                          setInvoices(data.items);
                           setSelectedIds([]);
                           setBulkLabel('');
                           toast.success('Labels removed');

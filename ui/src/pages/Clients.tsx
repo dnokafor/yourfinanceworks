@@ -1,10 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Loader2, Pencil, Trash2, Users, Tag, Filter, Minus, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Search, Loader2, Pencil, Trash2, Users, Tag, Minus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
 import { clientApi, Client, getErrorMessage } from "@/lib/api";
@@ -13,7 +12,6 @@ import { Link } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { canPerformActions } from "@/utils/auth";
 import { useTranslation } from 'react-i18next';
-import { PageHeader } from "@/components/ui/professional-layout";
 import { ProfessionalCard } from "@/components/ui/professional-card";
 import { ProfessionalButton } from "@/components/ui/professional-button";
 

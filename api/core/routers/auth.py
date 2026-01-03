@@ -623,6 +623,8 @@ async def google_callback(request: Request, code: Optional[str] = None, state: O
         raise HTTPException(status_code=400, detail=f"Failed to exchange code: {e}")
 
     # Fetch user info
+    first_name = None
+    last_name = None
     try:
         user_info = await google_oauth_client.get_id_email(token["access_token"])  # returns tuple (id, email, verified)
         google_id, email, verified_email = user_info
@@ -642,6 +644,8 @@ async def google_callback(request: Request, code: Optional[str] = None, state: O
                     google_id = user_data.get("id")
                     email = user_data.get("email")
                     verified_email = user_data.get("verified_email", False)
+                    first_name = user_data.get("given_name")
+                    last_name = user_data.get("family_name")
                     logger.info(f"Successfully fetched Google user info via userinfo endpoint: {email}")
                 else:
                     logger.error(f"Userinfo endpoint failed: {response.status_code} - {response.text}")
@@ -675,8 +679,8 @@ async def google_callback(request: Request, code: Optional[str] = None, state: O
         user = MasterUser(
             email=email,
             hashed_password=get_password_hash(secrets.token_urlsafe(16)),
-            first_name=None,
-            last_name=None,
+            first_name=first_name,
+            last_name=last_name,
             role="admin" if is_first_user else "admin",  # Owner of the new tenant
             tenant_id=db_tenant.id,
             is_active=True,
@@ -697,8 +701,8 @@ async def google_callback(request: Request, code: Optional[str] = None, state: O
                 id=user.id,
                 email=email,
                 hashed_password=user.hashed_password,
-                first_name=None,
-                last_name=None,
+                first_name=first_name,
+                last_name=last_name,
                 role="admin",
                 is_active=True,
                 is_superuser=is_first_user,
