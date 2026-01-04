@@ -935,7 +935,15 @@
   "settings": {
     "title": "Configuración",
     "description": "Respalda, exporta y restaura todos los datos de tu organización de forma segura.",
-    "company_info": "Información de la Empresa",
+    "company_info": {
+      "company_name": "Nombre de la Empresa",
+      "company_email": "Correo de la Empresa",
+      "company_phone": "Teléfono de la Empresa",
+      "company_address": "Dirección de la Empresa",
+      "tax_id": "ID Fiscal / EIN",
+      "company_logo": "Logo de la Empresa",
+      "email_readonly_hint": "El correo de la empresa no puede ser cambiado aquí."
+    },
     "company_name": "Nombre de la Empresa",
     "company_email": "Correo de la Empresa",
     "company_phone": "Teléfono de la Empresa",

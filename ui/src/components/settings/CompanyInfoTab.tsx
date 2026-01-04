@@ -151,20 +151,20 @@ export const CompanyInfoTab: React.FC<CompanyInfoTabProps> = ({
             <ProfessionalCardHeader>
                 <ProfessionalCardTitle className="flex items-center gap-2">
                     <Building2 className="w-5 h-5 text-primary" />
-                    {t('settings.company_info')}
+                    {t('settings.company_info.title')}
                 </ProfessionalCardTitle>
             </ProfessionalCardHeader>
             <ProfessionalCardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <ProfessionalInput
-                        label={t('settings.company_name')}
+                        label={t('settings.company_info.company_name')}
                         id="name"
                         name="name"
                         value={companyInfo.name}
                         onChange={handleCompanyChange}
                     />
                     <ProfessionalInput
-                        label={t('settings.tax_id')}
+                        label={t('settings.company_info.tax_id')}
                         id="tax_id"
                         name="tax_id"
                         value={companyInfo.tax_id}
@@ -174,17 +174,17 @@ export const CompanyInfoTab: React.FC<CompanyInfoTabProps> = ({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <ProfessionalInput
-                        label={t('settings.company_email')}
+                        label={t('settings.company_info.company_email')}
                         id="email"
                         name="email"
                         type="email"
                         value={companyInfo.email}
                         onChange={handleCompanyChange}
                         disabled
-                        helperText={t('settings.email_readonly_hint', 'Company email cannot be changed here.')}
+                        helperText={t('settings.company_info.email_readonly_hint', 'Company email cannot be changed here.')}
                     />
                     <ProfessionalInput
-                        label={t('settings.company_phone')}
+                        label={t('settings.company_info.company_phone')}
                         id="phone"
                         name="phone"
                         value={companyInfo.phone}
@@ -193,7 +193,7 @@ export const CompanyInfoTab: React.FC<CompanyInfoTabProps> = ({
                 </div>
 
                 <ProfessionalTextarea
-                    label={t('settings.company_address')}
+                    label={t('settings.company_info.company_address')}
                     id="address"
                     name="address"
                     rows={3}

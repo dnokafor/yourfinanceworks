@@ -264,15 +264,15 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const renderCompanyInfo = () => (
     <View style={styles.tabContent}>
-      <Text style={styles.sectionTitle}>{t('settings.company_info')}</Text>
+      <Text style={styles.sectionTitle}>{t('settings.company_info.title')}</Text>
       
       <View style={styles.inputGroup}>
-        <Text style={styles.label}>{t('settings.company_name')}</Text>
+        <Text style={styles.label}>{t('settings.company_info.company_name')}</Text>
         <TextInput
           style={styles.input}
           value={companyInfo.name}
           onChangeText={(text) => setCompanyInfo(prev => ({ ...prev, name: text }))}
-          placeholder={t('settings.company_name')}
+          placeholder={t('settings.company_info.company_name')}
         />
       </View>
 
