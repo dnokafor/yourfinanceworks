@@ -9,11 +9,11 @@ interface FaviconProps {
 export function Favicon({ logoUrl, companyName }: FaviconProps) {
   useEffect(() => {
     const updateFavicon = () => {
-      // Remove existing favicon links
-      const existingLinks = document.querySelectorAll('link[rel*="icon"]');
-      existingLinks.forEach(link => link.remove());
-
       if (logoUrl) {
+        // Remove all existing favicon links when using company logo
+        const existingLinks = document.querySelectorAll('link[rel*="icon"]');
+        existingLinks.forEach(link => link.remove());
+        
         // Use company logo as favicon
         const link = document.createElement('link');
         link.rel = 'icon';
@@ -26,14 +26,8 @@ export function Favicon({ logoUrl, companyName }: FaviconProps) {
         appleLink.rel = 'apple-touch-icon';
         appleLink.href = `${API_BASE_URL}${logoUrl}`;
         document.head.appendChild(appleLink);
-      } else {
-        // Use default favicon
-        const link = document.createElement('link');
-        link.rel = 'icon';
-        link.type = 'image/x-icon';
-        link.href = '/favicon.ico';
-        document.head.appendChild(link);
       }
+      // If no logoUrl, leave the favicon from index.html alone (no flash)
 
       // Update document title with company name
       if (companyName) {
