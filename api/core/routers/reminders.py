@@ -238,7 +238,7 @@ def create_reminder(
     """Create a new reminder"""
 
     # Verify assigned user exists and create in tenant DB if needed
-    assigned_user = db.query(User).filter(User.id == reminder_data.assigned_to_id).first()
+    assigned_user = db.query(TenantUser).filter(TenantUser.id == reminder_data.assigned_to_id).first()
 
     # If not in tenant database, check master database and create tenant user
     if not assigned_user:
@@ -357,7 +357,7 @@ def update_reminder(
     for field, value in update_data.items():
         if field == "assigned_to_id" and value:
             # Verify assigned user exists and create in tenant DB if needed
-            assigned_user = db.query(User).filter(User.id == value).first()
+            assigned_user = db.query(TenantUser).filter(TenantUser.id == value).first()
             if not assigned_user:
                 from core.models.database import get_master_db
                 master_db = next(get_master_db())
@@ -686,7 +686,7 @@ def bulk_update_reminders(
             for field, value in update_data.items():
                 if field == "assigned_to_id" and value is not None:
                     # Verify assigned user exists and create in tenant DB if needed
-                    assigned_user = db.query(User).filter(User.id == value).first()
+                    assigned_user = db.query(TenantUser).filter(TenantUser.id == value).first()
                     if not assigned_user:
                         from core.models.database import get_master_db
                         master_db = next(get_master_db())
