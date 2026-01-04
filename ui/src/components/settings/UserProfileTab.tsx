@@ -22,6 +22,8 @@ interface UserProfile {
     last_name?: string;
     show_analytics?: boolean;
     email: string;
+    sso_provider?: 'google' | 'microsoft' | null;
+    has_sso?: boolean;
 }
 
 interface PasswordData {
@@ -54,6 +56,21 @@ export const UserProfileTab: React.FC = () => {
         queryKey: ['currentUser'],
         queryFn: () => authApi.getCurrentUser(),
     });
+
+    // Debug: Log user SSO provider
+    useEffect(() => {
+        if (user) {
+            console.log('Full user object:', user);
+            console.log('User SSO Provider:', user.sso_provider);
+            console.log('User has_sso:', user.has_sso);
+            console.log('User google_id:', user.google_id);
+            console.log('User azure_ad_id:', user.azure_ad_id);
+            console.log('SSO check result:', user.has_sso === true);
+        }
+    }, [user]);
+
+    // Helper function to check if user is SSO
+    const isSSOUser = user && (user.has_sso === true || user.sso_provider !== null);
 
     useEffect(() => {
         if (user) {
@@ -111,7 +128,7 @@ export const UserProfileTab: React.FC = () => {
 
     const onChangePassword = async () => {
         if (passwordData.new_password !== passwordData.confirm_password) {
-            toast.error(t('settings.passwords_do_not_match'));
+            toast.error(t('settings.profile.passwords_not_match'));
             return;
         }
 
@@ -121,7 +138,7 @@ export const UserProfileTab: React.FC = () => {
                 new_password: passwordData.new_password,
                 confirm_password: passwordData.confirm_password
             });
-            toast.success(t('settings.password_changed_successfully'));
+            toast.success(t('settings.profile.password_changed_successfully'));
             setShowPasswordChange(false);
             setPasswordData({
                 current_password: "",
@@ -130,7 +147,7 @@ export const UserProfileTab: React.FC = () => {
             });
         } catch (error) {
             console.error("Failed to change password:", error);
-            toast.error(t('settings.failed_to_change_password'));
+            toast.error(t('settings.profile.failed_to_change_password'));
         }
     };
 
@@ -147,13 +164,13 @@ export const UserProfileTab: React.FC = () => {
             <ProfessionalCardHeader>
                 <ProfessionalCardTitle className="flex items-center gap-2">
                     <Building2 className="w-5 h-5 text-primary" />
-                    {t('settings.user_profile')}
+                    {t('settings.profile.user_profile')}
                 </ProfessionalCardTitle>
             </ProfessionalCardHeader>
             <ProfessionalCardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <ProfessionalInput
-                        label={t('settings.first_name')}
+                        label={t('settings.profile.first_name')}
                         id="first_name"
                         name="first_name"
                         value={userProfile.first_name || ''}
@@ -161,7 +178,7 @@ export const UserProfileTab: React.FC = () => {
                         autoComplete="given-name"
                     />
                     <ProfessionalInput
-                        label={t('settings.last_name')}
+                        label={t('settings.profile.last_name')}
                         id="last_name"
                         name="last_name"
                         value={userProfile.last_name || ''}
@@ -171,8 +188,8 @@ export const UserProfileTab: React.FC = () => {
                 </div>
                 <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl">
                     <div className="space-y-0.5">
-                        <Label htmlFor="show_analytics" className="text-base font-semibold">{t('settings.show_analytics_menu')}</Label>
-                        <p className="text-sm text-muted-foreground">{t('settings.show_analytics_menu_description')}</p>
+                        <Label htmlFor="show_analytics" className="text-base font-semibold">{t('settings.profile.show_analytics_menu')}</Label>
+                        <p className="text-sm text-muted-foreground">{t('settings.profile.show_analytics_menu_description')}</p>
                     </div>
                     <Switch
                         id="show_analytics"
@@ -180,57 +197,75 @@ export const UserProfileTab: React.FC = () => {
                         onCheckedChange={handleShowAnalyticsChange}
                     />
                 </div>
+
+                {/* SSO User Information */}
+                {isSSOUser && (
+                    <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl">
+                        <div className="space-y-0.5">
+                            <Label className="text-base font-semibold">{t('settings.profile.password_management')}</Label>
+                            <p className="text-sm text-muted-foreground">
+                                {user.sso_provider === 'google' ? t('settings.profile.sso_password_message_google') : 
+                                 user.sso_provider === 'microsoft' ? t('settings.profile.sso_password_message_microsoft') : 
+                                 t('settings.profile.sso_password_message_general')}
+                            </p>
+                        </div>
+                    </div>
+                )}
+
                 <div className="flex justify-end pt-4 gap-3">
-                    <ProfessionalButton
-                        variant="outline"
-                        onClick={() => setShowPasswordChange(!showPasswordChange)}
-                        leftIcon={<Key className="w-4 h-4" />}
-                    >
-                        {showPasswordChange ? t('settings.cancel') : t('settings.change_password')}
-                    </ProfessionalButton>
+                    {/* Only show password change button for non-SSO users */}
+                    {!isSSOUser && (
+                        <ProfessionalButton
+                            variant="outline"
+                            onClick={() => setShowPasswordChange(!showPasswordChange)}
+                            leftIcon={<Key className="w-4 h-4" />}
+                        >
+                            {showPasswordChange ? t('settings.profile.cancel') : t('settings.profile.change_password')}
+                        </ProfessionalButton>
+                    )}
                     <ProfessionalButton
                         onClick={onProfileSave}
                         variant="gradient"
                     >
-                        {t('settings.save_profile')}
+                        {t('settings.profile.save_profile')}
                     </ProfessionalButton>
                 </div>
 
-                {/* Password Change Section */}
-                {showPasswordChange && (
+                {/* Password Change Section - Only show for non-SSO users */}
+                {!isSSOUser && showPasswordChange && (
                     <div className="mt-8 pt-8 border-t border-border/50 animate-fade-in-up">
                         <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
                             <ShieldCheck className="w-5 h-5 text-primary" />
-                            {t('settings.change_password')}
+                            {t('settings.profile.change_password')}
                         </h3>
                         <div className="space-y-6">
                             <ProfessionalInput
-                                label={t('settings.current_password')}
+                                label={t('settings.profile.current_password')}
                                 id="current_password"
                                 name="current_password"
                                 type="password"
                                 value={passwordData.current_password}
                                 onChange={handlePasswordChange}
-                                placeholder={t('settings.current_password')}
+                                placeholder={t('settings.profile.current_password')}
                             />
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <ProfessionalInput
-                                    label={t('settings.new_password')}
+                                    label={t('settings.profile.new_password')}
                                     id="new_password"
                                     name="new_password"
                                     type="password"
                                     value={passwordData.new_password}
                                     onChange={handlePasswordChange}
-                                    placeholder={t('auth.password_min_length')}
+                                    placeholder={t('settings.profile.new_password')}
                                 />
                                 <ProfessionalInput
-                                    label={t('settings.confirm_password')}
+                                    label={t('settings.profile.confirm_password')}
                                     id="confirm_password"
                                     name="confirm_password"
                                     type="password"
                                     value={passwordData.confirm_password}
                                     onChange={handlePasswordChange}
-                                    placeholder={t('settings.confirm_password')}
+                                    placeholder={t('settings.profile.confirm_password')}
                                 />
                             </div>
                             <div className="flex justify-end gap-3 pt-2">
@@ -240,13 +275,13 @@ export const UserProfileTab: React.FC = () => {
                                         setShowPasswordChange(false);
                                     }}
                                 >
-                                    {t('settings.cancel')}
+                                    {t('settings.profile.cancel')}
                                 </ProfessionalButton>
                                 <ProfessionalButton
                                     onClick={onChangePassword}
                                     variant="default"
                                 >
-                                    {t('settings.change_password')}
+                                    {t('settings.profile.change_password')}
                                 </ProfessionalButton>
                             </div>
                         </div>

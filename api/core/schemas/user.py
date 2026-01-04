@@ -51,6 +51,9 @@ class UserRead(UserBase):
     id: int
     tenant_id: int
     google_id: Optional[str] = None
+    azure_ad_id: Optional[str] = None
+    sso_provider: Optional[str] = None
+    has_sso: Optional[bool] = None
     show_analytics: Optional[bool] = True
     created_at: datetime
     updated_at: datetime

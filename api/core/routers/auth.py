@@ -1031,6 +1031,16 @@ async def read_users_me(current_user: MasterUser = Depends(get_current_user), db
     user_data = UserRead.model_validate(current_user)
     user_dict = user_data.model_dump()
     user_dict['organizations'] = organizations
+    
+    # Add SSO provider information
+    user_dict['sso_provider'] = None
+    if current_user.google_id:
+        user_dict['sso_provider'] = 'google'
+    elif current_user.azure_ad_id:
+        user_dict['sso_provider'] = 'microsoft'
+    
+    # Add has_sso flag for backward compatibility
+    user_dict['has_sso'] = user_dict['sso_provider'] is not None
 
     return user_dict
 

@@ -70,7 +70,7 @@ const Settings = () => {
               className="px-4 py-2 h-auto data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm rounded-md hover:bg-muted transition-all"
             >
               <User className="w-4 h-4 mr-2" />
-              {t('settings.tabs.profile', t('settings.user_profile'))}
+              {t('settings.tabs.profile', t('settings.profile.user_profile'))}
             </TabsTrigger>
 
             {isAdmin && (

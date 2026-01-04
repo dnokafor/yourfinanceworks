@@ -376,8 +376,7 @@
     "failedToLoad": "Failed to load license information",
     "recurrence": {
       "days": "days"
-    },
-    "upgrade": "Upgrade"
+    }
   },
   "dashboard": {
     "title": "Dashboard",
@@ -800,7 +799,6 @@
     "payment_status": "Payment Status",
     "payment_status_description": "Track and record payments for this invoice.",
     "outstanding": "Outstanding",
-    "payer": "PAYER",
     "edit_page_context": "on edit invoice page",
     "please_select_pdf_file": "Please select a PDF file",
     "pdf_processed_successfully": "PDF processed successfully!",
@@ -839,11 +837,6 @@
     "paid_amount_updated": "Paid Amount Updated",
     "payment_reduced": "Payment Reduced",
     "payment_amount_changed_via_invoice_form": "Payment amount changed via invoice form",
-    "payment_amount_reduced_via_invoice_form": "Payment amount reduced via invoice form",
-    "create_expense": "Create Expense",
-    "payer": "Payer",
-    "select_payer": "Select payer",
-    "you": "You",
     "client": "Client"
   },
   "clients": {
@@ -963,16 +956,24 @@
     "upload_logo": "Upload Logo",
     "uploading_logo": "Uploading...",
     "recommended_size": "Recommended size: 200x200px",
-    "user_profile": "User Profile",
-    "first_name": "First Name",
-    "last_name": "Last Name",
-    "save_profile": "Save Profile",
-    "change_password": "Change Password",
-    "current_password": "Current Password",
-    "new_password": "New Password",
-    "confirm_password": "Confirm New Password",
-    "password_changed_successfully": "Password changed successfully",
-    "password_change_failed": "Failed to change password",
+    "profile": {
+      "user_profile": "User Profile",
+      "first_name": "First Name",
+      "last_name": "Last Name",
+      "save_profile": "Save Profile",
+      "change_password": "Change Password",
+      "current_password": "Current Password",
+      "new_password": "New Password",
+      "confirm_password": "Confirm New Password",
+      "password_changed_successfully": "Password changed successfully",
+      "password_change_failed": "Failed to change password",
+      "password_management": "Password Management",
+      "sso_password_message_google": "You are signed in with Google SSO. Manage your password in your Google Account settings.",
+      "sso_password_message_microsoft": "You are signed in with Microsoft SSO. Manage your password in your Microsoft Account settings.",
+      "sso_password_message_general": "You are signed in with SSO. Manage your password with your identity provider.",
+      "show_analytics_menu": "Show Analytics Menu",
+      "show_analytics_menu_description": "Show or hide Analytics menu in the sidebar navigation"
+    },
     "invoice_settings": "Invoice Settings",
     "invoice_prefix": "Invoice Number Prefix",
     "next_invoice_number": "Next Invoice Number",
@@ -1504,8 +1505,6 @@
     "backup_current_data_first": "Backup current data first",
     "ai_assistant": "AI Assistant",
     "ai_assistant_description": "Enable or disable the invoice AI assistant for your organization.",
-    "show_analytics_menu": "Show Analytics Menu",
-    "show_analytics_menu_description": "Show or hide the analytics menu in the sidebar",
     "organization_timezone": "Select your organization's timezone for date and time display",
     "timezone": "Timezone",
     "client": "Client",
