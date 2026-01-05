@@ -288,96 +288,6 @@
     },
     "provider_error": "useSearch debe usarse dentro de un SearchProvider"
   },
-  "license": {
-    "feature_locked": "Funcionalidad Bloqueada",
-    "expired": "Licencia Expirada",
-    "expired_message": "Su licencia ha expirado. Todavía puede ver sus datos existentes, pero algunas funciones pueden estar limitadas. Por favor renueve su licencia para continuar usando todas las funciones.",
-    "renew": "Renovar Licencia",
-    "manage": "Gestionar Licencia",
-    "trial_ended": "Su período de prueba ha terminado. Active una licencia para continuar usando esta función.",
-    "license_expired_feature": "Su licencia ha expirado. Por favor renueve para continuar usando esta función.",
-    "trial_ended_access": "Su período de prueba ha terminado. Active una licencia para acceder a esta función.",
-    "license_expired_access": "Su licencia ha expirado. Por favor renueve para acceder a esta función.",
-    "advanced_search_required": "La Búsqueda Avanzada requiere una licencia comercial. Actualice para buscar en todos sus datos con filtros potentes.",
-    "tabTitle": "Licencia",
-    "status": {
-      "title": "Estado de la Licencia",
-      "description": "Vea su información de licencia actual y administre su suscripción",
-      "installationId": "ID de Instalación",
-      "usageType": "Tipo",
-      "trialPeriod": "Período de Prueba",
-      "daysRemaining": "Días Restantes",
-      "expiration": "Expiración de la Licencia",
-      "licensedTo": "Licenciado A",
-      "deactivate": "Desactivar Licencia",
-      "confirmDeactivate": "¿Está seguro de que desea desactivar su licencia? Esto desactivará las funciones con licencia.",
-      "deactivateSuccess": "Licencia desactivada exitosamente",
-      "deactivateError": "Error al desactivar la licencia"
-    },
-    "activate": {
-      "title": "Activar Licencia",
-      "description": "Ingrese su clave de licencia para activar funciones premium",
-      "keyLabel": "Clave de Licencia",
-      "keyPlaceholder": "Ingrese su clave de licencia",
-      "button": "Activar Licencia",
-      "purchase": "Comprar Licencia",
-      "success": "¡Licencia activada exitosamente!",
-      "error": "Error al activar la licencia",
-      "enterKey": "Por favor ingrese una clave de licencia"
-    },
-    "features": {
-      "title": "Funciones Disponibles",
-      "description": "Funciones disponibles en su plan actual",
-      "enabled": "Habilitado"
-    },
-    "help": {
-      "title": "¿Necesita Ayuda?",
-      "description": "Si tiene preguntas sobre las licencias o necesita ayuda, contacte a nuestro equipo de soporte.",
-      "contactSupport": "Contactar Soporte",
-      "documentation": "Documentación"
-    },
-    "deactivateDialog": {
-      "title": "¿Desactivar Licencia?",
-      "description": "¿Está seguro de que desea desactivar su licencia? Esto desactivará todas las funciones con licencia, incluyendo:",
-      "featureList": {
-        "promptManagement": "Gestión de Prompts - Plantillas y personalización de prompts de IA",
-        "aiInvoiceProcessing": "Procesamiento de Facturas con IA - Extracción automática de datos de facturas",
-        "aiExpenseProcessing": "Procesamiento de Gastos con IA - Categorización de gastos por IA",
-        "advancedReporting": "Informes Avanzados - Informes personalizados y análisis",
-        "approvalWorkflows": "Flujos de Aprobación - Sistemas de aprobación multinivel",
-        "allPremiumFeatures": "Todas las demás funciones premium"
-      },
-      "reactivateNote": "Puede reactivar su licencia en cualquier momento ingresando una nueva clave de licencia.",
-      "cancel": "Cancelar",
-      "deactivating": "Desactivando...",
-      "confirmButton": "Desactivar Licencia"
-    },
-    "badges": {
-      "expiredGrace": "Expirado (Período de Gracia)",
-      "expired": "Expirado",
-      "expiringSoon": "Expirando Pronto",
-      "active": "Activo",
-      "trialExpired": "Prueba Expirada",
-      "trialEndingSoon": "Prueba Terminando Pronto",
-      "trialActive": "Prueba Activa",
-      "personalUse": "Edición Core",
-      "noLicense": "Sin Licencia"
-    },
-    "warnings": {
-      "actionRequired": "Acción Requerida",
-      "gracePeriod": "Su licencia ha expirado. Está en un período de gracia. Por favor renueve su licencia para continuar usando todas las funciones.",
-      "trialEnded": "Su período de prueba ha terminado. Active una licencia para continuar usando funciones premium.",
-      "trialEnding": "Su período de prueba termina en {{days}} días. Active una licencia para evitar interrupciones.",
-      "expiring": "Su licencia expira en {{days}} días. Por favor renueve para evitar interrupciones del servicio.",
-      "expired": "Su licencia ha expirado. Por favor renueve para continuar usando todas las funciones."
-    },
-    "loading": "Cargando información de licencia...",
-    "failedToLoad": "Error al cargar información de licencia",
-    "recurrence": {
-      "days": "Días"
-    },
-    "upgrade": "Actualizar"
-  },
   "dashboard": {
     "title": "Panel de Control",
     "welcome": "¡Bienvenido de vuelta, {{name}}!",
@@ -1547,6 +1457,103 @@
     "data_management": "Gestión de Datos",
     "data_management_description": "Respalda, exporta y restaura todos los datos de tu organización de forma segura.",
     "currency_management": "Gestión de Monedas",
+    "license": {
+      "title": "Gestión de Licencias",
+      "create_new": "Crear Nueva Clave de Licencia",
+      "confirm_title": "Transferir Clave Privada",
+      "confirm_description": "Está a punto de ser redirigido a nuestro sitio de destino para crear una nueva clave de licencia. Su clave privada se transferirá de forma segura a través de postMessage una vez que se cargue la nueva página.",
+      "confirm_action": "Redirigir y Transferir",
+      "cancel": "Cancelar",
+      "feature_locked": "Funcionalidad Bloqueada",
+      "expired": "Licencia Expirada",
+      "expired_message": "Su licencia ha expirado. Todavía puede ver sus datos existentes, pero algunas funciones pueden estar limitadas. Por favor renueve su licencia para continuar usando todas las funciones.",
+      "renew": "Renovar Licencia",
+      "manage": "Gestionar Licencia",
+      "upgrade": "Actualizar",
+      "upgrade_license": "Actualizar Licencia",
+      "required": "Licencia Requerida",
+      "trial_ended": "Su período de prueba ha terminado. Active una licencia para continuar usando esta función.",
+      "license_expired_feature": "Su licencia ha expirado. Por favor renueve para continuar usando esta función.",
+      "trial_ended_access": "Su período de prueba ha terminado. Active una licencia para acceder a esta función.",
+      "license_expired_access": "Su licencia ha expirado. Por favor renueve para acceder a esta función.",
+      "advanced_search_required": "La Búsqueda Avanzada requiere una licencia comercial. Actualice para buscar en todos sus datos con filtros potentes.",
+      "tabTitle": "Licencia",
+      "status": {
+        "title": "Estado de la Licencia",
+        "description": "Vea su información de licencia actual y administre su suscripción",
+        "installationId": "ID de Instalación",
+        "usageType": "Tipo",
+        "trialPeriod": "Período de Prueba",
+        "daysRemaining": "Días Restantes",
+        "expiration": "Expiración de la Licencia",
+        "licensedTo": "Licenciado A",
+        "deactivate": "Desactivar Licencia",
+        "confirmDeactivate": "¿Está seguro de que desea desactivar su licencia? Esto desactivará las funciones con licencia.",
+        "deactivateSuccess": "Licencia desactivada exitosamente",
+        "deactivateError": "Error al desactivar la licencia"
+      },
+      "activate": {
+        "title": "Activar Licencia",
+        "description": "Ingrese su clave de licencia para activar funciones premium",
+        "keyLabel": "Clave de Licencia",
+        "keyPlaceholder": "Ingrese su clave de licencia",
+        "button": "Activar Licencia",
+        "success": "¡Licencia activada exitosamente!",
+        "error": "Error al activar la licencia",
+        "enterKey": "Por favor ingrese una clave de licencia"
+      },
+      "features": {
+        "title": "Funciones Disponibles",
+        "description": "Funciones disponibles en su plan actual",
+        "enabled": "Habilitado"
+      },
+      "help": {
+        "title": "¿Necesita Ayuda?",
+        "description": "Si tiene preguntas sobre las licencias o necesita ayuda, contacte a nuestro equipo de soporte.",
+        "contactSupport": "Contactar Soporte",
+        "documentation": "Documentación"
+      },
+      "deactivateDialog": {
+        "title": "¿Desactivar Licencia?",
+        "description": "¿Está seguro de que desea desactivar su licencia? Esto desactivará toutes les fonctions con licencia, incluyendo:",
+        "featureList": {
+          "promptManagement": "Gestión de Prompts - Plantillas y personalización de prompts de IA",
+          "aiInvoiceProcessing": "Procesamiento de Facturas con IA - Extracción automática de datos de facturas",
+          "aiExpenseProcessing": "Procesamiento de Gastos con IA - Categorización de gastos por IA",
+          "advancedReporting": "Informes Avanzados - Informes personalizados y análisis",
+          "approvalWorkflows": "Flujos de Aprobación - Sistemas de aprobación multinivel",
+          "allPremiumFeatures": "Todas las demás funciones premium"
+        },
+        "reactivateNote": "Puede reactivar su licencia en cualquier momento ingresando una nueva clave de licencia.",
+        "cancel": "Cancelar",
+        "deactivating": "Desactivando...",
+        "confirmButton": "Desactivar Licencia"
+      },
+      "badges": {
+        "expiredGrace": "Expirado (Período de Gracia)",
+        "expired": "Expirado",
+        "expiringSoon": "Expirando Pronto",
+        "active": "Activo",
+        "trialExpired": "Prueba Expirada",
+        "trialEndingSoon": "Prueba Terminando Pronto",
+        "trialActive": "Prueba Activa",
+        "personalUse": "Edición Core",
+        "noLicense": "Sin Licencia"
+      },
+      "warnings": {
+        "actionRequired": "Acción Requerida",
+        "gracePeriod": "Su licencia ha expirado. Está en un período de gracia. Por favor renueve su licencia para continuar usando todas las funciones.",
+        "trialEnded": "Su período de prueba ha terminado. Active una licencia para continuar usando funciones premium.",
+        "trialEnding": "Su período de prueba termina en {{days}} días. Active una licencia para evitar interrupciones.",
+        "expiring": "Su licencia expira en {{days}} días. Por favor renueve para evitar interrupciones del servicio.",
+        "expired": "Su licencia ha expirado. Por favor renueve para continuar usando todas las funciones."
+      },
+      "loading": "Cargando información de licencia...",
+      "failedToLoad": "Error al cargar información de licencia",
+      "recurrence": {
+        "days": "Días"
+      }
+    },
     "status": "Estado",
     "notification_settings_saved_successfully": "Configuración de notificaciones guardada exitosamente",
     "test_notification_sent_successfully": "Notificación de prueba enviada exitosamente",

@@ -285,6 +285,13 @@ else:
         allowed_origins = [
             "http://localhost:8080", "http://localhost:3000"
         ]
+
+    # Add license key request URL to allowed origins if specified
+    license_key_site = os.getenv("LICENSE_KEY_REQUEST_URL")
+    if license_key_site:
+        if license_key_site not in allowed_origins:
+            allowed_origins.append(license_key_site)
+
     allow_credentials = os.getenv("ALLOW_CORS_CREDENTIALS", "True").lower() == "true"
 
 # Log CORS configuration for debugging

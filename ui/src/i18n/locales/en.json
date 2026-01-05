@@ -288,96 +288,6 @@
     },
     "provider_error": "useSearch must be used within a SearchProvider"
   },
-  "license": {
-    "feature_locked": "Feature Locked",
-    "expired": "License Expired",
-    "expired_message": "Your license has expired. You can still view your existing data, but some features may be limited. Please renew your license to continue using all features.",
-    "renew": "Renew License",
-    "manage": "Manage License",
-    "upgrade": "Upgrade",
-    "trial_ended": "Your trial period has ended. Activate a license to continue using this feature.",
-    "license_expired_feature": "Your license has expired. Please renew to continue using this feature.",
-    "trial_ended_access": "Your trial period has ended. Activate a license to access this feature.",
-    "license_expired_access": "Your license has expired. Please renew to access this feature.",
-    "advanced_search_required": "Advanced Search requires a commercial license. Upgrade to search across all your data with powerful filters.",
-    "tabTitle": "License",
-    "status": {
-      "title": "License Status",
-      "description": "View your current license information and manage your subscription",
-      "installationId": "Installation ID",
-      "usageType": "Type",
-      "trialPeriod": "Trial Period",
-      "daysRemaining": "Days Remaining",
-      "expiration": "License Expiration",
-      "licensedTo": "Licensed To",
-      "deactivate": "Deactivate License",
-      "confirmDeactivate": "Are you sure you want to deactivate your license? This will disable licensed features.",
-      "deactivateSuccess": "License deactivated successfully",
-      "deactivateError": "Failed to deactivate license"
-    },
-    "activate": {
-      "title": "Activate License",
-      "description": "Enter your license key to activate premium features",
-      "keyLabel": "License Key",
-      "keyPlaceholder": "Enter your license key",
-      "button": "Activate License",
-      "purchase": "Purchase License",
-      "success": "License activated successfully!",
-      "error": "Failed to activate license",
-      "enterKey": "Please enter a license key"
-    },
-    "features": {
-      "title": "Available Features",
-      "description": "Features available in your current plan",
-      "enabled": "Enabled"
-    },
-    "help": {
-      "title": "Help",
-      "description": "Need help with your license? Contact our support or check our documentation.",
-      "contactSupport": "Contact Support",
-      "documentation": "Documentation"
-    },
-    "deactivateDialog": {
-      "title": "Deactivate License?",
-      "description": "Are you sure you want to deactivate your license? This will disable all licensed features including:",
-      "featureList": {
-        "promptManagement": "Prompt Management - AI prompt templates and customization",
-        "aiInvoiceProcessing": "AI Invoice Processing - Automated invoice data extraction",
-        "aiExpenseProcessing": "AI Expense Processing - AI-powered expense categorization",
-        "advancedReporting": "Advanced Reporting - Custom reports and analytics",
-        "approvalWorkflows": "Approval Workflows - Multi-level approval systems",
-        "allPremiumFeatures": "All other premium features"
-      },
-      "reactivateNote": "You can reactivate your license at any time by entering a new license key.",
-      "cancel": "Cancel",
-      "deactivating": "Deactivating...",
-      "confirmButton": "Deactivate License"
-    },
-    "badges": {
-      "expiredGrace": "Expired (Grace Period)",
-      "expired": "Expired",
-      "expiringSoon": "Expiring Soon",
-      "active": "Active",
-      "trialExpired": "Trial Expired",
-      "trialEndingSoon": "Trial Ending Soon",
-      "trialActive": "Trial Active",
-      "personalUse": "Core Edition",
-      "noLicense": "No License"
-    },
-    "warnings": {
-      "actionRequired": "Action Required",
-      "gracePeriod": "Your license has expired. You are in a grace period. Please renew your license to continue using all features.",
-      "trialEnded": "Your trial period has ended. Activate a license to continue using premium features.",
-      "trialEnding": "Your trial period ends in {{days}} days. Activate a license to avoid interruption.",
-      "expiring": "Your license expires in {{days}} days. Please renew to avoid service interruption.",
-      "expired": "Your license has expired. Please renew to continue using all features."
-    },
-    "loading": "Loading license information...",
-    "failedToLoad": "Failed to load license information",
-    "recurrence": {
-      "days": "days"
-    }
-  },
   "dashboard": {
     "title": "Dashboard",
     "welcome": "Welcome back, {{name}}!",
@@ -1399,6 +1309,107 @@
     "data_management": "Data Management",
     "data_management_description": "Backup, export, and restore all your organization’s data securely.",
     "currency_management": "Currency Management",
+    "license": {
+      "title": "License Management",
+      "create_new": "Create New License Key",
+      "confirm_title": "Transfer Private Key",
+      "confirm_description": "You are about to be redirected to our landing site to create a new license key. Your private key will be securely transferred via postMessage once the new page loads.",
+      "confirm_action": "Redirect and Transfer",
+      "cancel": "Cancel",
+      "popup_blocked": "Popup blocked. Please allow popups and try again.",
+      "opening_site": "Opening license creation site...",
+      "key_transferred": "Private key transferred successfully!",
+      "private_key_error": "Failed to fetch private key. Make sure you are an admin.",
+      "feature_locked": "Feature Locked",
+      "expired": "License Expired",
+      "expired_message": "Your license has expired. You can still view your existing data, but some features may be limited. Please renew your license to continue using all features.",
+      "renew": "Renew License",
+      "manage": "Manage License",
+      "upgrade": "Upgrade",
+      "upgrade_license": "Upgrade License",
+      "required": "License Required",
+      "trial_ended": "Your trial period has ended. Activate a license to continue using this feature.",
+      "license_expired_feature": "Your license has expired. Please renew to continue using this feature.",
+      "trial_ended_access": "Your trial period has ended. Activate a license to access this feature.",
+      "license_expired_access": "Your license has expired. Please renew to access this feature.",
+      "advanced_search_required": "Advanced Search requires a commercial license. Upgrade to search across all your data with powerful filters.",
+      "tabTitle": "License",
+      "status": {
+        "title": "License Status",
+        "description": "View your current license information and manage your subscription",
+        "installationId": "Installation ID",
+        "usageType": "Type",
+        "trialPeriod": "Trial Period",
+        "daysRemaining": "Days Remaining",
+        "expiration": "License Expiration",
+        "licensedTo": "Licensed To",
+        "deactivate": "Deactivate License",
+        "confirmDeactivate": "Are you sure you want to deactivate your license? This will disable licensed features.",
+        "deactivateSuccess": "License deactivated successfully",
+        "deactivateError": "Failed to deactivate license"
+      },
+      "activate": {
+        "title": "Activate License",
+        "description": "Enter your license key to activate premium features",
+        "keyLabel": "License Key",
+        "keyPlaceholder": "Enter your license key",
+        "button": "Activate License",
+        "success": "License activated successfully!",
+        "error": "Failed to activate license",
+        "enterKey": "Please enter a license key"
+      },
+      "features": {
+        "title": "Available Features",
+        "description": "Features available in your current plan",
+        "enabled": "Enabled"
+      },
+      "help": {
+        "title": "Help",
+        "description": "Need help with your license? Contact our support or check our documentation.",
+        "contactSupport": "Contact Support",
+        "documentation": "Documentation"
+      },
+      "deactivateDialog": {
+        "title": "Deactivate License?",
+        "description": "Are you sure you want to deactivate your license? This will disable all licensed features including:",
+        "featureList": {
+          "promptManagement": "Prompt Management - AI prompt templates and customization",
+          "aiInvoiceProcessing": "AI Invoice Processing - Automated invoice data extraction",
+          "aiExpenseProcessing": "AI Expense Processing - AI-powered expense categorization",
+          "advancedReporting": "Advanced Reporting - Custom reports and analytics",
+          "approvalWorkflows": "Approval Workflows - Multi-level approval systems",
+          "allPremiumFeatures": "All other premium features"
+        },
+        "reactivateNote": "You can reactivate your license at any time by entering a new license key.",
+        "cancel": "Cancel",
+        "deactivating": "Deactivating...",
+        "confirmButton": "Deactivate License"
+      },
+      "badges": {
+        "expiredGrace": "Expired (Grace Period)",
+        "expired": "Expired",
+        "expiringSoon": "Expiring Soon",
+        "active": "Active",
+        "trialExpired": "Trial Expired",
+        "trialEndingSoon": "Trial Ending Soon",
+        "trialActive": "Trial Active",
+        "personalUse": "Core Edition",
+        "noLicense": "No License"
+      },
+      "warnings": {
+        "actionRequired": "Action Required",
+        "gracePeriod": "Your license has expired. You are in a grace period. Please renew your license to continue using all features.",
+        "trialEnded": "Your trial period has ended. Activate a license to continue using premium features.",
+        "trialEnding": "Your trial period ends in {{days}} days. Activate a license to avoid interruption.",
+        "expiring": "Your license expires in {{days}} days. Please renew to avoid service interruption.",
+        "expired": "Your license has expired. Please renew to continue using all features."
+      },
+      "loading": "Loading license information...",
+      "failedToLoad": "Failed to load license information",
+      "recurrence": {
+        "days": "days"
+      }
+    },
     "status": "Status",
     "active": "Active",
     "inactive": "Inactive",

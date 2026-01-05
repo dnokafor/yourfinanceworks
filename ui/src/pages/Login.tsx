@@ -39,6 +39,7 @@ const Login = () => {
       // Dispatch custom event to notify FeatureContext
       window.dispatchEvent(new Event('auth-changed'));
       toast.success(t('auth.login_success'));
+
       navigate("/dashboard");
     } catch (error: any) {
       const errorMessage = getErrorMessage(error, t);

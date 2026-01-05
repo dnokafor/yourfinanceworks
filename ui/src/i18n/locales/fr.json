@@ -288,96 +288,6 @@
     },
     "provider_error": "useSearch doit être utilisé dans un SearchProvider"
   },
-  "license": {
-    "feature_locked": "Fonctionnalité Verrouillée",
-    "expired": "Licence Expirée",
-    "expired_message": "Votre licence a expiré. Vous pouvez toujours visualiser vos données existantes, mais certaines fonctionnalités peuvent être limitées. Veuillez renouveler votre licence pour continuer à utiliser toutes les fonctionnalités.",
-    "renew": "Renouveler la Licence",
-    "manage": "Gérer la Licence",
-    "trial_ended": "Votre période d'essai est terminée. Activez une licence pour continuer à utiliser cette fonctionnalité.",
-    "license_expired_feature": "Votre licence a expiré. Veuillez renouveler pour continuer à utiliser cette fonctionnalité.",
-    "trial_ended_access": "Votre période d'essai est terminée. Activez une licence pour accéder à cette fonctionnalité.",
-    "license_expired_access": "Votre licence a expiré. Veuillez renouveler pour accéder à cette fonctionnalité.",
-    "advanced_search_required": "La Recherche Avancée nécessite une licence commerciale. Mettez à niveau pour rechercher dans toutes vos données avec des filtres puissants.",
-    "tabTitle": "Licence",
-    "status": {
-      "title": "Statut de la Licence",
-      "description": "Voir vos informations de licence actuelles et gérer votre abonnement",
-      "installationId": "ID d'Installation",
-      "usageType": "Type",
-      "trialPeriod": "Période d'Essai",
-      "daysRemaining": "Jours Restants",
-      "expiration": "Expiration de la Licence",
-      "licensedTo": "Licencié À",
-      "deactivate": "Désactiver la Licence",
-      "confirmDeactivate": "Êtes-vous sûr de vouloir désactiver votre licence ? Cela désactivera les fonctionnalités sous licence.",
-      "deactivateSuccess": "Licence désactivée avec succès",
-      "deactivateError": "Échec de la désactivation de la licence"
-    },
-    "activate": {
-      "title": "Activer la Licence",
-      "description": "Entrez votre clé de licence pour activer les fonctionnalités premium",
-      "keyLabel": "Clé de Licence",
-      "keyPlaceholder": "Entrez votre clé de licence",
-      "button": "Activer la Licence",
-      "purchase": "Acheter une Licence",
-      "success": "Licence activée avec succès !",
-      "error": "Échec de l'activation de la licence",
-      "enterKey": "Veuillez entrer une clé de licence"
-    },
-    "features": {
-      "title": "Fonctionnalités Disponibles",
-      "description": "Fonctionnalités disponibles dans votre plan actuel",
-      "enabled": "Activé"
-    },
-    "help": {
-      "title": "Besoin d'Aide ?",
-      "description": "Si vous avez des questions sur les licences ou avez besoin d'aide, veuillez contacter notre équipe de support.",
-      "contactSupport": "Contacter le Support",
-      "documentation": "Documentation"
-    },
-    "deactivateDialog": {
-      "title": "Désactiver la Licence ?",
-      "description": "Êtes-vous sûr de vouloir désactiver votre licence ? Cela désactivera toutes les fonctionnalités sous licence, y compris :",
-      "featureList": {
-        "promptManagement": "Gestion des Prompts - Modèles et personnalisation des prompts IA",
-        "aiInvoiceProcessing": "Traitement IA des Factures - Extraction automatique des données des factures",
-        "aiExpenseProcessing": "Traitement IA des Dépenses - Catégorisation des dépenses par IA",
-        "advancedReporting": "Rapports Avancés - Rapports personnalisés et analyses",
-        "approvalWorkflows": "Workflows d'Approbation - Systèmes d'approbation multiniveaux",
-        "allPremiumFeatures": "Toutes les autres fonctionnalités premium"
-      },
-      "reactivateNote": "Vous pouvez réactiver votre licence à tout moment en entrant une nouvelle clé de licence.",
-      "cancel": "Annuler",
-      "deactivating": "Désactivation...",
-      "confirmButton": "Désactiver la Licence"
-    },
-    "badges": {
-      "expiredGrace": "Expiré (Période de Grâce)",
-      "expired": "Expiré",
-      "expiringSoon": "Expire Bientôt",
-      "active": "Actif",
-      "trialExpired": "Essai Expiré",
-      "trialEndingSoon": "Essai Bientôt Terminé",
-      "trialActive": "Essai Actif",
-      "personalUse": "Édition Core",
-      "noLicense": "Pas de Licence"
-    },
-    "warnings": {
-      "actionRequired": "Action Requise",
-      "gracePeriod": "Votre licence a expiré. Vous êtes dans une période de grâce. Veuillez renouveler votre licence pour continuer à utiliser toutes les fonctionnalités.",
-      "trialEnded": "Votre période d'essai est terminée. Activez une licence pour continuer à utiliser les fonctionnalités premium.",
-      "trialEnding": "Votre période d'essai se termine dans {{days}} jours. Activez une licence pour éviter toute interruption.",
-      "expiring": "Votre licence expire dans {{days}} jours. Veuillez renouveler pour éviter toute interruption de service.",
-      "expired": "Votre licence a expiré. Veuillez renouveler pour continuer à utiliser toutes les fonctionnalités."
-    },
-    "loading": "Chargement des informations de licence...",
-    "failedToLoad": "Échec du chargement des informations de licence",
-    "recurrence": {
-      "days": "Jours"
-    },
-    "upgrade": "Mettre à niveau"
-  },
   "dashboard": {
     "title": "Tableau de Bord",
     "welcome": "Bon retour, {{name}}!",
@@ -1385,6 +1295,103 @@
     "data_management": "Gestion des Données",
     "data_management_description": "Sauvegardez, exportez et restaurez toutes les données de votre organisation en toute sécurité.",
     "currency_management": "Gestion des Devises",
+    "license": {
+      "title": "Gestion des Licences",
+      "create_new": "Créer une nouvelle clé de licence",
+      "confirm_title": "Transférer la clé privée",
+      "confirm_description": "Vous allez être redirigé vers notre site de destination pour créer une nouvelle clé de licence. Votre clé privée sera transférée en toute sécurité via postMessage une fois la nouvelle page chargée.",
+      "confirm_action": "Rediriger et transférer",
+      "cancel": "Annuler",
+      "feature_locked": "Fonctionnalité Verrouillée",
+      "expired": "Licence Expirée",
+      "expired_message": "Votre licence a expiré. Vous pouvez toujours visualiser vos données existantes, mais certaines fonctionnalités peuvent être limitées. Veuillez renouveler votre licence pour continuer à utiliser toutes les fonctionnalités.",
+      "renew": "Renouveler la Licence",
+      "manage": "Gérer la Licence",
+      "upgrade": "Mettre à niveau",
+      "upgrade_license": "Mettre à niveau la licence",
+      "required": "Licence Requise",
+      "trial_ended": "Votre période d'essai est terminée. Activez une licence pour continuer à utiliser cette fonctionnalité.",
+      "license_expired_feature": "Votre licence a expiré. Veuillez renouveler pour continuer à utiliser cette fonctionnalité.",
+      "trial_ended_access": "Votre période d'essai est terminée. Activez une licence pour accéder à cette fonctionnalité.",
+      "license_expired_access": "Votre licence a expiré. Veuillez renouveler pour accéder à cette fonctionnalité.",
+      "advanced_search_required": "La Recherche Avancée nécessite une licence commerciale. Mettez à niveau pour rechercher dans toutes vos données avec des filtres puissants.",
+      "tabTitle": "Licence",
+      "status": {
+        "title": "Statut de la Licence",
+        "description": "Voir vos informations de licence actuelles et gérer votre abonnement",
+        "installationId": "ID d'Installation",
+        "usageType": "Type",
+        "trialPeriod": "Période d'Essai",
+        "daysRemaining": "Jours Restants",
+        "expiration": "Expiration de la Licence",
+        "licensedTo": "Licencié À",
+        "deactivate": "Désactiver la Licence",
+        "confirmDeactivate": "Êtes-vous sûr de vouloir désactiver votre licence ? Cela désactivera les fonctionnalités sous licence.",
+        "deactivateSuccess": "Licence désactivée avec succès",
+        "deactivateError": "Échec de la désactivation de la licence"
+      },
+      "activate": {
+        "title": "Activer la Licence",
+        "description": "Entrez votre clé de licence pour activer les fonctionnalités premium",
+        "keyLabel": "Clé de Licence",
+        "keyPlaceholder": "Entrez votre clé de licence",
+        "button": "Activer la Licence",
+        "success": "Licence activée avec succès !",
+        "error": "Échec de l'activation de la licence",
+        "enterKey": "Veuillez entrer une clé de licence"
+      },
+      "features": {
+        "title": "Fonctionnalités Disponibles",
+        "description": "Fonctionnalités disponibles dans votre plan actuel",
+        "enabled": "Activé"
+      },
+      "help": {
+        "title": "Besoin d'Aide ?",
+        "description": "Si vous avez des questions sur les licences ou avez besoin d'aide, veuillez contacter notre équipe de support.",
+        "contactSupport": "Contacter le Support",
+        "documentation": "Documentation"
+      },
+      "deactivateDialog": {
+        "title": "Désactiver la Licence ?",
+        "description": "Êtes-vous sûr de vouloir désactiver votre licence ? Cela désactivera toutes les fonctionnalités sous licence, y compris :",
+        "featureList": {
+          "promptManagement": "Gestion des Prompts - Modèles et personnalisation des prompts IA",
+          "aiInvoiceProcessing": "Traitement IA des Factures - Extraction automatique des données des factures",
+          "aiExpenseProcessing": "Traitement IA des Dépenses - Catégorisation des dépenses par IA",
+          "advancedReporting": "Rapports Avancés - Rapports personnalisés et analyses",
+          "approvalWorkflows": "Workflows d'Approbation - Systèmes d'approbation multiniveaux",
+          "allPremiumFeatures": "Toutes les autres fonctionnalités premium"
+        },
+        "reactivateNote": "Vous pouvez réactiver votre licence à tout moment en entrant une nouvelle clé de licence.",
+        "cancel": "Annuler",
+        "deactivating": "Désactivation...",
+        "confirmButton": "Désactiver la Licence"
+      },
+      "badges": {
+        "expiredGrace": "Expiré (Période de Grâce)",
+        "expired": "Expiré",
+        "expiringSoon": "Expire Bientôt",
+        "active": "Actif",
+        "trialExpired": "Essai Expiré",
+        "trialEndingSoon": "Essai Bientôt Terminé",
+        "trialActive": "Essai Actif",
+        "personalUse": "Édition Core",
+        "noLicense": "Pas de Licence"
+      },
+      "warnings": {
+        "actionRequired": "Action Requise",
+        "gracePeriod": "Votre licence a expiré. Vous êtes dans une période de grâce. Veuillez renouveler votre licence pour continuer à utiliser toutes les fonctionnalités.",
+        "trialEnded": "Votre période d'essai est terminée. Activez une licence pour continuer à utiliser les fonctionnalités premium.",
+        "trialEnding": "Votre période d'essai se termine dans {{days}} jours. Activez une licence pour éviter toute interruption.",
+        "expiring": "Votre licence expire dans {{days}} jours. Veuillez renouveler pour éviter toute interruption de service.",
+        "expired": "Votre licence a expiré. Veuillez renouveler pour continuer à utiliser toutes les fonctionnalités."
+      },
+      "loading": "Chargement des informations de licence...",
+      "failedToLoad": "Échec du chargement des informations de licence",
+      "recurrence": {
+        "days": "Jours"
+      }
+    },
     "status": "Statut",
     "complete_backup": "Sauvegarde Complète",
     "complete_backup_description": "Téléchargez une sauvegarde complète de toutes vos données, y compris les clients, factures, paiements et paramètres.",

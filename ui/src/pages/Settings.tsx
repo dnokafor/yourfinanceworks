@@ -164,7 +164,7 @@ const Settings = () => {
                   className="px-4 py-2 h-auto data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm rounded-md hover:bg-muted transition-all"
                 >
                   <Shield className="w-4 h-4 mr-2" />
-                  {t('license.tabTitle')}
+                  {t('settings.license.tabTitle')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="data"

@@ -280,96 +280,6 @@
     },
     "provider_error": "useSearch muss innerhalb eines SearchProvider verwendet werden"
   },
-  "license": {
-    "feature_locked": "Funktion Gesperrt",
-    "expired": "Lizenz Abgelaufen",
-    "expired_message": "Ihre Lizenz ist abgelaufen. Sie können weiterhin Ihre vorhandenen Daten anzeigen, aber einige Funktionen können eingeschränkt sein. Bitte erneuern Sie Ihre Lizenz, um alle Funktionen weiterhin zu nutzen.",
-    "renew": "Lizenz Erneuern",
-    "manage": "Lizenz Verwalten",
-    "upgrade": "Aktualisieren",
-    "trial_ended": "Ihr Testzeitraum ist beendet. Aktivieren Sie eine Lizenz, um diese Funktion weiterhin zu nutzen.",
-    "license_expired_feature": "Ihre Lizenz ist abgelaufen. Bitte erneuern Sie, um diese Funktion weiterhin zu nutzen.",
-    "trial_ended_access": "Ihr Testzeitraum ist beendet. Aktivieren Sie eine Lizenz, um auf diese Funktion zuzugreifen.",
-    "license_expired_access": "Ihre Lizenz ist abgelaufen. Bitte erneuern Sie, um auf diese Funktion zuzugreifen.",
-    "advanced_search_required": "Erweiterte Suche erfordert eine kommerzielle Lizenz. Aktualisieren Sie, um alle Ihre Daten mit leistungsstarken Filtern zu durchsuchen.",
-    "tabTitle": "Lizenz",
-    "status": {
-      "title": "Lizenzstatus",
-      "description": "Aktuelle Lizenzinformationen anzeigen und Abonnement verwalten",
-      "installationId": "Installations-ID",
-      "usageType": "Typ",
-      "trialPeriod": "Testzeitraum",
-      "daysRemaining": "Verbleibende Tage",
-      "expiration": "Lizenzablauf",
-      "licensedTo": "Lizenziert an",
-      "deactivate": "Lizenz deaktivieren",
-      "confirmDeactivate": "Sind Sie sicher, dass Sie Ihre Lizenz deaktivieren möchten? Dies deaktiviert lizenzierte Funktionen.",
-      "deactivateSuccess": "Lizenz erfolgreich deaktiviert",
-      "deactivateError": "Fehler beim Deaktivieren der Lizenz"
-    },
-    "activate": {
-      "title": "Lizenz aktivieren",
-      "description": "Lizenzschlüssel eingeben, um Premium-Funktionen zu aktivieren",
-      "keyLabel": "Lizenzschlüssel",
-      "keyPlaceholder": "Lizenzschlüssel eingeben",
-      "button": "Lizenz aktivieren",
-      "purchase": "Lizenz kaufen",
-      "success": "Lizenz erfolgreich aktiviert!",
-      "error": "Fehler beim Aktivieren der Lizenz",
-      "enterKey": "Bitte geben Sie einen Lizenzschlüssel ein"
-    },
-    "features": {
-      "title": "Verfügbare Funktionen",
-      "description": "Überprüfen Sie, welche Funktionen mit Ihrer aktuellen Lizenz aktiviert sind",
-      "enabled": "Aktiviert"
-    },
-    "badges": {
-      "active": "Aktiv",
-      "expired": "Abgelaufen",
-      "expiringSoon": "Läuft bald ab",
-      "trialActive": "Test aktiv",
-      "trialExpired": "Test abgelaufen",
-      "trialEndingSoon": "Test endet bald",
-      "personalUse": "Core Edition",
-      "noLicense": "Keine Lizenz",
-      "expiredGrace": "Abgelaufen (Karenzzeit)"
-    },
-    "warnings": {
-      "actionRequired": "Aktion erforderlich",
-      "gracePeriod": "Ihre Lizenz ist abgelaufen. Sie befinden sich in einer Karenzzeit. Bitte erneuern Sie Ihre Lizenz, um alle Funktionen weiterhin zu nutzen.",
-      "trialEnded": "Ihr Testzeitraum ist beendet. Aktivieren Sie eine Lizenz, um Premium-Funktionen weiterhin zu nutzen.",
-      "trialEnding": "Ihr Testzeitraum endet in {{days}} Tagen. Aktivieren Sie eine Lizenz, um Unterbrechungen zu vermeiden.",
-      "expiring": "Ihre Lizenz läuft in {{days}} Tagen ab. Bitte erneuern Sie, um Dienstunterbrechungen zu vermeiden.",
-      "expired": "Ihre Lizenz ist abgelaufen. Bitte erneuern Sie, um alle Funktionen weiterhin zu nutzen."
-    },
-    "loading": "Lizenzinformationen werden geladen...",
-    "failedToLoad": "Fehler beim Laden der Lizenzinformationen",
-    "recurrence": {
-      "days": "Tage"
-    },
-    "help": {
-      "title": "Hilfe",
-      "description": "Benötigen Sie Hilfe mit Ihrer Lizenz? Kontaktieren Sie unseren Support oder lesen Sie unsere Dokumentation.",
-      "contactSupport": "Support kontaktieren",
-      "documentation": "Dokumentation"
-    },
-    "deactivateDialog": {
-      "title": "Lizenz deaktivieren?",
-      "description": "Sind Sie sicher, dass Sie Ihre Lizenz deaktivieren möchten? Dies deaktiviert alle lizenzierten Funktionen, einschließlich:",
-      "featureList": {
-        "promptManagement": "Prompt-Management - KI-Prompt-Vorlagen und -Anpassung",
-        "aiInvoiceProcessing": "KI-Rechnungsverarbeitung - Automatisierte Rechnungsdatenextraktion",
-        "aiExpenseProcessing": "KI-Ausgabenverarbeitung - KI-gestützte Ausgabenkategorisierung",
-        "advancedReporting": "Erweiterte Berichterstattung - Benutzerdefinierte Berichte und Analysen",
-        "approvalWorkflows": "Genehmigungs-Workflows - Mehrstufige Genehmigungssysteme",
-        "allPremiumFeatures": "Alle anderen Premium-Funktionen"
-      },
-      "reactivateNote": "Sie können Ihre Lizenz jederzeit durch Eingabe eines neuen Lizenzschlüssels reaktivieren.",
-      "cancel": "Abbrechen",
-      "deactivating": "Wird deaktiviert...",
-      "confirmButton": "Lizenz deaktivieren"
-    }
-  },
   "dashboard": {
     "title": "Dashboard",
     "welcome": "Willkommen zurück, {{name}}!",
@@ -1362,6 +1272,103 @@
     "data_management": "Datenverwaltung",
     "data_management_description": "Sichern, exportieren und wiederherstellen Sie alle Daten Ihrer Organisation sicher.",
     "currency_management": "Währungsverwaltung",
+    "license": {
+      "title": "Lizenzverwaltung",
+      "create_new": "Neuen Lizenzschlüssel erstellen",
+      "confirm_title": "Privaten Schlüssel übertragen",
+      "confirm_description": "Sie werden zu unserer Landingpage weitergeleitet, um einen neuen Lizenzschlüssel zu erstellen. Ihr privater Schlüssel wird sicher per postMessage übertragen, sobald die neue Seite geladen ist.",
+      "confirm_action": "Weiterleiten und übertragen",
+      "cancel": "Abbrechen",
+      "feature_locked": "Funktion Gesperrt",
+      "expired": "Lizenz Abgelaufen",
+      "expired_message": "Ihre Lizenz ist abgelaufen. Sie können weiterhin Ihre vorhandenen Daten anzeigen, aber einige Funktionen können eingeschränkt sein. Bitte erneuern Sie Ihre Lizenz, um alle Funktionen weiterhin zu nutzen.",
+      "renew": "Lizenz Erneuern",
+      "manage": "Lizenz Verwalten",
+      "upgrade": "Aktualisieren",
+      "upgrade_license": "Lizenz Aktualisieren",
+      "required": "Lizenz Erforderlich",
+      "trial_ended": "Ihr Testzeitraum ist beendet. Aktivieren Sie eine Lizenz, um diese Funktion weiterhin zu nutzen.",
+      "license_expired_feature": "Ihre Lizenz ist abgelaufen. Bitte erneuern Sie, um diese Funktion weiterhin zu nutzen.",
+      "trial_ended_access": "Ihr Testzeitraum ist beendet. Aktivieren Sie eine Lizenz, um auf diese Funktion zuzugreifen.",
+      "license_expired_access": "Ihre Lizenz ist abgelaufen. Bitte erneuern Sie, um auf diese Funktion zuzugreifen.",
+      "advanced_search_required": "Erweiterte Suche erfordert eine kommerzielle Lizenz. Aktualisieren Sie, um alle Ihre Daten mit leistungsstarken Filtern zu durchsuchen.",
+      "tabTitle": "Lizenz",
+      "status": {
+        "title": "Lizenzstatus",
+        "description": "Aktuelle Lizenzinformationen anzeigen und Abonnement verwalten",
+        "installationId": "Installations-ID",
+        "usageType": "Typ",
+        "trialPeriod": "Testzeitraum",
+        "daysRemaining": "Verbleibende Tage",
+        "expiration": "Lizenzablauf",
+        "licensedTo": "Lizenziert an",
+        "deactivate": "Lizenz deaktivieren",
+        "confirmDeactivate": "Sind Sie sicher, dass Sie Ihre Lizenz deaktivieren möchten? Dies deaktiviert lizenzierte Funktionen.",
+        "deactivateSuccess": "Lizenz erfolgreich deaktiviert",
+        "deactivateError": "Fehler beim Deaktivieren der Lizenz"
+      },
+      "activate": {
+        "title": "Lizenz aktivieren",
+        "description": "Lizenzschlüssel eingeben, um Premium-Funktionen zu aktivieren",
+        "keyLabel": "Lizenzschlüssel",
+        "keyPlaceholder": "Lizenzschlüssel eingeben",
+        "button": "Lizenz aktivieren",
+        "success": "Lizenz erfolgreich aktiviert!",
+        "error": "Fehler beim Aktivieren der Lizenz",
+        "enterKey": "Bitte geben Sie einen Lizenzschlüssel ein"
+      },
+      "features": {
+        "title": "Verfügbare Funktionen",
+        "description": "Überprüfen Sie, welche Funktionen mit Ihrer aktuellen Lizenz aktiviert sind",
+        "enabled": "Aktiviert"
+      },
+      "badges": {
+        "active": "Aktiv",
+        "expired": "Abgelaufen",
+        "expiringSoon": "Läuft bald ab",
+        "trialActive": "Test aktiv",
+        "trialExpired": "Test abgelaufen",
+        "trialEndingSoon": "Test endet bald",
+        "personalUse": "Core Edition",
+        "noLicense": "Keine Lizenz",
+        "expiredGrace": "Abgelaufen (Karenzzeit)"
+      },
+      "warnings": {
+        "actionRequired": "Aktion erforderlich",
+        "gracePeriod": "Ihre Lizenz ist abgelaufen. Sie befinden sich in einer Karenzzeit. Bitte erneuern Sie Ihre Lizenz, um alle Funktionen weiterhin zu nutzen.",
+        "trialEnded": "Ihr Testzeitraum ist beendet. Aktivieren Sie eine Lizenz, um Premium-Funktionen weiterhin zu nutzen.",
+        "trialEnding": "Ihr Testzeitraum endet in {{days}} Tagen. Aktivieren Sie eine Lizenz, um Unterbrechungen zu vermeiden.",
+        "expiring": "Ihre Lizenz läuft in {{days}} Tagen ab. Bitte erneuern Sie, um Dienstunterbrechungen zu vermeiden.",
+        "expired": "Ihre Lizenz ist abgelaufen. Bitte erneuern Sie, um alle Funktionen weiterhin zu nutzen."
+      },
+      "loading": "Lizenzinformationen werden geladen...",
+      "failedToLoad": "Fehler beim Laden der Lizenzinformationen",
+      "recurrence": {
+        "days": "Tage"
+      },
+      "help": {
+        "title": "Hilfe",
+        "description": "Benötigen Sie Hilfe mit Ihrer Lizenz? Kontaktieren Sie unseren Support oder lesen Sie unsere Dokumentation.",
+        "contactSupport": "Support kontaktieren",
+        "documentation": "Dokumentation"
+      },
+      "deactivateDialog": {
+        "title": "Lizenz deaktivieren?",
+        "description": "Sind Sie sicher, dass Sie Ihre Lizenz deaktivieren möchten? Dies deaktiviert alle lizenzierten Funktionen, einschließlich:",
+        "featureList": {
+          "promptManagement": "Prompt-Management - KI-Prompt-Vorlagen und -Anpassung",
+          "aiInvoiceProcessing": "KI-Rechnungsverarbeitung - Automatisierte Rechnungsdatenextraktion",
+          "aiExpenseProcessing": "KI-Ausgabenverarbeitung - KI-gestützte Ausgabenkategorisierung",
+          "advancedReporting": "Erweiterte Berichterstattung - Benutzerdefinierte Berichte und Analysen",
+          "approvalWorkflows": "Genehmigungs-Workflows - Mehrstufige Genehmigungssysteme",
+          "allPremiumFeatures": "Alle anderen Premium-Funktionen"
+        },
+        "reactivateNote": "Sie können Ihre Lizenz jederzeit durch Eingabe eines neuen Lizenzschlüssels reaktivieren.",
+        "cancel": "Abbrechen",
+        "deactivating": "Wird deaktiviert...",
+        "confirmButton": "Lizenz deaktivieren"
+      }
+    },
     "status": "Status",
     "active": "Aktiv",
     "inactive": "Inaktiv",

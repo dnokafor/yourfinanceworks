@@ -71,7 +71,6 @@ const ApprovalReportsPage = React.lazy(() => import("./pages/ApprovalReportsPage
 const Reminders = React.lazy(() => import("./pages/Reminders"));
 const OrganizationJoinRequests = React.lazy(() => import("./pages/OrganizationJoinRequests"));
 const PromptManagement = React.lazy(() => import("./pages/PromptManagement"));
-const Gamification = React.lazy(() => import("./pages/Gamification"));
 
 const queryClient = new QueryClient();
 
@@ -184,7 +183,6 @@ const AppContent = () => {
                     <Route path="/inventory/edit/:id" element={<RoleProtectedRoute allowedRoles={['admin', 'user']}><EditInventoryItem /></RoleProtectedRoute>} />
                     <Route path="/inventory/new-inventory" element={<RoleProtectedRoute allowedRoles={['admin', 'user']}><NewInventoryInvoice /></RoleProtectedRoute>} />
                     <Route path="/prompts" element={<RoleProtectedRoute allowedRoles={['admin']}><PromptManagement /></RoleProtectedRoute>} />
-                    <Route path="/gamification" element={<Gamification />} />
                     <Route path="/expenses/recycle-bin" element={<ExpenseRecycleBin />} />
                     <Route path="/statements/recycle-bin" element={<StatementRecycleBin />} />
                   </Route>
