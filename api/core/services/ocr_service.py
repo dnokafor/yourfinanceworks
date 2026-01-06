@@ -15,12 +15,415 @@ from core.exceptions.bank_ocr_exceptions import (
     OCRDependencyMissingError,
     OCRConfigurationError
 )
+from core.utils.timezone import get_tenant_timezone_aware_datetime
 
 def _resolve_log_level(name: str) -> int:
     try:
         return getattr(logging, (name or "INFO").upper(), logging.INFO)
     except Exception:
         return logging.INFO
+
+def parse_number(value: Any) -> Optional[float]:
+    """Robust number parsing for OCR results."""
+    try:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        s = str(value)
+        # Remove currency symbols and spaces
+        import re
+        s = re.sub(r"[^0-9,.-]", "", s)
+        # If both comma and dot present, assume comma thousands
+        if "," in s and "." in s:
+            s = s.replace(",", "")
+        else:
+            # If only comma present, treat as decimal
+            s = s.replace(",", ".")
+        return float(s)
+    except Exception:
+        return None
+
+def first_key(d: Dict[str, Any], keys: list[str]) -> Any:
+    """Find the first key in a dictionary that exists and has a value."""
+    for k in keys:
+        if isinstance(d, dict) and k in d and d[k] not in (None, ""):
+            return d[k]
+    return None
+
+async def apply_ocr_extraction_to_expense(
+    db: Session,
+    expense: Any,
+    extracted: Dict[str, Any],
+    attachment_id: Optional[int] = None,
+    ai_extraction_attempted: bool = False,
+    file_path: Optional[str] = None,
+    ai_config: Optional[Dict[str, Any]] = None
+) -> None:
+    """
+    Apply extracted OCR data to an Expense record with robust mapping and normalization.
+    This logic is shared between standard reprocessing and batch uploads.
+    """
+    from core.models.models_per_tenant import Expense, ExpenseAttachment, AIConfig as AIConfigModel
+    from core.utils.timezone import get_tenant_timezone_aware_datetime
+    from datetime import datetime, timezone
+    import json
+
+    expense_id = expense.id
+    logger.info(f"Applying OCR extraction to expense {expense_id}. Attachment: {attachment_id}")
+
+    # Map fields robustly
+    extracted = extracted if isinstance(extracted, dict) else {}
+    logger.info(f"OCR extracted keys: {list(extracted.keys()) if isinstance(extracted, dict) else 'non-dict result'}")
+    
+    # Debug: Log the actual extracted data to see what the AI returned
+    if isinstance(extracted, dict):
+        logger.info(f"OCR extracted data: {json.dumps(extracted, indent=2, default=str)}")
+
+        # Check if vendor field contains CSV-like data (common AI model error)
+        vendor_value = extracted.get('vendor', '')
+        if isinstance(vendor_value, str) and vendor_value.count(',') >= 3:
+            logger.warning(f"Detected CSV-like data in vendor field: {vendor_value[:100]}...")
+            # Try to parse as CSV
+            csv_parsed = _parse_csv_like_response(vendor_value)
+            if csv_parsed:
+                logger.info(f"Successfully parsed CSV-like response, replacing extracted data")
+                extracted = csv_parsed
+
+    # If we only got raw text, first try to extract embedded JSON, then try markdown, then heuristics
+    if set(extracted.keys()) == {"raw"} and isinstance(extracted.get("raw"), str):
+        extracted_text = extracted["raw"]
+        # Detect known OCR transport errors and fail early
+        if any(err in extracted_text for err in [
+            "Error processing image", "HTTPConnectionPool", "Failed to establish a new connection", "Connection refused"
+        ]):
+            expense.analysis_status = "failed"
+            expense.analysis_error = extracted_text[:500]
+            db.commit()
+            logger.error(f"OCR transport error for expense {expense.id}: {expense.analysis_error}")
+            return
+
+        # Try to parse JSON embedded in raw text
+        parsed_json = _extract_json_from_text(extracted_text)
+        if isinstance(parsed_json, dict) and len(parsed_json) > 1:
+            extracted.update(parsed_json)
+            logger.info(f"Parsed embedded JSON keys: {list(parsed_json.keys())}")
+        else:
+            # Try to parse markdown-formatted response
+            parsed_markdown = _parse_markdown_formatted_response(extracted_text)
+            if parsed_markdown and len(parsed_markdown) > 0:
+                extracted.update(parsed_markdown)
+                logger.info(f"Parsed markdown response keys: {list(parsed_markdown.keys())}")
+            else:
+                try:
+                    heur = _heuristic_parse_text(extracted_text)
+                    if heur:
+                        extracted.update(heur)
+                        logger.info(f"Heuristic parse extracted keys: {list(heur.keys())}")
+
+                        # Validate heuristic timestamp extraction quality
+                        if "receipt_timestamp" in heur:
+                            timestamp_str = heur["receipt_timestamp"]
+                            try:
+                                from dateutil import parser as dateparser
+                                parsed_dt = dateparser.parse(str(timestamp_str))
+                                # Check if the parsed date is reasonable (not too far in future/past)
+                                now = datetime.now(timezone.utc)
+                                year_diff = abs(parsed_dt.year - now.year)
+                                if year_diff > 5:  # More than 5 years difference seems suspicious
+                                    logger.warning(f"Heuristic timestamp seems unreasonable: {timestamp_str} (parsed as {parsed_dt})")
+                                    logger.info("Timestamp extraction quality check failed, attempting AI LLM fallback...")
+                                    # Retry with AI LLM for better timestamp extraction
+                                    retry_ai_config = ai_config or _get_ai_config_from_env()
+                                    if retry_ai_config and not ai_extraction_attempted and file_path:
+                                        try:
+                                            logger.info("🔄 Retrying with AI LLM due to questionable timestamp...")
+                                            ai_result = await _run_ocr(file_path, ai_config=retry_ai_config)
+                                            if ai_result and isinstance(ai_result, dict) and "receipt_timestamp" in ai_result:
+                                                # Validate AI result timestamp
+                                                ai_timestamp = ai_result["receipt_timestamp"]
+                                                try:
+                                                    ai_parsed_dt = dateparser.parse(str(ai_timestamp))
+                                                    ai_year_diff = abs(ai_parsed_dt.year - now.year)
+                                                    if ai_year_diff <= 5:  # AI result is more reasonable
+                                                        logger.info(f"✅ AI LLM provided better timestamp: {ai_timestamp}")
+                                                        extracted.update(ai_result)
+                                                    else:
+                                                        logger.warning(f"❌ AI LLM timestamp also questionable: {ai_timestamp}")
+                                                except Exception:
+                                                    logger.warning("❌ AI LLM timestamp parsing failed")
+                                            else:
+                                                logger.warning("❌ AI LLM retry did not provide timestamp")
+                                        except Exception as retry_error:
+                                            logger.error(f"AI LLM retry failed: {retry_error}")
+                                    else:
+                                        logger.info("AI LLM retry not available for timestamp validation")
+                            except Exception as e:
+                                logger.warning(f"Failed to validate heuristic timestamp '{timestamp_str}': {e}")
+                    else:
+                        logger.info("Heuristic parsing returned no data, attempting AI LLM extraction...")
+                        # Retry with AI LLM if available and not already attempted
+                        retry_ai_config = ai_config or _get_ai_config_from_env()
+                        if retry_ai_config and not ai_extraction_attempted and file_path:
+                            try:
+                                logger.info("🔄 Retrying with AI LLM due to failed heuristic parsing...")
+                                ai_result = await _run_ocr(file_path, ai_config=retry_ai_config)
+                                if ai_result and isinstance(ai_result, dict) and len(ai_result) > 1:
+                                    logger.info("✅ AI LLM retry successful, using AI results")
+                                    extracted.update(ai_result)
+                                else:
+                                    logger.warning("❌ AI LLM retry also failed")
+                            except Exception as retry_error:
+                                logger.error(f"AI LLM retry failed: {retry_error}")
+                        else:
+                            logger.info("AI LLM retry not available (no config or already attempted)")
+                except Exception as e:
+                    logger.warning(f"Heuristic parse failed: {e}")
+                    logger.info("Heuristic parsing failed, attempting AI LLM extraction...")
+                    # Retry with AI LLM if available and not already attempted
+                    retry_ai_config = ai_config or _get_ai_config_from_env()
+                    if retry_ai_config and not ai_extraction_attempted and file_path:
+                        try:
+                            logger.info("🔄 Retrying with AI LLM due to heuristic parsing failure...")
+                            ai_result = await _run_ocr(file_path, ai_config=retry_ai_config)
+                            if ai_result and isinstance(ai_result, dict) and len(ai_result) > 1:
+                                logger.info("✅ AI LLM retry successful, using AI results")
+                                extracted.update(ai_result)
+                            else:
+                                logger.warning("❌ AI LLM retry also failed")
+                        except Exception as retry_error:
+                            logger.error(f"AI LLM retry failed: {retry_error}")
+                    else:
+                        logger.info("AI LLM retry not available (no config or already attempted)")
+
+    # Amount/total
+    # Extract amount/total from receipt
+    # Note: We'll handle amount updates after extracting all fields
+    extracted_amount = parse_number(first_key(extracted, [
+        "total_amount", "total", "amount", "grand_total", "subtotal"
+    ]))
+
+    # Currency - convert symbols to ISO codes
+    cur = first_key(extracted, ["currency", "currency_code", "iso_currency", "total_currency"]) or None
+    if isinstance(cur, str) and len(cur) <= 5:
+        # Map common currency symbols to ISO codes
+        currency_symbol_map = {
+            '$': 'USD', '€': 'EUR', '£': 'GBP', '¥': 'JPY', '₹': 'INR',
+            'C$': 'CAD', 'A$': 'AUD', 'NZ$': 'NZD', 'HK$': 'HKD', 'S$': 'SGD',
+            'R$': 'BRL', 'R': 'ZAR', '₽': 'RUB', '₩': 'KRW', '₺': 'TRY',
+            'kr': 'SEK', 'CHF': 'CHF',
+        }
+        # If it's a symbol, convert it; otherwise use as-is (assuming it's already an ISO code)
+        cur_upper = cur.upper().strip()
+        if cur in currency_symbol_map:
+            expense.currency = currency_symbol_map[cur]
+        elif len(cur_upper) == 3 and cur_upper.isalpha():
+            # Looks like a valid ISO code
+            expense.currency = cur_upper
+        else:
+            # Unknown format, default to USD
+            expense.currency = 'USD'
+    elif not expense.currency:
+        expense.currency = 'USD' # Default if missing
+
+    # Date
+    date_str = first_key(extracted, ["expense_date", "date", "transaction_date", "purchase_date"]) or None
+    if date_str:
+        try:
+            from dateutil import parser as dateparser  # type: ignore
+            parsed_dt = dateparser.parse(str(date_str))
+            if parsed_dt:
+                expense.expense_date = parsed_dt
+        except Exception:
+            pass
+
+    # Receipt timestamp (exact time from receipt)
+    timestamp_str = first_key(extracted, ["receipt_timestamp", "timestamp", "transaction_time", "receipt_time"]) or None
+    if timestamp_str:
+        try:
+            # First validate the timestamp format
+            if not _validate_timestamp(str(timestamp_str)):
+                logger.warning(f"Timestamp validation failed for '{timestamp_str}', skipping")
+                expense.receipt_time_extracted = False
+            else:
+                from dateutil import parser as dateparser  # type: ignore
+                parsed_timestamp = dateparser.parse(str(timestamp_str))
+                if parsed_timestamp:
+                    expense.receipt_timestamp = parsed_timestamp
+                    expense.receipt_time_extracted = True
+                    logger.info(f"Extracted receipt timestamp: {parsed_timestamp} for expense {expense.id}")
+                else:
+                    expense.receipt_time_extracted = False
+        except Exception as e:
+            logger.warning(f"Failed to parse receipt timestamp '{timestamp_str}': {e}")
+            expense.receipt_time_extracted = False
+    else:
+        expense.receipt_time_extracted = False
+
+    # Category and vendor
+    cat = first_key(extracted, ["category", "expense_category"]) or None
+    if cat:
+        # Ensure category is clean text, not encrypted data
+        category_str = str(cat).strip()
+        if category_str and not _looks_like_base64_encrypted(category_str):
+            expense.category = category_str
+        else:
+            logger.warning(f"Invalid category data detected, using default")
+            expense.category = "General"
+    elif not expense.category:
+        expense.category = "General"
+
+    vend = first_key(extracted, ["vendor", "merchant", "seller", "store", "payee"]) or None
+    if vend:
+        # Ensure vendor is clean text, not encrypted data
+        vendor_str = str(vend).strip()
+        if vendor_str and not _looks_like_base64_encrypted(vendor_str):
+            expense.vendor = vendor_str
+        else:
+            logger.warning(f"Invalid vendor data detected, using default")
+            expense.vendor = "Unknown Vendor"
+    elif not expense.vendor:
+        expense.vendor = "Unknown Vendor"
+
+    # Taxes and total
+    tr = parse_number(first_key(extracted, ["tax_rate", "vat_rate"]))
+    ta = parse_number(first_key(extracted, ["tax_amount", "vat_amount"]))
+    tt = parse_number(first_key(extracted, ["total_amount", "total"]))
+
+    expense.tax_rate = tr if tr is not None else expense.tax_rate
+    expense.tax_amount = ta if ta is not None else expense.tax_amount
+
+    # Amount update logic:
+    # 1. Update individual attachment first
+    # 2. Then sum all attachments to update expense total
+
+    # Use the most specific amount found for this attachment
+    final_attachment_amount = tt if tt is not None else extracted_amount
+    if final_attachment_amount is not None:
+        final_attachment_amount = round(final_attachment_amount, 4)
+
+    if attachment_id:
+        attachment = db.query(ExpenseAttachment).filter(ExpenseAttachment.id == attachment_id).first()
+        if attachment:
+            attachment.analysis_status = "done"
+            attachment.extracted_amount = final_attachment_amount
+            attachment.analysis_result = extracted
+            attachment.analysis_error = None
+            db.commit()
+            logger.info(f"Updated attachment {attachment_id} with extracted amount {final_attachment_amount}")
+
+    # Aggregate all attachments for this expense
+    all_attachments = db.query(ExpenseAttachment).filter(ExpenseAttachment.expense_id == expense.id).all()
+    
+    # Check if this expense was imported from email and has multiple attachments
+    # Or just generally sum up all successful OCR results
+    total_sum = 0
+    any_success = False
+    for att in all_attachments:
+        if att.analysis_status == "done" and att.extracted_amount is not None:
+            total_sum += att.extracted_amount
+            any_success = True
+
+    if any_success:
+        total_sum = round(total_sum, 4)
+        logger.info(f"Expense {expense.id}: Aggregated total amount from {len(all_attachments)} attachments: {total_sum}")
+        expense.amount = total_sum
+        expense.total_amount = total_sum
+    else:
+        # Fallback to single extraction if aggregation didn't find anything
+        if tt is not None:
+            tt = round(tt, 4)
+            expense.amount = tt
+            expense.total_amount = tt
+        elif extracted_amount is not None:
+            extracted_amount = round(extracted_amount, 4)
+            expense.amount = extracted_amount
+            if getattr(expense, 'total_amount', None) in (None, 0):
+                expense.total_amount = extracted_amount
+
+    # Other details
+    pm = first_key(extracted, ["payment_method", "payment", "method"]) or None
+    if pm:
+        payment_str = str(pm).strip()
+        if payment_str and not _looks_like_base64_encrypted(payment_str):
+            expense.payment_method = payment_str
+        else:
+            logger.warning(f"Invalid payment method data detected, skipping")
+
+    ref = first_key(extracted, ["reference_number", "reference", "ref", "receipt_number", "invoice_number"]) or None
+    if ref:
+        ref_str = str(ref).strip()
+        if ref_str and not _looks_like_base64_encrypted(ref_str):
+            expense.reference_number = ref_str
+        else:
+            logger.warning(f"Invalid reference number data detected, skipping")
+
+    notes = first_key(extracted, ["notes", "memo"]) or None
+    if notes:
+        notes_str = str(notes).strip()
+        if notes_str and not _looks_like_base64_encrypted(notes_str):
+            expense.notes = notes_str
+        else:
+            logger.warning(f"Invalid notes data detected, skipping")
+            expense.notes = None
+
+    # Persist normalized extraction as dict
+    try:
+        # Validate and sanitize the extracted data before storing
+        if isinstance(extracted, dict):
+            # Ensure all values are JSON serializable and not corrupted
+            sanitized_data = {}
+            for key, value in extracted.items():
+                try:
+                    # Test JSON serialization
+                    json.dumps(value)
+                    # Ensure it's not encrypted data being stored as plain text
+                    if isinstance(value, str) and not _looks_like_base64_encrypted(value):
+                        sanitized_data[key] = value
+                    elif not isinstance(value, str):
+                        sanitized_data[key] = value
+                    else:
+                        logger.warning(f"Skipping potentially corrupted field {key} in analysis_result")
+                except (TypeError, ValueError) as ve:
+                    logger.warning(f"Skipping non-serializable field {key} in analysis_result: {ve}")
+
+            # Add metadata about extraction method
+            if sanitized_data:
+                sanitized_data["extraction_metadata"] = {
+                    "ai_extraction_attempted": ai_extraction_attempted,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+
+            expense.analysis_result = sanitized_data if sanitized_data else {"status": "extracted", "extraction_metadata": {"ai_extraction_attempted": ai_extraction_attempted}}
+            logger.info(f"Stored sanitized analysis_result with keys: {list(sanitized_data.keys()) if sanitized_data else ['status']}")
+        else:
+            expense.analysis_result = {"items": extracted} if extracted else {"status": "no_data"}
+
+    except Exception as e:
+        logger.error(f"Failed to set analysis_result for expense {expense.id}: {e}")
+        # Store a safe fallback that won't cause encryption issues
+        expense.analysis_result = {"error": "Failed to store result", "timestamp": datetime.now(timezone.utc).isoformat()}
+    
+    expense.analysis_status = "done"
+    expense.analysis_updated_at = get_tenant_timezone_aware_datetime(db)
+    
+    try:
+        mapped_preview = {
+            "amount": expense.amount,
+            "currency": expense.currency,
+            "expense_date": str(expense.expense_date),
+            "category": expense.category,
+            "vendor": expense.vendor,
+            "tax_rate": expense.tax_rate,
+            "tax_amount": expense.tax_amount,
+            "total_amount": expense.total_amount,
+        }
+        logger.info(f"Mapped OCR fields for expense {expense.id}: {mapped_preview}")
+    except Exception:
+        pass
+    
+    db.commit()
+    logger.info(f"Expense {expense.id} analysis updated: {expense.analysis_status}")
 
 logging.basicConfig(level=_resolve_log_level(os.getenv("LOG_LEVEL", "INFO")))
 logger = logging.getLogger(__name__)
@@ -1454,7 +1857,7 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
         logger.info(f"Expense {expense_id} manually overridden during OCR; not applying result.")
         return
     try:
-        expense.analysis_updated_at = datetime.now(timezone.utc)
+        expense.analysis_updated_at = get_tenant_timezone_aware_datetime(db)
         logger.info(f"Updating expense {expense_id} with OCR result. Error present: {'error' in result if isinstance(result, dict) else False}")
         if isinstance(result, dict) and "error" in result:
             # Persist error payload as a dict
@@ -1513,388 +1916,15 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
                 expense.status = "recorded"
         else:
             # Success! Mark as done so consumer knows to commit.
-            expense.analysis_status = "done"
-
-            # Map fields robustly
-            extracted = result if isinstance(result, dict) else {}
-            logger.info(f"OCR extracted keys: {list(extracted.keys()) if isinstance(extracted, dict) else 'non-dict result'}")
-            # Debug: Log the actual extracted data to see what the AI returned
-            if isinstance(extracted, dict):
-                logger.info(f"OCR extracted data: {json.dumps(extracted, indent=2, default=str)}")
-
-                # Check if vendor field contains CSV-like data (common AI model error)
-                vendor_value = extracted.get('vendor', '')
-                if isinstance(vendor_value, str) and vendor_value.count(',') >= 3:
-                    logger.warning(f"Detected CSV-like data in vendor field: {vendor_value[:100]}...")
-                    # Try to parse as CSV
-                    csv_parsed = _parse_csv_like_response(vendor_value)
-                    if csv_parsed:
-                        logger.info(f"Successfully parsed CSV-like response, replacing extracted data")
-                        extracted = csv_parsed
-
-            # If we only got raw text, first try to extract embedded JSON, then try markdown, then heuristics
-            if set(extracted.keys()) == {"raw"} and isinstance(extracted.get("raw"), str):
-                extracted_text = extracted["raw"]
-                # Detect known OCR transport errors and fail early
-                if any(err in extracted_text for err in [
-                    "Error processing image", "HTTPConnectionPool", "Failed to establish a new connection", "Connection refused"
-                ]):
-                    expense.analysis_status = "failed"
-                    expense.analysis_error = extracted_text[:500]
-                    db.commit()
-                    logger.error(f"OCR transport error for expense {expense_id}: {expense.analysis_error}")
-                    return
-
-                # Try to parse JSON embedded in raw text
-                parsed_json = _extract_json_from_text(extracted_text)
-                if isinstance(parsed_json, dict) and len(parsed_json) > 1:
-                    extracted.update(parsed_json)
-                    logger.info(f"Parsed embedded JSON keys: {list(parsed_json.keys())}")
-                else:
-                    # Try to parse markdown-formatted response
-                    parsed_markdown = _parse_markdown_formatted_response(extracted_text)
-                    if parsed_markdown and len(parsed_markdown) > 0:
-                        extracted.update(parsed_markdown)
-                        logger.info(f"Parsed markdown response keys: {list(parsed_markdown.keys())}")
-                    else:
-                        try:
-                            heur = _heuristic_parse_text(extracted_text)
-                            if heur:
-                                extracted.update(heur)
-                                logger.info(f"Heuristic parse extracted keys: {list(heur.keys())}")
-
-                                # Validate heuristic timestamp extraction quality
-                                if "receipt_timestamp" in heur:
-                                    timestamp_str = heur["receipt_timestamp"]
-                                    try:
-                                        from dateutil import parser as dateparser
-                                        parsed_dt = dateparser.parse(str(timestamp_str))
-                                        # Check if the parsed date is reasonable (not too far in future/past)
-                                        now = datetime.now(timezone.utc)
-                                        year_diff = abs(parsed_dt.year - now.year)
-                                        if year_diff > 5:  # More than 5 years difference seems suspicious
-                                            logger.warning(f"Heuristic timestamp seems unreasonable: {timestamp_str} (parsed as {parsed_dt})")
-                                            logger.info("Timestamp extraction quality check failed, attempting AI LLM fallback...")
-                                            # Retry with AI LLM for better timestamp extraction
-                                            retry_ai_config = ai_config or _get_ai_config_from_env()
-                                            if retry_ai_config and not ai_extraction_attempted:
-                                                try:
-                                                    logger.info("🔄 Retrying with AI LLM due to questionable timestamp...")
-                                                    ai_result = await _run_ocr(file_path, ai_config=retry_ai_config)
-                                                    if ai_result and isinstance(ai_result, dict) and "receipt_timestamp" in ai_result:
-                                                        # Validate AI result timestamp
-                                                        ai_timestamp = ai_result["receipt_timestamp"]
-                                                        try:
-                                                            ai_parsed_dt = dateparser.parse(str(ai_timestamp))
-                                                            ai_year_diff = abs(ai_parsed_dt.year - now.year)
-                                                            if ai_year_diff <= 5:  # AI result is more reasonable
-                                                                logger.info(f"✅ AI LLM provided better timestamp: {ai_timestamp}")
-                                                                extracted.update(ai_result)
-                                                            else:
-                                                                logger.warning(f"❌ AI LLM timestamp also questionable: {ai_timestamp}")
-                                                        except Exception:
-                                                            logger.warning("❌ AI LLM timestamp parsing failed")
-                                                    else:
-                                                        logger.warning("❌ AI LLM retry did not provide timestamp")
-                                                except Exception as retry_error:
-                                                    logger.error(f"AI LLM retry failed: {retry_error}")
-                                            else:
-                                                logger.info("AI LLM retry not available for timestamp validation")
-                                    except Exception as e:
-                                        logger.warning(f"Failed to validate heuristic timestamp '{timestamp_str}': {e}")
-                            else:
-                                logger.info("Heuristic parsing returned no data, attempting AI LLM extraction...")
-                                # Retry with AI LLM if available and not already attempted
-                                retry_ai_config = ai_config or _get_ai_config_from_env()
-                                if retry_ai_config and not ai_extraction_attempted:
-                                    try:
-                                        logger.info("🔄 Retrying with AI LLM due to failed heuristic parsing...")
-                                        ai_result = await _run_ocr(file_path, ai_config=retry_ai_config)
-                                        if ai_result and isinstance(ai_result, dict) and len(ai_result) > 1:
-                                            logger.info("✅ AI LLM retry successful, using AI results")
-                                            extracted.update(ai_result)
-                                        else:
-                                            logger.warning("❌ AI LLM retry also failed")
-                                    except Exception as retry_error:
-                                        logger.error(f"AI LLM retry failed: {retry_error}")
-                                else:
-                                    logger.info("AI LLM retry not available (no config or already attempted)")
-                        except Exception as e:
-                            logger.warning(f"Heuristic parse failed: {e}")
-                            logger.info("Heuristic parsing failed, attempting AI LLM extraction...")
-                            # Retry with AI LLM if available and not already attempted
-                            retry_ai_config = ai_config or _get_ai_config_from_env()
-                            if retry_ai_config and not ai_extraction_attempted:
-                                try:
-                                    logger.info("🔄 Retrying with AI LLM due to heuristic parsing failure...")
-                                    ai_result = await _run_ocr(file_path, ai_config=retry_ai_config)
-                                    if ai_result and isinstance(ai_result, dict) and len(ai_result) > 1:
-                                        logger.info("✅ AI LLM retry successful, using AI results")
-                                        extracted.update(ai_result)
-                                    else:
-                                        logger.warning("❌ AI LLM retry also failed")
-                                except Exception as retry_error:
-                                    logger.error(f"AI LLM retry failed: {retry_error}")
-                            else:
-                                logger.info("AI LLM retry not available (no config or already attempted)")
-
-            def parse_number(value: Any) -> Optional[float]:
-                try:
-                    if value is None:
-                        return None
-                    if isinstance(value, (int, float)):
-                        return float(value)
-                    s = str(value)
-                    # Remove currency symbols and spaces
-                    import re
-                    s = re.sub(r"[^0-9,.-]", "", s)
-                    # If both comma and dot present, assume comma thousands
-                    if "," in s and "." in s:
-                        s = s.replace(",", "")
-                    else:
-                        # If only comma present, treat as decimal
-                        s = s.replace(",", ".")
-                    return float(s)
-                except Exception:
-                    return None
-
-            def first_key(d: Dict[str, Any], keys: list[str]) -> Any:
-                for k in keys:
-                    if k in d and d[k] not in (None, ""):
-                        return d[k]
-                return None
-
-            # Amount/total
-            # Extract amount/total from receipt
-            # Note: We'll handle amount updates after extracting all fields
-            extracted_amount = parse_number(first_key(extracted, [
-                "total_amount", "total", "amount", "grand_total", "subtotal"
-            ]))
-
-            # Currency - convert symbols to ISO codes
-            cur = first_key(extracted, ["currency", "currency_code", "iso_currency", "total_currency"]) or None
-            if isinstance(cur, str) and len(cur) <= 5:
-                # Map common currency symbols to ISO codes
-                currency_symbol_map = {
-                    '$': 'USD',
-                    '€': 'EUR',
-                    '£': 'GBP',
-                    '¥': 'JPY',
-                    '₹': 'INR',
-                    'C$': 'CAD',
-                    'A$': 'AUD',
-                    'NZ$': 'NZD',
-                    'HK$': 'HKD',
-                    'S$': 'SGD',
-                    'R$': 'BRL',
-                    'R': 'ZAR',
-                    '₽': 'RUB',
-                    '₩': 'KRW',
-                    '₺': 'TRY',
-                    'kr': 'SEK',
-                    'CHF': 'CHF',
-                }
-                # If it's a symbol, convert it; otherwise use as-is (assuming it's already an ISO code)
-                cur_upper = cur.upper().strip()
-                if cur in currency_symbol_map:
-                    expense.currency = currency_symbol_map[cur]
-                elif len(cur_upper) == 3 and cur_upper.isalpha():
-                    # Looks like a valid ISO code
-                    expense.currency = cur_upper
-                else:
-                    # Unknown format, default to USD
-                    expense.currency = 'USD'
-
-            # Date
-            date_str = first_key(extracted, ["expense_date", "date", "transaction_date", "purchase_date"]) or None
-            if date_str:
-                try:
-                    from dateutil import parser as dateparser  # type: ignore
-                    parsed_dt = dateparser.parse(str(date_str))
-                    if parsed_dt:
-                        expense.expense_date = parsed_dt
-                except Exception:
-                    pass
-
-            # Receipt timestamp (exact time from receipt)
-            timestamp_str = first_key(extracted, ["receipt_timestamp", "timestamp", "transaction_time", "receipt_time"]) or None
-            if timestamp_str:
-                try:
-                    # First validate the timestamp format
-                    if not _validate_timestamp(str(timestamp_str)):
-                        logger.warning(f"Timestamp validation failed for '{timestamp_str}', skipping")
-                        expense.receipt_time_extracted = False
-                    else:
-                        from dateutil import parser as dateparser  # type: ignore
-                        parsed_timestamp = dateparser.parse(str(timestamp_str))
-                        if parsed_timestamp:
-                            expense.receipt_timestamp = parsed_timestamp
-                            expense.receipt_time_extracted = True
-                            logger.info(f"Extracted receipt timestamp: {parsed_timestamp} for expense {expense_id}")
-                        else:
-                            expense.receipt_time_extracted = False
-                except Exception as e:
-                    logger.warning(f"Failed to parse receipt timestamp '{timestamp_str}': {e}")
-                    expense.receipt_time_extracted = False
-            else:
-                expense.receipt_time_extracted = False
-
-            # Category and vendor
-            cat = first_key(extracted, ["category", "expense_category"]) or None
-            if cat:
-                # Ensure category is clean text, not encrypted data
-                category_str = str(cat).strip()
-                if category_str and not _looks_like_base64_encrypted(category_str):
-                    expense.category = category_str
-                else:
-                    logger.warning(f"Invalid category data detected, using default")
-                    expense.category = "General"
-
-            vend = first_key(extracted, ["vendor", "merchant", "seller", "store", "payee"]) or None
-            if vend:
-                # Ensure vendor is clean text, not encrypted data
-                vendor_str = str(vend).strip()
-                if vendor_str and not _looks_like_base64_encrypted(vendor_str):
-                    expense.vendor = vendor_str
-                else:
-                    logger.warning(f"Invalid vendor data detected, using default")
-                    expense.vendor = "Unknown Vendor"
-
-            # Taxes and total
-            tr = parse_number(first_key(extracted, ["tax_rate", "vat_rate"]))
-            ta = parse_number(first_key(extracted, ["tax_amount", "vat_amount"]))
-            tt = parse_number(first_key(extracted, ["total_amount", "total"]))
-
-            expense.tax_rate = tr if tr is not None else expense.tax_rate
-            expense.tax_amount = ta if ta is not None else expense.tax_amount
-
-            # Amount update logic:
-            # 1. Update individual attachment first
-            # 2. Then sum all attachments to update expense total
-
-            # Use the most specific amount found for this attachment
-            final_attachment_amount = tt if tt is not None else extracted_amount
-            if final_attachment_amount is not None:
-                final_attachment_amount = round(final_attachment_amount, 4)
-
-            if attachment_id:
-                attachment = db.query(ExpenseAttachment).filter(ExpenseAttachment.id == attachment_id).first()
-                if attachment:
-                    attachment.analysis_status = "done"
-                    attachment.extracted_amount = final_attachment_amount
-                    attachment.analysis_result = extracted
-                    attachment.analysis_error = None
-                    db.commit()
-                    logger.info(f"Updated attachment {attachment_id} with extracted amount {final_attachment_amount}")
-
-            # Aggregate all attachments for this expense
-            all_attachments = db.query(ExpenseAttachment).filter(ExpenseAttachment.expense_id == expense_id).all()
-            
-            # Check if this expense was imported from email and has multiple attachments
-            # Or just generally sum up all successful OCR results
-            total_sum = 0
-            any_success = False
-            for att in all_attachments:
-                if att.analysis_status == "done" and att.extracted_amount is not None:
-                    total_sum += att.extracted_amount
-                    any_success = True
-
-            if any_success:
-                total_sum = round(total_sum, 4)
-                logger.info(f"Expense {expense_id}: Aggregated total amount from {len(all_attachments)} attachments: {total_sum}")
-                expense.amount = total_sum
-                expense.total_amount = total_sum
-            else:
-                # Fallback to single extraction if aggregation didn't find anything
-                if tt is not None:
-                    tt = round(tt, 4)
-                    expense.amount = tt
-                    expense.total_amount = tt
-                elif extracted_amount is not None:
-                    extracted_amount = round(extracted_amount, 4)
-                    expense.amount = extracted_amount
-                    if expense.total_amount in (None, 0):
-                        expense.total_amount = extracted_amount
-
-            # Other details
-            pm = first_key(extracted, ["payment_method", "payment", "method"]) or None
-            if pm:
-                payment_str = str(pm).strip()
-                if payment_str and not _looks_like_base64_encrypted(payment_str):
-                    expense.payment_method = payment_str
-                else:
-                    logger.warning(f"Invalid payment method data detected, skipping")
-
-            ref = first_key(extracted, ["reference_number", "reference", "ref", "receipt_number", "invoice_number"]) or None
-            if ref:
-                ref_str = str(ref).strip()
-                if ref_str and not _looks_like_base64_encrypted(ref_str):
-                    expense.reference_number = ref_str
-                else:
-                    logger.warning(f"Invalid reference number data detected, skipping")
-
-            notes = first_key(extracted, ["notes", "memo"]) or None
-            if notes:
-                notes_str = str(notes).strip()
-                if notes_str and not _looks_like_base64_encrypted(notes_str):
-                    expense.notes = notes_str
-                else:
-                    logger.warning(f"Invalid notes data detected, skipping")
-                    expense.notes = None
-
-            # Persist normalized extraction as dict
-            try:
-                # Validate and sanitize the extracted data before storing
-                if isinstance(extracted, dict):
-                    # Ensure all values are JSON serializable and not corrupted
-                    sanitized_data = {}
-                    for key, value in extracted.items():
-                        try:
-                            # Test JSON serialization
-                            json.dumps(value)
-                            # Ensure it's not encrypted data being stored as plain text
-                            if isinstance(value, str) and not _looks_like_base64_encrypted(value):
-                                sanitized_data[key] = value
-                            elif not isinstance(value, str):
-                                sanitized_data[key] = value
-                            else:
-                                logger.warning(f"Skipping potentially corrupted field {key} in analysis_result")
-                        except (TypeError, ValueError) as ve:
-                            logger.warning(f"Skipping non-serializable field {key} in analysis_result: {ve}")
-
-                    # Add metadata about extraction method
-                    if sanitized_data:
-                        sanitized_data["extraction_metadata"] = {
-                            "ai_extraction_attempted": ai_extraction_attempted,
-                            "timestamp": datetime.now(timezone.utc).isoformat()
-                        }
-
-                    expense.analysis_result = sanitized_data if sanitized_data else {"status": "extracted", "extraction_metadata": {"ai_extraction_attempted": ai_extraction_attempted}}
-                    logger.info(f"Stored sanitized analysis_result with keys: {list(sanitized_data.keys()) if sanitized_data else ['status']}")
-                else:
-                    expense.analysis_result = {"items": extracted} if extracted else {"status": "no_data"}
-
-            except Exception as e:
-                logger.error(f"Failed to set analysis_result for expense {expense_id}: {e}")
-                # Store a safe fallback that won't cause encryption issues
-                expense.analysis_result = {"error": "Failed to store result", "timestamp": datetime.now(timezone.utc).isoformat()}
-            expense.analysis_status = "done"
-            try:
-                mapped_preview = {
-                    "amount": expense.amount,
-                    "currency": expense.currency,
-                    "expense_date": str(expense.expense_date),
-                    "category": expense.category,
-                    "vendor": expense.vendor,
-                    "tax_rate": expense.tax_rate,
-                    "tax_amount": expense.tax_amount,
-                    "total_amount": expense.total_amount,
-                }
-                logger.info(f"Mapped OCR fields for expense {expense_id}: {mapped_preview}")
-            except Exception:
-                pass
-        db.commit()
-        logger.info(f"Expense {expense_id} analysis updated: {expense.analysis_status}")
+            await apply_ocr_extraction_to_expense(
+                db=db,
+                expense=expense,
+                extracted=result,
+                attachment_id=attachment_id,
+                ai_extraction_attempted=ai_extraction_attempted,
+                file_path=file_path,
+                ai_config=ai_config
+            )
     except Exception as e:
         db.rollback()
         logger.error(f"Failed updating OCR result for expense {expense_id}: {e}")

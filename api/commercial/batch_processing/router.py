@@ -715,3 +715,120 @@ async def list_jobs(
             detail=f"Failed to list jobs: {str(e)}"
         )
 
+
+@router.delete(
+    "/jobs/{job_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Cancel batch job",
+    description="Cancel a batch processing job and free up concurrent processing slots. Requires API key authentication via X-API-Key header."
+)
+async def cancel_job(
+    job_id: str,
+    auth_context: tuple = Depends(get_api_key_auth),
+    db: Session = Depends(get_batch_db),
+    service: BatchProcessingService = Depends(get_batch_processing_service)
+):
+    """
+    Cancel a batch processing job.
+    
+    Args:
+        job_id: Batch job ID (UUID)
+        auth_context: Authenticated API client context (tenant_id, user_id, api_client_id, api_client)
+        db: Database session
+        service: Batch processing service
+        
+    Returns:
+        Confirmation message
+        
+    Raises:
+        HTTPException: If job not found, access denied, or already complete
+    """
+    try:
+        # Extract authentication context from API key
+        tenant_id, user_id, api_client_id, api_client = auth_context
+        
+        # Check if batch_processing feature is enabled
+        from core.utils.feature_gate import check_feature
+        check_feature("batch_processing", db)
+        
+        logger.info(
+            f"Cancel job request for {job_id} from API client {api_client_id} "
+            f"(tenant {tenant_id})"
+        )
+        
+        # Cancel job with tenant isolation validation
+        success, message = service.cancel_job(job_id, tenant_id)
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=message
+            )
+        
+        return {
+            "job_id": job_id,
+            "status": "cancelled",
+            "message": message
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to cancel job {job_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to cancel job: {str(e)}"
+        )
+
+
+@router.delete(
+    "/jobs",
+    status_code=status.HTTP_200_OK,
+    summary="Cancel all batch jobs",
+    description="Cancel all active batch processing jobs for the authenticated API client. Requires API key authentication via X-API-Key header."
+)
+async def cancel_all_jobs(
+    auth_context: tuple = Depends(get_api_key_auth),
+    db: Session = Depends(get_batch_db),
+    service: BatchProcessingService = Depends(get_batch_processing_service)
+):
+    """
+    Cancel all active batch processing jobs for the client.
+    
+    Returns confirmation of how many jobs were cancelled.
+    
+    **Authentication**: Requires API key via X-API-Key header.
+    """
+    try:
+        # Extract authentication context from API key
+        tenant_id, user_id, api_client_id, api_client = auth_context
+        
+        # Check if batch_processing feature is enabled
+        from core.utils.feature_gate import check_feature
+        check_feature("batch_processing", db)
+        
+        logger.info(f"Cancel all jobs request from API client {api_client_id} (tenant {tenant_id})")
+        
+        # Cancel all jobs
+        success, message = service.cancel_all_jobs(tenant_id, api_client_id)
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=message
+            )
+        
+        return {
+            "status": "success",
+            "message": message
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to cancel all jobs for {api_client_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to cancel all jobs: {str(e)}"
+        )
+

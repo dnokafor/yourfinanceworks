@@ -481,7 +481,11 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
     [{ id: 1, sender: 'ai', text: <EnhancedAIResponse text={t('aiAssistant.welcomeMessage')} /> }]
   );
   const [input, setInput] = useState('');
-  const [hasUnreadMessages, setHasUnreadMessages] = useState(true);
+  const [hasUnreadMessages, setHasUnreadMessages] = useState(() => {
+    // Check localStorage for persisted unread state, default to true only on first visit
+    const stored = localStorage.getItem('ai-assistant-unread');
+    return stored === null ? true : stored === 'true';
+  });
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [hasMoreHistory, setHasMoreHistory] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -501,7 +505,10 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
         text: typeof content === 'string' ? <EnhancedAIResponse text={content} /> : content,
         timestamp: new Date().toISOString()
       }];
-      if (!isOpen) setHasUnreadMessages(true);
+      if (!isOpen) {
+        setHasUnreadMessages(true);
+        localStorage.setItem('ai-assistant-unread', 'true');
+      }
       return updated;
     });
     setIsThinking(false);
@@ -669,6 +676,7 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
     } else {
       // Clear unread indicator when opened
       setHasUnreadMessages(false);
+      localStorage.setItem('ai-assistant-unread', 'false');
     }
   }, [isOpen]);
 
@@ -989,7 +997,10 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
           text: <EnhancedAIResponse text={errorMessage} />,
           timestamp: new Date().toISOString()
         }];
-        if (!isOpen) setHasUnreadMessages(true);
+        if (!isOpen) {
+          setHasUnreadMessages(true);
+          localStorage.setItem('ai-assistant-unread', 'true');
+        }
         return updated;
       });
       setIsThinking(false);
@@ -1007,20 +1018,20 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 group">
+    <div className="fixed bottom-6 right-6 z-50">
       <div>
         <Button
           className={cn(
             "rounded-full w-16 h-16 shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:shadow-[0_12px_40px_rgb(0,0,0,0.18)]",
             "bg-gradient-to-br from-[#2b5876] via-[#4e4376] to-[#2b5876] dark:from-indigo-600 dark:via-purple-600 dark:to-indigo-600",
-            "hover:scale-105 transition-all duration-300 border border-white/10 backdrop-blur-md",
+            "hover:scale-105 transition-all duration-300 border border-white/10 backdrop-blur-md transform-gpu",
             isOpen ? "scale-0 opacity-0" : "scale-100 opacity-100"
           )}
           onClick={() => setIsOpen(true)}
         >
-          <MessageCircle className="h-8 w-8 text-white drop-shadow-md animate-pulse-slow" />
+          <MessageCircle className="h-8 w-8 text-white drop-shadow-md" />
           {hasUnreadMessages && (
-            <span className="absolute -top-1 -right-1 flex h-3 w-3">
+            <span className="absolute -top-1 -right-1 flex h-3 w-3 pointer-events-none">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
             </span>
@@ -1031,13 +1042,13 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
           <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-6">
             {/* Backdrop */}
             <div
-              className="absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity duration-300 animate-in fade-in"
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm transform-gpu will-change-transform"
               onClick={() => setIsOpen(false)}
             />
 
             {/* Dialog Panel */}
             <div className={cn(
-              "relative flex flex-col bg-white/90 dark:bg-gray-950/90 w-full shadow-2xl overflow-hidden transition-all duration-300 animate-in zoom-in-95 slide-in-from-bottom-10",
+              "relative flex flex-col bg-white/95 dark:bg-gray-950/95 w-full shadow-2xl overflow-hidden transform-gpu will-change-transform",
               "backdrop-blur-xl border border-white/20 dark:border-white/10",
               isFullscreen
                 ? 'h-[100dvh] w-full sm:rounded-none'
@@ -1117,7 +1128,7 @@ const AuthenticatedAIAssistant = React.forwardRef<HTMLDivElement, { user: any }>
                       <div
                         key={msg.id}
                         className={cn(
-                          "flex flex-col w-full transition-all duration-300 animate-in fade-in slide-in-from-bottom-2",
+                          "flex flex-col w-full",
                           msg.sender === 'user' ? "items-end" : "items-start"
                         )}
                       >

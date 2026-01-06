@@ -32,6 +32,9 @@ load_dotenv()
 
 # Service imports
 from core.services.ocr_service import (
+    apply_ocr_extraction_to_expense,
+    parse_number,
+    first_key,
     process_attachment_inline,
     publish_ocr_result,
     publish_ocr_task,
@@ -239,6 +242,7 @@ class ExpenseMessageHandler(BaseMessageHandler):
         file_path = str(payload.get("file_path"))
         tenant_id = self.extract_tenant_id(payload)
         user_id = payload.get("user_id")
+        api_client_id = payload.get("api_client_id")  # Extract API client ID for attribution
 
         if not user_id:
             self.logger.error(f"Missing user_id in batch expense payload for file {batch_file_id}")
@@ -251,18 +255,41 @@ class ExpenseMessageHandler(BaseMessageHandler):
                 with database_session(tenant_id) as db:
                     from core.services.unified_ocr_service import UnifiedOCRService, DocumentType, OCRConfig
                     from commercial.batch_processing.service import BatchProcessingService
-                    from core.models.models_per_tenant import Expense, ExpenseAttachment, AIConfig as AIConfigModel
+                    from core.models.models_per_tenant import Expense, ExpenseAttachment, AIConfig as AIConfigModel, User
                     from datetime import datetime, timezone
+
+                    # Get API client user for attribution if api_client_id is provided
+                    created_by_user_id = user_id  # Default to user_id from payload
+                    if api_client_id:
+                        try:
+                            # Query the master database to get API client info
+                            from core.models.database import get_master_db
+                            from core.models.api_models import APIClient
+                            
+                            master_db = next(get_master_db())
+                            api_client = master_db.query(APIClient).filter(
+                                APIClient.client_id == api_client_id
+                            ).first()
+                            
+                            if api_client:
+                                # Use the API client's owner user ID for both attribution and gamification
+                                created_by_user_id = api_client.user_id
+                                self.logger.info(f"Using API client owner for attribution and gamification: client_id={api_client_id}, owner_user_id={created_by_user_id}")
+                            else:
+                                self.logger.warning(f"API client not found: {api_client_id}, using default user attribution")
+                        except Exception as e:
+                            self.logger.error(f"Failed to look up API client {api_client_id}: {e}, using default user attribution")
 
                     # Get AI config
                     ai_conf_model = db.query(AIConfigModel).first()
                     ai_conf = {}
                     if ai_conf_model:
                         ai_conf = {
-                            "provider": ai_conf_model.provider,
+                            "provider": ai_conf_model.provider_name,
                             "api_key": ai_conf_model.api_key,
                             "model_name": ai_conf_model.model_name,
-                            "api_base": ai_conf_model.api_base,
+                            "api_base": ai_conf_model.provider_url,
+                            "ocr_enabled": ai_conf_model.ocr_enabled,
                         }
 
                     # Process with unified OCR service
@@ -277,39 +304,26 @@ class ExpenseMessageHandler(BaseMessageHandler):
 
                     extracted_data = result.structured_data or {}
 
-                    # Create Expense record from extracted data
+                    # Create Expense record with unified mapping
                     created_expense_id = None
                     try:
-                        # Parse date if it's a string, otherwise use as-is
-                        expense_date_value = extracted_data.get('date')
-                        if isinstance(expense_date_value, str):
-                            try:
-                                from dateutil import parser
-                                expense_date_value = parser.parse(expense_date_value)
-                            except:
-                                expense_date_value = datetime.now(timezone.utc)
-                        elif expense_date_value is None:
-                            expense_date_value = datetime.now(timezone.utc)
-
-                        # Ensure category is never None (required field)
-                        category = extracted_data.get('category') or 'Other'
-
                         expense = Expense(
                             user_id=user_id,
-                            vendor=extracted_data.get('vendor') or 'Unknown Vendor',
-                            amount=extracted_data.get('amount') or 0.0,
-                            currency=extracted_data.get('currency') or 'USD',
-                            expense_date=expense_date_value,
-                            category=category,
-                            tax_amount=extracted_data.get('tax_amount'),
+                            vendor='Unknown Vendor',
+                            amount=0.0,
+                            currency='USD',
+                            expense_date=datetime.now(timezone.utc),
+                            category='General',
                             notes=f"Batch processed from job {batch_job_id}",
-                            status='recorded'
+                            status='recorded',
+                            created_by_user_id=created_by_user_id,  # API client attribution
+                            analysis_status='processing',
+                            imported_from_attachment=True  # Mark as imported from attachment
                         )
                         db.add(expense)
                         db.flush()  # Get the expense ID
 
                         # Create attachment record
-                        # Detect content type from filename
                         import mimetypes
                         original_filename = payload.get("original_filename", "batch_file")
                         content_type, _ = mimetypes.guess_type(original_filename)
@@ -324,27 +338,71 @@ class ExpenseMessageHandler(BaseMessageHandler):
                             content_type=content_type
                         )
                         db.add(attachment)
-                        db.commit()
+                        db.flush()
+
+                        # Apply unified robust mapping
+                        await apply_ocr_extraction_to_expense(
+                            db=db,
+                            expense=expense,
+                            extracted=extracted_data,
+                            attachment_id=attachment.id,
+                            ai_extraction_attempted=True,
+                            file_path=file_path,
+                            ai_config=ai_conf
+                        )
 
                         created_expense_id = expense.id
-                        self.logger.info(f"Created expense record {created_expense_id} from batch file {batch_file_id}")
+                        self.logger.info(f"✅ STEP: Created expense record {created_expense_id} from batch file {batch_file_id}")
+
+                        # Process gamification event for API-created expense
+                        try:
+                            from core.services.tenant_database_manager import tenant_db_manager
+                            from core.services.financial_event_processor import create_financial_event_processor
+
+                            self.logger.info(f"STEP: Processing gamification for expense {expense.id}")
+
+                            # Get tenant database session for gamification
+                            tenant_session = tenant_db_manager.get_tenant_session(tenant_id)
+                            if tenant_session:
+                                gamification_db = tenant_session()
+                                try:
+                                    event_processor = create_financial_event_processor(gamification_db)
+
+                                    expense_data = {
+                                        "vendor": expense.vendor,
+                                        "category": expense.category,
+                                        "amount": float(expense.amount) if expense.amount else 0
+                                    }
+
+                                    # For API keys, use the master user ID directly
+                                    await event_processor.process_expense_added(
+                                        user_id=created_by_user_id,
+                                        expense_id=expense.id,
+                                        expense_data=expense_data
+                                    )
+                                    self.logger.info(f"✅ STEP: Gamification processed for expense {expense.id}")
+                                finally:
+                                    gamification_db.close()
+                        except Exception as e:
+                            self.logger.warning(f"Failed to process gamification: {e}")
+
                     except Exception as e:
-                        self.logger.error(f"Failed to create expense record: {e}")
+                        self.logger.error(f"❌ Error during expense record creation: {e}", exc_info=True)
                         db.rollback()
-                        # Continue anyway - we still have the extracted data
 
                     # Update batch processing service
+                    self.logger.info(f"STEP: Updating batch service for expense {batch_file_id}")
                     batch_service = BatchProcessingService(db)
                     await batch_service.process_file_completion(
                         file_id=int(batch_file_id),
                         extracted_data=extracted_data,
-                        status="completed",
+                        status="completed" if created_expense_id else "failed",
                         created_record_id=created_expense_id,
                         record_type='expense'
                     )
 
-                    self.logger.info(f"Batch expense OCR completed: batch_file_id={batch_file_id}")
-                    return ProcessingResult(success=True, committed=True)
+                    self.logger.info(f"✅ Batch expense OCR completed: batch_file_id={batch_file_id}")
+                    return ProcessingResult(success=True, committed=False)
 
         except Exception as e:
             self.logger.error(f"Batch expense OCR failed: {e}")
@@ -565,16 +623,38 @@ class BankStatementMessageHandler(BaseMessageHandler):
                     # Get AI config
                     ai_conf = await self._get_ai_config(db)
 
-                    # Ensure file is local
+                    # Get cloud file URL from batch file record
+                    from core.models.models_per_tenant import BatchFileProcessing
+                    batch_file = db.query(BatchFileProcessing).filter(
+                        BatchFileProcessing.id == int(batch_file_id)
+                    ).first()
+                    cloud_file_url = batch_file.cloud_file_url if batch_file else None
+
+                    # Create initial BankStatement record
+                    statement = BankStatement(
+                        tenant_id=tenant_id,
+                        original_filename=payload.get("original_filename", "batch_file"),
+                        stored_filename=payload.get("stored_filename", payload.get("original_filename", "batch_file")),
+                        file_path=file_path,
+                        cloud_file_url=cloud_file_url,
+                        status='processing',
+                        extracted_count=0,
+                        notes=f"Batch processing started from job {batch_job_id}"
+                    )
+                    db.add(statement)
+                    db.flush()  # Get the statement ID
+
+                    # Ensure file is local using the real statement object
                     try:
-                        file_path = await self._ensure_local_statement_file(db, stmt, file_path, tenant_id)
+                        file_path = await self._ensure_local_statement_file(db, statement, file_path, tenant_id)
                     except Exception as e:
                         self.logger.error(f"Failed to ensure local file for batch statement: {e}")
-                        # Continue with original path if download fails? Or fail?
-                        # process_attachment_inline in expense handler fails the expense.
+                        statement.status = 'failed'
+                        db.commit()
                         raise e
 
                     # Try unified OCR first, fallback to legacy
+                    txns = []
                     try:
                         ocr_config = OCRConfig(
                             ai_config=ai_conf,
@@ -591,39 +671,20 @@ class BankStatementMessageHandler(BaseMessageHandler):
                             # Use legacy transaction parsing for now
                             txns = process_bank_pdf_with_llm(file_path, ai_conf, db)
                         else:
-                            raise Exception(f"UnifiedOCR text extraction failed: {text_result.error_message}")
+                            self.logger.warning(f"UnifiedOCR text extraction failed: {text_result.error_message}. Falling back to legacy.")
+                            txns = process_bank_pdf_with_llm(file_path, ai_conf, db)
 
-                    except ImportError:
-                        # Fallback to legacy service
+                    except Exception as e:
+                        self.logger.warning(f"UnifiedOCR encountered error: {e}. Falling back to legacy.")
                         txns = process_bank_pdf_with_llm(file_path, ai_conf, db)
 
-                    # Update statement with final transactions
-                    statement.extracted_count = len(txns) if txns else 0
-                    statement.local_cache_path = statement.local_cache_path # Ensure it's tracked
-
-                    # Get cloud file URL from batch file record
-                    from core.models.models_per_tenant import BatchFileProcessing
-                    batch_file = db.query(BatchFileProcessing).filter(
-                        BatchFileProcessing.id == int(batch_file_id)
-                    ).first()
-                    cloud_file_url = batch_file.cloud_file_url if batch_file else None
-
-                    # Create BankStatement record from extracted data
+                    # Update statement with final results
                     created_statement_id = None
                     try:
-                        # BankStatement model fields: tenant_id, original_filename, stored_filename, file_path, cloud_file_url, status, extracted_count, notes, labels
-                        statement = BankStatement(
-                            tenant_id=tenant_id,
-                            original_filename=payload.get("original_filename", "batch_file"),
-                            stored_filename=payload.get("stored_filename", payload.get("original_filename", "batch_file")),
-                            file_path=file_path,
-                            cloud_file_url=cloud_file_url,
-                            status='processed',
-                            extracted_count=len(txns) if txns else 0,
-                            notes=f"Batch processed from job {batch_job_id}"
-                        )
-                        db.add(statement)
-                        db.flush()  # Get the statement ID
+                        statement.status = 'processed'
+                        statement.extracted_count = len(txns) if txns else 0
+                        statement.notes = f"Batch processed from job {batch_job_id}"
+                        statement.file_path = file_path # Update to local path if changed
 
                         # Create attachment record
                         original_filename = payload.get("original_filename", "batch_file")
@@ -649,9 +710,9 @@ class BankStatementMessageHandler(BaseMessageHandler):
                                     statement_id=statement.id,
                                     date=txn.get('date'),
                                     description=txn.get('description', ''),
-                                    amount=txn.get('amount', 0.0),
+                                    amount=parse_number(txn.get('amount', 0.0)),
                                     transaction_type=txn.get('type', 'debit'),
-                                    balance=txn.get('balance'),
+                                    balance=parse_number(txn.get('balance')),
                                     category=txn.get('category')
                                 )
                                 db.add(transaction)
@@ -660,25 +721,25 @@ class BankStatementMessageHandler(BaseMessageHandler):
                         db.commit()
 
                         created_statement_id = statement.id
-                        self.logger.info(f"Created bank statement record {created_statement_id} with {len(txns) if txns else 0} transactions and attachment from batch file {batch_file_id}, cloud_url={cloud_file_url}")
+                        self.logger.info(f"✅ STEP: Updated bank statement record {created_statement_id}")
                     except Exception as e:
-                        self.logger.error(f"Failed to create bank statement record: {e}")
+                        self.logger.error(f"❌ Failed to finalize bank statement record: {e}")
                         db.rollback()
-                        # Continue anyway - we still have the extracted data
 
                     # Update batch processing
+                    self.logger.info(f"STEP: Updating batch service for statement {batch_file_id}")
                     from commercial.batch_processing.service import BatchProcessingService
                     batch_service = BatchProcessingService(db)
                     await batch_service.process_file_completion(
                         file_id=int(batch_file_id),
                         extracted_data={"transactions": txns, "transaction_count": len(txns)},
-                        status="completed",
+                        status="completed" if created_statement_id else "failed",
                         created_record_id=created_statement_id,
                         record_type='statement'
                     )
 
-                    self.logger.info(f"Batch bank statement OCR completed: batch_file_id={batch_file_id}")
-                    return ProcessingResult(success=True, committed=True)
+                    self.logger.info(f"✅ Batch bank statement OCR completed: batch_file_id={batch_file_id}")
+                    return ProcessingResult(success=True, committed=False)
 
         except Exception as e:
             self.logger.error(f"Batch bank statement OCR failed: {e}")
@@ -885,6 +946,7 @@ class BankStatementMessageHandler(BaseMessageHandler):
                 "provider_url": ai_row.provider_url,
                 "api_key": ai_row.api_key,
                 "model_name": ai_row.model_name,
+                "ocr_enabled": ai_row.ocr_enabled,
             }
         else:
             self.logger.warning("⚠️ No AI config found in database, using environment variables")
@@ -1051,15 +1113,15 @@ class InvoiceMessageHandler(BaseMessageHandler):
                     invoice_creation_error = None
                     try:
                         # Calculate subtotal and amount
-                        total_amount = extracted_data.get('total_amount', 0.0)
+                        total_amount = parse_number(first_key(extracted_data, ['total_amount', 'total', 'amount'])) or 0.0
 
                         invoice = Invoice(
                             client_id=client_id,
-                            number=extracted_data.get('invoice_number', f'BATCH-{batch_file_id}'),
-                            due_date=extracted_data.get('due_date') or datetime.now(timezone.utc),
+                            number=first_key(extracted_data, ['invoice_number', 'number']) or f'BATCH-{batch_file_id}',
+                            due_date=first_key(extracted_data, ['due_date', 'date']) or datetime.now(timezone.utc),
                             amount=total_amount,
                             subtotal=total_amount,  # No discount for batch invoices
-                            currency=extracted_data.get('currency', 'USD'),
+                            currency=first_key(extracted_data, ['currency', 'currency_code']) or 'USD',
                             status='draft',
                             notes=f"Batch processed from job {batch_job_id}"
                         )
@@ -1113,7 +1175,7 @@ class InvoiceMessageHandler(BaseMessageHandler):
                             error_message=f"Failed to create invoice record: {invoice_creation_error}"
                         )
                         self.logger.warning(f"Batch invoice OCR completed but invoice creation failed: batch_file_id={batch_file_id}")
-                        return ProcessingResult(success=False, error_message=invoice_creation_error, committed=True)
+                        return ProcessingResult(success=False, error_message=invoice_creation_error, committed=False)
                     else:
                         await batch_service.process_file_completion(
                             file_id=int(batch_file_id),
@@ -1123,8 +1185,8 @@ class InvoiceMessageHandler(BaseMessageHandler):
                             record_type='invoice'
                         )
 
-                    self.logger.info(f"Batch invoice OCR completed: batch_file_id={batch_file_id}")
-                    return ProcessingResult(success=True, committed=True)
+                    self.logger.info(f"✅ Batch invoice OCR completed: batch_file_id={batch_file_id}")
+                    return ProcessingResult(success=True, committed=False)
 
         except Exception as e:
             self.logger.error(f"Batch invoice OCR failed: {e}")
@@ -1268,6 +1330,7 @@ class InvoiceMessageHandler(BaseMessageHandler):
                 model_name=model_name,
                 is_active=True,
                 tested=True,
+                ocr_enabled=True,  # Default to True for environment config
             )
         else:
             return ai_row
