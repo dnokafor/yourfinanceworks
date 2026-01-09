@@ -368,11 +368,15 @@
       "overdue_rate": "Tasa de Vencimiento",
       "monthly_growth": "Crecimiento Mensual",
       "active_clients": "Clientes Activos",
-      "revenue_trend": "Tendencia de Ingresos"
+      "revenue_trend": "Tendencia de Ingresos",
+      "gamification_score": "Score de Bienestar Financiero",
+      "gamification_desc": "Seguimiento de hábitos financieros y gana recompensas",
+      "view_score": "Ver Score"
     },
     "actions": {
       "view_all": "Ver Todo",
-      "quick_actions_button": "Acciones Rápidas"
+      "quick_actions_button": "Acciones Rápidas",
+      "view_score": "Ver Score"
     },
     "progressive_features": {
       "ai_assistant_title": "Asistente de Negocios IA",
@@ -725,26 +729,23 @@
     "select_payer": "Seleccionar pagador",
     "you": "Tú",
     "client": "Cliente",
-    "items_and_services": "Gestiona los productos y servicios para esta factura.",
-    "discount_and_summary": "Aplica descuentos y revisa los totales finales.",
-    "final_total": "Total Final",
-    "paid_amount_update_note": "Puedes actualizar el monto pagado para esta factura aprobada para registrar pagos parciales.",
-    "visible_in_pdf_note": "Visible en la vista previa del PDF y la descarga.",
-    "labels_section": {
-      "title": "Etiquetas",
-      "description": "Agrega hasta 10 etiquetas para organizar tus facturas",
-      "no_labels": "No se han agregado etiquetas aún...",
-      "add_label": "Agregar una etiqueta..."
-    },
-    "attachments_section": {
-      "title": "Adjuntos",
-      "description": "Sube y gestiona archivos relacionados con esta factura.",
-      "upload_prompt": "Haz clic o arrastra para subir"
-    },
-    "payment_status": "Estado de Pago",
-    "payment_status_description": "Rastrea y registra pagos para esta factura.",
-    "outstanding": "Pendiente",
-    "edit_page_context": "en la página de edición de factura"
+    "client_info": "Información del Cliente",
+    "client_section_description": "Elige o crea un cliente para esta factura.",
+    "items_section_description": "Gestiona los productos y servicios para esta factura.",
+    "discount_section_description": "Aplica descuentos y revisa los totales finales.",
+    "pdf_discount_description": "Visible en la vista previa del PDF y la descarga.",
+    "notes_label": "Notas Adicionales",
+    "notes_placeholder": "Agrega notas o comentarios adicionales para esta factura...",
+    "labels": "Etiquetas",
+    "labels_description": "Agrega hasta 10 etiquetas para organizar tus facturas",
+    "no_labels_yet": "No se han agregado etiquetas aún...",
+    "add_label_placeholder": "Agregar una etiqueta...",
+    "attachments": "Archivos Adjuntos",
+    "attachment_section_description": "Sube y gestiona archivos relacionados con esta factura.",
+    "click_or_drag_to_upload": "Haz clic o arrastra para subir",
+    "supported_formats_limit": "PDF, DOC, DOCX, JPG, PNG (Máx 10MB)",
+    "payment_section_description": "Rastrea y registra pagos para esta factura.",
+    "payment_update_note": "Puedes actualizar el monto pagado para esta factura aprobada para registrar pagos parciales."
   },
   "clients": {
     "title": "Clientes",
@@ -2488,6 +2489,7 @@
     "updateInvoiceDetails": "Actualizar detalles de la factura",
     "totalAmount": "Monto Total",
     "dueDate": "Fecha de Vencimiento",
+    "due_date": "Fecha de Vencimiento",
     "items": "Artículos",
     "linkedExpenses": "Gastos Vinculados",
     "livePreview": "Vista Previa en Vivo",
@@ -3044,7 +3046,9 @@
     "how_invoice_affected_stock": "Cómo esta factura afectó tu inventario",
     "total_stock_impact": "Impacto Total",
     "no_stock_movements": "Sin Movimientos de Inventario",
-    "stock_movements_will_be_created": "Los movimientos de inventario se crearán cuando esta factura sea marcada como pagada o completada."
+    "stock_movements_will_be_created": "Los movimientos de inventario se crearán cuando esta factura sea marcada como pagada o completada.",
+    "no_items_found": "No se encontraron artículos de inventario",
+    "add_items_first": "Agrega primero artículos a tu inventario"
   },
   "approvalDashboard": {
     "title": "Panel de Aprobaciones",

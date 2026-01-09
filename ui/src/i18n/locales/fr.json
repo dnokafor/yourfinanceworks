@@ -368,11 +368,15 @@
       "overdue_rate": "Taux de Retard",
       "monthly_growth": "Croissance Mensuelle",
       "active_clients": "Clients Actifs",
-      "revenue_trend": "Tendance des Revenus"
+      "revenue_trend": "Tendance des Revenus",
+      "gamification_score": "Score de Bien-être Financier",
+      "gamification_desc": "Suivez vos habitudes financières et gagnez des récompenses",
+      "view_score": "Voir le Score"
     },
     "actions": {
       "view_all": "Voir Tout",
-      "quick_actions_button": "Actions Rapides"
+      "quick_actions_button": "Actions Rapides",
+      "view_score": "Voir le Score"
     },
     "progressive_features": {
       "ai_assistant_title": "Assistant d'Affaires IA",
@@ -744,7 +748,24 @@
     "payer": "Payeur",
     "select_payer": "Sélectionner le payeur",
     "you": "Vous",
-    "client": "Client"
+    "client": "Client",
+    "client_info": "Informations Client",
+    "client_section_description": "Choisissez ou créez un client pour cette facture.",
+    "items_section_description": "Gérez les produits et services pour cette facture.",
+    "discount_section_description": "Appliquez des remises et consultez les totaux finaux.",
+    "pdf_discount_description": "Visible dans l'aperçu PDF et le téléchargement.",
+    "notes_label": "Notes Additionnelles",
+    "notes_placeholder": "Ajoutez des notes ou commentaires supplémentaires pour cette facture...",
+    "labels": "Étiquettes",
+    "labels_description": "Ajoutez jusqu'à 10 étiquettes pour organiser vos factures",
+    "no_labels_yet": "Aucune étiquette ajoutée pour l'instant...",
+    "add_label_placeholder": "Ajouter une étiquette...",
+    "attachments": "Pièces jointes",
+    "attachment_section_description": "Téléchargez et gérez les fichiers liés à cette facture.",
+    "click_or_drag_to_upload": "Cliquez ou glissez pour télécharger",
+    "supported_formats_limit": "PDF, DOC, DOCX, JPG, PNG (Max 10MB)",
+    "payment_section_description": "Suivez et enregistrez les paiements pour cette facture.",
+    "payment_update_note": "Vous pouvez mettre à jour le montant payé pour cette facture approuvée pour enregistrer les paiements partiels."
   },
   "clients": {
     "title": "Clients",
@@ -2382,6 +2403,7 @@
     "updateInvoiceDetails": "Mettre à jour les détails de la facture",
     "totalAmount": "Montant Total",
     "dueDate": "Date d'Échéance",
+    "due_date": "Date d'échéance",
     "items": "Articles",
     "linkedExpenses": "Dépenses Liées",
     "livePreview": "Aperçu en Direct",
@@ -2943,7 +2965,9 @@
     "how_invoice_affected_stock": "Comment cette facture a affecté votre inventaire",
     "total_stock_impact": "Impact Total",
     "no_stock_movements": "Aucun Mouvement de Stock",
-    "stock_movements_will_be_created": "Les mouvements de stock seront créés lorsque cette facture sera marquée comme payée ou terminée."
+    "stock_movements_will_be_created": "Les mouvements de stock seront créés lorsque cette facture sera marquée comme payée ou terminée.",
+    "no_items_found": "Aucun article d'inventaire trouvé",
+    "add_items_first": "Ajoutez d'abord des articles à votre inventaire"
   },
   "approvalDashboard": {
     "title": "Tableau de Bord des Approbations",

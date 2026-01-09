@@ -11,7 +11,8 @@ import {
   ArrowRight,
   Zap,
   RefreshCw,
-  Plus
+  Plus,
+  Gamepad2
 } from 'lucide-react';
 
 import { ContentSection, GridLayout } from '@/components/ui/professional-layout';
@@ -440,7 +441,9 @@ export function ProfessionalDashboard() {
                   <DollarSign className="h-4 w-4 text-blue-600" />
                   <span className="text-sm font-medium">{t('dashboard.metrics.monthly_growth')}</span>
                 </div>
-                <span className="text-lg font-bold text-green-600">+15%</span>
+                <span className={`text-lg font-bold ${dashboardStats.trends.income.isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                  {dashboardStats.trends.income.isPositive ? '+' : ''}{dashboardStats.trends.income.value}%
+                </span>
               </div>
 
               <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
@@ -459,6 +462,26 @@ export function ProfessionalDashboard() {
                 <span className="text-lg font-bold text-green-600">
                   {dashboardStats.trends.income.isPositive ? '↗' : '↘'} {dashboardStats.trends.income.value}%
                 </span>
+              </div>
+
+              {/* Gamification Link */}
+              <div className="flex items-center justify-between p-4 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <Gamepad2 className="h-4 w-4 text-purple-600" />
+                  <div>
+                    <span className="text-sm font-medium">{t('dashboard.metrics.gamification_score')}</span>
+                    <p className="text-xs text-muted-foreground">{t('dashboard.metrics.gamification_desc')}</p>
+                  </div>
+                </div>
+                <ProfessionalButton
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate('/settings?tab=gamification')}
+                  className="text-purple-600 hover:bg-purple-100 h-8 px-3"
+                >
+                  {t('dashboard.actions.view_score')}
+                  <ArrowRight className="h-3 w-3 ml-1" />
+                </ProfessionalButton>
               </div>
             </div>
           </div>

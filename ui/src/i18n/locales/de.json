@@ -360,11 +360,15 @@
       "overdue_rate": "Überfälligkeitsrate",
       "monthly_growth": "Monatliches Wachstum",
       "active_clients": "Aktive Kunden",
-      "revenue_trend": "Umsatztrend"
+      "revenue_trend": "Umsatzentwicklung",
+      "gamification_score": "Finanzielles Wohlbefinden Score",
+      "gamification_desc": "Verfolgen Sie Ihre finanziellen Gewohnheiten und verdienen Sie Belohnungen",
+      "view_score": "Score Anzeigen"
     },
     "actions": {
       "view_all": "Alle anzeigen",
-      "quick_actions_button": "Schnellaktionen"
+      "quick_actions_button": "Schnellaktionen",
+      "view_score": "Score Anzeigen"
     },
     "progressive_features": {
       "ai_assistant_title": "KI-Geschäftsassistent",
@@ -703,26 +707,23 @@
     "select_payer": "Zahler auswählen",
     "you": "Sie",
     "client": "Kunde",
-    "items_and_services": "Verwalten Sie die Produkte und Dienstleistungen für diese Rechnung.",
-    "discount_and_summary": "Rabatte anwenden und die Endsummen überprüfen.",
-    "final_total": "Endsumme",
-    "paid_amount_update_note": "Sie können den gezahlten Betrag für diese genehmigte Rechnung aktualisieren, um Teilzahlungen zu erfassen.",
-    "visible_in_pdf_note": "Sichtbar in der PDF-Vorschau und im Download.",
-    "labels_section": {
-      "title": "Labels",
-      "description": "Fügen Sie bis zu 10 Labels hinzu, um Ihre Rechnungen zu organisieren",
-      "no_labels": "Noch keine Labels hinzugefügt...",
-      "add_label": "Label hinzufügen..."
-    },
-    "attachments_section": {
-      "title": "Anhänge",
-      "description": "Dateien hochladen und verwalten, die sich auf diese Rechnung beziehen.",
-      "upload_prompt": "Klicken oder ziehen zum Hochladen"
-    },
-    "payment_status": "Zahlungsstatus",
-    "payment_status_description": "Zahlungen für diese Rechnung verfolgen und erfassen.",
-    "outstanding": "Ausstehend",
-    "edit_page_context": "auf der Rechnungsbearbeitungsseite"
+    "client_info": "Kundeninformationen",
+    "client_section_description": "Wählen Sie einen Kunden für diese Rechnung aus oder erstellen Sie einen neuen.",
+    "items_section_description": "Verwalten Sie die Produkte und Dienstleistungen für diese Rechnung.",
+    "discount_section_description": "Rabatte anwenden und die Endsummen überprüfen.",
+    "pdf_discount_description": "Sichtbar in der PDF-Vorschau und im Download.",
+    "notes_label": "Zusätzliche Notizen",
+    "notes_placeholder": "Fügen Sie zusätzliche Notizen oder Kommentare für diese Rechnung hinzu...",
+    "labels": "Labels",
+    "labels_description": "Fügen Sie bis zu 10 Labels hinzu, um Ihre Rechnungen zu organisieren",
+    "no_labels_yet": "Noch keine Labels hinzugefügt...",
+    "add_label_placeholder": "Label hinzufügen...",
+    "attachments": "Anhänge",
+    "attachment_section_description": "Dateien hochladen und verwalten, die sich auf diese Rechnung beziehen.",
+    "click_or_drag_to_upload": "Klicken oder ziehen Sie zum Hochladen",
+    "supported_formats_limit": "PDF, DOC, DOCX, JPG, PNG (Max 10MB)",
+    "payment_section_description": "Verfolgen und erfassen Sie Zahlungen für diese Rechnung.",
+    "payment_update_note": "Sie können den gezahlten Betrag für diese genehmigte Rechnung aktualisieren, um Teilzahlungen zu erfassen."
   },
   "clients": {
     "title": "Kunden",
@@ -2406,6 +2407,7 @@
     "updateInvoiceDetails": "Rechnungsdetails aktualisieren",
     "totalAmount": "Gesamtbetrag",
     "dueDate": "Fälligkeitsdatum",
+    "due_date": "Fälligkeitsdatum",
     "items": "Artikel",
     "linkedExpenses": "Verknüpfte Ausgaben",
     "livePreview": "Live-Vorschau",
@@ -2959,7 +2961,9 @@
     "how_invoice_affected_stock": "Wie diese Rechnung Ihren Lagerbestand beeinflusst hat",
     "total_stock_impact": "Gesamtauswirkung",
     "no_stock_movements": "Keine Lagerbewegungen",
-    "stock_movements_will_be_created": "Lagerbewegungen werden erstellt, wenn diese Rechnung als bezahlt oder abgeschlossen markiert wird."
+    "stock_movements_will_be_created": "Lagerbewegungen werden erstellt, wenn diese Rechnung als bezahlt oder abgeschlossen markiert wird.",
+    "no_items_found": "Keine Inventarartikel gefunden",
+    "add_items_first": "Fügen Sie zuerst Artikel zu Ihrem Inventar hinzu"
   },
   "approvalDashboard": {
     "title": "Genehmigungs-Dashboard",

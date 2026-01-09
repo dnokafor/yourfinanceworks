@@ -366,11 +366,15 @@
       "overdue_rate": "Overdue Rate",
       "monthly_growth": "Monthly Growth",
       "active_clients": "Active Clients",
-      "revenue_trend": "Revenue Trend"
+      "revenue_trend": "Revenue Trend",
+      "gamification_score": "Financial Wellness Score",
+      "gamification_desc": "Track your financial habits and earn rewards",
+      "view_score": "View Score"
     },
     "actions": {
       "view_all": "View All",
-      "quick_actions_button": "Quick Actions"
+      "quick_actions_button": "Quick Actions",
+      "view_score": "View Score"
     },
     "progressive_features": {
       "ai_assistant_title": "AI Business Assistant",
@@ -751,7 +755,24 @@
     "payment_reduced": "Payment Reduced",
     "payment_amount_changed_via_invoice_form": "Payment amount changed via invoice form",
     "create_expense": "Create Expense",
-    "client": "Client"
+    "client": "Client",
+    "client_info": "Client Information",
+    "client_section_description": "Choose or create a client for this invoice.",
+    "items_section_description": "Manage products and services for this invoice.",
+    "discount_section_description": "Apply discounts and review final totals.",
+    "pdf_discount_description": "Visible in PDF preview and download.",
+    "notes_label": "Additional Notes",
+    "notes_placeholder": "Add any additional notes or comments for this invoice...",
+    "labels": "Labels",
+    "labels_description": "Add up to 10 labels to organize your invoices",
+    "no_labels_yet": "No labels added yet...",
+    "add_label_placeholder": "Add a label...",
+    "attachments": "Attachments",
+    "attachment_section_description": "Upload and manage files related to this invoice.",
+    "click_or_drag_to_upload": "Click or drag to upload",
+    "supported_formats_limit": "PDF, DOC, DOCX, JPG, PNG (Max 10MB)",
+    "payment_section_description": "Track and record payments for this invoice.",
+    "payment_update_note": "You can update paid amount for this approved invoice to record partial payments."
   },
   "clients": {
     "title": "Clients",
@@ -2548,6 +2569,7 @@
     "updateInvoiceDetails": "Update invoice details",
     "totalAmount": "Total Amount",
     "dueDate": "Due Date",
+    "due_date": "Due Date",
     "items": "Items",
     "linkedExpenses": "Linked Expenses",
     "livePreview": "Live Preview",
@@ -3116,7 +3138,9 @@
     "how_invoice_affected_stock": "How this invoice affected your inventory",
     "total_stock_impact": "Total Impact",
     "no_stock_movements": "No Stock Movements",
-    "stock_movements_will_be_created": "Stock movements will be created when this invoice is marked as paid or completed."
+    "stock_movements_will_be_created": "Stock movements will be created when this invoice is marked as paid or completed.",
+    "no_items_found": "No inventory items found",
+    "add_items_first": "Add some items to your inventory first"
   },
   "approvalDashboard": {
     "title": "Approval Dashboard",
