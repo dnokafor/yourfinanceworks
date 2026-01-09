@@ -13,7 +13,7 @@ import json
 import base64
 
 from core.models.database import get_db, get_master_db
-from core.models.models import Tenant, MasterUser
+from core.models.models import Tenant, MasterUser, Invite
 from core.schemas.user import UserRead
 from core.models.models_per_tenant import User as TenantUser
 from core.services.tenant_database_manager import tenant_db_manager
@@ -21,6 +21,7 @@ from core.middleware.tenant_context_middleware import set_tenant_context
 from core.utils.feature_gate import require_feature, check_feature
 from core.utils.auth import create_access_token, get_password_hash, ACCESS_TOKEN_EXPIRE_MINUTES
 from config import config
+from sqlalchemy import func
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,14 @@ def _oauth_prune_states() -> None:
     stale = [s for s, v in OAUTH_STATE_STORE.items() if v.get("ts", 0) < cutoff]
     for s in stale:
         OAUTH_STATE_STORE.pop(s, None)
+
+def check_user_has_valid_invite(db: Session, email: str) -> Optional[Invite]:
+    """Check if email has valid invitation for any tenant"""
+    return db.query(Invite).filter(
+        func.lower(Invite.email) == func.lower(email),
+        Invite.is_accepted == False,
+        Invite.expires_at > datetime.now(timezone.utc)
+    ).first()
 
 # -------------------- Google OAuth (SSO) endpoints --------------------
 @router.get("/google/login")
@@ -163,20 +172,31 @@ async def google_callback(request: Request, code: Optional[str] = None, state: O
     # Find or create user in master database
     user = db.query(MasterUser).filter((MasterUser.google_id == google_id) | (MasterUser.email == email)).first()
     if not user:
-        # Create a minimal tenant for first user if none exists yet, otherwise attach to the first active tenant
-        # Determine if this is the first user in the system
-        is_first_user = db.query(MasterUser).count() == 0
-        # Create tenant for first user
-        tenant_name = f"{email.split('@')[0]}'s Organization"
-        db_tenant = Tenant(name=tenant_name, email=email, is_active=True)
-        db.add(db_tenant)
-        db.commit()
-        db.refresh(db_tenant)
+        # Check if user has a valid invitation first
+        valid_invite = check_user_has_valid_invite(db, email)
+        
+        if valid_invite:
+            # User has invitation, assign to inviting tenant
+            db_tenant = db.query(Tenant).filter(Tenant.id == valid_invite.tenant_id).first()
+            if not db_tenant:
+                raise HTTPException(status_code=400, detail="Invited organization not found")
+            tenant_name = db_tenant.name
+            is_first_user = False
+        else:
+            # No invitation, create a new tenant for first user if none exists yet
+            # Determine if this is the first user in the system
+            is_first_user = db.query(MasterUser).count() == 0
+            # Create tenant for first user
+            tenant_name = f"{email.split('@')[0]}'s Organization"
+            db_tenant = Tenant(name=tenant_name, email=email, is_active=True)
+            db.add(db_tenant)
+            db.commit()
+            db.refresh(db_tenant)
 
-        # Provision tenant DB
-        success = tenant_db_manager.create_tenant_database(db_tenant.id, tenant_name)
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to create tenant database")
+            # Provision tenant DB
+            success = tenant_db_manager.create_tenant_database(db_tenant.id, tenant_name)
+            if not success:
+                raise HTTPException(status_code=500, detail="Failed to create tenant database")
 
         # Create master user
         user = MasterUser(
@@ -184,7 +204,7 @@ async def google_callback(request: Request, code: Optional[str] = None, state: O
             hashed_password=get_password_hash(secrets.token_urlsafe(16)),
             first_name=first_name,
             last_name=last_name,
-            role="admin" if is_first_user else "admin",  # Owner of the new tenant
+            role="admin" if is_first_user else (valid_invite.role if valid_invite else "admin"),
             tenant_id=db_tenant.id,
             is_active=True,
             is_superuser=is_first_user,
@@ -194,6 +214,12 @@ async def google_callback(request: Request, code: Optional[str] = None, state: O
         db.add(user)
         db.commit()
         db.refresh(user)
+
+        # Mark invitation as accepted if there was one
+        if valid_invite:
+            valid_invite.is_accepted = True
+            valid_invite.accepted_at = datetime.now(timezone.utc)
+            db.commit()
 
         # Create tenant user mirror
         set_tenant_context(db_tenant.id)
@@ -215,7 +241,7 @@ async def google_callback(request: Request, code: Optional[str] = None, state: O
                 hashed_password=user.hashed_password,
                 first_name=first_name,
                 last_name=last_name,
-                role="admin",
+                role="admin" if is_first_user else (valid_invite.role if valid_invite else "admin"),
                 is_active=True,
                 is_superuser=is_first_user,
                 is_verified=True,
@@ -340,16 +366,27 @@ async def azure_callback(request: Request, code: Optional[str] = None, state: Op
     user = db.query(MasterUser).filter(MasterUser.email == email).first()
     
     if not user:
-         # Create a minimal tenant for first user if none exists yet, otherwise attach to the first active tenant
-        # Determine if this is the first user in the system
-        is_first_user = db.query(MasterUser).count() == 0
+        # Check if user has a valid invitation first
+        valid_invite = check_user_has_valid_invite(db, email)
         
-        # Create tenant for first user
-        tenant_name = f"{email.split('@')[0]}'s Organization"
-        db_tenant = Tenant(name=tenant_name, email=email, is_active=True)
-        db.add(db_tenant)
-        db.commit()
-        db.refresh(db_tenant)
+        if valid_invite:
+            # User has invitation, assign to inviting tenant
+            db_tenant = db.query(Tenant).filter(Tenant.id == valid_invite.tenant_id).first()
+            if not db_tenant:
+                raise HTTPException(status_code=400, detail="Invited organization not found")
+            tenant_name = db_tenant.name
+            is_first_user = False
+        else:
+            # No invitation, create a new tenant for first user if none exists yet
+            # Determine if this is the first user in the system
+            is_first_user = db.query(MasterUser).count() == 0
+            
+            # Create tenant for first user
+            tenant_name = f"{email.split('@')[0]}'s Organization"
+            db_tenant = Tenant(name=tenant_name, email=email, is_active=True)
+            db.add(db_tenant)
+            db.commit()
+            db.refresh(db_tenant)
 
         # Provision tenant DB
         success = tenant_db_manager.create_tenant_database(db_tenant.id, tenant_name)
@@ -362,7 +399,7 @@ async def azure_callback(request: Request, code: Optional[str] = None, state: Op
             hashed_password=get_password_hash(secrets.token_urlsafe(16)),
             first_name=first_name,
             last_name=last_name,
-            role="admin" if is_first_user else "admin",  # Owner of the new tenant
+            role="admin" if is_first_user else (valid_invite.role if valid_invite else "admin"),
             tenant_id=db_tenant.id,
             is_active=True,
             is_superuser=is_first_user,
@@ -372,6 +409,12 @@ async def azure_callback(request: Request, code: Optional[str] = None, state: Op
         db.add(user)
         db.commit()
         db.refresh(user)
+
+        # Mark invitation as accepted if there was one
+        if valid_invite:
+            valid_invite.is_accepted = True
+            valid_invite.accepted_at = datetime.now(timezone.utc)
+            db.commit()
 
         # Create tenant user mirror
         set_tenant_context(db_tenant.id)
@@ -393,7 +436,7 @@ async def azure_callback(request: Request, code: Optional[str] = None, state: Op
                 hashed_password=user.hashed_password,
                 first_name=first_name,
                 last_name=last_name,
-                role="admin",
+                role="admin" if is_first_user else (valid_invite.role if valid_invite else "admin"),
                 is_active=True,
                 is_superuser=is_first_user,
                 is_verified=True,
