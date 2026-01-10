@@ -299,12 +299,12 @@ export function ChallengeCards({ challenges: propChallenges }: ChallengeCardsPro
               ))}
             </div>
           ) : (
-            <ProfessionalCard variant="dashed">
+            <ProfessionalCard variant="minimal">
               <ProfessionalCardContent className="p-8 text-center">
                 <Target className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
-                <h3 className="text-lg font-semibold mb-2">{t('gamification.challenges.no_active_challenges')}</h3>
+                <h3 className="text-lg font-semibold mb-2">{t('settings.gamification.challenges.no_active_challenges')}</h3>
                 <p className="text-muted-foreground">
-                  {t('gamification.challenges.no_active_challenges_description')}
+                  {t('settings.gamification.challenges.no_active_challenges_description')}
                 </p>
               </ProfessionalCardContent>
             </ProfessionalCard>
@@ -339,12 +339,12 @@ export function ChallengeCards({ challenges: propChallenges }: ChallengeCardsPro
               })}
             </div>
           ) : (
-            <ProfessionalCard variant="dashed">
+            <ProfessionalCard variant="minimal">
               <ProfessionalCardContent className="p-8 text-center">
                 <Calendar className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No Available Challenges</h3>
+                <h3 className="text-lg font-semibold mb-2">{t('settings.gamification.challenges.no_available_challenges')}</h3>
                 <p className="text-muted-foreground">
-                  Check back later for new challenges to join!
+                  {t('settings.gamification.challenges.no_available_challenges_description')}
                 </p>
               </ProfessionalCardContent>
             </ProfessionalCard>
@@ -364,12 +364,12 @@ export function ChallengeCards({ challenges: propChallenges }: ChallengeCardsPro
               ))}
             </div>
           ) : (
-            <ProfessionalCard variant="dashed">
+            <ProfessionalCard variant="minimal">
               <ProfessionalCardContent className="p-8 text-center">
                 <CheckCircle className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No Completed Challenges</h3>
+                <h3 className="text-lg font-semibold mb-2">{t('settings.gamification.challenges.no_completed_challenges')}</h3>
                 <p className="text-muted-foreground">
-                  Complete challenges to see them here and earn rewards!
+                  {t('settings.gamification.challenges.no_completed_challenges_description')}
                 </p>
               </ProfessionalCardContent>
             </ProfessionalCard>

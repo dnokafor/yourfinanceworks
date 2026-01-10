@@ -154,7 +154,7 @@ export function GamificationDashboard() {
           icon={Zap}
           variant="default"
           change={{
-            value: dashboard.level_progress.current_xp,
+            value: dashboard.level_progress.progress_percentage || 0,
             type: 'increase'
           }}
           description="XP this level"
@@ -178,8 +178,13 @@ export function GamificationDashboard() {
           icon={TrendingUp}
           variant="success"
           change={{
-            value: dashboard.financial_health_trend,
-            type: dashboard.financial_health_trend >= 0 ? 'increase' : 'decrease'
+            value: dashboard.financial_health_trend.length > 0
+              ? dashboard.financial_health_trend[dashboard.financial_health_trend.length - 1].score
+              : 0,
+            type: dashboard.financial_health_trend.length > 0 &&
+              dashboard.financial_health_trend[dashboard.financial_health_trend.length - 1].score >= 0
+              ? 'increase'
+              : 'decrease'
           }}
           description="vs last month"
           className="bg-card shadow-sm border-border/50"

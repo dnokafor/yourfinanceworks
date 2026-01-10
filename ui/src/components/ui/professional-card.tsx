@@ -117,10 +117,11 @@ interface MetricCardProps {
   description?: string;
   variant?: 'default' | 'success' | 'warning' | 'danger';
   loading?: boolean;
+  className?: string;
 }
 
 const MetricCard = React.forwardRef<HTMLDivElement, MetricCardProps>(
-  ({ title, value, change, icon: Icon, description, variant = 'default', loading = false }, ref) => {
+  ({ title, value, change, icon: Icon, description, variant = 'default', loading = false, className }, ref) => {
     const variantStyles = {
       default: "border-l-4 border-l-primary bg-primary/5",
       success: "border-l-4 border-l-success bg-success/5",
@@ -152,7 +153,7 @@ const MetricCard = React.forwardRef<HTMLDivElement, MetricCardProps>(
     return (
       <ProfessionalCard
         variant="elevated"
-        className={cn("group hover:shadow-xl transition-all duration-300", variantStyles[variant])}
+        className={cn("group hover:shadow-xl transition-all duration-300", variantStyles[variant], className)}
         interactive
         ref={ref}
       >
