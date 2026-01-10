@@ -89,7 +89,7 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [selectedTenantForUsers, setSelectedTenantForUsers] = useState<Tenant | null>(null);
   const [createTenantForm, setCreateTenantForm] = useState({ name: '', email: '', default_currency: 'USD' });
-  const [createUserForm, setCreateUserForm] = useState({ email: '', first_name: '', last_name: '', role: 'user', password: '', tenant_ids: [], primary_tenant_id: '', tenant_roles: {} });
+  const [createUserForm, setCreateUserForm] = useState({ email: '', first_name: '', last_name: '', role: 'user', password: '', tenant_ids: [], primary_tenant_id: '', tenant_roles: {}, is_sso: false });
   const [promoteEmail, setPromoteEmail] = useState('');
   const [promoteLoading, setPromoteLoading] = useState(false);
   const [promoteError, setPromoteError] = useState<string | null>(null);
@@ -174,7 +174,7 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
       }, { skipTenant: true });
 
       setShowCreateUser(false);
-      setCreateUserForm({ email: '', first_name: '', last_name: '', role: 'user', password: '', tenant_ids: [], primary_tenant_id: '', tenant_roles: {} });
+      setCreateUserForm({ email: '', first_name: '', last_name: '', role: 'user', password: '', tenant_ids: [], primary_tenant_id: '', tenant_roles: {}, is_sso: false });
       toast.success('User created successfully');
       fetchUsers(selectedTenantForUsers?.id);
     } catch (err: any) {
@@ -777,16 +777,61 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
                             </div>
                           </div>
 
-                          <div>
-                            <Label htmlFor="user-password">{t('superAdmin.password_label')}</Label>
-                            <Input
-                              id="user-password"
-                              type="password"
-                              value={createUserForm.password}
-                              onChange={(e) => setCreateUserForm(prev => ({ ...prev, password: e.target.value }))}
-                              placeholder={t('superAdmin.password_placeholder')}
-                            />
+                          {/* SSO Option */}
+                          <div className="space-y-3">
+                            <Label className="text-base font-medium">Authentication Method</Label>
+                            <div className="flex items-center space-x-3">
+                              <input
+                                type="radio"
+                                id="auth-password"
+                                name="auth-method"
+                                checked={!createUserForm.is_sso}
+                                onChange={() => setCreateUserForm(prev => ({ ...prev, is_sso: false, password: '' }))}
+                                className="w-4 h-4"
+                              />
+                              <Label htmlFor="auth-password" className="text-sm font-normal cursor-pointer">
+                                Password Authentication
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-3">
+                              <input
+                                type="radio"
+                                id="auth-sso"
+                                name="auth-method"
+                                checked={createUserForm.is_sso}
+                                onChange={() => setCreateUserForm(prev => ({ ...prev, is_sso: true, password: '' }))}
+                                className="w-4 h-4"
+                              />
+                              <Label htmlFor="auth-sso" className="text-sm font-normal cursor-pointer">
+                                Single Sign-On (SSO)
+                              </Label>
+                            </div>
                           </div>
+
+                          {/* Password Field - Only show for non-SSO users */}
+                          {!createUserForm.is_sso && (
+                            <div>
+                              <Label htmlFor="user-password">{t('superAdmin.password_label')}</Label>
+                              <Input
+                                id="user-password"
+                                type="password"
+                                value={createUserForm.password}
+                                onChange={(e) => setCreateUserForm(prev => ({ ...prev, password: e.target.value }))}
+                                placeholder={t('superAdmin.password_placeholder')}
+                                required
+                              />
+                            </div>
+                          )}
+
+                          {/* SSO Info Message - Show for SSO users */}
+                          {createUserForm.is_sso && (
+                            <div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                              <p className="text-sm text-blue-800 dark:text-blue-200">
+                                <strong>SSO User:</strong> The user will be able to sign in using any configured SSO provider. 
+                                No password is required for SSO users.
+                              </p>
+                            </div>
+                          )}
                           <Button onClick={handleCreateUser} className="w-full">{t('superAdmin.create_user_button')}</Button>
                         </div>
                       </DialogContent>

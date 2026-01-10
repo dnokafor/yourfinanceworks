@@ -5,6 +5,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 from pydantic import BaseModel
 import logging
+import secrets
 
 from core.models.database import get_master_db
 from core.models.models import (
@@ -664,8 +665,15 @@ async def create_user(
     current_user: MasterUser = Depends(require_super_admin)
 ):
     """Create a new user for multiple tenants"""
-    # Validate required fields
-    required_fields = ['email', 'first_name', 'last_name', 'password', 'tenant_ids', 'primary_tenant_id']
+    # Check if this is an SSO user
+    is_sso_user = user_data.get('is_sso', False)
+    
+    # Validate required fields - password is optional for SSO users
+    if is_sso_user:
+        required_fields = ['email', 'first_name', 'last_name', 'tenant_ids', 'primary_tenant_id']
+    else:
+        required_fields = ['email', 'first_name', 'last_name', 'password', 'tenant_ids', 'primary_tenant_id']
+    
     for field in required_fields:
         if field not in user_data:
             raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
@@ -675,10 +683,11 @@ async def create_user(
     if not email or '@' not in email or '.' not in email.split('@')[-1]:
         raise HTTPException(status_code=400, detail="Invalid email format")
 
-    # Validate password strength
-    is_valid, errors = validate_password_strength(user_data['password'])
-    if not is_valid:
-        raise HTTPException(status_code=400, detail={"message": "Password does not meet requirements", "errors": errors})
+    # Validate password strength for non-SSO users
+    if not is_sso_user:
+        is_valid, errors = validate_password_strength(user_data['password'])
+        if not is_valid:
+            raise HTTPException(status_code=400, detail={"message": "Password does not meet requirements", "errors": errors})
 
     # Validate tenant IDs are not empty
     if not user_data['tenant_ids'] or not all(tid.strip() for tid in user_data['tenant_ids']):
@@ -712,8 +721,15 @@ async def create_user(
         )
 
     # Create user in master database
-    hashed_password = get_password_hash(user_data['password'])
+    # For SSO users, generate a random password that they won't use
+    if is_sso_user:
+        hashed_password = get_password_hash(secrets.token_urlsafe(32))
+    else:
+        hashed_password = get_password_hash(user_data['password'])
+    
     primary_role = provided_tenant_roles.get(str(primary_tenant_id), user_data.get('role', 'user'))
+    
+    # Create master user - SSO provider fields will be populated when user first signs in
     master_user = MasterUser(
         email=user_data['email'],
         hashed_password=hashed_password,
@@ -743,6 +759,7 @@ async def create_user(
         try:
             tenant_session = tenant_db_manager.get_tenant_session(tenant_id)()
             
+            # Create tenant user - SSO provider fields will be populated when user first signs in
             tenant_user = TenantUser(
                 id=master_user.id,
                 email=user_data['email'],
@@ -766,6 +783,9 @@ async def create_user(
     user_dict = master_user.__dict__.copy()
     user_dict.pop('_sa_instance_state', None)
     user_dict['tenant_names'] = [t.name for t in tenants]
+    
+    # Add SSO information to response
+    user_dict['is_sso'] = is_sso_user
 
     return user_dict
 

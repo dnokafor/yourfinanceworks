@@ -898,6 +898,7 @@
       "first_name": "First Name",
       "last_name": "Last Name",
       "save_profile": "Save Profile",
+      "cancel": "Cancel",
       "change_password": "Change Password",
       "current_password": "Current Password",
       "new_password": "New Password",

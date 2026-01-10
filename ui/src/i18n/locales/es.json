@@ -877,6 +877,7 @@
       "first_name": "Nombre",
       "last_name": "Apellido",
       "save_profile": "Guardar Perfil",
+      "cancel": "Cancelar",
       "change_password": "Cambiar Contraseña",
       "current_password": "Contraseña Actual",
       "new_password": "Nueva Contraseña",

@@ -890,6 +890,7 @@
       "first_name": "Prénom",
       "last_name": "Nom",
       "save_profile": "Enregistrer le Profil",
+      "cancel": "Annuler",
       "change_password": "Changer le Mot de Passe",
       "current_password": "Mot de Passe Actuel",
       "new_password": "Nouveau Mot de Passe",
