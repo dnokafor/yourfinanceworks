@@ -63,6 +63,7 @@ services:
       # Other settings
       - DEBUG=${DEBUG:-False}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - IGNORE_LICENSE_FOR_FIRST_SSO_USER=${IGNORE_LICENSE_FOR_FIRST_SSO_USER:-false}
       # Kafka (optional)
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - KAFKA_OCR_TOPIC=expenses_ocr

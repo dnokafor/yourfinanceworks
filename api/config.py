@@ -47,6 +47,7 @@ class Config:
 
     # Tenant settings
     MULTI_TENANT: bool = os.getenv("MULTI_TENANT", "true").lower() == "true"
+    IGNORE_LICENSE_FOR_FIRST_SSO_USER: bool = os.getenv("IGNORE_LICENSE_FOR_FIRST_SSO_USER", "false").lower() == "true"
 
     # Cache settings
     REDIS_URL: Optional[str] = os.getenv("REDIS_URL")

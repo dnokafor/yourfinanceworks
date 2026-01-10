@@ -29,7 +29,8 @@ from core.services.tenant_database_manager import tenant_db_manager
 from core.middleware.tenant_context_middleware import set_tenant_context
 from core.utils.rbac import require_admin
 from core.utils.audit import log_audit_event, log_audit_event_master
-from core.utils.feature_gate import require_feature
+from core.utils.feature_gate import require_feature, check_feature
+from config import config
 from core.constants.error_codes import USER_NOT_FOUND, INCORRECT_PASSWORD, INACTIVE_USER, TENANT_CONTEXT_REQUIRED, INVALID_CREDENTIALS
 
 from core.constants.password import MIN_PASSWORD_LENGTH
@@ -65,25 +66,25 @@ def create_reset_token_entry(db: Session, user_id: int) -> PasswordResetToken:
         PasswordResetToken.is_used == False,
         PasswordResetToken.expires_at > datetime.now(timezone.utc)
     ).all()
-    
+
     for token in existing_tokens:
         token.is_used = True
         token.used_at = datetime.now(timezone.utc)
-    
+
     # Create new token
     token = create_password_reset_token()
     expires_at = datetime.now(timezone.utc) + timedelta(hours=1)  # Token expires in 1 hour
-    
+
     reset_token = PasswordResetToken(
         token=token,
         user_id=user_id,
         expires_at=expires_at
     )
-    
+
     db.add(reset_token)
     db.commit()
     db.refresh(reset_token)
-    
+
     return reset_token
 
 def verify_reset_token(db: Session, token: str) -> Optional[PasswordResetToken]:
@@ -93,7 +94,7 @@ def verify_reset_token(db: Session, token: str) -> Optional[PasswordResetToken]:
         PasswordResetToken.is_used == False,
         PasswordResetToken.expires_at > datetime.now(timezone.utc)
     ).first()
-    
+
     return reset_token
 
 def get_email_service_for_tenant(db: Session, tenant_id: int) -> Optional[EmailService]:
@@ -104,16 +105,16 @@ def get_email_service_for_tenant(db: Session, tenant_id: int) -> Optional[EmailS
             Settings.tenant_id == tenant_id,
             Settings.key == "email_config"
         ).first()
-        
+
         if not email_settings or not email_settings.value:
             return None
-        
+
         email_config_data = email_settings.value
-        
+
         # Check if email service is enabled
         if not email_config_data.get('enabled', False):
             return None
-        
+
         # Create email provider config
         config = EmailProviderConfig(
             provider=EmailProvider(email_config_data['provider']),
@@ -126,9 +127,9 @@ def get_email_service_for_tenant(db: Session, tenant_id: int) -> Optional[EmailS
             mailgun_api_key=email_config_data.get('mailgun_api_key'),
             mailgun_domain=email_config_data.get('mailgun_domain')
         )
-        
+
         return EmailService(config)
-        
+
     except Exception as e:
         print(f"Failed to initialize email service for tenant {tenant_id}: {str(e)}")
         return None
@@ -347,7 +348,6 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
         logger.info(f"Created tenant {tenant_id} for {user.email}")
 
         # Create tenant database
-        from core.services.tenant_database_manager import tenant_db_manager
         success = tenant_db_manager.create_tenant_database(tenant_id, tenant_name)
         logger.info(f"Tenant DB creation for {tenant_id}: {success}")
         if not success:
@@ -374,25 +374,28 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
     # Handle user creation/update
     if is_existing_user:
         db_user = existing_user
+        is_global_first_user = False  # Existing users are never the first global user
         logger.info(f"Using existing user {db_user.id} for {user.email}")
     else:
-        # Check if this is the first user in the system
-        user_count = db.query(MasterUser).count()
-        is_first_user = user_count == 0
+        # Check if this is the first user in the entire system (Global Super Admin)
+        user_total_count = db.query(MasterUser).count()
+        is_global_first_user = user_total_count == 0
+
+        # Determine if this user is the first one in the organization they just created
+        is_org_first_user = not user.tenant_id
 
         # Create user in master database
         logger.info(f"Creating user in master DB: {user.email}")
-        hashed_password = get_password_hash(user.password)
         db_user = MasterUser(
             email=user.email,
-            hashed_password=hashed_password,
+            hashed_password=get_password_hash(user.password),
             first_name=user.first_name,
             last_name=user.last_name,
+            is_active=True,
+            is_superuser=is_global_first_user,
+            role="admin" if is_org_first_user else user_role,
             tenant_id=tenant_id,
-            role="admin" if is_first_user else user_role,
-            is_active=user.is_active,
-            is_superuser=is_first_user or user.is_superuser,
-            is_verified=True  # Auto-verify new users during registration
+            is_verified=True # Auto-verify for now
         )
 
         db.add(db_user)
@@ -413,7 +416,7 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
             )
             db.commit()
             logger.info(f"Created user-tenant association for user {existing_user.id} with tenant {tenant_id}")
-            
+
             # Update user's primary tenant to the new organization
             existing_user.tenant_id = tenant_id
             existing_user.role = user_role
@@ -432,6 +435,13 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
         tenant_session = tenant_db_manager.get_tenant_session(tenant_id)
         tenant_db = tenant_session()
         try:
+            # Gating check
+            # Only bypass license check for the FIRST user in the ENTIRE SYSTEM (global first user)
+            # Not for every organization creator
+            if not (config.IGNORE_LICENSE_FOR_FIRST_SSO_USER and is_global_first_user):
+                # Standard registration includes basic SSO features
+                check_feature("sso", tenant_db)
+
             # Check if tenant user already exists
             existing_tenant_user = tenant_db.query(TenantUser).filter(TenantUser.id == db_user.id).first()
 
@@ -460,7 +470,7 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
                 else:
                     # Use new user's hashed password
                     hashed_password = db_user.hashed_password
-                
+
                 tenant_user = TenantUser(
                     id=db_user.id,  # Use same ID as master user
                     email=user.email,
@@ -482,6 +492,8 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
                 tenant_db.close()
             except Exception:
                 pass
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to create/update tenant user for {user.email} in tenant DB {tenant_id}: {str(e)}")
         logger.error(traceback.format_exc())
@@ -502,7 +514,7 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
 
     # Get user organizations for response
     organizations = get_user_organizations(db, db_user)
-    
+
     # Create user response with organizations
     user_response = UserRead.model_validate(db_user)
     user_response.organizations = organizations
@@ -550,7 +562,7 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_master_db
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Your account has been disabled. Please contact your administrator."
         )
-    
+
     # Check if tenant is active
     tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
     if not tenant or not tenant.is_active:
@@ -566,7 +578,7 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_master_db
 
     # Get user organizations for response
     organizations = get_user_organizations(db, user)
-    
+
     # Create user response with organizations
     user_response = UserRead.model_validate(user)
     user_response.organizations = organizations
@@ -588,7 +600,7 @@ async def change_password(
         raise HTTPException(status_code=401, detail=INCORRECT_PASSWORD)
     if payload.new_password != payload.confirm_password:
         raise HTTPException(status_code=400, detail="Passwords do not match")
-    
+
     # Validate password strength
     is_valid, errors = validate_password_strength(payload.new_password)
     if not is_valid:
@@ -649,19 +661,19 @@ async def read_users_me(current_user: MasterUser = Depends(get_current_user), db
             elif tenant.id == current_user.tenant_id:
                 org_data['role'] = current_user.role
             organizations.append(org_data)
-    
+
     # Create response with organizations
     user_data = UserRead.model_validate(current_user)
     user_dict = user_data.model_dump()
     user_dict['organizations'] = organizations
-    
+
     # Add SSO provider information
     user_dict['sso_provider'] = None
     if current_user.google_id:
         user_dict['sso_provider'] = 'google'
     elif current_user.azure_ad_id:
         user_dict['sso_provider'] = 'microsoft'
-    
+
     # Add has_sso flag for backward compatibility
     user_dict['has_sso'] = user_dict['sso_provider'] is not None
 
@@ -725,7 +737,7 @@ async def invite_user(
     """Invite a user to the organization (admin only)"""
     # Check if current user is admin
     require_admin(current_user, "invite users")
-    
+
     # Normalize email for comparisons
     invite_email = (invite_data.email or "").strip()
     if not invite_email:
@@ -747,7 +759,7 @@ async def invite_user(
         ).first()
         if membership or existing_master_user.tenant_id == current_user.tenant_id:
             raise HTTPException(status_code=400, detail="User already exists in this organization")
-    
+
     # Check if invite already exists and is not expired
     existing_invite = db.query(Invite).filter(
         func.lower(Invite.email) == func.lower(invite_email),
@@ -779,10 +791,10 @@ async def invite_user(
     except Exception:
         # If tenant DB lookup fails, continue; master checks above are sufficient
         pass
-    
+
     # If there's an expired invite, we can create a new one (this will create a duplicate, but that's okay)
     # Alternatively, we could update the existing expired invite, but creating new is simpler
-    
+
     # Create invite
     invite = Invite(
         email=invite_email,
@@ -794,11 +806,10 @@ async def invite_user(
         tenant_id=current_user.tenant_id,
         invited_by_id=current_user.id
     )
-    
     db.add(invite)
     db.commit()
     db.refresh(invite)
-    
+
     # Send invite email via configured provider if available, otherwise fallback to console
     invite_path = f"/accept-invite?token={invite.token}"
     inviter_name = f"{current_user.first_name} {current_user.last_name}".strip() or current_user.email
@@ -837,7 +848,7 @@ async def invite_user(
     else:
         # Fallback to console
         send_invite_email(invite.email, accept_url, inviter_name, tenant_name)
-    
+
     # Log audit event in master database
     log_audit_event_master(
         db=db,
@@ -851,7 +862,7 @@ async def invite_user(
         tenant_id=current_user.tenant_id,
         status="success"
     )
-    
+
     # Log audit event in tenant database as well
     tenant_db = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
     try:
@@ -868,7 +879,7 @@ async def invite_user(
         )
     finally:
         tenant_db.close()
-    
+
     # Manually construct response to handle invited_by field
     invite_response = InviteRead(
         id=invite.id,
@@ -881,7 +892,7 @@ async def invite_user(
         created_at=invite.created_at,
         invited_by=current_user.email
     )
-    
+
     return invite_response
 
 @router.get("/invites", response_model=List[InviteRead])
@@ -891,11 +902,10 @@ async def list_invites(
 ):
     """List all invites for the organization (admin only)"""
     require_admin(current_user, "view invites")
-    
     invites = db.query(Invite).filter(
         Invite.tenant_id == current_user.tenant_id
     ).all()
-    
+
     # Manually construct response to handle invited_by field
     result = []
     for invite in invites:
@@ -912,7 +922,7 @@ async def list_invites(
             "invited_by": inviter.email if inviter else None
         }
         result.append(InviteRead(**invite_dict))
-    
+
     return result
 
 @router.delete("/invites/{invite_id}", response_model=Dict[str, str])
@@ -924,29 +934,29 @@ async def cancel_invite(
     """Cancel a pending invite (admin only)"""
     # Check if current user is admin
     require_admin(current_user, "cancel invites")
-    
+
     # Find the invite
     invite = db.query(Invite).filter(
         Invite.id == invite_id,
         Invite.tenant_id == current_user.tenant_id,
         Invite.is_accepted == False
     ).first()
-    
+
     if not invite:
         raise HTTPException(status_code=404, detail="Invite not found or already accepted")
-    
+
     # Check if invite is expired
     if invite.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Cannot cancel an expired invite")
-    
+
     # Store invite details for audit logging
     invite_email = invite.email
     invite_role = invite.role
-    
+
     # Delete the invite
     db.delete(invite)
     db.commit()
-    
+
     # Log audit event in master database
     log_audit_event_master(
         db=db,
@@ -966,7 +976,7 @@ async def cancel_invite(
         tenant_id=current_user.tenant_id,
         status="success"
     )
-    
+
     # Log audit event in tenant database as well
     tenant_db = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
     try:
@@ -989,7 +999,7 @@ async def cancel_invite(
         )
     finally:
         tenant_db.close()
-    
+
     return {"message": f"Invite for {invite_email} has been cancelled"}
 
 @router.post("/accept-invite", response_model=Token)
@@ -1004,10 +1014,10 @@ async def accept_invite(
         Invite.is_accepted == False,
         Invite.expires_at > datetime.now(timezone.utc)
     ).first()
-    
+
     if not invite:
         raise HTTPException(status_code=400, detail="Invalid or expired invite token")
-    
+
     # Check if user already exists
     existing_user = db.query(MasterUser).filter(
         MasterUser.email == invite.email,
@@ -1015,9 +1025,10 @@ async def accept_invite(
     ).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="User already exists")
-    
+
+    # Hash the password
     hashed_password = get_password_hash(invite_data.password)
-    
+
     # Create or reuse a master user record for all invited roles, and mirror in tenant DB
     existing_master_user = db.query(MasterUser).filter(
         func.lower(MasterUser.email) == func.lower(invite.email)
@@ -1103,13 +1114,12 @@ async def accept_invite(
         raise HTTPException(status_code=500, detail=f"Failed to create tenant user: {str(e)}")
     finally:
         tenant_db.close()
-    
+
     # Mark invite as accepted
     invite.is_accepted = True
     invite.accepted_at = datetime.now(timezone.utc)
-    
     db.commit()
-    
+
     # Log audit event in master database for invite acceptance
     log_audit_event_master(
         db=db,
@@ -1128,7 +1138,7 @@ async def accept_invite(
         tenant_id=invite.tenant_id,
         status="success"
     )
-    
+
     # Log audit event in tenant database as well
     set_tenant_context(invite.tenant_id)
     tenant_db = tenant_db_manager.get_tenant_session(invite.tenant_id)()
@@ -1151,10 +1161,10 @@ async def accept_invite(
         )
     finally:
         tenant_db.close()
-    
+
     # Generate access token
     access_token = create_access_token(data={"sub": user.email})
-    
+
     return {"access_token": access_token, "token_type": "bearer", "user": user}
 
 @router.get("/users", response_model=List[UserList])
@@ -1166,37 +1176,37 @@ async def list_users(
     # Allow all authenticated users to see other users for assignment purposes
     # Only admins can see the full list for management purposes
     # Regular users can see activated users for reminder assignments
-    
+
     from core.models.database import get_tenant_context
     current_tenant_id = get_tenant_context()
     if not current_tenant_id:
         raise HTTPException(status_code=400, detail="Tenant context required")
-    
+
     # Get all users who have access to this tenant via association table
     from core.models.models import user_tenant_association
-    
+
     # Get user IDs that have access to this tenant
     user_tenant_memberships = master_db.execute(
         user_tenant_association.select().where(
             user_tenant_association.c.tenant_id == current_tenant_id
         )
     ).fetchall()
-    
+
     user_ids = [membership.user_id for membership in user_tenant_memberships]
-    
+
     # Also include users whose primary tenant is this tenant
     primary_users = master_db.query(MasterUser).filter(
         MasterUser.tenant_id == current_tenant_id
     ).all()
-    
+
     for user in primary_users:
         if user.id not in user_ids:
             user_ids.append(user.id)
-    
+
     # Get all users with access to this tenant
     if user_ids:
         users = master_db.query(MasterUser).filter(MasterUser.id.in_(user_ids)).all()
-        
+
         # Get tenant-specific roles for these users
         try:
             tenant_session = tenant_db_manager.get_tenant_session(current_tenant_id)
@@ -1206,11 +1216,11 @@ async def list_users(
                 tenant_users = tenant_db.query(TenantUser).filter(
                     TenantUser.id.in_(user_ids)
                 ).all()
-                
+
                 # Create a mapping of user_id to tenant role
                 tenant_role_map = {tu.id: tu.role for tu in tenant_users}
                 logger.info(f"Found {len(tenant_role_map)} tenant-specific roles: {tenant_role_map}")
-                
+
                 # Update roles for users who exist in tenant database
                 for user in users:
                     if user.id in tenant_role_map:
@@ -1243,10 +1253,10 @@ async def update_user_role(
 ):
     """Update user role (admin only)"""
     require_admin(current_user, "update user roles")
-    
+
     if user_id == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot update your own role")
-    
+
     # Resolve current tenant context (must be provided via X-Tenant-ID or explicit tenant_id query)
     from core.models.database import get_tenant_context
     current_tenant_id = tenant_id or get_tenant_context()
@@ -1270,16 +1280,16 @@ async def update_user_role(
 
     # Find user in master database (by id only), then ensure membership in current tenant
     user = db.query(MasterUser).filter(MasterUser.id == user_id).first()
-    
+
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     # Prevent demotion of the organization owner (creator) by non-super-admins
     # A tenant's owner is the master user whose primary tenant_id equals the current tenant
     is_target_owner_of_current_tenant = (user.tenant_id == current_tenant_id)
     if is_target_owner_of_current_tenant and not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Cannot change role of the organization owner")
-    
+
     # Ensure membership in current tenant and update role in association table
     from core.models.models import user_tenant_association
     membership = db.execute(
@@ -1313,7 +1323,7 @@ async def update_user_role(
     # Store old role for audit logging
     old_role = user.role
     logger.info(f"Updating role for user {user.email} (ID: {user_id}) from '{old_role}' to '{role_update.role}'")
-    
+
     # Update role in tenant database only; reflect in response
     try:
         tenant_db = tenant_db_manager.get_tenant_session(current_tenant_id)()
@@ -1359,7 +1369,7 @@ async def update_user_role(
         created_at=user.created_at,
         updated_at=user.updated_at
     )
-    
+
     # Log audit event in master database
     log_audit_event_master(
         db=db,
@@ -1379,7 +1389,7 @@ async def update_user_role(
         tenant_id=current_tenant_id,
         status="success"
     )
-    
+
     # Log audit event in tenant database as well
     tenant_db = tenant_db_manager.get_tenant_session(current_tenant_id)()
     try:
@@ -1402,7 +1412,7 @@ async def update_user_role(
         )
     finally:
         tenant_db.close()
-    
+
     return response_user
 
 @router.post("/invites/{invite_id}/activate", response_model=UserList)
@@ -1415,21 +1425,21 @@ async def admin_activate_user(
     """Admin activates a pending invite by setting password and creating user account"""
     # Check if current user is admin
     require_admin(current_user, "activate users")
-    
+
     # Find the invite
     invite = db.query(Invite).filter(
         Invite.id == invite_id,
         Invite.tenant_id == current_user.tenant_id,
         Invite.is_accepted == False
     ).first()
-    
+
     if not invite:
         raise HTTPException(status_code=404, detail="Invite not found or already accepted")
-    
+
     # Check if invite is expired
     if invite.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Invite has expired")
-    
+
     # Check if user already exists
     existing_user = db.query(MasterUser).filter(
         MasterUser.email == invite.email,
@@ -1437,7 +1447,7 @@ async def admin_activate_user(
     ).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="User already exists")
-    
+
     # Determine password strategy
     generated_temp_password: Optional[str] = None
     if activation_data.password and len(activation_data.password) >= 6:
@@ -1446,14 +1456,14 @@ async def admin_activate_user(
         # Generate a secure temporary password and force reset on first login
         generated_temp_password = secrets.token_urlsafe(12)
         hashed_password = get_password_hash(generated_temp_password)
-    
+
     # Mark invite as accepted
     invite.is_accepted = True
     invite.accepted_at = datetime.now(timezone.utc)
-    
+
     # Commit invite changes
     db.commit()
-    
+
     # Create or reuse a master user record
     existing_master_user = db.query(MasterUser).filter(
         func.lower(MasterUser.email) == func.lower(invite.email)
@@ -1581,7 +1591,7 @@ async def admin_activate_user(
         raise HTTPException(status_code=500, detail=f"Failed to create tenant user: {str(e)}")
     finally:
         tenant_db.close()
-    
+
     # Log audit event in master database (sanitize activation_data)
     activation_details = activation_data.dict()
     if 'password' in activation_details:
@@ -1603,7 +1613,7 @@ async def admin_activate_user(
         tenant_id=current_user.tenant_id,
         status="success"
     )
-    
+
     # Log audit event in tenant database as well (sanitize activation_data)
     tenant_db = tenant_db_manager.get_tenant_session(invite.tenant_id)()
     try:
@@ -1625,7 +1635,7 @@ async def admin_activate_user(
         )
     finally:
         tenant_db.close()
-    
+
     return user
 
 @router.get("/check-email-availability")
@@ -1639,7 +1649,7 @@ async def check_email_availability(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email must be at least 3 characters long"
         )
-    
+
     # Basic email format validation
     import re
     email_pattern = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
@@ -1648,12 +1658,12 @@ async def check_email_availability(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid email format"
         )
-    
+
     # Check if email already exists (case-insensitive)
     existing_user = master_db.query(MasterUser).filter(
         func.lower(MasterUser.email) == func.lower(email.strip())
     ).first()
-    
+
     # Always return available: True to allow existing users to create new organizations
     # The actual validation will happen in the registration endpoint
     return {
@@ -1682,28 +1692,28 @@ async def request_password_reset(
     user = master_db.query(MasterUser).filter(
         func.lower(MasterUser.email) == func.lower(request.email.strip())
     ).first()
-    
+
     # Always return success to prevent email enumeration
     if not user:
         return PasswordResetResponse(
             message="If the email address exists in our system, you will receive a password reset email shortly.",
             success=True
         )
-    
+
     # Check if user is active
     if not user.is_active:
         return PasswordResetResponse(
             message="If the email address exists in our system, you will receive a password reset email shortly.",
             success=True
         )
-    
+
     # Create password reset token
     reset_token = create_reset_token_entry(master_db, user.id)
-    
+
     # Get tenant and email service configuration
     tenant = master_db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
     email_service = get_email_service_for_tenant(master_db, user.tenant_id)
-    
+
     # Try to send email if email service is configured
     if email_service and tenant:
         try:
@@ -1712,14 +1722,14 @@ async def request_password_reset(
                 Settings.tenant_id == user.tenant_id,
                 Settings.key == "email_config"
             ).first()
-            
+
             email_config_data = email_settings.value if email_settings else {}
             from_name = email_config_data.get('from_name', tenant.name)
             from_email = email_config_data.get('from_email', 'noreply@invoiceapp.com')
-            
+
             # Send password reset email
             user_display_name = f"{user.first_name} {user.last_name}".strip() or user.email
-            
+
             success = email_service.send_password_reset_email(
                 user_email=user.email,
                 user_name=user_display_name,
@@ -1728,12 +1738,12 @@ async def request_password_reset(
                 from_name=from_name,
                 from_email=from_email
             )
-            
+
             if success:
                 print(f"Password reset email sent successfully to {user.email}")
             else:
                 print(f"Failed to send password reset email to {user.email}")
-                
+
         except Exception as e:
             print(f"Error sending password reset email to {user.email}: {str(e)}")
     else:
@@ -1742,7 +1752,7 @@ async def request_password_reset(
         print(f"Email service not configured for tenant {user.tenant_id}")
         print(f"Password reset token for {user.email}: {reset_token.token}")
         print(f"Reset URL: {config.UI_BASE_URL}/reset-password?token={reset_token.token}")
-    
+
     return PasswordResetResponse(
         message="If the email address exists in our system, you will receive a password reset email shortly.",
         success=True
@@ -1761,7 +1771,7 @@ async def reset_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired password reset token"
         )
-    
+
     # Get user
     user = master_db.query(MasterUser).filter(MasterUser.id == reset_token.user_id).first()
     if not user:
@@ -1769,13 +1779,13 @@ async def reset_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User not found"
         )
-    
+
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User account is inactive"
         )
-    
+
     # Validate password strength
     is_valid, errors = validate_password_strength(request.new_password)
     if not is_valid:
@@ -1783,20 +1793,20 @@ async def reset_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"message": "Password does not meet requirements", "errors": errors}
         )
-    
+
     # Update password
     user.hashed_password = get_password_hash(request.new_password)
     user.updated_at = datetime.now(timezone.utc)
-    
+
     # Mark token as used
     reset_token.is_used = True
     reset_token.used_at = datetime.now(timezone.utc)
-    
+
     # Also update password in tenant database
     try:
         from core.models.database import set_tenant_context
         set_tenant_context(user.tenant_id)
-        
+
         tenant_session = tenant_db_manager.get_tenant_session(user.tenant_id)
         tenant_db = tenant_session()
         try:
@@ -1810,9 +1820,9 @@ async def reset_password(
     except Exception as e:
         # If tenant user update fails, still allow master user password update
         print(f"Warning: Failed to update tenant user password: {str(e)}")
-    
+
     master_db.commit()
-    
+
     return PasswordResetResponse(
         message="Password has been reset successfully. You can now log in with your new password.",
         success=True
@@ -1902,7 +1912,7 @@ async def get_password_requirements():
     """Get password requirements for frontend validation (public endpoint)"""
     from core.constants.password import MIN_PASSWORD_LENGTH, PASSWORD_COMPLEXITY
     from core.utils.password_validation import get_password_requirements
-    
+
     return {
         "min_length": MIN_PASSWORD_LENGTH,
         "complexity": PASSWORD_COMPLEXITY,

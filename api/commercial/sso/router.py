@@ -124,8 +124,7 @@ async def google_callback(request: Request, code: Optional[str] = None, state: O
     if not state_data:
         raise HTTPException(status_code=400, detail="Invalid or expired state")
 
-    base_url = str(request.base_url).rstrip("/")
-    ui_base = os.getenv("UI_BASE_URL") or "http://localhost:8080"
+    ui_base = config.UI_BASE_URL
     callback_url = f"{ui_base}/api/v1/auth/google/callback"
 
     # Exchange code for token
@@ -172,20 +171,33 @@ async def google_callback(request: Request, code: Optional[str] = None, state: O
     # Find or create user in master database
     user = db.query(MasterUser).filter((MasterUser.google_id == google_id) | (MasterUser.email == email)).first()
     if not user:
+        # Determine if this is the first user in the entire system (Global Super Admin)
+        is_global_first_user = db.query(MasterUser).count() == 0
+
         # Check if user has a valid invitation first
         valid_invite = check_user_has_valid_invite(db, email)
-        
+
         if valid_invite:
             # User has invitation, assign to inviting tenant
             db_tenant = db.query(Tenant).filter(Tenant.id == valid_invite.tenant_id).first()
             if not db_tenant:
                 raise HTTPException(status_code=400, detail="Invited organization not found")
             tenant_name = db_tenant.name
-            is_first_user = False
+            is_org_first_user = False
         else:
-            # No invitation, create a new tenant for first user if none exists yet
-            # Determine if this is the first user in the system
-            is_first_user = db.query(MasterUser).count() == 0
+            # No invitation, create a new tenant for first user of organization
+            is_org_first_user = True
+
+            # IMPORTANT: Only the first user in the entire system can create a new organization
+            # without a license. This "Global and Early" rejection strategy prevents
+            # resource waste (Tenant/DB creation) for unlicensed users.
+            # See docs/SSO_LICENSE_GATING.md for full rationale.
+            if not is_global_first_user:
+                # This is not the first user globally, so they need a license
+                # Reject without creating any resources
+                ui_base = config.UI_BASE_URL
+                return RedirectResponse(url=f"{ui_base}/login?error=sso_license_required")
+
             # Create tenant for first user
             tenant_name = f"{email.split('@')[0]}'s Organization"
             db_tenant = Tenant(name=tenant_name, email=email, is_active=True)
@@ -204,10 +216,10 @@ async def google_callback(request: Request, code: Optional[str] = None, state: O
             hashed_password=get_password_hash(secrets.token_urlsafe(16)),
             first_name=first_name,
             last_name=last_name,
-            role="admin" if is_first_user else (valid_invite.role if valid_invite else "admin"),
+            role="admin" if is_org_first_user else (valid_invite.role if valid_invite else "admin"),
             tenant_id=db_tenant.id,
             is_active=True,
-            is_superuser=is_first_user,
+            is_superuser=is_global_first_user,
             is_verified=bool(verified_email),
             google_id=str(google_id),
         )
@@ -226,29 +238,25 @@ async def google_callback(request: Request, code: Optional[str] = None, state: O
         tenant_session = tenant_db_manager.get_tenant_session(db_tenant.id)
         tenant_db = tenant_session()
         try:
-            # Gating check
-            try:
-                check_feature("sso", tenant_db)
-            except HTTPException as e:
-                if e.status_code == 402:
-                    ui_base = os.getenv("UI_BASE_URL") or "http://localhost:8080"
-                    return RedirectResponse(url=f"{ui_base}/login?error=sso_license_required")
-                raise
-
             tenant_user = TenantUser(
                 id=user.id,
                 email=email,
                 hashed_password=user.hashed_password,
                 first_name=first_name,
                 last_name=last_name,
-                role="admin" if is_first_user else (valid_invite.role if valid_invite else "admin"),
+                role="admin" if is_org_first_user else (valid_invite.role if valid_invite else "admin"),
                 is_active=True,
-                is_superuser=is_first_user,
+                is_superuser=is_global_first_user,
                 is_verified=True,
                 google_id=str(google_id),
             )
             tenant_db.add(tenant_user)
             tenant_db.commit()
+
+            # License check for NEW users who are not the global first user
+            # This covers users joining via invitation.
+            if not is_global_first_user:
+                check_feature("sso", tenant_db)
         finally:
             tenant_db.close()
     else:
@@ -257,26 +265,22 @@ async def google_callback(request: Request, code: Optional[str] = None, state: O
             user.google_id = str(google_id)
             db.commit()
 
-        # Gating check for existing users
-        tenant_session = tenant_db_manager.get_tenant_session(user.tenant_id)
-        tenant_db = tenant_session()
-        try:
+        # License check for EXISTING users who are not the global first user
+        if not user.is_superuser:
+            set_tenant_context(user.tenant_id)
+            tenant_session = tenant_db_manager.get_tenant_session(user.tenant_id)
+            tenant_db = tenant_session()
             try:
                 check_feature("sso", tenant_db)
-            except HTTPException as e:
-                if e.status_code == 402:
-                    ui_base = os.getenv("UI_BASE_URL") or "http://localhost:8080"
-                    return RedirectResponse(url=f"{ui_base}/login?error=sso_license_required")
-                raise
-        finally:
-            tenant_db.close()
+            finally:
+                tenant_db.close()
 
     # Issue JWT
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(data={"sub": user.email}, expires_delta=access_token_expires)
 
     # Redirect back to UI with token via fragment so it doesn't hit server logs
-    ui_base = os.getenv("UI_BASE_URL") or "http://localhost:8080"
+    ui_base = config.UI_BASE_URL
     redirect_next = state_data.get("next") or "/dashboard"
     # Compose URL: e.g., /oauth-callback?token=...&user=...
     user_payload = UserRead.model_validate(user).model_dump()
@@ -296,8 +300,7 @@ async def azure_login(request: Request, next: Optional[str] = None, db: Session 
         raise HTTPException(status_code=503, detail="Azure AD SSO is not configured")
 
     # Determine redirect URI (callback)
-    # Use UI_BASE_URL for external access (nginx on port 8080)
-    ui_base = os.getenv("UI_BASE_URL") or "http://localhost:8080"
+    ui_base = config.UI_BASE_URL
     callback_url = f"{ui_base}/api/v1/auth/azure/callback"
 
     # Generate state for CSRF protection
@@ -326,8 +329,7 @@ async def azure_callback(request: Request, code: Optional[str] = None, state: Op
     if not state_data:
         raise HTTPException(status_code=400, detail="Invalid or expired state")
 
-    base_url = str(request.base_url).rstrip("/")
-    ui_base = os.getenv("UI_BASE_URL") or "http://localhost:8080"
+    ui_base = config.UI_BASE_URL
     callback_url = f"{ui_base}/api/v1/auth/azure/callback"
 
     # Exchange code for token using MSAL
@@ -366,21 +368,33 @@ async def azure_callback(request: Request, code: Optional[str] = None, state: Op
     user = db.query(MasterUser).filter(MasterUser.email == email).first()
     
     if not user:
+        # Determine if this is the first user in the entire system (Global Super Admin)
+        is_global_first_user = db.query(MasterUser).count() == 0
+
         # Check if user has a valid invitation first
         valid_invite = check_user_has_valid_invite(db, email)
-        
+
         if valid_invite:
             # User has invitation, assign to inviting tenant
             db_tenant = db.query(Tenant).filter(Tenant.id == valid_invite.tenant_id).first()
             if not db_tenant:
                 raise HTTPException(status_code=400, detail="Invited organization not found")
             tenant_name = db_tenant.name
-            is_first_user = False
+            is_org_first_user = False
         else:
-            # No invitation, create a new tenant for first user if none exists yet
-            # Determine if this is the first user in the system
-            is_first_user = db.query(MasterUser).count() == 0
+            # No invitation, create a new tenant for first user of organization
+            is_org_first_user = True
             
+            # IMPORTANT: Only the first user in the entire system can create a new organization
+            # without a license. This "Global and Early" rejection strategy prevents
+            # resource waste (Tenant/DB creation) for unlicensed users.
+            # See docs/SSO_LICENSE_GATING.md for full rationale.
+            if not is_global_first_user:
+                # This is not the first user globally, so they need a license
+                # Reject without creating any resources
+                ui_base = config.UI_BASE_URL
+                return RedirectResponse(url=f"{ui_base}/login?error=sso_license_required")
+
             # Create tenant for first user
             tenant_name = f"{email.split('@')[0]}'s Organization"
             db_tenant = Tenant(name=tenant_name, email=email, is_active=True)
@@ -388,10 +402,10 @@ async def azure_callback(request: Request, code: Optional[str] = None, state: Op
             db.commit()
             db.refresh(db_tenant)
 
-        # Provision tenant DB
-        success = tenant_db_manager.create_tenant_database(db_tenant.id, tenant_name)
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to create tenant database")
+            # Provision tenant DB
+            success = tenant_db_manager.create_tenant_database(db_tenant.id, tenant_name)
+            if not success:
+                raise HTTPException(status_code=500, detail="Failed to create tenant database")
 
         # Create master user
         user = MasterUser(
@@ -399,10 +413,10 @@ async def azure_callback(request: Request, code: Optional[str] = None, state: Op
             hashed_password=get_password_hash(secrets.token_urlsafe(16)),
             first_name=first_name,
             last_name=last_name,
-            role="admin" if is_first_user else (valid_invite.role if valid_invite else "admin"),
+            role="admin" if is_org_first_user else (valid_invite.role if valid_invite else "admin"),
             tenant_id=db_tenant.id,
             is_active=True,
-            is_superuser=is_first_user,
+            is_superuser=is_global_first_user,
             is_verified=True,
             # google_id=str(oid), # Do NOT reuse google_id for azure OID
         )
@@ -421,53 +435,45 @@ async def azure_callback(request: Request, code: Optional[str] = None, state: Op
         tenant_session = tenant_db_manager.get_tenant_session(db_tenant.id)
         tenant_db = tenant_session()
         try:
-            # Gating check
-            try:
-                check_feature("sso", tenant_db)
-            except HTTPException as e:
-                if e.status_code == 402:
-                    ui_base = os.getenv("UI_BASE_URL") or "http://localhost:8080"
-                    return RedirectResponse(url=f"{ui_base}/login?error=sso_license_required")
-                raise
-
             tenant_user = TenantUser(
                 id=user.id,
                 email=email,
                 hashed_password=user.hashed_password,
                 first_name=first_name,
                 last_name=last_name,
-                role="admin" if is_first_user else (valid_invite.role if valid_invite else "admin"),
+                role="admin" if is_org_first_user else (valid_invite.role if valid_invite else "admin"),
                 is_active=True,
-                is_superuser=is_first_user,
+                is_superuser=is_global_first_user,
                 is_verified=True,
             )
             tenant_db.add(tenant_user)
             tenant_db.commit()
+
+            # License check for NEW users who are not the global first user
+            # This covers users joining via invitation.
+            if not is_global_first_user:
+                check_feature("sso", tenant_db)
         finally:
             tenant_db.close()
     else:
-        # Gating check for existing users
-        tenant_session = tenant_db_manager.get_tenant_session(user.tenant_id)
-        tenant_db = tenant_session()
-        try:
+        # License check for EXISTING users who are not the global first user
+        if not user.is_superuser:
+            set_tenant_context(user.tenant_id)
+            tenant_session = tenant_db_manager.get_tenant_session(user.tenant_id)
+            tenant_db = tenant_session()
             try:
                 check_feature("sso", tenant_db)
-            except HTTPException as e:
-                if e.status_code == 402:
-                    ui_base = os.getenv("UI_BASE_URL") or "http://localhost:8080"
-                    return RedirectResponse(url=f"{ui_base}/login?error=sso_license_required")
-                raise
-        finally:
-            tenant_db.close()
+            finally:
+                tenant_db.close()
 
     # Issue JWT
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(data={"sub": user.email}, expires_delta=access_token_expires)
 
     # Redirect back to UI...
-    ui_base = os.getenv("UI_BASE_URL") or "http://localhost:8080"
+    ui_base = config.UI_BASE_URL
     redirect_next = state_data.get("next") or "/dashboard"
-    
+    # Serialize user data to JSON and then base64 encode
     user_payload = UserRead.model_validate(user).model_dump()
     def datetime_serializer(obj):
         if isinstance(obj, (datetime, date)):
