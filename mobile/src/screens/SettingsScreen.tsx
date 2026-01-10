@@ -409,7 +409,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           }}
         >
           <Ionicons name="add" size={20} color="#FFFFFF" />
-          <Text style={styles.addButtonText}>{t('settings.tabs.add_rule')}</Text>
+          <Text style={styles.addButtonText}>{t('settings.discount_rules.add_rule')}</Text>
         </TouchableOpacity>
       </View>
 
