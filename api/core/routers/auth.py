@@ -178,9 +178,8 @@ def get_current_user(
     if current_tenant_id and current_tenant_id != user.tenant_id:
         # User is accessing a different tenant, get their role from that tenant's database
         try:
-            tenant_session = tenant_db_manager.get_tenant_session(current_tenant_id)
-            tenant_db = tenant_session()
-            try:
+            from core.routers.super_admin import tenant_session_context
+            with tenant_session_context(current_tenant_id) as tenant_db:
                 tenant_user = tenant_db.query(TenantUser).filter(TenantUser.id == user.id).first()
                 if tenant_user:
                     # Create a copy of the master user with the tenant-specific role
@@ -222,8 +221,6 @@ def get_current_user(
                         updated_at=user.updated_at
                     )
                     return user_copy
-            finally:
-                tenant_db.close()
         except Exception as e:
             logger.warning(f"Failed to get tenant-specific role for user {email} in tenant {current_tenant_id}: {e}")
             # Fall back to master user if tenant lookup fails

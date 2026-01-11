@@ -46,7 +46,7 @@ class Client(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     # No tenant_id needed since each tenant has its own database
-    
+
     name = Column(EncryptedColumn(), index=True)  # Encrypted for privacy
     email = Column(EncryptedColumn(), unique=True, nullable=False, index=True)  # Encrypted for privacy
     phone = Column(EncryptedColumn(), nullable=True)  # Encrypted for privacy
@@ -102,6 +102,10 @@ class Invoice(Base):
     attachment_path = Column(String, nullable=True)  # Path to uploaded attachment file
     attachment_filename = Column(EncryptedColumn(), nullable=True)  # Encrypted for privacy
     labels = Column(JSON, nullable=True)  # Multiple labels (tags) stored as JSON array of strings
+
+    # Anomaly detection audit fields
+    is_audited = Column(Boolean, default=False, nullable=False)  # Track if entity has been audited
+    last_audited_at = Column(DateTime(timezone=True), nullable=True)  # When entity was last audited
 
     # Soft delete fields for recycle bin functionality
     is_deleted = Column(Boolean, default=False, nullable=False)
@@ -230,6 +234,10 @@ class Expense(Base):
     # Receipt timestamp fields for expense habit analytics
     receipt_timestamp = Column(DateTime(timezone=True), nullable=True)  # Exact timestamp from receipt
     receipt_time_extracted = Column(Boolean, default=False, nullable=False)  # Whether timestamp was extracted from receipt
+
+    # Anomaly detection audit fields
+    is_audited = Column(Boolean, default=False, nullable=False)  # Track if entity has been audited
+    last_audited_at = Column(DateTime(timezone=True), nullable=True)  # When entity was last audited
 
     # Soft delete fields for recycle bin functionality
     is_deleted = Column(Boolean, default=False, nullable=False)
@@ -481,6 +489,10 @@ class BankStatementTransaction(Base):
     # Optional link to an expense created from this transaction (prevents duplicates)
     expense_id = Column(Integer, ForeignKey("expenses.id"), nullable=True)
 
+    # Anomaly detection audit fields
+    is_audited = Column(Boolean, default=False, nullable=False)  # Track if entity has been audited
+    last_audited_at = Column(DateTime(timezone=True), nullable=True)  # When entity was last audited
+
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -545,40 +557,40 @@ class RawEmail(Base):
     sender = Column(String, nullable=True)  # Temporary staging, no encryption needed
     recipient = Column(String, nullable=True)  # Temporary staging, no encryption needed
     date = Column(DateTime(timezone=True), nullable=True)
-    
+
     # Raw content storage
     raw_content = Column(Text, nullable=True)  # Store full raw email content
     content_type = Column(String, nullable=True)
-    
+
     # Processing status
     status = Column(String, default="pending", index=True, nullable=False)  # pending, processing, processed, failed, ignored
     error_message = Column(Text, nullable=True)
     retry_count = Column(Integer, default=0, nullable=False)
-    
+
     # Links
     expense_id = Column(Integer, ForeignKey("expenses.id"), nullable=True)
-    
+
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     processed_at = Column(DateTime(timezone=True), nullable=True)
 
 class EmailNotificationSettings(Base):
     __tablename__ = "email_notification_settings"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
+
     # User operation notifications
     user_created = Column(Boolean, default=False)
     user_updated = Column(Boolean, default=False)
     user_deleted = Column(Boolean, default=False)
     user_login = Column(Boolean, default=False)
-    
+
     # Client operation notifications
     client_created = Column(Boolean, default=True)
     client_updated = Column(Boolean, default=False)
     client_deleted = Column(Boolean, default=True)
-    
+
     # Invoice operation notifications
     invoice_created = Column(Boolean, default=True)
     invoice_updated = Column(Boolean, default=False)
@@ -586,12 +598,12 @@ class EmailNotificationSettings(Base):
     invoice_sent = Column(Boolean, default=True)
     invoice_paid = Column(Boolean, default=True)
     invoice_overdue = Column(Boolean, default=True)
-    
+
     # Payment operation notifications
     payment_created = Column(Boolean, default=True)
     payment_updated = Column(Boolean, default=False)
     payment_deleted = Column(Boolean, default=True)
-    
+
     # Expense operation notifications
     expense_created = Column(Boolean, default=True)
     expense_updated = Column(Boolean, default=False)
@@ -602,7 +614,7 @@ class EmailNotificationSettings(Base):
     expense_imported = Column(Boolean, default=True)
     expense_analysis_completed = Column(Boolean, default=True)
     expense_analysis_failed = Column(Boolean, default=True)
-    
+
     # Inventory operation notifications
     inventory_created = Column(Boolean, default=True)
     inventory_updated = Column(Boolean, default=False)
@@ -613,7 +625,7 @@ class EmailNotificationSettings(Base):
     inventory_category_created = Column(Boolean, default=False)
     inventory_category_updated = Column(Boolean, default=False)
     inventory_category_deleted = Column(Boolean, default=True)
-    
+
     # Statement operation notifications
     statement_generated = Column(Boolean, default=True)
     statement_sent = Column(Boolean, default=True)
@@ -622,7 +634,7 @@ class EmailNotificationSettings(Base):
     statement_processed = Column(Boolean, default=True)
     statement_processing_failed = Column(Boolean, default=True)
     statement_transaction_created = Column(Boolean, default=False)
-    
+
     # Settings operation notifications
     settings_updated = Column(Boolean, default=False)
 
@@ -651,11 +663,11 @@ class EmailNotificationSettings(Base):
     expense_auto_approved = Column(Boolean, default=True)
     approval_reminder = Column(Boolean, default=True)
     approval_escalation = Column(Boolean, default=True)
-    
+
     # Approval notification frequency preferences
     approval_notification_frequency = Column(String, default="immediate", nullable=False)  # immediate, daily_digest
     approval_reminder_frequency = Column(String, default="daily", nullable=False)  # daily, weekly, disabled
-    
+
     # Approval notification channel preferences
     approval_notification_channels = Column(JSON, default=["email"], nullable=False)  # ["email", "in_app"] or ["email"] or ["in_app"]
 
@@ -666,7 +678,7 @@ class EmailNotificationSettings(Base):
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    
+
     # Relationships
     user = relationship("User")
 
@@ -675,7 +687,7 @@ class EmailNotificationSettings(Base):
 
 class ReportTemplate(Base):
     __tablename__ = "report_templates"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     report_type = Column(String, nullable=False)  # client, invoice, payment, expense, statement
@@ -684,10 +696,10 @@ class ReportTemplate(Base):
     formatting = Column(JSON, nullable=True)  # Formatting preferences
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     is_shared = Column(Boolean, default=False, nullable=False)
-    
+
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    
+
     # Relationships
     user = relationship("User")
     scheduled_reports = relationship("ScheduledReport", back_populates="template", cascade="all, delete-orphan")
@@ -696,7 +708,7 @@ class ReportTemplate(Base):
 
 class ScheduledReport(Base):
     __tablename__ = "scheduled_reports"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     template_id = Column(Integer, ForeignKey("report_templates.id", ondelete="CASCADE"), nullable=False)
     schedule_type = Column(String, nullable=False)  # daily, weekly, monthly, yearly, cron
@@ -705,10 +717,10 @@ class ScheduledReport(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     last_run = Column(DateTime(timezone=True), nullable=True)
     next_run = Column(DateTime(timezone=True), nullable=True)
-    
+
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    
+
     # Relationships
     template = relationship("ReportTemplate", back_populates="scheduled_reports")
 
@@ -1433,6 +1445,44 @@ class ExportDestinationConfig(Base):
 
     def __repr__(self):
         return f"<ExportDestinationConfig(id={self.id}, name='{self.name}', type='{self.destination_type}', active={self.is_active})>"
+
+
+# --- Anomaly Detection Models ---
+
+class Anomaly(Base):
+    """
+    Model for tracking detected anomalies and high-risk items.
+    """
+    __tablename__ = "anomalies"
+
+    id = Column(Integer, primary_key=True, index=True)
+    entity_type = Column(String(50), nullable=False, index=True)  # expense, invoice, bank_transaction
+    entity_id = Column(Integer, nullable=False, index=True)
+
+    # Risk assessment
+    risk_score = Column(Float, default=0.0, nullable=False)
+    risk_level = Column(String(20), nullable=False, default="low")  # low, medium, high, critical
+
+    # Description and evidence
+    reason = Column(Text, nullable=False)
+    rule_id = Column(String(100), nullable=True)  # ID of the rule that triggered it
+    details = Column(JSON, nullable=True)  # JSON blob with evidence/metadata
+
+    # Status
+    is_dismissed = Column(Boolean, default=False, nullable=False)
+    dismissed_at = Column(DateTime(timezone=True), nullable=True)
+    dismissed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    dismiss_notes = Column(Text, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    dismissed_by = relationship("User", foreign_keys=[dismissed_by_id])
+
+    def __repr__(self):
+        return f"<Anomaly(id={self.id}, entity='{self.entity_type}:{self.entity_id}', risk='{self.risk_level}')>"
 
 
 # --- License Management Models ---

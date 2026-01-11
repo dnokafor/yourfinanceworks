@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -9,14 +8,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Trash2, Edit, UserPlus, Building, Database, Users, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Trash2, Edit, UserPlus, Building, Database, Users, ShieldCheck, AlertTriangle, Eye, RotateCcw, Shield } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { useTranslation } from "react-i18next";
+import { useFeatures } from '@/contexts/FeatureContext';
 import { superAdminApi, apiRequest } from '../lib/api';
 import { CurrencySelector } from '@/components/ui/currency-selector';
 import { PageHeader } from '@/components/ui/professional-layout';
 import { ProfessionalCard } from '@/components/ui/professional-card';
+import { FeatureGate } from '@/components/FeatureGate';
 
 interface Tenant {
   id: number;
@@ -51,6 +52,20 @@ interface DatabaseStatus {
   error?: string;
 }
 
+interface Anomaly {
+  id: number;
+  tenant_id: number;
+  tenant_name: string;
+  entity_type: string;
+  entity_id: number;
+  risk_score: number;
+  risk_level: string;
+  reason: string;
+  rule_id: string;
+  details: any;
+  created_at: string;
+}
+
 const SuperAdminDashboard: React.FC = () => {
   const { user } = useAuth();
   const { t } = useTranslation();
@@ -76,12 +91,24 @@ const SuperAdminDashboard: React.FC = () => {
 const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options?: any) => string }> = ({ user, t }) => {
   // All hooks at the top!
   const { user: currentUser } = useAuth();
+  const { isFeatureEnabled } = useFeatures();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [databases, setDatabases] = useState<DatabaseStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('tenants');
+
+  const isAnomaliesEnabled = isFeatureEnabled('anomaly_detection');
+  
+  // Debug: Log feature status
+  console.log('SuperAdmin - FinanceWorks Insights enabled:', isAnomaliesEnabled);
+  console.log('SuperAdmin - isFeatureEnabled function:', typeof isFeatureEnabled);
+  
+  // Force re-render when feature status changes
+  React.useEffect(() => {
+    console.log('SuperAdmin - Feature status changed, isAnomaliesEnabled:', isAnomaliesEnabled);
+  }, [isAnomaliesEnabled]);
 
   // Form states
   const [showCreateTenant, setShowCreateTenant] = useState(false);
@@ -106,6 +133,9 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
 
   // Add state for recreate database confirmation
   const [dbToRecreate, setDbToRecreate] = useState<DatabaseStatus | null>(null);
+
+  const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
+  const [selectedAnomaly, setSelectedAnomaly] = useState<Anomaly | null>(null);
 
   const fetchTenants = useCallback(async () => {
     try {
@@ -134,6 +164,43 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
       setError('Failed to fetch database overview');
     }
   }, []);
+
+  const fetchAnomalies = useCallback(async () => {
+    try {
+      const data = await apiRequest<Anomaly[]>('/super-admin/anomalies', {}, { skipTenant: true });
+      setAnomalies(data || []);
+    } catch (err) {
+      console.error('Failed to fetch anomalies:', err);
+    }
+  }, []);
+
+  const handleRunAudit = async () => {
+    try {
+      const result = await apiRequest<{ message: string }>(
+        '/super-admin/anomalies/audit',
+        { method: 'POST' },
+        { skipTenant: true }
+      );
+      toast.success(result.message);
+      fetchAnomalies();
+    } catch (err) {
+      toast.error('Failed to trigger platform audit scan');
+    }
+  };
+
+  const handleReprocessAll = async () => {
+    try {
+      const result = await apiRequest<{ message: string }>(
+        '/super-admin/anomalies/reprocess',
+        { method: 'POST' },
+        { skipTenant: true }
+      );
+      toast.success(result.message);
+      fetchAnomalies();
+    } catch (err) {
+      toast.error('Failed to trigger reprocess scan');
+    }
+  };
 
   const handleCreateTenant = async () => {
     try {
@@ -361,6 +428,10 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
         await fetchTenants();
         await fetchUsers();
         await fetchDatabaseOverview();
+        // Only fetch anomalies if the feature is enabled
+        if (isAnomaliesEnabled) {
+          await fetchAnomalies();
+        }
       } catch (err) {
         console.error('SuperAdmin: Error loading initial data:', err);
         // Error is already handled by individual fetch functions
@@ -370,7 +441,7 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
     };
 
     loadData();
-  }, []); // Empty dependency array - only run once on mount
+  }, [isAnomaliesEnabled]); // Add isAnomaliesEnabled as dependency
 
   // Load users when selected tenant changes (but not on initial load)
   useEffect(() => {
@@ -469,7 +540,7 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <ProfessionalCard className="border border-border/50 hover:border-border/80 transition-all duration-200 slide-in">
             <div className="p-6">
               <div className="flex items-center justify-between">
@@ -530,10 +601,18 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
 
         {/* Main Content */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full tabs-professional">
-          <TabsList className="grid grid-cols-1 sm:grid-cols-3 gap-2 h-auto p-1.5 bg-muted/50 rounded-xl border border-border/50">
+          <TabsList className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 h-auto p-1.5 bg-muted/50 rounded-xl border border-border/50">
             <TabsTrigger value="tenants" className="text-xs md:text-sm min-w-0 flex-shrink-0 gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md py-2.5 transition-all font-medium justify-center">Organizations</TabsTrigger>
             <TabsTrigger value="users" className="text-xs md:text-sm min-w-0 flex-shrink-0 gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md py-2.5 transition-all font-medium justify-center">{t('superAdmin.users_tab')}</TabsTrigger>
             <TabsTrigger value="databases" className="text-xs md:text-sm min-w-0 flex-shrink-0 gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md py-2.5 transition-all font-medium justify-center">{t('superAdmin.databases_tab')}</TabsTrigger>
+            <TabsTrigger value="anomalies" className="text-xs md:text-sm min-w-0 flex-shrink-0 gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md py-2.5 transition-all font-medium justify-center flex items-center gap-2">
+              FinanceWorks Insights
+              {isAnomaliesEnabled && anomalies.length > 0 && (
+                <Badge variant="destructive" className="ml-1 h-5 px-1.5 flex items-center justify-center text-[10px]">
+                  {anomalies.length}
+                </Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="tenants" className="space-y-4">
@@ -696,7 +775,7 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
                               placeholder={t('superAdmin.email_placeholder')}
                             />
                           </div>
-                          <div className="grid grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                               <Label htmlFor="user-first-name">{t('superAdmin.first_name_label')}</Label>
                               <Input
@@ -993,6 +1072,177 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
               </div>
             </ProfessionalCard>
           </TabsContent>
+
+
+          <TabsContent value="anomalies" className="space-y-4">
+            <FeatureGate
+              feature="anomaly_detection"
+              fallback={
+                <ProfessionalCard variant="elevated" className="border-blue-200/50 dark:border-blue-800/50 bg-blue-50/50 dark:bg-blue-900/10">
+                  <div className="p-12 text-center">
+                    <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
+                      <AlertTriangle className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-foreground mb-3">Business License Required</h3>
+                    <p className="text-muted-foreground mb-8 max-w-lg mx-auto leading-relaxed">
+                      FinanceWorks Insights provides AI-powered anomaly detection, forensic auditing, and risk assessment for your financial data.
+                      Upgrade to a business license to access advanced fraud detection and financial intelligence features.
+                    </p>
+                    <div className="bg-background/80 backdrop-blur-sm rounded-xl p-6 mb-8 max-w-lg mx-auto shadow-sm border border-border/50">
+                      <h4 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                        <Shield className="h-4 w-4 text-primary" />
+                        With Business License, you get:
+                      </h4>
+                      <ul className="text-left space-y-3 text-sm text-foreground/80">
+                        <li className="flex items-start">
+                          <div className="mr-3 p-0.5 bg-green-100 rounded-full mt-0.5"><div className="w-2 h-2 bg-green-600 rounded-full" /></div>
+                          <span>AI-powered anomaly detection across expenses, invoices, and transactions</span>
+                        </li>
+                        <li className="flex items-start">
+                          <div className="mr-3 p-0.5 bg-green-100 rounded-full mt-0.5"><div className="w-2 h-2 bg-green-600 rounded-full" /></div>
+                          <span>Senior Forensic Auditor AI for deep financial analysis</span>
+                        </li>
+                        <li className="flex items-start">
+                          <div className="mr-3 p-0.5 bg-green-100 rounded-full mt-0.5"><div className="w-2 h-2 bg-green-600 rounded-full" /></div>
+                          <span>Risk scoring and intelligent fraud detection</span>
+                        </li>
+                        <li className="flex items-start">
+                          <div className="mr-3 p-0.5 bg-green-100 rounded-full mt-0.5"><div className="w-2 h-2 bg-green-600 rounded-full" /></div>
+                          <span>Cross-tenant anomaly monitoring and alerts</span>
+                        </li>
+                      </ul>
+                    </div>
+                    <div className="flex justify-center gap-4">
+                      <Button
+                        className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
+                        onClick={() => window.location.href = '/settings?tab=license'}
+                        size="lg"
+                      >
+                        Upgrade to Business License
+                      </Button>
+                    </div>
+                  </div>
+                </ProfessionalCard>
+              }
+            >
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                <div className="lg:col-span-3">
+                  <ProfessionalCard className="slide-in">
+                    <div className="p-6">
+                      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="h-5 w-5 text-red-500" />
+                          <h2 className="text-xl font-semibold">Flagged High-Risk Items</h2>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm" onClick={fetchAnomalies}>
+                            <Database className="h-4 w-4 mr-2" />
+                            Refresh List
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={handleReprocessAll} className="bg-orange-600 hover:bg-orange-700 text-white">
+                            <RotateCcw className="h-4 w-4 mr-2" />
+                            Reprocess All
+                          </Button>
+                          <Button variant="default" size="sm" onClick={handleRunAudit} className="bg-red-600 hover:bg-red-700 text-white">
+                            <ShieldCheck className="h-4 w-4 mr-2" />
+                            Run Audit Scan
+                          </Button>
+                        </div>
+                      </div>
+
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Organization</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Risk Level</TableHead>
+                            <TableHead>Audit Reason</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {anomalies.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                                No high-risk items detected across the platform.
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            anomalies.map((anomaly) => (
+                              <TableRow key={`${anomaly.tenant_id}-${anomaly.id}`}>
+                                <TableCell className="whitespace-nowrap">
+                                  {new Date(anomaly.created_at).toLocaleDateString()}
+                                </TableCell>
+                                <TableCell className="font-medium">{anomaly.tenant_name}</TableCell>
+                                <TableCell className="capitalize">{anomaly.entity_type.replace('_', ' ')}</TableCell>
+                                <TableCell>
+                                  <Badge variant={
+                                    anomaly.risk_level === 'critical' || anomaly.risk_level === 'high' 
+                                      ? 'destructive' 
+                                      : anomaly.risk_level === 'medium' 
+                                        ? 'default' 
+                                        : 'secondary'
+                                  }>
+                                    {anomaly.risk_level}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="max-w-md truncate" title={anomaly.reason}>
+                                  {anomaly.reason}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setSelectedAnomaly(anomaly)}
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </ProfessionalCard>
+              </div>
+
+              <div className="lg:col-span-1">
+                <ProfessionalCard className="bg-primary/5 border-primary/20 sticky top-6 slide-in">
+                  <div className="p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <ShieldCheck className="h-5 w-5 text-primary" />
+                      <h3 className="font-semibold text-primary">Auditor Recommendations</h3>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="text-sm">
+                        <p className="font-medium text-primary/80 mb-1">Recommended Next Steps:</p>
+                        <ul className="list-disc pl-4 space-y-2 text-muted-foreground">
+                          <li>Review digital audit trail for flagged vendors</li>
+                          <li>Correlate round-number trends with specific users</li>
+                          <li>Verify physical receipts for temporal anomalies</li>
+                          <li>Cross-reference split transactions with annual budget caps</li>
+                        </ul>
+                      </div>
+                      <div className="pt-4 border-t border-primary/10">
+                        <div className="p-3 bg-white/50 dark:bg-black/20 rounded-lg border border-primary/10">
+                          <p className="text-[10px] uppercase tracking-wider font-bold text-primary/60 mb-1">AI Insights Status</p>
+                          <div className="flex items-center gap-2">
+                            <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                            <span className="text-xs font-medium">Senior Forensic Auditor Active</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </ProfessionalCard>
+              </div>
+            </div>
+            </FeatureGate>
+          </TabsContent>
         </Tabs>
       </div>
 
@@ -1172,6 +1422,130 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
               <Button variant="destructive" onClick={confirmRecreateDatabase}>{t('superAdmin.recreate_button')}</Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Anomaly Details Dialog */}
+      <Dialog open={!!selectedAnomaly} onOpenChange={open => { if (!open) setSelectedAnomaly(null); }}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-orange-500" />
+              Anomaly Details
+            </DialogTitle>
+          </DialogHeader>
+          {selectedAnomaly && (
+            <div className="space-y-6">
+              {/* Basic Information */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Organization</Label>
+                  <p className="font-semibold">{selectedAnomaly.tenant_name}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Entity Type</Label>
+                  <p className="font-semibold capitalize">{selectedAnomaly.entity_type.replace('_', ' ')}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Entity ID</Label>
+                  <p className="font-semibold">{selectedAnomaly.entity_id}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">Detected On</Label>
+                  <p className="font-semibold">{new Date(selectedAnomaly.created_at).toLocaleDateString()}</p>
+                </div>
+              </div>
+
+              {/* Risk Assessment */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-muted-foreground">Risk Assessment</Label>
+                <div className="flex items-center gap-4">
+                  <Badge variant={
+                    selectedAnomaly.risk_level === 'critical' || selectedAnomaly.risk_level === 'high' 
+                      ? 'destructive'
+                      : selectedAnomaly.risk_level === 'medium'
+                        ? 'default'
+                        : 'secondary'
+                  }>
+                    {selectedAnomaly.risk_level.toUpperCase()}
+                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Risk Score:</span>
+                    <span className="font-semibold">{selectedAnomaly.risk_score}/100</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Detection Rule */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-muted-foreground">Detection Rule</Label>
+                <p className="font-mono text-sm bg-muted/50 p-2 rounded">{selectedAnomaly.rule_id}</p>
+              </div>
+
+              {/* Reason */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-muted-foreground">Anomaly Reason</Label>
+                <p className="text-sm leading-relaxed">{selectedAnomaly.reason}</p>
+              </div>
+
+              {/* Search Information */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-muted-foreground">Search Information</Label>
+                <div className="bg-muted/30 p-3 rounded-lg">
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="font-medium">Record Type:</span>
+                      <span className="ml-2 capitalize">{selectedAnomaly.entity_type.replace('_', ' ')}</span>
+                    </div>
+                    <div>
+                      <span className="font-medium">Record ID:</span>
+                      <span className="ml-2">{selectedAnomaly.entity_id}</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Use this information to search for the record in the respective {selectedAnomaly.entity_type.replace('_', ' ')} section.
+                  </p>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button variant="secondary" onClick={() => setSelectedAnomaly(null)}>
+                  Close
+                </Button>
+                {(() => {
+                  const currentTenantId = localStorage.getItem('selected_tenant_id') || user?.tenant_id?.toString();
+                  const isFromCurrentTenant = selectedAnomaly.tenant_id.toString() === currentTenantId;
+
+                  if (isFromCurrentTenant) {
+                    return (
+                      <Button
+                        onClick={() => {
+                          // Navigate to the specific entity for further investigation
+                          const entityType = selectedAnomaly.entity_type;
+                          const entityId = selectedAnomaly.entity_id;
+                          const path = `/${entityType}s/view/${entityId}`;
+                          window.open(path, '_blank');
+                        }}
+                      >
+                        Investigate Entity
+                      </Button>
+                    );
+                  } else {
+                    return (
+                      <Button
+                        variant="outline"
+                        disabled
+                        title={`This anomaly is from ${selectedAnomaly.tenant_name}. Switch to that organization to investigate.`}
+                      >
+                        Investigate Entity
+                      </Button>
+                    );
+                  }
+                })()}
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </>

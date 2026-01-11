@@ -168,6 +168,14 @@ class FeatureConfigService:
             'default': False,
             'license_tier': 'commercial'
         },
+        'anomaly_detection': {
+            'name': 'FinanceWorks Insights',
+            'description': 'Intelligent financial oversight and transaction integrity monitoring',
+            'category': 'advanced',
+            'env_var': 'FEATURE_ANOMALY_DETECTION_ENABLED',
+            'default': False,
+            'license_tier': 'commercial'
+        },
     }
     
     @classmethod

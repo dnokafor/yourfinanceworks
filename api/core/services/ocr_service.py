@@ -1106,6 +1106,30 @@ def publish_ocr_task(message: Dict[str, Any]) -> bool:
         return False
 
 
+def publish_fraud_audit_task(tenant_id: int, entity_type: str, entity_id: int, reprocess_mode: bool = False) -> bool:
+    """Publish a fraud audit task to Kafka. Returns True if published."""
+    producer, topic = _get_kafka_producer_for("KAFKA_FRAUD_AUDIT_TOPIC", "fraud_audit")
+    if not producer:
+        return False
+    try:
+        message = {
+            "tenant_id": tenant_id,
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "reprocess_mode": reprocess_mode,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        payload = json.dumps(message).encode("utf-8")
+        key = f"{tenant_id}_{entity_type}_{entity_id}"
+        producer.produce(topic, value=payload, key=key)
+        producer.flush(5.0)
+        logger.info(f"Published Fraud Audit task to Kafka topic={topic}: {entity_type} {entity_id} (reprocess_mode: {reprocess_mode})")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to publish Fraud Audit task: {e}")
+        return False
+
+
 def _get_kafka_producer_for(env_name: str, default_topic: str):
     """Return a Kafka producer and a topic for a specific stream based on env var name."""
     bootstrap = os.getenv("KAFKA_BOOTSTRAP_SERVERS")

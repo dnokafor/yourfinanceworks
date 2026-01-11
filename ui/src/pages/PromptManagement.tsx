@@ -308,6 +308,7 @@ const PromptManagementContent = () => {
                   <SelectItem value="email_classification">{t('settings.promptManagement.categories.email_classification')}</SelectItem>
                   <SelectItem value="ocr_conversion">{t('settings.promptManagement.categories.ocr_conversion')}</SelectItem>
                   <SelectItem value="expense_processing">{t('settings.promptManagement.categories.expense_processing')}</SelectItem>
+                  <SelectItem value="fraud_detection">{t('settings.promptManagement.categories.fraud_detection')}</SelectItem>
                   <SelectItem value="general">{t('settings.promptManagement.categories.general')}</SelectItem>
                 </SelectContent>
               </Select>

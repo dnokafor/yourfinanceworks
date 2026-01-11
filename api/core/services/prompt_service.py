@@ -14,6 +14,7 @@ from jinja2 import Template, TemplateError
 
 from core.models.prompt_templates import PromptTemplate, PromptUsageLog
 from core.models.database import get_tenant_context
+from core.utils.data_helpers import ensure_dict
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +98,8 @@ class PromptService:
         if template:
             # Check for provider-specific override
             if provider_name and template.provider_overrides:
-                overrides = template.provider_overrides
+                overrides = ensure_dict(template.provider_overrides, "provider_overrides")
+
                 if provider_name in overrides:
                     # Create a copy with provider-specific content
                     template_copy = PromptTemplate()
@@ -122,6 +124,10 @@ class PromptService:
             default_data = next((t for t in DEFAULT_PROMPT_TEMPLATES if t["name"] == name), None)
 
             if default_data:
+                # Ensure provider_overrides and default_values are dicts
+                provider_overrides = ensure_dict(default_data.get("provider_overrides"), "provider_overrides")
+                default_values = ensure_dict(default_data.get("default_values"), "default_values")
+
                 template = PromptTemplate(
                     id=-(DEFAULT_PROMPT_TEMPLATES.index(default_data) + 1),  # Negative ID for virtual records
                     name=default_data["name"],
@@ -130,8 +136,8 @@ class PromptService:
                     template_content=default_data["template_content"],
                     template_variables=default_data["template_variables"],
                     output_format=default_data["output_format"],
-                    default_values=default_data["default_values"],
-                    provider_overrides=default_data["provider_overrides"],
+                    default_values=default_values,
+                    provider_overrides=provider_overrides,
                     version=default_data.get("version", 1), # Default to 1 if not specified
                     is_active=default_data.get("is_active", True), # Default to True if not specified
                     created_at=datetime.utcnow(),  # Fake timestamp
@@ -152,7 +158,8 @@ class PromptService:
 
         # Add default values first
         if template.default_values:
-            merged.update(template.default_values)
+            default_vals = ensure_dict(template.default_values, "default_values")
+            merged.update(default_vals)
 
         # Override with provided variables
         merged.update(variables)
@@ -452,6 +459,10 @@ class PromptService:
 
         templates = []
         for i, data in enumerate(DEFAULT_PROMPT_TEMPLATES):
+            # Ensure provider_overrides and default_values are dicts
+            provider_overrides = ensure_dict(data.get("provider_overrides"), "provider_overrides")
+            default_values = ensure_dict(data.get("default_values"), "default_values")
+
             templates.append(PromptTemplate(
                 id=-(i + 1),  # Negative ID for virtual records
                 name=data["name"],
@@ -460,8 +471,8 @@ class PromptService:
                 template_content=data["template_content"],
                 template_variables=data["template_variables"],
                 output_format=data["output_format"],
-                default_values=data["default_values"],
-                provider_overrides=data["provider_overrides"],
+                default_values=default_values,
+                provider_overrides=provider_overrides,
                 version=data.get("version", 1), # Default to 1 if not specified
                 is_active=data.get("is_active", True), # Default to True if not specified
                 created_at=datetime.utcnow(),
@@ -469,7 +480,7 @@ class PromptService:
                 created_by=None,
                 updated_by=None
             ))
-            
+
         logger.info(f"Returning {len(templates)} default prompt templates form constants")
         return templates
 
@@ -486,17 +497,17 @@ class PromptService:
             if not default_template:
                 logger.warning(f"Default template '{name}' not found")
                 return None
-            
+
             # Enforce version limit
             self._enforce_version_limit(name)
-            
+
             # Get the latest version to determine new version number
             latest_template = self.db_session.query(PromptTemplate).filter(
                 PromptTemplate.name == name
             ).order_by(PromptTemplate.version.desc()).first()
-            
+
             new_version = (latest_template.version + 1) if latest_template else 2
-            
+
             # Create new version with default content
             reset_template = PromptTemplate(
                 name=default_template.name,

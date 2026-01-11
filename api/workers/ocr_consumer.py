@@ -38,7 +38,8 @@ from core.services.ocr_service import (
     process_attachment_inline,
     publish_ocr_result,
     publish_ocr_task,
-    release_processing_lock
+    release_processing_lock,
+    publish_fraud_audit_task
 )
 from core.utils.timezone import get_tenant_timezone_aware_datetime
 from core.models.database import set_tenant_context
@@ -354,6 +355,13 @@ class ExpenseMessageHandler(BaseMessageHandler):
                         created_expense_id = expense.id
                         self.logger.info(f"✅ STEP: Created expense record {created_expense_id} from batch file {batch_file_id}")
 
+                        # Trigger Anomaly Detection (AI Auditor)
+                        try:
+                            # Trigger Fraud Audit asynchronously via Kafka
+                            publish_fraud_audit_task(tenant_id, "expense", expense.id)
+                        except Exception as e:
+                            self.logger.warning(f"Failed to run anomaly detection for batch expense {expense.id}: {e}")
+
                         # Process gamification event for API-created expense
                         try:
                             from core.services.tenant_database_manager import tenant_db_manager
@@ -472,6 +480,14 @@ class ExpenseMessageHandler(BaseMessageHandler):
 
                     if getattr(exp, "analysis_status", None) == ProcessingStatus.DONE.value:
                         # Success - commit and publish result
+                        
+                        # Trigger Anomaly Detection (AI Auditor)
+                        try:
+                            # Trigger Fraud Audit asynchronously via Kafka
+                            publish_fraud_audit_task(tenant_id, "expense", exp.id) # Corrected entity type and ID
+                        except Exception as e:
+                            self.logger.warning(f"Failed to run anomaly detection for expense {expense_id}: {e}")
+
                         await self._commit_message(consumer, message)
                         await self._publish_ocr_result(expense_id, tenant_id, "done")
                         return ProcessingResult(success=True, committed=True)
@@ -817,6 +833,20 @@ class BankStatementMessageHandler(BaseMessageHandler):
 
                         # Save transactions
                         await self._save_transactions(db, stmt, txns, method)
+
+                        # Trigger Anomaly Detection for each transaction
+                        try:
+                            # We get the fresh transactions from the DB to have their IDs
+                            from core.models.models_per_tenant import BankStatementTransaction
+                            new_txns = db.query(BankStatementTransaction).filter(
+                                BankStatementTransaction.statement_id == statement_id
+                            ).all()
+                            
+                            for txn in new_txns:
+                                publish_fraud_audit_task(tenant_id, "bank_statement_transaction", txn.id)
+                        except Exception as e:
+                            self.logger.warning(f"Failed to run anomaly detection for statement transactions {statement_id}: {e}")
+
                         return ProcessingResult(success=True, committed=True)
 
                     except Exception as e:

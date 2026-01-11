@@ -509,29 +509,25 @@ export const LicenseManagementTab: React.FC = () => {
             </p>
           </ProfessionalCardHeader>
           <ProfessionalCardContent className="space-y-6">
-            <div className="grid gap-4 max-w-xl ml-9">
-              <ProfessionalInput
-                id="license-key"
-                label={t('settings.license.activate.keyLabel')}
-                placeholder={t('settings.license.activate.keyPlaceholder')}
-                value={licenseKey}
-                onChange={(e) => setLicenseKey(e.target.value)}
-                disabled={activating}
-                className="font-mono"
-                leftIcon={<Key className="h-4 w-4 text-muted-foreground" />}
-              />
+             <div className="flex gap-3 items-start max-w-xl ml-9">
+               <textarea
+                 id="license-key"
+                 placeholder={t('settings.license.activate.keyPlaceholder')}
+                 value={licenseKey}
+                 onChange={(e) => setLicenseKey(e.target.value)}
+                 disabled={activating}
+                 className="font-mono flex-1 min-h-[80px] px-3 py-2 text-sm border border-input bg-background rounded-md shadow-sm resize-y focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring disabled:cursor-not-allowed disabled:opacity-50"
+               />
 
-              <div className="flex gap-3 pt-2">
-                <ProfessionalButton
-                  onClick={() => handleActivateLicense()}
-                  disabled={activating || !licenseKey.trim()}
-                  loading={activating}
-                  className="flex-1 sm:flex-none"
-                >
-                  {t('settings.license.activate.button')}
-                </ProfessionalButton>
-              </div>
-            </div>
+               <ProfessionalButton
+                 onClick={() => handleActivateLicense()}
+                 disabled={activating || !licenseKey.trim()}
+                 loading={activating}
+                 className="flex-none"
+               >
+                 {t('settings.license.activate.button')}
+               </ProfessionalButton>
+             </div>
           </ProfessionalCardContent>
         </ProfessionalCard>
       )}

@@ -184,5 +184,95 @@ JSON:""",
             "openai": "You are a financial data extraction expert. Extract bank transactions from the text below.",
             "anthropic": "As an expert in financial data analysis, extract structured transaction data with high precision."
         }
+    },
+    {
+        "name": "forensic_auditor_phantom_vendor",
+        "category": "fraud_detection",
+        "description": "Analyze vendor name to identify potential phantom vendors used for fraud",
+        "template_content": """You are a Senior Forensic Auditor with 20 years of experience in fraud prevention. 
+Your task is to analyze a vendor name and determine if it has characteristics of a "Phantom Vendor" (a shell company or fictitious entity created to embezzle funds).
+
+Vendor Name: "{{vendor_name}}"
+
+Analyze for:
+1. Typos of well-known brands (e.g., "Amazn" vs "Amazon")
+2. Generic or suspicious names (e.g., "Consulting Services LLC", "Miscellaneous Supply")
+3. Fictitious patterns (e.g., "ABC 123 Corp")
+4. Names that attempt to sound official but are vague
+
+Respond with ONLY valid JSON in this format:
+{
+  "is_phantom": boolean,
+  "risk_score": 0-100,
+  "reasoning": "Detailed forensic explanation",
+  "risk_level": "low/medium/high"
+}""",
+        "template_variables": ["vendor_name"],
+        "output_format": "json",
+        "default_values": {},
+        "version": 1,
+        "is_active": True,
+        "provider_overrides": {}
+    },
+    {
+        "name": "forensic_auditor_description_mismatch",
+        "category": "fraud_detection",
+        "description": "Analyze transaction details for discrepancies between vendor and description",
+        "template_content": """You are a Senior Forensic Auditor specializing in corporate embezzlement. 
+Analyze the following transaction for a "Description Mismatch" anomaly, where the description of items purchased doesn't align with the vendor's primary business.
+
+Transaction Details:
+- Vendor: {{vendor}}
+- Category: {{category}}
+- Description/Notes: {{description}}
+
+Identify:
+1. Semantic mismatch (e.g., Buying "Luxury Watch" from "Standard Office Supplies")
+2. Unusual items for the business type
+3. Vague descriptions that might hide unauthorized personal purchases
+
+Respond with ONLY valid JSON in this format:
+{
+  "is_mismatch": boolean,
+  "risk_score": 0-100,
+  "reasoning": "Detailed forensic explanation",
+  "risk_level": "low/medium/high"
+}""",
+        "template_variables": ["vendor", "category", "description"],
+        "output_format": "json",
+        "default_values": {},
+        "version": 1,
+        "is_active": True,
+        "provider_overrides": {}
+    },
+    {
+        "name": "forensic_auditor_attachment",
+        "category": "fraud_detection",
+        "description": "Analyze document attachments for evidence of tampering, suspicious formatting, or digital alterations.",
+        "template_content": """You are a Senior Forensic Document Examiner. 
+Analyze the provided image(s) of a financial document (receipt, invoice, or statement) for any signs of fraud or manipulation.
+
+Focus on:
+1. **Digital Alterations**: Inconsistent fonts, misaligned text, or "photoshopped" elements (e.g., amount or date look different from the rest of the text).
+2. **Formatting Anomalies**: Non-standard layouts from supposedly reputable vendors.
+3. **Inconsistencies**: Discontinuities in shadows, paper texture, or ink density around critical fields.
+4. **Data Verification**: Does the text in the image match the metadata provided?
+   - Vendor Context: {{vendor}}
+   - Stated Amount: {{amount}}
+
+Respond with ONLY valid JSON in this format:
+{
+  "is_tampered": boolean,
+  "risk_score": 0-100,
+  "reasoning": "Detailed forensic explanation of findings",
+  "risk_level": "low/medium/high",
+  "detected_anomalies": ["list", "of", "specific", "observations"]
+}""",
+        "template_variables": ["vendor", "amount"],
+        "output_format": "json",
+        "default_values": {},
+        "version": 1,
+        "is_active": True,
+        "provider_overrides": {}
     }
 ]

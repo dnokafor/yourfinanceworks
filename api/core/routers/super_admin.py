@@ -1460,3 +1460,231 @@ async def demote_super_admin(
         print(f"Failed to log demotion to tenant audit log: {e}")
 
     return {"message": f"User '{request.email}' has been demoted from super admin."}
+@router.get("/anomalies")
+async def get_all_anomalies(
+    risk_level: Optional[str] = Query(None),
+    is_dismissed: bool = Query(False),
+    limit: int = 100,
+    master_db: Session = Depends(get_master_db),
+    current_user: MasterUser = Depends(require_super_admin)
+):
+    """Aggregate anomalies from all tenants for platform-wide monitoring"""
+    from core.services.feature_config_service import FeatureConfigService
+
+    # Check if anomaly detection is enabled via environment variable or license
+    # Note: We check without db to avoid transaction issues with master_db
+    is_enabled = FeatureConfigService.is_enabled('anomaly_detection', db=None, check_license=False)
+
+    logger.info(f"Anomaly detection check - enabled: {is_enabled}")
+
+    if not is_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="FinanceWorks Insights feature is not available in your current license"
+        )
+
+    tenants = master_db.query(Tenant).filter(Tenant.is_active == True).all()
+
+    all_anomalies = []
+
+    for tenant in tenants:
+        tenant_session = None
+        try:
+            tenant_session = tenant_db_manager.get_tenant_session(tenant.id)()
+            from core.models.models_per_tenant import Anomaly
+
+            query = tenant_session.query(Anomaly).filter(Anomaly.is_dismissed == is_dismissed)
+
+            if risk_level:
+                query = query.filter(Anomaly.risk_level == risk_level)
+
+            anomalies = query.order_by(Anomaly.created_at.desc()).limit(limit).all()
+
+            for a in anomalies:
+                all_anomalies.append({
+                    "id": a.id,
+                    "tenant_id": tenant.id,
+                    "tenant_name": tenant.name,
+                    "entity_type": a.entity_type,
+                    "entity_id": a.entity_id,
+                    "risk_score": a.risk_score,
+                    "risk_level": a.risk_level,
+                    "reason": a.reason,
+                    "rule_id": a.rule_id,
+                    "details": a.details,
+                    "created_at": a.created_at
+                })
+
+            if len(all_anomalies) >= limit:
+                break
+
+        except Exception as e:
+            logger.error(f"Failed to fetch anomalies for tenant {tenant.id}: {e}")
+            continue
+        finally:
+            if tenant_session:
+                try:
+                    tenant_session.close()
+                except Exception as e:
+                    logger.error(f"Error closing tenant session for {tenant.id}: {e}")
+
+    # Sort results by date across all tenants
+    all_anomalies.sort(key=lambda x: x['created_at'], reverse=True)
+    return all_anomalies[:limit]
+
+
+@router.post("/anomalies/audit")
+async def trigger_full_audit(
+    days: int = Query(30),
+    master_db: Session = Depends(get_master_db),
+    current_user: MasterUser = Depends(require_super_admin)
+):
+    """Trigger a forensic audit scan for all active tenants for the last N days"""
+    from core.services.feature_config_service import FeatureConfigService
+    from core.services.tenant_database_manager import tenant_db_manager
+
+    logger.info(f"trigger_full_audit: Starting audit scan for {days} days")
+
+    # For super admin operations, check license using super admin's tenant database
+    # since InstallationInfo is stored in tenant databases, not master
+    super_admin_tenant_id = current_user.tenant_id
+    tenant_session = tenant_db_manager.get_tenant_session(super_admin_tenant_id)()
+
+    try:
+        # Check if anomaly detection is enabled using tenant database for license check
+        feature_enabled = FeatureConfigService.is_enabled('anomaly_detection', db=tenant_session)
+        logger.info(f"trigger_full_audit: anomaly_detection feature enabled = {feature_enabled}")
+
+        if not feature_enabled:
+            logger.error("trigger_full_audit: anomaly_detection feature not enabled")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="FinanceWorks Insights feature is not available in your current license"
+            )
+    finally:
+        tenant_session.close()
+
+    logger.info("trigger_full_audit: License check passed, proceeding with audit scan")
+    from core.services.ocr_service import publish_fraud_audit_task
+    from core.models.models_per_tenant import Expense, BankStatementTransaction
+    from datetime import datetime, timezone, timedelta
+
+    tenants = master_db.query(Tenant).filter(Tenant.is_active == True).all()
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+
+    total_triggered = 0
+
+    for tenant in tenants:
+        try:
+            tenant_session = tenant_db_manager.get_tenant_session(tenant.id)()
+
+            # Audit Expenses
+            expenses = tenant_session.query(Expense).filter(
+                Expense.created_at >= cutoff_date
+            ).all()
+            for exp in expenses:
+                if publish_fraud_audit_task(tenant.id, "expense", exp.id, reprocess_mode=False):
+                    total_triggered += 1
+
+            # Audit Bank Transactions
+            transactions = tenant_session.query(BankStatementTransaction).filter(
+                BankStatementTransaction.created_at >= cutoff_date
+            ).all()
+            for txn in transactions:
+                if publish_fraud_audit_task(tenant.id, "bank_statement_transaction", txn.id, reprocess_mode=False):
+                    total_triggered += 1
+
+            tenant_session.close()
+        except Exception as e:
+            logger.error(f"Failed to trigger audit for tenant {tenant.id}: {e}")
+            continue
+
+    return {
+        "message": f"Successfully queued {total_triggered} entities for forensic audit across {len(tenants)} active tenants.",
+        "entities_queued": total_triggered,
+        "tenants_scanned": len(tenants)
+    }
+
+
+@router.post("/anomalies/reprocess")
+async def trigger_reprocess_all(
+    days: int = Query(30),
+    master_db: Session = Depends(get_master_db),
+    current_user: MasterUser = Depends(require_super_admin)
+):
+    """Trigger reprocessing of all entities (including previously processed) for last N days"""
+    from core.services.feature_config_service import FeatureConfigService
+    from core.services.tenant_database_manager import tenant_db_manager
+
+    logger.info(f"trigger_reprocess_all: Starting reprocess scan for {days} days")
+
+    # For super admin operations, check license using super admin's tenant database
+    # since InstallationInfo is stored in tenant databases, not master
+    super_admin_tenant_id = current_user.tenant_id
+    tenant_session = tenant_db_manager.get_tenant_session(super_admin_tenant_id)()
+
+    try:
+        # Check if anomaly detection is enabled using tenant database for license check
+        feature_enabled = FeatureConfigService.is_enabled('anomaly_detection', db=tenant_session)
+        logger.info(f"trigger_reprocess_all: anomaly_detection feature enabled = {feature_enabled}")
+
+        if not feature_enabled:
+            logger.error("trigger_reprocess_all: anomaly_detection feature not enabled")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="FinanceWorks Insights feature is not available in your current license"
+            )
+    finally:
+        tenant_session.close()
+
+    logger.info("trigger_reprocess_all: License check passed, proceeding with reprocess scan")
+    from core.services.ocr_service import publish_fraud_audit_task
+    from core.models.models_per_tenant import Expense, BankStatementTransaction, Invoice
+    from datetime import datetime, timezone, timedelta
+
+    tenants = master_db.query(Tenant).filter(Tenant.is_active == True).all()
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+
+    total_triggered = 0
+
+    for tenant in tenants:
+        try:
+            tenant_session = tenant_db_manager.get_tenant_session(tenant.id)()
+
+            # Reprocess ALL entities without filtering for previous processing
+            # This includes entities that may have been processed before
+
+            # Reprocess Expenses
+            expenses = tenant_session.query(Expense).filter(
+                Expense.created_at >= cutoff_date
+            ).all()
+            for exp in expenses:
+                if publish_fraud_audit_task(tenant.id, "expense", exp.id, reprocess_mode=True):
+                    total_triggered += 1
+
+            # Reprocess Invoices
+            invoices = tenant_session.query(Invoice).filter(
+                Invoice.created_at >= cutoff_date
+            ).all()
+            for inv in invoices:
+                if publish_fraud_audit_task(tenant.id, "invoice", inv.id, reprocess_mode=True):
+                    total_triggered += 1
+
+            # Reprocess Bank Transactions
+            transactions = tenant_session.query(BankStatementTransaction).filter(
+                BankStatementTransaction.created_at >= cutoff_date
+            ).all()
+            for txn in transactions:
+                if publish_fraud_audit_task(tenant.id, "bank_statement_transaction", txn.id, reprocess_mode=True):
+                    total_triggered += 1
+
+            tenant_session.close()
+        except Exception as e:
+            logger.error(f"Failed to trigger reprocess for tenant {tenant.id}: {e}")
+            continue
+
+    return {
+        "message": f"Successfully queued {total_triggered} entities for reprocessing across {len(tenants)} active tenants.",
+        "entities_queued": total_triggered,
+        "tenants_scanned": len(tenants)
+    }
