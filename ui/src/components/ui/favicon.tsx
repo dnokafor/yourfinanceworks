@@ -14,7 +14,7 @@ export function Favicon({ logoUrl, companyName }: FaviconProps) {
         // Remove all existing favicon links when using company logo
         const existingLinks = document.querySelectorAll('link[rel*="icon"]');
         existingLinks.forEach(link => link.remove());
-        
+
         // Use company logo as favicon
         const link = document.createElement('link');
         link.rel = 'icon';

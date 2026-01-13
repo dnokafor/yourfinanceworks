@@ -232,7 +232,8 @@ export function HelpCenter() {
                   <CardContent className="space-y-4">
                     <div className="space-y-3 pt-2">
                       {[
-                        { tip: t('helpCenter.tip_shortcuts'), icon: <Settings className="h-3.5 w-3.5" /> },
+                        { tip: t('helpCenter.tip_gamification'), icon: <Settings className="h-3.5 w-3.5" /> },
+                        { tip: t('helpCenter.tip_ai'), icon: <Settings className="h-3.5 w-3.5" /> },
                         { tip: t('helpCenter.tip_templates'), icon: <FileText className="h-3.5 w-3.5" /> },
                         { tip: t('helpCenter.tip_reminders'), icon: <Mail className="h-3.5 w-3.5" /> },
                         { tip: t('helpCenter.tip_backups'), icon: <Users className="h-3.5 w-3.5" /> }
