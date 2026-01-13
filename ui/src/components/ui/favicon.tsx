@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { API_BASE_URL } from '@/lib/api';
+import { APP_NAME } from '@/constants/app';
 
 interface FaviconProps {
   logoUrl?: string;
@@ -31,9 +32,9 @@ export function Favicon({ logoUrl, companyName }: FaviconProps) {
 
       // Update document title with company name
       if (companyName) {
-        document.title = `${companyName} - Invoice Management`;
+        document.title = `${companyName} - ${APP_NAME}`;
       } else {
-        document.title = 'Invoice Management';
+        document.title = APP_NAME;
       }
     };
 
