@@ -1,6 +1,34 @@
 # YourFinanceWORKS
 
-A modern, AI-powered multi-tenant financial management system. This application allows businesses to manage clients, create invoices, track payments, and generate professional PDF invoices with intelligent automation, smart expense categorization, natural language queries, MCP-powered AI chat, and comprehensive data management features.
+![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)
+![Python: 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB.svg?logo=python&logoColor=white)
+![React: 18+](https://img.shields.io/badge/React-18+-61DAFB.svg?logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6.svg?logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-5.0-646CFF.svg?logo=vite&logoColor=white)
+
+A modern, AI-powered multi-tenant financial management system. YourFinanceWORKS empowers businesses with professional invoicing, automated expense tracking through OCR, and deep business intelligence powered by the Model Context Protocol (MCP).
+
+---
+
+## ⚡ Quick Start
+
+Get up and running in minutes using Docker:
+
+```bash
+# 1. Clone and enter
+git clone <repository-url>
+cd invoice-app
+
+# 2. Spin up the entire stack
+docker-compose up -d
+
+# 3. Create your first Super User
+docker-compose exec api python scripts/create_super_user.py
+```
+
+- **Default Login**: Use the credentials created in step 3.
+
+---
 
 ## 🚀 Features
 
@@ -25,7 +53,7 @@ A modern, AI-powered multi-tenant financial management system. This application 
 - **Smart Invoice Analysis** - AI analyzes invoice patterns and provides business insights
 - **Automated Expense Categorization** - AI automatically categorizes expenses based on descriptions
 - **Business Recommendations** - Get actionable suggestions based on your financial data
-- **MCP-Powered AI Chat** - Natural language queries using Model Context Protocol to access real business data
+- **MCP-Powered AI Chat** - Natural language queries using Model Context Protocol to access real business data ([Guide](docs/developer/MCP_SERVER_GUIDE.md))
 - **Intelligent Business Queries** - Ask questions like "Who owes me money?" or "Show me overdue invoices"
 
 ### 🏢 Enterprise Features
@@ -52,6 +80,10 @@ A modern, AI-powered multi-tenant financial management system. This application 
 - **Performance Monitoring** - Real-time monitoring of system performance and resource usage
 
 ## 🏗️ Architecture
+
+### 📚 Documentation Hub
+
+For detailed guides, architecture diagrams, and administration manuals, visit our **[Documentation Hub](docs/README.md)**.
 
 ### Backend (FastAPI)
 
@@ -300,9 +332,9 @@ POST /api/v1/email/send-invoice
    ```
 
 4. **Access the application**:
-   - Web: http://localhost:8080
-   - API: http://localhost:8000
-   - API Docs: http://localhost:8000/docs
+   - Web: [http://localhost:8080](http://localhost:8080)
+   - API: [http://localhost:8000](http://localhost:8000)
+   - API Docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ### Docker Deployment
 
@@ -320,10 +352,10 @@ docker-compose down
 docker-compose exec api python scripts/create_super_user.py
 
 # Access the application
-# - Web UI: http://localhost:8080
-# - API: http://localhost:8000
-# - API Docs: http://localhost:8000/docs
-# - Super Admin: http://localhost:8080/super-admin
+# - Web UI: [http://localhost:8080](http://localhost:8080)
+# - API: [http://localhost:8000](http://localhost:8000)
+# - API Docs: [http://localhost:8000/docs](http://localhost:8000/docs)
+# - Super Admin: [http://localhost:8080/super-admin](http://localhost:8080/super-admin)
 ```
 
 ## 🧪 Testing
@@ -358,14 +390,29 @@ For detailed testing information, see [TESTING.md](TESTING.md).
 
 ## 📚 Documentation
 
-- [API Documentation](http://localhost:8000/docs) - Interactive API docs
-- [Testing Guide](TESTING.md) - Comprehensive testing documentation
-- [Backend API](api/README.md) - Backend development guide
-- [Frontend Guide](ui/README.md) - Frontend development guide
-- [Database Troubleshooting](api/docs/TROUBLESHOOTING_MISSING_TENANT_DATABASES.md) - Database troubleshooting guide
-- [Super User System](api/docs/SUPER_USER_SYSTEM.md) - Super user system documentation
-- [Data Export & Import Guide](docs/DATA_EXPORT_IMPORT_GUIDE.md) - Complete backup and restore documentation
-- [PDF Upload AI Priority System](docs/PDF_UPLOAD_AI_PRIORITY.md) - AI configuration priority system for PDF processing
+We have organized our documentation to help you get the most out of YourFinanceWORKS:
+
+### 📖 User & Feature Guides
+
+- **[Getting Started Guide](docs/user-guide/GETTING_STARTED_GUIDE.md)** - Your first 10 minutes with the app.
+- **[UI Directory](docs/user-guide/PAGES_DIRECTORY.md)** - A map of every page in the system.
+- **[Revenue & Invoicing](docs/features/REVENUE_CYCLE_OPTIMIZATION.md)** - Master your billing workflow.
+- **[Expense Intelligence](docs/features/EXPENSE_INTELLIGENCE.md)** - Automated tracking and OCR.
+- **[Banking & Reconciliation](docs/features/BANKING_RECONCILIATION.md)** - Sync with your bank.
+- **[AI Services](docs/features/AI_SERVICES.md)** - How to use the AI Assistant and MCP.
+- **[Governance & RBAC](docs/features/GOVERNANCE_WORKFLOWS.md)** - Multi-user approvals and roles.
+
+### 🛠️ Administration & Development
+
+- **[Super Admin Guide](docs/admin-guide/SUPER_ADMIN_SYSTEM.md)** - Platform oversight and tenant management.
+- **[Contributing Guide](CONTRIBUTING.md)** - How to help us build a better financial tool.
+- **[Support Guide](SUPPORT.md)** - Where to get help.
+- **[Code of Conduct](CODE_OF_CONDUCT.md)** - Our community standards.
+- **[API Reference](docs/developer/API_REFERENCE.md)** - For developers integrating with our API.
+
+### 🗄️ Technical Archive
+
+For historical context and deeply technical implementation details, visit the **[Technical Notes Archive](docs/technical-notes/)**.
 
 ## 🤝 Contributing
 

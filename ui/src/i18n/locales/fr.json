@@ -2813,6 +2813,12 @@
     "title": "Inventaire",
     "service_description": "Créez un catalogue de services pour votre travail de conseil et freelance",
     "product_description": "Gérez vos produits et niveaux de stock",
+    "tabs": {
+      "overview": "Aperçu",
+      "analytics": "Analytique",
+      "forecasting": "Prévision",
+      "insights": "Aperçus"
+    },
     "add_item": "Ajouter un Article",
     "items_list": "Articles d'Inventaire",
     "all_categories": "Toutes les Catégories",

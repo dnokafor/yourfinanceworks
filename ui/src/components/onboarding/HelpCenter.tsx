@@ -4,7 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 import { 
   HelpCircle, 
   Play, 
@@ -20,11 +22,15 @@ import {
 } from 'lucide-react';
 import { useOnboarding } from './OnboardingProvider';
 import { useTranslation } from 'react-i18next';
+import { HELP_ARTICLES_CONTENT } from './HelpArticlesData';
+import { ChevronLeft } from 'lucide-react';
 
 export function HelpCenter() {
   const { startTour, tours } = useOnboarding();
   const [searchQuery, setSearchQuery] = useState('');
   const [open, setOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('tours');
+  const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
   const { t } = useTranslation();
 
   const helpArticles = [
@@ -84,6 +90,62 @@ export function HelpCenter() {
     article.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const selectedArticle = helpArticles.find(a => a.id === selectedArticleId);
+
+  // Simple Markdown Renderer (similar to AIAssistant.tsx)
+  const MarkdownRenderer = ({ content }: { content: string }) => {
+    if (!content) return null;
+    const sections = content.split('\n');
+    return (
+      <div className="space-y-3 text-[0.95rem] leading-relaxed">
+        {sections.map((line, idx) => {
+          const isHeader = line.startsWith('#');
+          const isBullet = line.trim().startsWith('* ') || line.trim().startsWith('- ') || line.trim().startsWith('• ');
+          
+          const processInlineBold = (text: string) => {
+            const parts = text.split(/(\*\*.*?\*\*)/g);
+            return parts.map((part, i) => {
+              if (part.startsWith('**') && part.endsWith('**')) {
+                return <strong key={i} className="font-bold text-primary">{part.slice(2, -2)}</strong>;
+              }
+              return part;
+            });
+          };
+
+          if (isBullet) {
+            const bulletContent = line.replace(/^[\*\-\•]\s*/, '');
+            return (
+              <div key={idx} className="flex items-start text-foreground/90 ml-3">
+                <span className="mr-2 mt-2 h-1.5 w-1.5 rounded-full bg-primary/40 shrink-0"></span>
+                <span>{processInlineBold(bulletContent)}</span>
+              </div>
+            );
+          }
+
+          if (isHeader) {
+            const level = line.match(/^#+/)?.[0].length || 1;
+            const headerContent = line.replace(/^#+\s+/, '');
+            const sizes = ['', 'text-2xl', 'text-xl', 'text-lg', 'text-base'];
+            return (
+              <div key={idx} className={cn("font-extrabold text-primary pt-4 pb-1", sizes[level] || 'text-base')}>
+                {headerContent}
+              </div>
+            );
+          }
+
+          if (!line.trim()) return <div key={idx} className="h-1"></div>;
+          if (line.trim() === '---') return <div key={idx} className="my-6 border-t border-border/50"></div>;
+
+          return (
+            <div key={idx} className="whitespace-pre-wrap text-muted-foreground font-medium">
+              {processInlineBold(line)}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -105,8 +167,38 @@ export function HelpCenter() {
           </DialogHeader>
         </div>
         
-        <div className="p-6 h-[70vh] flex flex-col">
-          <Tabs defaultValue="tours" className="flex-1 flex flex-col">
+        <div className="p-6 h-[70vh] flex flex-col overflow-hidden relative">
+          {selectedArticle ? (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="mb-4 flex items-center justify-between">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => {
+                    setSelectedArticleId(null);
+                    setActiveTab('articles');
+                  }}
+                  className="hover:bg-primary/5 -ml-2 font-bold transition-all"
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  {t('common.back', 'Back')}
+                </Button>
+                <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 font-bold">
+                  {selectedArticle.category}
+                </Badge>
+              </div>
+              <ScrollArea className="flex-1 -mr-2 pr-4 scrollbar-none">
+                <div className="pb-8">
+                  <MarkdownRenderer content={HELP_ARTICLES_CONTENT[selectedArticle.id] || selectedArticle.content} />
+                </div>
+              </ScrollArea>
+            </div>
+          ) : (
+            <Tabs 
+              value={activeTab} 
+              onValueChange={setActiveTab}
+              className="flex-1 flex flex-col overflow-hidden"
+            >
             <TabsList className="grid w-full grid-cols-3 mb-8 bg-muted/50 p-1.5 h-12 rounded-xl">
               <TabsTrigger value="tours" className="rounded-lg font-bold data-[state=active]:shadow-md transition-all">{t('helpCenter.tours')}</TabsTrigger>
               <TabsTrigger value="articles" className="rounded-lg font-bold data-[state=active]:shadow-md transition-all">{t('helpCenter.documentation')}</TabsTrigger>
@@ -168,7 +260,11 @@ export function HelpCenter() {
               
               <div className="grid md:grid-cols-2 gap-4">
                 {filteredArticles.map((article) => (
-                  <Card key={article.id} className="group hover:border-primary/20 transition-all duration-300 cursor-pointer overflow-hidden hover:shadow-lg hover:shadow-primary/5">
+                  <Card 
+                    key={article.id} 
+                    onClick={() => setSelectedArticleId(article.id)}
+                    className="group hover:border-primary/20 transition-all duration-300 cursor-pointer overflow-hidden hover:shadow-lg hover:shadow-primary/5 border-border/50"
+                  >
                     <CardContent className="p-5">
                       <div className="flex items-start gap-4">
                         <div className="p-3 bg-primary/5 rounded-2xl group-hover:bg-primary/10 transition-colors">
@@ -249,6 +345,7 @@ export function HelpCenter() {
               </div>
             </TabsContent>
           </Tabs>
+          )}
         </div>
       </DialogContent>
     </Dialog>

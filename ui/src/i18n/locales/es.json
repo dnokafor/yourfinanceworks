@@ -2898,6 +2898,12 @@
     "title": "Inventario",
     "service_description": "Crea un catálogo de servicios para tu trabajo de consultoría y freelance",
     "product_description": "Gestiona tus productos y niveles de stock",
+    "tabs": {
+      "overview": "Resumen",
+      "analytics": "Análisis",
+      "forecasting": "Pronóstico",
+      "insights": "Perspectivas"
+    },
     "add_item": "Agregar Artículo",
     "items_list": "Artículos de Inventario",
     "all_categories": "Todas las Categorías",
