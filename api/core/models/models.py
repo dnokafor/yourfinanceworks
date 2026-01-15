@@ -483,3 +483,4 @@ class CloudStorageConfiguration(Base):
 
     def __repr__(self):
         return f"<CloudStorageConfiguration(id={self.id}, tenant_id={self.tenant_id}, provider='{self.provider}', enabled={self.is_enabled})>"
+

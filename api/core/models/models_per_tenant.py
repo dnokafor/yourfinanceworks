@@ -1486,92 +1486,87 @@ class Anomaly(Base):
 
 
 # --- License Management Models ---
+# NOTE: InstallationInfo and LicenseValidationLog are stored in tenant databases
+# Each tenant has its own license configuration and validation logs
 
 class InstallationInfo(Base):
     """
-    Stores installation and license information for self-hosted deployments.
-    Each tenant has one installation record that tracks trial status and license activation.
+    License and installation information for a tenant.
+    Each tenant has exactly one InstallationInfo record.
     """
     __tablename__ = "installation_info"
 
     id = Column(Integer, primary_key=True, index=True)
-
-    # Installation identification
-    installation_id = Column(String(36), unique=True, nullable=False, index=True)  # UUID for this installation
-
-    # Usage type selection
-    usage_type = Column(String(20), nullable=True)  # personal, business, None (not selected yet)
-    usage_type_selected_at = Column(DateTime(timezone=True), nullable=True)  # When user selected usage type
-
-    # Trial information
-    trial_start_date = Column(DateTime(timezone=True), nullable=True)  # When trial started (when business selected)
-    trial_end_date = Column(DateTime(timezone=True), nullable=True)  # 30 days after trial_start_date
-    trial_extended_until = Column(DateTime(timezone=True), nullable=True)  # Optional trial extension
-
-    # License information
-    license_key = Column(Text, nullable=True)  # JWT license key (can be very long)
-    license_activated_at = Column(DateTime(timezone=True), nullable=True)  # When license was activated
-    license_expires_at = Column(DateTime(timezone=True), nullable=True)  # License expiration date
-    license_status = Column(String(20), default="invalid", nullable=False)  # invalid, personal, trial, active, expired, grace_period
-
-    # Licensed features (JSON array of feature IDs)
-    licensed_features = Column(JSON, nullable=True)  # ["ai_invoice", "ai_expense", "tax_integration", ...]
-
-    # License validation cache (to avoid repeated JWT verification)
-    last_validation_at = Column(DateTime(timezone=True), nullable=True)
-    last_validation_result = Column(Boolean, nullable=True)  # True if last validation succeeded
-    validation_cache_expires_at = Column(DateTime(timezone=True), nullable=True)  # Cache TTL (1 hour)
-
-    # Customer information (from license)
-    customer_email = Column(String(255), nullable=True)
-    customer_name = Column(String(255), nullable=True)
-    organization_name = Column(String(255), nullable=True)
-
-    # Timestamps
+    installation_id = Column(String(36), unique=True, nullable=False, index=True)
+    
+    # License status: invalid, personal, trial, active, expired, suspended
+    license_status = Column(String(20), default="invalid", nullable=False)
+    
+    # Usage type selection: personal (free) or business (trial/paid)
+    usage_type = Column(String(20), nullable=True)  # personal or business
+    usage_type_selected_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Trial management
+    trial_start_date = Column(DateTime(timezone=True), nullable=True)
+    trial_end_date = Column(DateTime(timezone=True), nullable=True)
+    trial_extended_until = Column(DateTime(timezone=True), nullable=True)  # For grace period extensions
+    
+    # License key storage
+    license_key = Column(Text, nullable=True)  # Encrypted in practice
+    license_activated_at = Column(DateTime(timezone=True), nullable=True)
+    license_expires_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Feature tracking
+    max_tenants = Column(Integer, nullable=True)  # From license
+    features = Column(JSON, nullable=True)  # List of enabled features from license
+    licensed_features = Column(JSON, nullable=True)  # List of licensed features (from activated license)
+    
+    # Customer information from license
+    customer_email = Column(String, nullable=True)  # Email from license
+    customer_name = Column(String, nullable=True)  # Name from license
+    organization_name = Column(String, nullable=True)  # Organization name from license
+    
+    # Validation cache for performance
+    last_validation_at = Column(DateTime(timezone=True), nullable=True)  # When license was last validated
+    last_validation_result = Column(Boolean, nullable=True)  # Result of last validation (True/False)
+    validation_cache_expires_at = Column(DateTime(timezone=True), nullable=True)  # When cache expires
+    
+    # Audit fields
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-
-    # Relationships
-    validation_logs = relationship("LicenseValidationLog", back_populates="installation", cascade="all, delete-orphan")
-
-    def __repr__(self):
-        return f"<InstallationInfo(id={self.id}, installation_id='{self.installation_id}', status='{self.license_status}')>"
 
 
 class LicenseValidationLog(Base):
     """
-    Audit trail for license validation attempts.
-    Tracks all license activations, validations, and errors for security and debugging.
+    Audit log for license validation attempts and changes.
+    Tracks all license-related operations for compliance and debugging.
     """
     __tablename__ = "license_validation_logs"
 
     id = Column(Integer, primary_key=True, index=True)
     installation_id = Column(Integer, ForeignKey("installation_info.id", ondelete="CASCADE"), nullable=False, index=True)
-
+    
     # Validation details
-    validation_type = Column(String(50), nullable=False)  # activation, periodic_check, manual_validation, startup_check
-    validation_result = Column(String(20), nullable=False)  # success, failed, expired, invalid_signature, malformed
-
-    # License information at time of validation
-    license_key_hash = Column(String(64), nullable=True)  # SHA-256 hash of license key (for tracking without storing full key)
+    validation_type = Column(String(50), nullable=False, index=True)  # activation, trial_start, usage_type_selected, etc.
+    validation_result = Column(String(20), nullable=False)  # success, failed
+    
+    # License information
+    license_key_hash = Column(String(64), nullable=True)  # SHA-256 hash for privacy
     features_validated = Column(JSON, nullable=True)  # Features that were validated
-    expiration_date = Column(DateTime(timezone=True), nullable=True)  # Expiration date from license
-
-    # Error information (if validation failed)
-    error_code = Column(String(50), nullable=True)  # EXPIRED, INVALID_SIGNATURE, MALFORMED, etc.
-    error_message = Column(Text, nullable=True)  # Detailed error message
-
-    # Context information
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # User who triggered validation (if applicable)
-    ip_address = Column(String(45), nullable=True)  # IP address of validation request
-    user_agent = Column(String(500), nullable=True)  # User agent string
-
-    # Timestamp
-    validated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
-
+    expiration_date = Column(DateTime(timezone=True), nullable=True)
+    max_tenants_validated = Column(Integer, nullable=True)
+    
+    # Error tracking
+    error_code = Column(String(50), nullable=True)
+    error_message = Column(Text, nullable=True)
+    
+    # Request context
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(500), nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    
     # Relationships
-    installation = relationship("InstallationInfo", back_populates="validation_logs")
-    user = relationship("User", foreign_keys=[user_id])
-
-    def __repr__(self):
-        return f"<LicenseValidationLog(id={self.id}, type='{self.validation_type}', result='{self.validation_result}')>"
+    installation = relationship("InstallationInfo")

@@ -474,6 +474,7 @@ class LicenseService:
         expiration_date: Optional[datetime] = None,
         error_code: Optional[str] = None,
         error_message: Optional[str] = None,
+        max_tenants: Optional[int] = None,
         user_id: Optional[int] = None,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None
@@ -487,6 +488,7 @@ class LicenseService:
                 license_key_hash=self._get_license_key_hash(license_key) if license_key else None,
                 features_validated=features,
                 expiration_date=expiration_date,
+                max_tenants_validated=max_tenants,
                 error_code=error_code,
                 error_message=error_message,
                 user_id=user_id,
@@ -800,6 +802,20 @@ class LicenseService:
         exp_timestamp = payload.get("exp")
         expires_at = datetime.fromtimestamp(exp_timestamp, tz=timezone.utc) if exp_timestamp else None
 
+        # Extract max_tenants if available
+        max_tenants = payload.get("max_tenants")
+        if max_tenants is None:
+            # Check in metadata for backward compatibility or nested structure
+            metadata = payload.get("metadata", {})
+            max_tenants = metadata.get("max_tenants")
+        
+        # Ensure max_tenants is an integer if present
+        if max_tenants is not None:
+            try:
+                max_tenants = int(max_tenants)
+            except (ValueError, TypeError):
+                max_tenants = None
+
         # Verify installation ID matches
         license_installation_id = payload.get("installation_id")
         if not license_installation_id:
@@ -861,6 +877,7 @@ class LicenseService:
         installation.customer_email = payload.get("customer_email")
         installation.customer_name = payload.get("customer_name")
         installation.organization_name = payload.get("organization_name")
+        installation.max_tenants = max_tenants
 
         # If usage type not set, set it to business (since they're activating a paid license)
         if not installation.usage_type:
@@ -883,6 +900,7 @@ class LicenseService:
             license_key=license_key,
             features=features,
             expiration_date=expires_at,
+            max_tenants=max_tenants,
             user_id=user_id,
             ip_address=ip_address,
             user_agent=user_agent
@@ -1143,6 +1161,31 @@ class LicenseService:
         # No active license or trial
         return False
 
+    def get_max_tenants(self) -> int:
+        """
+        Get maximum number of tenants allowed by current license.
+        
+        Returns:
+            Max tenants count. Returns a very large number for trials/personal use.
+            Returns 1 as default for business installations without explicit limit.
+        """
+        installation = self._get_or_create_installation()
+
+        # personal or trial: no limit
+        if installation.license_status == "personal" or self.is_trial_active() or self.is_in_grace_period():
+            return 999999
+
+        # commercial: check for max_tenants limit
+        if installation.license_status == "active" or installation.license_status == "expired":
+            if installation.max_tenants:
+                return installation.max_tenants
+            
+            # Default to 1 if not specified in license but it's a commercial installation
+            return 1
+        
+        # Default fallback
+        return 1
+
     # ==================== Status Information ====================
     
     def get_expired_features(self) -> List[str]:
@@ -1248,7 +1291,8 @@ class LicenseService:
                 "expires_at": installation.license_expires_at,
                 "customer_email": installation.customer_email,
                 "customer_name": installation.customer_name,
-                "organization_name": installation.organization_name
+                "organization_name": installation.organization_name,
+                "max_tenants": installation.max_tenants or 1
             } if installation.license_status in ["active", "expired"] else None,
             "enabled_features": enabled_features,
             "expired_features": expired_features,  # Features that were licensed but now expired

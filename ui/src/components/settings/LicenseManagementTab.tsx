@@ -23,7 +23,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Loader2, CheckCircle2, XCircle, AlertTriangle, Key, Calendar, Shield, ExternalLink, Activity, Info, Lock, User, List, Clock, Plus } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, AlertTriangle, Key, Calendar, Shield, ExternalLink, Activity, Info, Lock, User, List, Clock, Plus, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useFeatures } from '@/contexts/FeatureContext';
@@ -53,6 +53,7 @@ interface LicenseInfo {
     customer_email: string | null;
     customer_name: string | null;
     organization_name: string | null;
+    max_tenants: number | null;
   };
   enabled_features: string[];
   has_all_features: boolean;
@@ -487,6 +488,17 @@ export const LicenseManagementTab: React.FC = () => {
                     <div className="text-sm font-medium px-3 py-1.5 bg-background border border-border rounded-md shadow-sm text-ellipsis overflow-hidden whitespace-nowrap">
                       {licenseInfo.license_info.customer_name}
                       {licenseInfo.license_info.organization_name && ` (${licenseInfo.license_info.organization_name})`}
+                    </div>
+                  </div>
+                )}
+                {licenseInfo.license_info.max_tenants !== undefined && (
+                  <div className="space-y-2">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1.5">
+                      <Building2 className="h-3.5 w-3.5" />
+                      {t('settings.license.status.maxTenants', 'Maximum Organizations')}
+                    </Label>
+                    <div className="text-sm font-medium px-3 py-1.5 bg-background border border-border rounded-md shadow-sm">
+                      {licenseInfo.license_info.max_tenants === 1 ? '1 Organization' : (licenseInfo.license_info.max_tenants || 'Unlimited')}
                     </div>
                   </div>
                 )}

@@ -1300,7 +1300,8 @@
         "deactivate": "Lizenz deaktivieren",
         "confirmDeactivate": "Sind Sie sicher, dass Sie Ihre Lizenz deaktivieren möchten? Dies deaktiviert lizenzierte Funktionen.",
         "deactivateSuccess": "Lizenz erfolgreich deaktiviert",
-        "deactivateError": "Fehler beim Deaktivieren der Lizenz"
+        "deactivateError": "Fehler beim Deaktivieren der Lizenz",
+        "maxTenants": "Maximale Organisationen"
       },
       "activate": {
         "title": "Lizenz aktivieren",

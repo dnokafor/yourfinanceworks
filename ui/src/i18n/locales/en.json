@@ -1354,7 +1354,8 @@
         "deactivate": "Deactivate License",
         "confirmDeactivate": "Are you sure you want to deactivate your license? This will disable licensed features.",
         "deactivateSuccess": "License deactivated successfully",
-        "deactivateError": "Failed to deactivate license"
+        "deactivateError": "Failed to deactivate license",
+        "maxTenants": "Maximum Organizations"
       },
       "activate": {
         "title": "Activate License",

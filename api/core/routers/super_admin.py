@@ -18,6 +18,7 @@ from core.schemas.user import UserCreate, UserUpdate, UserList, UserRoleUpdate
 from core.schemas.tenant import TenantCreate, TenantUpdate, Tenant as TenantSchema
 from core.routers.auth import get_current_user
 from core.services.tenant_database_manager import tenant_db_manager
+from core.services.license_service import LicenseService
 from core.utils.auth import verify_password, get_password_hash
 from core.utils.password_validation import validate_password_strength
 from core.utils.rbac import require_superuser
@@ -184,6 +185,48 @@ async def create_tenant(
             detail="Tenant name already exists"
         )
 
+    # Check license tenant limit from super admin's primary tenant
+    # The super admin can only create new tenants if their own license allows it
+    from core.models.database import set_tenant_context
+    
+    try:
+        # Get super admin's primary tenant
+        admin_tenant_id = current_user.tenant_id
+        if not admin_tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Super admin must have a primary tenant"
+            )
+        
+        # Set tenant context and get tenant session
+        set_tenant_context(admin_tenant_id)
+        tenant_session = tenant_db_manager.get_tenant_session(admin_tenant_id)
+        admin_tenant_db = tenant_session()
+        
+        try:
+            # Check license from super admin's tenant
+            license_service = LicenseService(admin_tenant_db)
+            max_tenants = license_service.get_max_tenants()
+            current_tenants_count = master_db.query(Tenant).count()
+            
+            if current_tenants_count >= max_tenants:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Tenant limit reached ({max_tenants}). Please upgrade your license to add more organizations."
+                )
+            logger.info(f"Super admin {current_user.email} license check passed: {current_tenants_count} < {max_tenants}")
+        finally:
+            try:
+                admin_tenant_db.close()
+            except Exception:
+                pass
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to check super admin license: {str(e)}")
+        # Don't block tenant creation if license check fails
+        pass
+    
     try:
         # Create tenant in master database
         tenant_data = tenant.model_dump()

@@ -1342,7 +1342,8 @@
         "deactivate": "Désactiver la Licence",
         "confirmDeactivate": "Êtes-vous sûr de vouloir désactiver votre licence ? Cela désactivera les fonctionnalités sous licence.",
         "deactivateSuccess": "Licence désactivée avec succès",
-        "deactivateError": "Échec de la désactivation de la licence"
+        "deactivateError": "Échec de la désactivation de la licence",
+        "maxTenants": "Organisations Maximales"
       },
       "activate": {
         "title": "Activer la Licence",

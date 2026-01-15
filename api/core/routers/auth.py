@@ -316,7 +316,7 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
         # Only set address if provided
         tenant_address = getattr(user, 'organization_address', None) or getattr(user, 'address', None)
 
-        # Create tenant
+        # Create tenant in master database
         logger.info(f"Creating new tenant for {user.email} with name {tenant_name}")
         # Ensure unique tenant name to satisfy DB unique constraint
         base_name = tenant_name
@@ -344,7 +344,7 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
         tenant_id = db_tenant.id
         logger.info(f"Created tenant {tenant_id} for {user.email}")
 
-        # Create tenant database
+        # Create tenant database BEFORE checking license
         success = tenant_db_manager.create_tenant_database(tenant_id, tenant_name)
         logger.info(f"Tenant DB creation for {tenant_id}: {success}")
         if not success:
@@ -353,6 +353,32 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to create tenant database"
             )
+
+        # Now check license from the tenant's database
+        from core.services.license_service import LicenseService
+        from core.models.database import set_tenant_context
+        
+        set_tenant_context(tenant_id)
+        tenant_session = tenant_db_manager.get_tenant_session(tenant_id)
+        tenant_db_for_license = tenant_session()
+        
+        try:
+            license_service = LicenseService(tenant_db_for_license)
+            max_tenants = license_service.get_max_tenants()
+            current_tenants_count = db.query(Tenant).count()
+            
+            if current_tenants_count > max_tenants:
+                logger.error(f"Tenant limit reached: {current_tenants_count} >= {max_tenants}")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Tenant limit reached ({max_tenants}). Please upgrade your license to add more organizations."
+                )
+            logger.info(f"License check passed: {current_tenants_count} < {max_tenants}")
+        finally:
+            try:
+                tenant_db_for_license.close()
+            except Exception:
+                pass
 
         # Make user an admin for the new tenant they're creating
         user_role = "admin"
