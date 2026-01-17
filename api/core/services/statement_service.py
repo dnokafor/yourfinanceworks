@@ -75,7 +75,7 @@ except ImportError:
 
     class RecursiveCharacterTextSplitter:
         def __init__(self, **kwargs):
-            self.chunk_size = kwargs.get('chunk_size', 3000)
+            self.chunk_size = kwargs.get('chunk_size', 6000)
             self.chunk_overlap = kwargs.get('chunk_overlap', 150)
         
         def split_text(self, text):
@@ -230,7 +230,7 @@ class UniversalBankTransactionExtractor:
                  ai_config: Dict[str, Any],
                  db_session: Session,
                  temperature: float = 0.1,
-                 chunk_size: int = 3000,
+                 chunk_size: int = 6000,
                  chunk_overlap: int = 150,
                  request_timeout: int = 120):
         """
@@ -264,7 +264,7 @@ class UniversalBankTransactionExtractor:
         logger.info(f"🚀 Initializing UniversalBankTransactionExtractor: {self.provider_name} / {self.model_name}")
         
         # Test provider connection
-        self._test_provider_connection()
+        # self._test_provider_connection()
         
         # Initialize enhanced PDF text extractor with OCR fallback
         try:
@@ -374,9 +374,9 @@ class UniversalBankTransactionExtractor:
         try:
             prompt_template = self.prompt_service.get_prompt(
                 name="bank_transaction_extraction",
-                variables={"text": ""},  # Provide empty text to avoid warning
+                variables={"text": "{{text}}"},  # Preserve placeholder for late binding
                 provider_name=self.provider_name,
-                fallback_prompt="""You are a financial data extraction expert. Extract bank transactions from the text below.
+                fallback_prompt="""You are a financial data extraction expert. Your task is to extract ALL bank transactions from the text below.
 
 RULES:
 1. Look for dates, descriptions, and amounts
@@ -448,7 +448,7 @@ JSON:"""
                 return str(self.extraction_prompt).replace("{text}", text)
         return str(self.extraction_prompt).replace("{text}", text)
 
-    def extract_transactions_with_litellm(self, text: str) -> List[Dict]:
+    def extract_transactions_with_litellm(self, text: str, temperature: float = None) -> List[Dict]:
         """Extract transactions using LiteLLM"""
         try:
             from litellm import completion
@@ -456,11 +456,14 @@ JSON:"""
             model_name = self._format_model_name()
             kwargs = self._prepare_litellm_kwargs()
 
+            # Use provided temperature or default
+            current_temp = temperature if temperature is not None else self.temperature
+
             kwargs.update({
                 "model": model_name,
                 "messages": [{"role": "user", "content": self._render_extraction_prompt(text)}],
-                "max_tokens": 2000,
-                "temperature": self.temperature
+                "max_tokens": 4096,
+                "temperature": current_temp
             })
 
             logger.info(f"🔄 Processing text chunk with {self.provider_name} ({len(text)} chars)")
@@ -633,6 +636,12 @@ JSON:"""
                 ))
 
         logger.info(f"Created {len(processed_docs)} chunks for processing")
+
+        # Log chunk details for debugging
+        for i, doc in enumerate(processed_docs):
+            preview = doc.page_content[:200].replace('\n', ' ')
+            logger.info(f"  Chunk {i+1}/{len(processed_docs)}: {len(doc.page_content)} chars, preview: {preview}...")
+
         return processed_docs
 
     def extract_transactions_from_documents(self, documents: List[Document]) -> List[Dict]:
@@ -648,25 +657,60 @@ JSON:"""
             try:
                 start_time = time.time()
 
-                # Use LiteLLM for extraction
-                chunk_transactions = self.extract_transactions_with_litellm(doc.page_content)
+                # Use LiteLLM for extraction with retry logic
+                max_retries = 3
+                best_transactions = []
+                base_temp = 0.1
 
+                for attempt in range(max_retries):
+                    # Increase temperature for each retry to break "stuck" logic
+                    # 0.1, 0.3, 0.5, 0.7, 0.9
+                    current_temp = min(0.9, base_temp + (attempt * 0.2))
+
+                    logger.info(f"   Attempt {attempt+1}/{max_retries} extracting transactions (temp={current_temp:.1f})...")
+                    attempt_transactions = self.extract_transactions_with_litellm(doc.page_content, temperature=current_temp)
+
+                    logger.info(f"     Found {len(attempt_transactions)} transactions in attempt {attempt+1}")
+
+                    # Keep the result with the most transactions
+                    if len(attempt_transactions) > len(best_transactions):
+                        best_transactions = attempt_transactions
+
+                    # Optimization: If we found a good number of transactions, we can stop early
+                    if len(best_transactions) > 6:
+                        logger.info(f"   Found sufficient transactions ({len(best_transactions)}), stopping retries early")
+                        break
+
+                    # If we have minimal transactions, force retry
+                    if len(best_transactions) <= 2 and attempt < max_retries - 1:
+                        logger.info(f"   Low transaction count ({len(best_transactions)}), retrying with higher temperature...")
+                        continue
+
+                chunk_transactions = best_transactions
                 processing_time = time.time() - start_time
-                logger.info(f"   Processed in {processing_time:.2f}s")
+                logger.info(f"   Processed chunk {i+1} in {processing_time:.2f}s (best of {attempt+1} attempts)")
 
                 if chunk_transactions:
-                    logger.info(f"   Found {len(chunk_transactions)} transactions")
+                    logger.info(f"   Found {len(chunk_transactions)} transactions in chunk {i+1}")
+                    # Log first transaction as sample
+                    if chunk_transactions:
+                        sample = chunk_transactions[0]
+                        logger.info(f"   Sample transaction: date={sample.get('date')}, desc={sample.get('description', '')[:30]}, amt={sample.get('amount')}")
                     all_transactions.extend(chunk_transactions)
                 else:
-                    logger.info(f"   No transactions found")
+                    logger.info(f"   No transactions found in chunk {i+1}")
 
             except Exception as e:
                 logger.error(f"Error processing chunk {i+1}: {e}")
                 continue
 
-        logger.info(f"Total transactions found: {len(all_transactions)}")
+        logger.info(f"📊 EXTRACTION SUMMARY: Total transactions before deduplication: {len(all_transactions)}")
         if all_transactions:
-            logger.info(f"Sample transaction: {all_transactions[0]}")
+            logger.info(f"   Sample transaction: {all_transactions[0]}")
+            # Log transaction distribution
+            dates = [t.get('date') for t in all_transactions if t.get('date')]
+            if dates:
+                logger.info(f"   Date range: {min(dates)} to {max(dates)}")
         return all_transactions
 
     def process_pdf(self, 
@@ -838,7 +882,11 @@ JSON:"""
         df = df.drop_duplicates(subset=['date', 'description', 'amount']).reset_index(drop=True)
         after_dedup = len(df)
         if before_dedup != after_dedup:
-            logger.info(f"Removed {before_dedup - after_dedup} duplicate transactions")
+            removed_count = before_dedup - after_dedup
+            logger.warning(f"⚠️ DEDUPLICATION: Removed {removed_count} duplicate transactions ({before_dedup} → {after_dedup})")
+            logger.warning(f"   Deduplication key: (date, description, amount)")
+            if removed_count > 5:
+                logger.warning(f"   ⚠️ High deduplication rate ({removed_count}/{before_dedup} = {removed_count*100/before_dedup:.1f}%) - possible chunking issue")
 
         # Sort by date
         if not df.empty:
@@ -1035,7 +1083,7 @@ class BankTransactionExtractor:
                  model_name: str = "gpt-oss:latest",
                  ollama_base_url: str = "http://localhost:11434",
                  temperature: float = 0.1,
-                 chunk_size: int = 3000,  # Smaller chunks for local models
+                 chunk_size: int = 6000,  # Smaller chunks for local models
                  chunk_overlap: int = 150,
                  request_timeout: int = 120):
         """
@@ -2112,7 +2160,7 @@ def process_bank_pdf_with_llm(pdf_path: str, ai_config: Optional[Dict[str, Any]]
                     ai_config=ai_config,
                     db_session=db,
                     temperature=0.1,
-                    chunk_size=3000,
+                    chunk_size=6000,
                     chunk_overlap=150,
                     request_timeout=120
                 )
@@ -2137,7 +2185,7 @@ def process_bank_pdf_with_llm(pdf_path: str, ai_config: Optional[Dict[str, Any]]
                     raise BankLLMUnavailableError(f"LLM extraction failed and no transactions found: {fallback_e}")
         else:
             # Fallback to environment variables - create ai_config from env vars
-            model_name = os.getenv("OLLAMA_MODEL", "gpt-oss:latest")
+            model_name = os.getenv("LLM_MODEL_BANK_STATEMENTS") or os.getenv("LLM_MODEL_EXPENSES") or os.getenv("OLLAMA_MODEL", "gpt-oss:latest")
             base_url = os.getenv("LLM_API_BASE", "http://localhost:11434")
             logger.info(f"⚠️ Using environment variables: model={model_name} base_url={base_url}")
             
@@ -2154,7 +2202,7 @@ def process_bank_pdf_with_llm(pdf_path: str, ai_config: Optional[Dict[str, Any]]
                     ai_config=ai_config,
                     db_session=db,
                     temperature=0.1,
-                    chunk_size=3000,
+                    chunk_size=6000,
                     chunk_overlap=150,
                     request_timeout=120
                 )
@@ -2319,7 +2367,7 @@ def extract_transactions_from_pdf_paths(pdf_paths: List[str]) -> List[Dict[str, 
             model_name=model_name,
             ollama_base_url=base_url,
             temperature=0.1,
-            chunk_size=3000,
+            chunk_size=6000,
             chunk_overlap=150,
             request_timeout=120
         )
@@ -2410,7 +2458,7 @@ class BankStatementExtractor:
                 model_name=self.model_name,
                 ollama_base_url=self.base_url,
                 temperature=0.1,
-                chunk_size=3000,
+                chunk_size=6000,
                 chunk_overlap=150,
                 request_timeout=120
             )

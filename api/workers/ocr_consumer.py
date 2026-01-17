@@ -1036,6 +1036,9 @@ class BankStatementMessageHandler(BaseMessageHandler):
         db.commit()
         self.logger.info(f"Bank statement processed with 0 transactions: id={stmt.id}")
 
+        # Release processing lock (CRITICAL FIX for infinite processing state)
+        await self._release_processing_lock("bank_statement", stmt.id)
+
     async def _save_transactions(self, db, stmt, transactions: List[Dict[str, Any]], method: str = "unknown"):
         """Save extracted transactions to database"""
         from datetime import datetime as dt

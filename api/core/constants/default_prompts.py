@@ -155,34 +155,56 @@ Document path: {{file_path}}""",
     "name": "bank_transaction_extraction",
     "category": "bank_processing",
     "description": "Extract bank transactions from statement text",
-    "template_content": """You are a financial data extraction expert. Extract bank transactions from the text below.
+    "template_content": """You are a financial data extraction expert. Your task is to extract ALL bank transactions from the text below.
 
-RULES:
-1. Look for dates, descriptions, and amounts
-2. Amounts with "-" or in parentheses are debits (money out)
-3. Positive amounts are credits (money in)
-4. Convert dates to YYYY-MM-DD format
-5. Extract merchant names clearly
-6. Only extract actual transactions, not headers or summaries
+CRITICAL INSTRUCTIONS:
+1. Extract EVERY SINGLE transaction - do not skip any
+2. Look for transaction patterns: date + description + amount
+3. Transactions may be in tables, lists, or narrative format
+4. Amounts with "-" or in parentheses are debits (money out, use negative numbers)
+5. Positive amounts are credits (money in, use positive numbers)
+6. Convert ALL dates to YYYY-MM-DD format
+7. Extract merchant/vendor names clearly from descriptions
+8. ONLY extract actual transactions - skip headers, summaries, totals, and account information
+
+STEP-BY-STEP PROCESS:
+1. First, scan the ENTIRE text to identify all transaction entries
+2. For each transaction, extract: date, description, amount, transaction_type, balance (if available)
+3. Validate that you found ALL transactions (count them)
+4. Double-check you didn't miss any transactions at the beginning or end
+5. Return a complete JSON array with ALL transactions
 
 TEXT:
 {{text}}
 
-Return ONLY a JSON array like this example:
+Return ONLY a valid JSON array. Each transaction must have these fields:
+- date (string, YYYY-MM-DD format, REQUIRED)
+- description (string, merchant/vendor name, REQUIRED)
+- amount (number, negative for debits, positive for credits, REQUIRED)
+- transaction_type (string, "debit" or "credit", REQUIRED)
+- balance (number, account balance after transaction, OPTIONAL)
+
+Example format:
 [
   {"date": "2024-01-15", "description": "GROCERY STORE", "amount": -45.67, "transaction_type": "debit", "balance": 1234.56},
-  {"date": "2024-01-16", "description": "SALARY DEPOSIT", "amount": 2500.00, "transaction_type": "credit", "balance": 3689.89}
+  {"date": "2024-01-16", "description": "SALARY DEPOSIT", "amount": 2500.00, "transaction_type": "credit", "balance": 3689.89},
+  {"date": "2024-01-17", "description": "ELECTRIC BILL", "amount": -125.00, "transaction_type": "debit", "balance": 3564.89}
 ]
+
+VALIDATION:
+- Ensure you extracted ALL transactions from the text
+- Verify each transaction has date, description, and amount
+- Confirm amounts are correctly signed (negative for debits, positive for credits)
 
 JSON:""",
         "template_variables": ["text"],
         "output_format": "json",
         "default_values": {},
-        "version": 1,
+        "version": 2,
         "is_active": True,
         "provider_overrides": {
-            "openai": "You are a financial data extraction expert. Extract bank transactions from the text below.",
-            "anthropic": "As an expert in financial data analysis, extract structured transaction data with high precision."
+            "openai": "You are a financial data extraction expert. Extract ALL bank transactions from the text. Be thorough and extract every single transaction.",
+            "anthropic": "As an expert in financial data analysis, meticulously extract ALL transactions with high precision. Do not skip any transactions."
         }
     },
     {
