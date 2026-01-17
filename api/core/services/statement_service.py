@@ -462,7 +462,7 @@ JSON:"""
             kwargs.update({
                 "model": model_name,
                 "messages": [{"role": "user", "content": self._render_extraction_prompt(text)}],
-                "max_tokens": 4096,
+                "max_tokens": 8000,
                 "temperature": current_temp
             })
 
@@ -658,7 +658,8 @@ JSON:"""
                 start_time = time.time()
 
                 # Use LiteLLM for extraction with retry logic
-                max_retries = 3
+                # Set to 1 since we will introduce reviewer worker
+                max_retries = 1
                 best_transactions = []
                 base_temp = 0.1
 

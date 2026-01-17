@@ -840,6 +840,9 @@ class BankStatementMessageHandler(BaseMessageHandler):
 
                     # Check if statement exists
                     stmt = db.query(BankStatement).filter(BankStatement.id == statement_id).first()
+                    if stmt:
+                         self.logger.info(f"Processing stmt {stmt.id}: initial created_by_user_id={stmt.created_by_user_id}")
+
                     if not stmt:
                         return ProcessingResult(success=True, committed=True)
 
@@ -1076,6 +1079,7 @@ class BankStatementMessageHandler(BaseMessageHandler):
         stmt.extraction_method = method
         stmt.analysis_error = None
         stmt.analysis_updated_at = get_tenant_timezone_aware_datetime(db)
+        self.logger.info(f"Saving stmt {stmt.id}: checking created_by_user_id={stmt.created_by_user_id}")
         db.commit()
         self.logger.info(f"Bank statement processed: id={stmt.id}, transactions={count}")
 

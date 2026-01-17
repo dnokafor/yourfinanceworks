@@ -8,7 +8,7 @@ import logging
 from core.utils.file_validation import validate_file_path
 from core.utils.file_deletion import delete_file_from_storage
 
-from core.models.database import get_db
+from core.models.database import get_db, get_master_db
 from sqlalchemy.orm import Session
 from core.routers.auth import get_current_user
 from core.models.models import MasterUser
@@ -239,6 +239,7 @@ async def list_statements(
     search: Optional[str] = None,
     created_by_user_id: Optional[int] = None,
     db: Session = Depends(get_db),
+    master_db: Session = Depends(get_master_db),
     current_user: MasterUser = Depends(get_current_user),
 ):
     require_non_viewer(current_user, "list statements")
@@ -286,8 +287,40 @@ async def list_statements(
         query.order_by(BankStatement.created_at.desc()).offset(skip).limit(limit).all()
     )
 
+    # Fetch user details from master DB to handle cross-database attribution
+    user_ids = {s.created_by_user_id for s in rows if s.created_by_user_id}
+    user_map = {}
+    if user_ids:
+        try:
+             users = master_db.query(MasterUser).filter(MasterUser.id.in_(user_ids)).all()
+             user_map = {u.id: u for u in users}
+        except Exception as e:
+             logger.warning(f"Failed to fetch users from master DB: {e}")
+
     statements = []
     for s in rows:
+        # Resolve creator, falling back to master DB lookups
+        creator = s.created_by
+        if not creator and s.created_by_user_id and s.created_by_user_id in user_map:
+             creator = user_map[s.created_by_user_id]
+        
+        # Calculate username and email
+        created_by_username = None
+        created_by_email = None
+        
+        if creator:
+             created_by_email = creator.email
+             name_parts = []
+             if creator.first_name:
+                 name_parts.append(creator.first_name)
+             if creator.last_name:
+                 name_parts.append(creator.last_name)
+             
+             if name_parts:
+                 created_by_username = " ".join(name_parts)
+             else:
+                 created_by_username = creator.email
+
         statements.append(
             {
                 "id": s.id,
@@ -307,15 +340,8 @@ async def list_statements(
                 "notes": getattr(s, "notes", None),
                 "created_at": s.created_at.isoformat() if s.created_at else None,
                 "created_by_user_id": s.created_by_user_id,
-                "created_by_username": (
-                    (
-                        f"{s.created_by.first_name or ''} {s.created_by.last_name or ''}".strip()
-                        or s.created_by.email
-                    )
-                    if s.created_by
-                    else None
-                ),
-                "created_by_email": s.created_by.email if s.created_by else None,
+                "created_by_username": created_by_username,
+                "created_by_email": created_by_email,
             }
         )
 
