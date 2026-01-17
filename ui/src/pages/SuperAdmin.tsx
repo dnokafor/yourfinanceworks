@@ -132,6 +132,11 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
   const [selectedAnomaly, setSelectedAnomaly] = useState<Anomaly | null>(null);
 
+  // Pagination for anomalies
+  const [anomaliesPage, setAnomaliesPage] = useState(1);
+  const [anomaliesPageSize, setAnomaliesPageSize] = useState(20);
+  const [totalAnomalies, setTotalAnomalies] = useState(0);
+
   const fetchTenants = useCallback(async () => {
     try {
       const data = await apiRequest<Tenant[]>('/super-admin/tenants', {}, { skipTenant: true });
@@ -162,12 +167,36 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
 
   const fetchAnomalies = useCallback(async () => {
     try {
-      const data = await apiRequest<Anomaly[]>('/super-admin/anomalies', {}, { skipTenant: true });
-      setAnomalies(data || []);
+      const params = new URLSearchParams();
+      const skip = (anomaliesPage - 1) * anomaliesPageSize;
+      params.set('skip', skip.toString());
+      params.set('limit', anomaliesPageSize.toString());
+
+      const queryString = params.toString();
+      console.log('SuperAdmin: Fetching anomalies with params:', queryString);
+
+      const data = await apiRequest<{
+        items: Anomaly[];
+        total: number;
+        skip: number;
+        limit: number;
+      }>(`/super-admin/anomalies${queryString ? `?${queryString}` : ''}`, {}, { skipTenant: true });
+
+      console.log('SuperAdmin: Received anomalies data:', {
+        itemsCount: data.items?.length || 0,
+        total: data.total,
+        skip: data.skip,
+        limit: data.limit
+      });
+
+      setAnomalies(data.items || []);
+      setTotalAnomalies(data.total || 0);
     } catch (err) {
       console.error('Failed to fetch anomalies:', err);
+      setAnomalies([]);
+      setTotalAnomalies(0);
     }
-  }, []);
+  }, [anomaliesPage, anomaliesPageSize]);
 
   const handleRunAudit = async () => {
     try {
@@ -436,7 +465,15 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
     };
 
     loadData();
-  }, [isAnomaliesEnabled]); // Add isAnomaliesEnabled as dependency
+  }, [isAnomaliesEnabled]); // Only refetch all data when feature status changes
+
+  // Separate useEffect for anomalies pagination
+  useEffect(() => {
+    if (isAnomaliesEnabled) {
+      console.log('SuperAdmin: Fetching anomalies with page', anomaliesPage, 'pageSize', anomaliesPageSize);
+      fetchAnomalies();
+    }
+  }, [anomaliesPage, anomaliesPageSize, isAnomaliesEnabled]);
 
   // Load users when selected tenant changes (but not on initial load)
   useEffect(() => {
@@ -602,9 +639,9 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
             <TabsTrigger value="databases" className="text-xs md:text-sm min-w-0 flex-shrink-0 gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md py-2.5 transition-all font-medium justify-center">{t('superAdmin.databases_tab')}</TabsTrigger>
             <TabsTrigger value="anomalies" className="text-xs md:text-sm min-w-0 flex-shrink-0 gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md py-2.5 transition-all font-medium justify-center flex items-center gap-2">
               FinanceWorks Insights
-              {isAnomaliesEnabled && anomalies.length > 0 && (
+              {isAnomaliesEnabled && totalAnomalies > 0 && (
                 <Badge variant="destructive" className="ml-1 h-5 px-1.5 flex items-center justify-center text-[10px]">
-                  {anomalies.length}
+                  {totalAnomalies}
                 </Badge>
               )}
             </TabsTrigger>
@@ -1200,6 +1237,64 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
                           )}
                         </TableBody>
                       </Table>
+
+                      {/* Pagination */}
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-6 border-t border-border/50">
+                        <div className="text-sm text-muted-foreground">
+                          Showing <span className="font-medium text-foreground">{anomalies.length}</span> of <span className="font-medium text-foreground">{totalAnomalies}</span> results
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setAnomaliesPage(prev => Math.max(1, prev - 1))}
+                            disabled={anomaliesPage <= 1}
+                            className="h-9 px-4"
+                          >
+                            {t('common.previous')}
+                          </Button>
+                          <div className="flex items-center gap-1">
+                            {Array.from({ length: Math.ceil(totalAnomalies / anomaliesPageSize) }, (_, i) => i + 1)
+                              .filter(p => p === 1 || p === Math.ceil(totalAnomalies / anomaliesPageSize) || Math.abs(p - anomaliesPage) <= 1)
+                              .map((p, i, arr) => (
+                                <div key={p} className="flex items-center">
+                                  {i > 0 && arr[i - 1] !== p - 1 && <span className="text-muted-foreground px-1">...</span>}
+                                  <Button
+                                    variant={anomaliesPage === p ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setAnomaliesPage(p)}
+                                    className="h-9 w-9 p-0"
+                                  >
+                                    {p}
+                                  </Button>
+                                </div>
+                              ))}
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setAnomaliesPage(prev => Math.min(Math.ceil(totalAnomalies / anomaliesPageSize), prev + 1))}
+                            disabled={anomaliesPage >= Math.ceil(totalAnomalies / anomaliesPageSize)}
+                            className="h-9 px-4"
+                          >
+                            {t('common.next')}
+                          </Button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">{t('common.page_size', { defaultValue: 'Page Size' })}</span>
+                          <Select value={String(anomaliesPageSize)} onValueChange={(v) => { setAnomaliesPageSize(Number(v)); setAnomaliesPage(1); }}>
+                            <SelectTrigger className="w-[100px] h-10 rounded-lg border-border/50 bg-muted/30">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="10">10</SelectItem>
+                              <SelectItem value="20">20</SelectItem>
+                              <SelectItem value="50">50</SelectItem>
+                              <SelectItem value="100">100</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </ProfessionalCard>

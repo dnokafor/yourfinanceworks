@@ -1509,14 +1509,18 @@ async def demote_super_admin(
     return {"message": f"User '{request.email}' has been demoted from super admin."}
 @router.get("/anomalies")
 async def get_all_anomalies(
+    skip: int = Query(0, ge=0, description="Number of items to skip"),
+    limit: int = Query(50, ge=1, le=100, description="Number of items to return"),
     risk_level: Optional[str] = Query(None),
     is_dismissed: bool = Query(False),
-    limit: int = 100,
     master_db: Session = Depends(get_master_db),
     current_user: MasterUser = Depends(require_super_admin)
 ):
     """Aggregate anomalies from all tenants for platform-wide monitoring"""
     from core.services.feature_config_service import FeatureConfigService
+
+    # Debug logging
+    logger.info(f"get_all_anomalies called with skip={skip}, limit={limit}, risk_level={risk_level}, is_dismissed={is_dismissed}")
 
     # Check if anomaly detection is enabled via environment variable or license
     # Note: We check without db to avoid transaction issues with master_db
@@ -1533,6 +1537,43 @@ async def get_all_anomalies(
     tenants = master_db.query(Tenant).filter(Tenant.is_active == True).all()
 
     all_anomalies = []
+    total_count = 0
+
+    # First, count total anomalies across all tenants
+    for tenant in tenants:
+        tenant_session = None
+        try:
+            tenant_session = tenant_db_manager.get_tenant_session(tenant.id)()
+            from core.models.models_per_tenant import Anomaly
+
+            query = tenant_session.query(Anomaly).filter(Anomaly.is_dismissed == is_dismissed)
+
+            if risk_level:
+                query = query.filter(Anomaly.risk_level == risk_level)
+
+            # Count total anomalies for this tenant
+            total_count += query.count()
+
+        except Exception as e:
+            logger.error(f"Failed to count anomalies for tenant {tenant.id}: {e}")
+            continue
+        finally:
+            if tenant_session:
+                try:
+                    tenant_session.close()
+                except Exception as e:
+                    logger.error(f"Error closing tenant session for {tenant.id}: {e}")
+
+    # Now fetch paginated results more efficiently
+    # Calculate how many records we need to fetch from each tenant
+    # For page N with size L, we need to fetch enough records to potentially fill all pages up to N
+    # We fetch (skip + limit) records from each tenant to ensure we have enough data
+    fetch_per_tenant = skip + limit
+
+    # But cap it to avoid excessive fetching
+    max_fetch_per_tenant = min(fetch_per_tenant, 500)  # Increased cap to ensure we have enough data
+
+    logger.info(f"Fetching up to {max_fetch_per_tenant} records per tenant for pagination (skip={skip}, limit={limit})")
 
     for tenant in tenants:
         tenant_session = None
@@ -1545,7 +1586,8 @@ async def get_all_anomalies(
             if risk_level:
                 query = query.filter(Anomaly.risk_level == risk_level)
 
-            anomalies = query.order_by(Anomaly.created_at.desc()).limit(limit).all()
+            # Get sufficient anomalies from each tenant for sorting and pagination
+            anomalies = query.order_by(Anomaly.created_at.desc()).limit(max_fetch_per_tenant).all()
 
             for a in anomalies:
                 all_anomalies.append({
@@ -1562,9 +1604,6 @@ async def get_all_anomalies(
                     "created_at": a.created_at
                 })
 
-            if len(all_anomalies) >= limit:
-                break
-
         except Exception as e:
             logger.error(f"Failed to fetch anomalies for tenant {tenant.id}: {e}")
             continue
@@ -1575,9 +1614,19 @@ async def get_all_anomalies(
                 except Exception as e:
                     logger.error(f"Error closing tenant session for {tenant.id}: {e}")
 
-    # Sort results by date across all tenants
+    # Sort results by date across all tenants and apply pagination
     all_anomalies.sort(key=lambda x: x['created_at'], reverse=True)
-    return all_anomalies[:limit]
+    paginated_anomalies = all_anomalies[skip:skip + limit]
+
+    logger.info(f"Before pagination: {len(all_anomalies)} total anomalies collected")
+    logger.info(f"After pagination: {len(paginated_anomalies)} items returned (skip={skip}, limit={limit})")
+
+    return {
+        "items": paginated_anomalies,
+        "total": total_count,
+        "skip": skip,
+        "limit": limit
+    }
 
 
 @router.post("/anomalies/audit")
