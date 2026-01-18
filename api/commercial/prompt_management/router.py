@@ -16,6 +16,7 @@ from core.routers.auth import get_current_user
 from core.models.models import MasterUser
 from core.utils.feature_gate import require_feature
 from core.services.tenant_database_manager import tenant_db_manager
+from core.utils.audit import log_audit_event
 
 router = APIRouter(prefix="/prompts", tags=["prompt-management"])
 
@@ -170,6 +171,26 @@ async def create_prompt_template(
         created_by=current_user.id
     )
 
+    # Log audit event
+    log_audit_event(
+        db=db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="CREATE",
+        resource_type="prompt_template",
+        resource_id=str(template.id),
+        resource_name=template.name,
+        details={
+            "category": template.category,
+            "version": template.version,
+            "description": template.description
+        },
+        ip_address=None,
+        user_agent=None,
+        status="success",
+        error_message=None
+    )
+
     return PromptTemplateResponse(
         id=template.id,
         name=template.name,
@@ -203,6 +224,9 @@ async def update_prompt_template(
 
     prompt_service = get_prompt_service(db)
 
+    # Get the current template before update for audit comparison
+    current_template = prompt_service._get_template(name)
+    
     # Convert to dict, excluding None values
     updates = {k: v for k, v in prompt_data.dict().items() if v is not None}
 
@@ -214,6 +238,40 @@ async def update_prompt_template(
 
     if not template:
         raise HTTPException(status_code=404, detail=f"Prompt template '{name}' not found")
+
+    # Build detailed change log for audit
+    changes = {}
+    if current_template:
+        for key, new_value in updates.items():
+            old_value = getattr(current_template, key, None)
+            if old_value != new_value:
+                changes[key] = {
+                    "old_value": old_value,
+                    "new_value": new_value
+                }
+    else:
+        # If no previous template, all updates are new
+        changes = {k: {"old_value": None, "new_value": v} for k, v in updates.items()}
+
+    # Log audit event with detailed changes
+    log_audit_event(
+        db=db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="UPDATE",
+        resource_type="prompt_template",
+        resource_id=str(template.id),
+        resource_name=template.name,
+        details={
+            "category": template.category,
+            "version": template.version,
+            "changes": changes
+        },
+        ip_address=None,
+        user_agent=None,
+        status="success",
+        error_message=None
+    )
 
     return PromptTemplateResponse(
         id=template.id,
@@ -389,6 +447,24 @@ async def delete_prompt_template(
     if not success:
         raise HTTPException(status_code=404, detail=f"Prompt template '{name}' not found")
 
+    # Log audit event
+    log_audit_event(
+        db=db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="DELETE",
+        resource_type="prompt_template",
+        resource_id=None,
+        resource_name=name,
+        details={
+            "action": "deleted_all_versions"
+        },
+        ip_address=None,
+        user_agent=None,
+        status="success",
+        error_message=None
+    )
+
     return {"message": f"Prompt template '{name}' deleted successfully"}
 
 
@@ -408,6 +484,26 @@ async def reset_prompt_to_default(
 
     if not template:
         raise HTTPException(status_code=404, detail=f"Prompt template '{name}' not found or no default available")
+
+    # Log audit event
+    log_audit_event(
+        db=db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="RESET",
+        resource_type="prompt_template",
+        resource_id=str(template.id),
+        resource_name=template.name,
+        details={
+            "reset_to_default": True,
+            "new_version": template.version,
+            "category": template.category
+        },
+        ip_address=None,
+        user_agent=None,
+        status="success",
+        error_message=None
+    )
 
     return PromptTemplateResponse(
         id=template.id,
@@ -479,6 +575,26 @@ async def restore_prompt_version(
 
     if not template:
         raise HTTPException(status_code=404, detail=f"Prompt template '{name}' version {version} not found")
+
+    # Log audit event
+    log_audit_event(
+        db=db,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        action="RESTORE",
+        resource_type="prompt_template",
+        resource_id=str(template.id),
+        resource_name=template.name,
+        details={
+            "restored_from_version": version,
+            "new_version": template.version,
+            "category": template.category
+        },
+        ip_address=None,
+        user_agent=None,
+        status="success",
+        error_message=None
+    )
 
     return PromptTemplateResponse(
         id=template.id,

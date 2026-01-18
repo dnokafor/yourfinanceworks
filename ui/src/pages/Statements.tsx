@@ -1309,7 +1309,7 @@ export default function Statements() {
                     ))}
                     {statements.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={7} className="h-auto p-0 border-none">
+                        <TableCell colSpan={9} className="h-auto p-0 border-none">
                           <div className="text-center py-20 bg-muted/5 rounded-xl border-2 border-dashed border-muted-foreground/20 m-4">
                             <div className="bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                               <FileText className="h-8 w-8 text-primary" />

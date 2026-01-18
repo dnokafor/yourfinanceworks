@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime, timezone
+import logging
 from core.models.database import get_db
 from core.routers.auth import get_current_user
 from core.models.models import MasterUser
@@ -16,6 +17,8 @@ from core.schemas.ai_config import (
     SUPPORTED_PROVIDERS
 )
 from core.utils.rbac import require_admin
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/ai-config",
@@ -574,4 +577,129 @@ async def trigger_full_system_review(
         }
     except Exception as e:
         db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/review-progress")
+async def get_review_progress(
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    """Get the current review progress for all document types"""
+    require_admin(current_user, "view review progress")
+
+    try:
+        from core.models.models_per_tenant import Invoice, Expense, BankStatement
+
+        # Get counts for each status
+        invoice_stats = {
+            "not_started": db.query(Invoice).filter(
+                Invoice.is_deleted == False,
+                Invoice.review_status == "not_started"
+            ).count(),
+            "pending": db.query(Invoice).filter(
+                Invoice.is_deleted == False,
+                Invoice.review_status == "pending"
+            ).count(),
+            "reviewed": db.query(Invoice).filter(
+                Invoice.is_deleted == False,
+                Invoice.review_status == "reviewed"
+            ).count(),
+            "diff_found": db.query(Invoice).filter(
+                Invoice.is_deleted == False,
+                Invoice.review_status == "diff_found"
+            ).count(),
+            "failed": db.query(Invoice).filter(
+                Invoice.is_deleted == False,
+                Invoice.review_status == "failed"
+            ).count(),
+        }
+
+        expense_stats = {
+            "not_started": db.query(Expense).filter(
+                Expense.is_deleted == False,
+                Expense.review_status == "not_started"
+            ).count(),
+            "pending": db.query(Expense).filter(
+                Expense.is_deleted == False,
+                Expense.review_status == "pending"
+            ).count(),
+            "reviewed": db.query(Expense).filter(
+                Expense.is_deleted == False,
+                Expense.review_status == "reviewed"
+            ).count(),
+            "diff_found": db.query(Expense).filter(
+                Expense.is_deleted == False,
+                Expense.review_status == "diff_found"
+            ).count(),
+            "failed": db.query(Expense).filter(
+                Expense.is_deleted == False,
+                Expense.review_status == "failed"
+            ).count(),
+        }
+
+        statement_stats = {
+            "not_started": db.query(BankStatement).filter(
+                BankStatement.is_deleted == False,
+                BankStatement.review_status == "not_started"
+            ).count(),
+            "pending": db.query(BankStatement).filter(
+                BankStatement.is_deleted == False,
+                BankStatement.review_status == "pending"
+            ).count(),
+            "reviewed": db.query(BankStatement).filter(
+                BankStatement.is_deleted == False,
+                BankStatement.review_status == "reviewed"
+            ).count(),
+            "diff_found": db.query(BankStatement).filter(
+                BankStatement.is_deleted == False,
+                BankStatement.review_status == "diff_found"
+            ).count(),
+            "failed": db.query(BankStatement).filter(
+                BankStatement.is_deleted == False,
+                BankStatement.review_status == "failed"
+            ).count(),
+        }
+
+        # Calculate totals and progress
+        invoice_total = sum(invoice_stats.values())
+        invoice_completed = invoice_stats["reviewed"] + invoice_stats["diff_found"] + invoice_stats["failed"]
+        invoice_progress = (invoice_completed / invoice_total * 100) if invoice_total > 0 else 0
+
+        expense_total = sum(expense_stats.values())
+        expense_completed = expense_stats["reviewed"] + expense_stats["diff_found"] + expense_stats["failed"]
+        expense_progress = (expense_completed / expense_total * 100) if expense_total > 0 else 0
+
+        statement_total = sum(statement_stats.values())
+        statement_completed = statement_stats["reviewed"] + statement_stats["diff_found"] + statement_stats["failed"]
+        statement_progress = (statement_completed / statement_total * 100) if statement_total > 0 else 0
+
+        return {
+            "invoices": {
+                "stats": invoice_stats,
+                "total": invoice_total,
+                "completed": invoice_completed,
+                "progress_percent": round(invoice_progress, 1)
+            },
+            "expenses": {
+                "stats": expense_stats,
+                "total": expense_total,
+                "completed": expense_completed,
+                "progress_percent": round(expense_progress, 1)
+            },
+            "statements": {
+                "stats": statement_stats,
+                "total": statement_total,
+                "completed": statement_completed,
+                "progress_percent": round(statement_progress, 1)
+            },
+            "overall_progress_percent": round(
+                ((invoice_completed + expense_completed + statement_completed) / 
+                 (invoice_total + expense_total + statement_total) * 100) 
+                if (invoice_total + expense_total + statement_total) > 0 else 0,
+                1
+            )
+        }
+    except Exception as e:
+        logger.error(f"Failed to get review progress: {e}")
         raise HTTPException(status_code=500, detail=str(e))

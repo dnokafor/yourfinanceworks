@@ -2571,6 +2571,12 @@ export const aiConfigApi = {
     message: string;
     counts: { invoices: number; expenses: number; statements: number }
   }>(`/ai-config/trigger-full-review`, { method: 'POST' }),
+  getReviewProgress: () => apiRequest<{
+    invoices: { stats: Record<string, number>; total: number; completed: number; progress_percent: number };
+    expenses: { stats: Record<string, number>; total: number; completed: number; progress_percent: number };
+    statements: { stats: Record<string, number>; total: number; completed: number; progress_percent: number };
+    overall_progress_percent: number;
+  }>(`/ai-config/review-progress`, { method: 'GET' }),
 };
 
 // AI Assistant API methods

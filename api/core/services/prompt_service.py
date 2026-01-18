@@ -442,6 +442,9 @@ class PromptService:
             # Create NEW version
             new_version = existing.version + 1
 
+            # If this is a default prompt (created_by is None) being customized, set created_by to the user
+            created_by = existing.created_by if existing.created_by is not None else updated_by
+
             new_template = PromptTemplate(
                 name=name,
                 category=updates.get("category", existing.category),
@@ -459,7 +462,7 @@ class PromptService:
                 ),
                 version=new_version,
                 is_active=updates.get("is_active", existing.is_active),
-                created_by=existing.created_by,  # Preserve original creator
+                created_by=created_by,  # Set to user ID if customizing a default prompt
                 updated_by=updated_by,
                 created_at=datetime.utcnow(),
             )
@@ -626,13 +629,12 @@ class PromptService:
     ) -> Optional[PromptTemplate]:
         """Restore a specific version of a prompt template."""
         try:
-            # Find the version to restore
+            # Find the version to restore (including inactive versions)
             source_template = (
                 self.db_session.query(PromptTemplate)
                 .filter(
                     PromptTemplate.name == name,
                     PromptTemplate.version == version,
-                    PromptTemplate.is_active == True,
                 )
                 .first()
             )
@@ -687,11 +689,11 @@ class PromptService:
             return None
 
     def list_prompt_versions(self, name: str) -> List[PromptTemplate]:
-        """List all versions of a specific prompt template."""
+        """List all versions of a specific prompt template (including inactive)."""
         try:
             templates = (
                 self.db_session.query(PromptTemplate)
-                .filter(PromptTemplate.name == name, PromptTemplate.is_active == True)
+                .filter(PromptTemplate.name == name)
                 .order_by(PromptTemplate.version.desc())
                 .all()
             )

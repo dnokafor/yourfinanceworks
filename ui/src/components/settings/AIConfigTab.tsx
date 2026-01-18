@@ -135,6 +135,10 @@ const AIConfigContent: React.FC<AIConfigTabProps> = ({
     const [configToDelete, setConfigToDelete] = useState<number | null>(null);
     const [reviewWorkerEnabled, setReviewWorkerEnabled] = useState(false);
     const [isTriggeringReview, setIsTriggeringReview] = useState(false);
+    const [showReviewProgress, setShowReviewProgress] = useState(false);
+    const [reviewProgress, setReviewProgress] = useState<any>(null);
+    const [isLoadingProgress, setIsLoadingProgress] = useState(false);
+    const [showReviewConfirmation, setShowReviewConfirmation] = useState(false);
     const [reviewerConfig, setReviewerConfig] = useState<any>({
         use_custom_config: false,
         config: {
@@ -348,20 +352,74 @@ const AIConfigContent: React.FC<AIConfigTabProps> = ({
         }
     };
 
-    const handleTriggerFullReview = async () => {
-        if (!window.confirm("This will reset the review status for ALL invoices, expenses, and bank statements. The review worker will re-process everything. Are you sure?")) {
-            return;
-        }
+    const handleOpenReviewProgress = async () => {
+        console.log("Opening review progress modal");
+        setShowReviewProgress(true);
+        await fetchReviewProgress();
+    };
 
+    const confirmTriggerFullReview = async () => {
+        console.log("User confirmed full review trigger");
+        setShowReviewConfirmation(false);
         setIsTriggeringReview(true);
+
         try {
+            console.log("About to call triggerFullReview API...");
             const result = await aiConfigApi.triggerFullReview();
-            toast.success(result.message);
+            console.log("API Response received:", result);
+
+            toast.success("Full system review triggered successfully!");
+
+            // Fetch initial progress
+            await fetchReviewProgress();
+
+            // Start polling for updates
+            startProgressPolling();
+
         } catch (error: any) {
+            console.error("Error in confirmTriggerFullReview:", error);
             toast.error(error?.message || "Failed to trigger full system review");
         } finally {
+            console.log("Setting isTriggeringReview to false");
             setIsTriggeringReview(false);
         }
+    };
+
+    const fetchReviewProgress = async () => {
+        try {
+            console.log("Fetching review progress...");
+            setIsLoadingProgress(true);
+            const progress = await aiConfigApi.getReviewProgress();
+            console.log("Review progress:", progress);
+            setReviewProgress(progress);
+        } catch (error) {
+            console.error('Failed to fetch review progress:', error);
+            toast.error("Failed to fetch review progress");
+        } finally {
+            setIsLoadingProgress(false);
+        }
+    };
+
+    const startProgressPolling = () => {
+        console.log("Starting progress polling...");
+        const pollInterval = setInterval(async () => {
+            try {
+                const progress = await aiConfigApi.getReviewProgress();
+                console.log("Polled progress:", progress);
+                setReviewProgress(progress);
+
+                // Stop polling if all items are completed
+                if (progress.overall_progress_percent === 100) {
+                    clearInterval(pollInterval);
+                    toast.success("Full system review completed!");
+                }
+            } catch (error) {
+                console.error('Error polling review progress:', error);
+            }
+        }, 2000); // Poll every 2 seconds
+
+        // Auto-stop polling after 30 minutes
+        setTimeout(() => clearInterval(pollInterval), 30 * 60 * 1000);
     };
 
     const providerRequiresApiKey = (providerName: string): boolean => {
@@ -588,12 +646,11 @@ const AIConfigContent: React.FC<AIConfigTabProps> = ({
                         <div className="flex justify-end gap-3">
                             <ProfessionalButton
                                 variant="outline"
-                                onClick={handleTriggerFullReview}
+                                onClick={handleOpenReviewProgress}
                                 disabled={isTriggeringReview}
-                                loading={isTriggeringReview}
                                 leftIcon={<RotateCcw className="h-4 w-4" />}
                             >
-                                Trigger Full System Review
+                                View Review Progress
                             </ProfessionalButton>
                             <ProfessionalButton
                                 onClick={() => saveReviewerSettingsMutation.mutate()}
@@ -798,6 +855,163 @@ const AIConfigContent: React.FC<AIConfigTabProps> = ({
                             ) : (
                                 t('common.delete')
                             )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Review Progress Modal */}
+            <Dialog open={showReviewProgress} onOpenChange={setShowReviewProgress}>
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <RotateCcw className="h-5 w-5 animate-spin" />
+                            Full System Review Progress
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    {isLoadingProgress ? (
+                        <div className="flex items-center justify-center py-8">
+                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        </div>
+                    ) : reviewProgress ? (
+                        <div className="space-y-6">
+                            {/* Overall Progress */}
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <span className="font-semibold">Overall Progress</span>
+                                    <span className="text-lg font-bold text-primary">{reviewProgress.overall_progress_percent}%</span>
+                                </div>
+                                <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
+                                    <div
+                                        className="bg-gradient-to-r from-blue-500 to-blue-600 h-full transition-all duration-300"
+                                        style={{ width: `${reviewProgress.overall_progress_percent}%` }}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Invoices Progress */}
+                            <div className="space-y-2 p-4 bg-muted/30 rounded-lg border border-border/50">
+                                <div className="flex items-center justify-between">
+                                    <span className="font-medium">📋 Invoices</span>
+                                    <span className="text-sm text-muted-foreground">
+                                        {reviewProgress.invoices.completed} / {reviewProgress.invoices.total}
+                                    </span>
+                                </div>
+                                <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                                    <div
+                                        className="bg-blue-500 h-full transition-all duration-300"
+                                        style={{ width: `${reviewProgress.invoices.progress_percent}%` }}
+                                    />
+                                </div>
+                                <div className="text-xs text-muted-foreground flex gap-4 mt-2">
+                                    <span>✓ Reviewed: {reviewProgress.invoices.stats.reviewed}</span>
+                                    <span>⏳ Pending: {reviewProgress.invoices.stats.pending}</span>
+                                    <span>⏸ Queued: {reviewProgress.invoices.stats.not_started}</span>
+                                    {reviewProgress.invoices.stats.failed > 0 && <span>✗ Failed: {reviewProgress.invoices.stats.failed}</span>}
+                                </div>
+                            </div>
+
+                            {/* Expenses Progress */}
+                            <div className="space-y-2 p-4 bg-muted/30 rounded-lg border border-border/50">
+                                <div className="flex items-center justify-between">
+                                    <span className="font-medium">💰 Expenses</span>
+                                    <span className="text-sm text-muted-foreground">
+                                        {reviewProgress.expenses.completed} / {reviewProgress.expenses.total}
+                                    </span>
+                                </div>
+                                <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                                    <div
+                                        className="bg-green-500 h-full transition-all duration-300"
+                                        style={{ width: `${reviewProgress.expenses.progress_percent}%` }}
+                                    />
+                                </div>
+                                <div className="text-xs text-muted-foreground flex gap-4 mt-2">
+                                    <span>✓ Reviewed: {reviewProgress.expenses.stats.reviewed}</span>
+                                    <span>⏳ Pending: {reviewProgress.expenses.stats.pending}</span>
+                                    <span>⏸ Queued: {reviewProgress.expenses.stats.not_started}</span>
+                                    {reviewProgress.expenses.stats.failed > 0 && <span>✗ Failed: {reviewProgress.expenses.stats.failed}</span>}
+                                </div>
+                            </div>
+
+                            {/* Bank Statements Progress */}
+                            <div className="space-y-2 p-4 bg-muted/30 rounded-lg border border-border/50">
+                                <div className="flex items-center justify-between">
+                                    <span className="font-medium">🏦 Bank Statements</span>
+                                    <span className="text-sm text-muted-foreground">
+                                        {reviewProgress.statements.completed} / {reviewProgress.statements.total}
+                                    </span>
+                                </div>
+                                <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                                    <div
+                                        className="bg-purple-500 h-full transition-all duration-300"
+                                        style={{ width: `${reviewProgress.statements.progress_percent}%` }}
+                                    />
+                                </div>
+                                <div className="text-xs text-muted-foreground flex gap-4 mt-2">
+                                    <span>✓ Reviewed: {reviewProgress.statements.stats.reviewed}</span>
+                                    <span>⏳ Pending: {reviewProgress.statements.stats.pending}</span>
+                                    <span>⏸ Queued: {reviewProgress.statements.stats.not_started}</span>
+                                    {reviewProgress.statements.stats.failed > 0 && <span>✗ Failed: {reviewProgress.statements.stats.failed}</span>}
+                                </div>
+                            </div>
+
+                            <div className="text-sm text-muted-foreground bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800/50">
+                                <p>💡 This modal will auto-refresh every 2 seconds. You can close it and check back later - the review will continue in the background.</p>
+                            </div>
+                        </div>
+                    ) : null}
+
+                    <DialogFooter className="flex items-center justify-between">
+                        <div>
+                            <ProfessionalButton
+                                onClick={() => setShowReviewConfirmation(true)}
+                                disabled={isTriggeringReview || (reviewProgress && reviewProgress.overall_progress_percent > 0)}
+                                loading={isTriggeringReview}
+                                className="bg-blue-600 hover:bg-blue-700"
+                            >
+                                <Zap className="mr-2 h-4 w-4" />
+                                Trigger Full System Review
+                            </ProfessionalButton>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button variant="outline" onClick={() => setShowReviewProgress(false)}>
+                                Close
+                            </Button>
+                            <Button onClick={fetchReviewProgress} disabled={isLoadingProgress}>
+                                {isLoadingProgress ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Refreshing...
+                                    </>
+                                ) : (
+                                    <>
+                                        <RotateCcw className="mr-2 h-4 w-4" />
+                                        Refresh Now
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Full Review Confirmation Dialog */}
+            <AlertDialog open={showReviewConfirmation} onOpenChange={setShowReviewConfirmation}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Trigger Full System Review?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will reset the review status for ALL invoices, expenses, and bank statements to "not_started". The review worker will re-process everything from scratch.
+                            <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800/50">
+                                <p className="text-sm font-medium text-yellow-800 dark:text-yellow-400">⚠️ This action cannot be undone and may take a long time depending on your data volume.</p>
+                            </div>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmTriggerFullReview} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                            Trigger Review
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
