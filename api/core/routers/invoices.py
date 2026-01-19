@@ -3451,6 +3451,27 @@ async def run_review(
     except Exception as e:
         logger.warning(f"Failed to publish Kafka event for invoice review trigger: {e}")
 
+    # Poll for completion with timeout
+    import asyncio
+    max_wait_time = 30  # Maximum 30 seconds
+    poll_interval = 0.5  # Check every 500ms
+    elapsed_time = 0
+
+    while elapsed_time < max_wait_time:
+        await asyncio.sleep(poll_interval)
+        elapsed_time += poll_interval
+
+        # Refresh to get latest status
+        db.refresh(invoice)
+
+        # Check if worker has processed the invoice
+        if invoice.review_status in ["reviewed", "failed", "diff_found"]:
+            logger.info(f"Review processing completed for invoice {invoice_id}. Final status: {invoice.review_status}")
+            break
+
+    if invoice.review_status == "pending":
+        logger.warning(f"Review processing timed out for invoice {invoice_id} after {max_wait_time} seconds")
+
     return invoice
 
 

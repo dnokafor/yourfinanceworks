@@ -102,6 +102,7 @@ class ProcessingStatus(Enum):
     QUEUED = "queued"
     PROCESSING = "processing"
     DONE = "done"
+    PROCESSED = "processed"  # For bank statements after successful extraction
     COMPLETED = "completed"  # For invoice processing tasks
     FAILED = "failed"
     SKIPPED = "skipped"
@@ -738,7 +739,7 @@ class BankStatementMessageHandler(BaseMessageHandler):
                     # Update statement with final results
                     created_statement_id = None
                     try:
-                        statement.status = 'processed'
+                        statement.status = ProcessingStatus.PROCESSED.value
                         statement.extracted_count = len(txns) if txns else 0
                         statement.notes = f"Batch processed from job {batch_job_id}"
                         statement.file_path = file_path # Update to local path if changed
@@ -853,8 +854,8 @@ class BankStatementMessageHandler(BaseMessageHandler):
                         return ProcessingResult(success=True, committed=True)
 
                     # Check if already done - skip reprocessing
-                    if stmt.status == ProcessingStatus.DONE.value:
-                        self.logger.info(f"Bank statement {statement_id} already done. Skipping reprocessing.")
+                    if stmt.status == ProcessingStatus.PROCESSED.value:
+                        self.logger.info(f"Bank statement {statement_id} already processed. Skipping reprocessing.")
                         await self._commit_message(consumer, message)
                         return ProcessingResult(success=True, committed=True)
 
@@ -1046,7 +1047,7 @@ class BankStatementMessageHandler(BaseMessageHandler):
         db.query(BankStatementTransaction).filter(
             BankStatementTransaction.statement_id == stmt.id
         ).delete()
-        stmt.status = "processed"
+        stmt.status = ProcessingStatus.PROCESSED.value
         stmt.extracted_count = 0
         db.commit()
         self.logger.info(f"Bank statement processed with 0 transactions: id={stmt.id}")
@@ -1086,7 +1087,7 @@ class BankStatementMessageHandler(BaseMessageHandler):
             ))
             count += 1
 
-        stmt.status = "processed"
+        stmt.status = ProcessingStatus.PROCESSED.value
         stmt.extracted_count = count
         stmt.extraction_method = method
         stmt.analysis_error = None
