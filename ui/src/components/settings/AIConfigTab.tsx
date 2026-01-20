@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
+import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
-import { Cpu as CpuIcon, Plus, Edit, Trash2, Loader2, ShieldCheck, Shield, Zap, RotateCcw, Wand, X } from "lucide-react";
+import { Cpu as CpuIcon, Plus, Edit, Trash2, Loader2, ShieldCheck, Shield, Zap, RotateCcw, Wand, X, PieChart, FileText, Receipt, Landmark, CheckCircle, Clock, AlertTriangle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -8,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -880,151 +881,268 @@ const AIConfigContent: React.FC<AIConfigTabProps> = ({
 
             {/* Review Progress Modal */}
             <Dialog open={showReviewProgress} onOpenChange={setShowReviewProgress}>
-                <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <RotateCcw className="h-5 w-5 animate-spin" />
-                            Full System Review Progress
-                        </DialogTitle>
+                <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden border-none shadow-2xl bg-background/95 backdrop-blur-xl">
+                    <DialogHeader className="p-6 pb-4 border-b bg-muted/10">
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
+                                <RotateCcw className={cn("h-5 w-5 text-primary", isLoadingProgress && "animate-spin")} />
+                            </div>
+                            <div>
+                                <DialogTitle className="text-xl font-bold tracking-tight">Full System Review Progress</DialogTitle>
+                                <DialogDescription className="text-muted-foreground mt-1">
+                                    AI is re-analyzing all documents in the background to detect discrepancies.
+                                </DialogDescription>
+                            </div>
+                        </div>
                     </DialogHeader>
 
-                    {isLoadingProgress ? (
-                        <div className="flex items-center justify-center py-8">
-                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    {isLoadingProgress && !reviewProgress ? (
+                        <div className="flex flex-col items-center justify-center py-24 space-y-4">
+                            <Loader2 className="h-12 w-12 animate-spin text-primary/50" />
+                            <p className="text-muted-foreground font-medium">Connecting to review worker...</p>
                         </div>
                     ) : reviewProgress ? (
-                        <div className="space-y-6">
-                            {/* Overall Progress */}
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <span className="font-semibold">Overall Progress</span>
-                                    <span className="text-lg font-bold text-primary">{reviewProgress.overall_progress_percent}%</span>
-                                </div>
-                                <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
-                                    <div
-                                        className="bg-gradient-to-r from-blue-500 to-blue-600 h-full transition-all duration-300"
-                                        style={{ width: `${reviewProgress.overall_progress_percent}%` }}
-                                    />
+                        <div className="p-6 space-y-8 bg-muted/5 flex-1 overflow-y-auto">
+
+                            {/* Hero Progress Section */}
+                            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/90 to-blue-600 p-8 text-primary-foreground shadow-lg">
+                                <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-full bg-white/10 blur-3xl opacity-50 pointer-events-none"></div>
+                                <div className="absolute bottom-0 left-0 -mb-10 -ml-10 h-64 w-64 rounded-full bg-black/10 blur-3xl opacity-50 pointer-events-none"></div>
+
+                                <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+                                    <div className="flex-1 space-y-4 w-full">
+                                        <div className="flex items-center justify-between">
+                                            <div className="space-y-1">
+                                                <h3 className="text-2xl font-bold">Overall Completion</h3>
+                                                <p className="text-primary-foreground/80 font-medium">
+                                                    {reviewProgress.overall_progress_percent === 100 
+                                                        ? "All reviews completed successfully" 
+                                                        : "Processing documents across all categories..."}
+                                                </p>
+                                            </div>
+                                            <div className="text-4xl font-black tabular-nums tracking-tight">
+                                                {Math.round(reviewProgress.overall_progress_percent)}%
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <div className="h-4 w-full overflow-hidden rounded-full bg-black/20 backdrop-blur-sm">
+                                                <div 
+                                                    className="h-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.5)] transition-all duration-1000 ease-out"
+                                                    style={{ width: `${reviewProgress.overall_progress_percent}%` }}
+                                                />
+                                            </div>
+                                            <div className="flex justify-between text-xs font-medium text-primary-foreground/70 uppercase tracking-widest">
+                                                <span>Start</span>
+                                                <span>{reviewProgress.overall_progress_percent === 100 ? "Completed" : "In Progress"}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Quick Summary Circle if space permits or layout desires */}
+                                    <div className="hidden md:flex flex-col items-center justify-center bg-white/10 rounded-xl p-4 backdrop-blur-md border border-white/20 min-w-[140px]">
+                                        <div className="text-xs font-semibold uppercase tracking-wider text-primary-foreground/70 mb-1">Total Items</div>
+                                        <div className="text-3xl font-bold">
+                                            {reviewProgress.invoices.total + reviewProgress.expenses.total + reviewProgress.statements.total}
+                                        </div>
+                                        <div className="text-xs text-primary-foreground/60 mt-1">Documents</div>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Invoices Progress */}
-                            <div className="space-y-2 p-4 bg-muted/30 rounded-lg border border-border/50">
-                                <div className="flex items-center justify-between">
-                                    <span className="font-medium">📋 Invoices</span>
-                                    <span className="text-sm text-muted-foreground">
-                                        {reviewProgress.invoices.completed} / {reviewProgress.invoices.total}
-                                    </span>
+                            {/* Detailed Stats Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                {/* Invoices Card */}
+                                <div className="group rounded-xl border bg-card p-5 shadow-sm transition-all hover:shadow-md hover:border-blue-200 dark:hover:border-blue-800">
+                                    <div className="mb-4 flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                                            <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                                                <FileText className="h-5 w-5" />
+                                            </div>
+                                            <span className="font-bold">Invoices</span>
+                                        </div>
+                                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/10 dark:text-blue-400 dark:border-blue-800/30">
+                                            {reviewProgress.invoices.progress_percent}%
+                                        </Badge>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div className="flex items-end justify-between">
+                                            <div className="text-3xl font-bold tabular-nums text-foreground">
+                                                {reviewProgress.invoices.completed}
+                                                <span className="text-lg text-muted-foreground font-normal ml-1">/ {reviewProgress.invoices.total}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                                            <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${reviewProgress.invoices.progress_percent}%` }} />
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-2 pt-2">
+                                            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 p-2 rounded border border-border/50">
+                                                <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+                                                <span>Reviewed: <span className="font-semibold text-foreground">{reviewProgress.invoices.stats.reviewed}</span></span>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 p-2 rounded border border-border/50">
+                                                <Clock className="h-3.5 w-3.5 text-amber-500" />
+                                                <span>Pending: <span className="font-semibold text-foreground">{reviewProgress.invoices.stats.pending}</span></span>
+                                            </div>
+                                            {(reviewProgress.invoices.stats.failed > 0) && (
+                                                 <div className="col-span-2 flex items-center gap-2 text-xs text-red-600 bg-red-50 dark:bg-red-900/10 p-2 rounded border border-red-100 dark:border-red-900/30">
+                                                    <AlertTriangle className="h-3.5 w-3.5" />
+                                                    <span>Failed: <span className="font-semibold">{reviewProgress.invoices.stats.failed}</span></span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                                    <div
-                                        className="bg-blue-500 h-full transition-all duration-300"
-                                        style={{ width: `${reviewProgress.invoices.progress_percent}%` }}
-                                    />
+
+                                {/* Expenses Card */}
+                                <div className="group rounded-xl border bg-card p-5 shadow-sm transition-all hover:shadow-md hover:border-green-200 dark:hover:border-green-800">
+                                    <div className="mb-4 flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                                            <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                                                <Receipt className="h-5 w-5" />
+                                            </div>
+                                            <span className="font-bold">Expenses</span>
+                                        </div>
+                                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-900/10 dark:text-green-400 dark:border-green-800/30">
+                                            {reviewProgress.expenses.progress_percent}%
+                                        </Badge>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div className="flex items-end justify-between">
+                                            <div className="text-3xl font-bold tabular-nums text-foreground">
+                                                {reviewProgress.expenses.completed}
+                                                <span className="text-lg text-muted-foreground font-normal ml-1">/ {reviewProgress.expenses.total}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                                            <div className="h-full bg-green-500 rounded-full transition-all duration-500" style={{ width: `${reviewProgress.expenses.progress_percent}%` }} />
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-2 pt-2">
+                                            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 p-2 rounded border border-border/50">
+                                                <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+                                                <span>Reviewed: <span className="font-semibold text-foreground">{reviewProgress.expenses.stats.reviewed}</span></span>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 p-2 rounded border border-border/50">
+                                                <Clock className="h-3.5 w-3.5 text-amber-500" />
+                                                <span>Pending: <span className="font-semibold text-foreground">{reviewProgress.expenses.stats.pending}</span></span>
+                                            </div>
+                                            {(reviewProgress.expenses.stats.failed > 0) && (
+                                                 <div className="col-span-2 flex items-center gap-2 text-xs text-red-600 bg-red-50 dark:bg-red-900/10 p-2 rounded border border-red-100 dark:border-red-900/30">
+                                                    <AlertTriangle className="h-3.5 w-3.5" />
+                                                    <span>Failed: <span className="font-semibold">{reviewProgress.expenses.stats.failed}</span></span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="text-xs text-muted-foreground flex gap-4 mt-2">
-                                    <span>✓ Reviewed: {reviewProgress.invoices.stats.reviewed}</span>
-                                    <span>⏳ Pending: {reviewProgress.invoices.stats.pending}</span>
-                                    <span>⏸ Queued: {reviewProgress.invoices.stats.not_started}</span>
-                                    {reviewProgress.invoices.stats.failed > 0 && <span>✗ Failed: {reviewProgress.invoices.stats.failed}</span>}
+
+                                {/* Bank Statements Card */}
+                                <div className="group rounded-xl border bg-card p-5 shadow-sm transition-all hover:shadow-md hover:border-purple-200 dark:hover:border-purple-800">
+                                    <div className="mb-4 flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400">
+                                            <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                                                <Landmark className="h-5 w-5" />
+                                            </div>
+                                            <span className="font-bold">Statements</span>
+                                        </div>
+                                        <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/10 dark:text-purple-400 dark:border-purple-800/30">
+                                            {reviewProgress.statements.progress_percent}%
+                                        </Badge>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div className="flex items-end justify-between">
+                                            <div className="text-3xl font-bold tabular-nums text-foreground">
+                                                {reviewProgress.statements.completed}
+                                                <span className="text-lg text-muted-foreground font-normal ml-1">/ {reviewProgress.statements.total}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                                            <div className="h-full bg-purple-500 rounded-full transition-all duration-500" style={{ width: `${reviewProgress.statements.progress_percent}%` }} />
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-2 pt-2">
+                                            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 p-2 rounded border border-border/50">
+                                                <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+                                                <span>Reviewed: <span className="font-semibold text-foreground">{reviewProgress.statements.stats.reviewed}</span></span>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 p-2 rounded border border-border/50">
+                                                <Clock className="h-3.5 w-3.5 text-amber-500" />
+                                                <span>Pending: <span className="font-semibold text-foreground">{reviewProgress.statements.stats.pending}</span></span>
+                                            </div>
+                                            {(reviewProgress.statements.stats.failed > 0) && (
+                                                 <div className="col-span-2 flex items-center gap-2 text-xs text-red-600 bg-red-50 dark:bg-red-900/10 p-2 rounded border border-red-100 dark:border-red-900/30">
+                                                    <AlertTriangle className="h-3.5 w-3.5" />
+                                                    <span>Failed: <span className="font-semibold">{reviewProgress.statements.stats.failed}</span></span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Expenses Progress */}
-                            <div className="space-y-2 p-4 bg-muted/30 rounded-lg border border-border/50">
-                                <div className="flex items-center justify-between">
-                                    <span className="font-medium">💰 Expenses</span>
-                                    <span className="text-sm text-muted-foreground">
-                                        {reviewProgress.expenses.completed} / {reviewProgress.expenses.total}
-                                    </span>
+                            <div className="flex items-start gap-3 p-4 bg-muted/50 rounded-lg border border-border/50 text-sm text-muted-foreground">
+                                <RotateCcw className="h-4 w-4 mt-0.5 animate-spin-slow" />
+                                <div className="space-y-1">
+                                    <p className="font-medium text-foreground">Live Updates Active</p>
+                                    <p>The system is automatically polling for updates every 2 seconds. You can close this modal and the review process will continue uninterrupted in the background.</p>
                                 </div>
-                                <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                                    <div
-                                        className="bg-green-500 h-full transition-all duration-300"
-                                        style={{ width: `${reviewProgress.expenses.progress_percent}%` }}
-                                    />
-                                </div>
-                                <div className="text-xs text-muted-foreground flex gap-4 mt-2">
-                                    <span>✓ Reviewed: {reviewProgress.expenses.stats.reviewed}</span>
-                                    <span>⏳ Pending: {reviewProgress.expenses.stats.pending}</span>
-                                    <span>⏸ Queued: {reviewProgress.expenses.stats.not_started}</span>
-                                    {reviewProgress.expenses.stats.failed > 0 && <span>✗ Failed: {reviewProgress.expenses.stats.failed}</span>}
-                                </div>
-                            </div>
-
-                            {/* Bank Statements Progress */}
-                            <div className="space-y-2 p-4 bg-muted/30 rounded-lg border border-border/50">
-                                <div className="flex items-center justify-between">
-                                    <span className="font-medium">🏦 Bank Statements</span>
-                                    <span className="text-sm text-muted-foreground">
-                                        {reviewProgress.statements.completed} / {reviewProgress.statements.total}
-                                    </span>
-                                </div>
-                                <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                                    <div
-                                        className="bg-purple-500 h-full transition-all duration-300"
-                                        style={{ width: `${reviewProgress.statements.progress_percent}%` }}
-                                    />
-                                </div>
-                                <div className="text-xs text-muted-foreground flex gap-4 mt-2">
-                                    <span>✓ Reviewed: {reviewProgress.statements.stats.reviewed}</span>
-                                    <span>⏳ Pending: {reviewProgress.statements.stats.pending}</span>
-                                    <span>⏸ Queued: {reviewProgress.statements.stats.not_started}</span>
-                                    {reviewProgress.statements.stats.failed > 0 && <span>✗ Failed: {reviewProgress.statements.stats.failed}</span>}
-                                </div>
-                            </div>
-
-                            <div className="text-sm text-muted-foreground bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800/50">
-                                <p>💡 This modal will auto-refresh every 2 seconds. You can close it and check back later - the review will continue in the background.</p>
                             </div>
                         </div>
                     ) : null}
 
-                    <DialogFooter className="flex items-center justify-between">
-                        <div className="flex gap-2">
-                            {reviewProgress && reviewProgress.overall_progress_percent > 0 && (
-                                <ProfessionalButton
-                                    onClick={handleCancelFullReview}
-                                    disabled={isTriggeringReview}
-                                    loading={isTriggeringReview}
-                                    variant="destructive"
-                                    className="bg-red-600 hover:bg-red-700"
+                    <div className="p-6 pt-4 border-t bg-muted/5">
+                        <DialogFooter className="flex-col sm:flex-row gap-3 sm:justify-between items-center w-full">
+                            <div className="flex gap-2 w-full sm:w-auto">
+                                <Button 
+                                    variant="ghost" 
+                                    onClick={() => setShowReviewProgress(false)}
+                                    className="flex-1 sm:flex-none"
                                 >
-                                    <X className="mr-2 h-4 w-4" />
-                                    Cancel Review
-                                </ProfessionalButton>
-                            )}
-                        </div>
-                        <div>
-                            <ProfessionalButton
-                                onClick={() => setShowReviewConfirmation(true)}
-                                disabled={isTriggeringReview || (reviewProgress && (reviewProgress.invoices.stats.pending > 0 || reviewProgress.expenses.stats.pending > 0 || reviewProgress.statements.stats.pending > 0))}
-                                loading={isTriggeringReview}
-                                className="bg-blue-600 hover:bg-blue-700"
-                            >
-                                <Zap className="mr-2 h-4 w-4" />
-                                Trigger Full System Review
-                            </ProfessionalButton>
-                        </div>
-                        <div className="flex gap-2">
-                            <Button variant="outline" onClick={() => setShowReviewProgress(false)}>
-                                Close
-                            </Button>
-                            <Button onClick={fetchReviewProgress} disabled={isLoadingProgress}>
-                                {isLoadingProgress ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Refreshing...
-                                    </>
-                                ) : (
-                                    <>
-                                        <RotateCcw className="mr-2 h-4 w-4" />
-                                        Refresh Now
-                                    </>
+                                    Close Monitor
+                                </Button>
+                                <Button 
+                                    variant="outline"
+                                    onClick={fetchReviewProgress} 
+                                    disabled={isLoadingProgress}
+                                    className="flex-1 sm:flex-none"
+                                >
+                                    {isLoadingProgress ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
+                                    Refresh Status
+                                </Button>
+                            </div>
+
+                            <div className="flex gap-2 w-full sm:w-auto justify-end">
+                                {reviewProgress && reviewProgress.overall_progress_percent > 0 && reviewProgress.overall_progress_percent < 100 && (
+                                    <Button
+                                        onClick={handleCancelFullReview}
+                                        disabled={isTriggeringReview}
+                                        variant="destructive"
+                                        className="flex-1 sm:flex-none border-destructive/20 hover:bg-destructive/90"
+                                    >
+                                        <X className="mr-2 h-4 w-4" />
+                                        Stop Review
+                                    </Button>
                                 )}
-                            </Button>
-                        </div>
-                    </DialogFooter>
+
+                                <Button
+                                    onClick={() => setShowReviewConfirmation(true)}
+                                    disabled={isTriggeringReview || (reviewProgress && (reviewProgress.invoices.stats.pending > 0 || reviewProgress.expenses.stats.pending > 0 || reviewProgress.statements.stats.pending > 0))}
+                                    className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20"
+                                >
+                                    {isTriggeringReview ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                                    Trigger New Review
+                                </Button>
+                            </div>
+                        </DialogFooter>
+                    </div>
                 </DialogContent>
             </Dialog>
 
