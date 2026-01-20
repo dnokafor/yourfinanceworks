@@ -11,9 +11,9 @@ import asyncio
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 
-from core.services.ai_config_service import AIConfigService
-from core.services.ocr_service import _run_ocr, track_ai_usage
-from core.services.prompt_service import get_prompt_service
+from commercial.ai.services.ai_config_service import AIConfigService
+from commercial.ai.services.ocr_service import _run_ocr, track_ai_usage
+from commercial.prompt_management.services.prompt_service import get_prompt_service
 
 logger = logging.getLogger(__name__)
 

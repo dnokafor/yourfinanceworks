@@ -63,7 +63,7 @@ class BaseAnomalyRule(ABC):
         if not ai_config:
             return None
 
-        from core.services.prompt_service import PromptService
+        from commercial.prompt_management.services.prompt_service import PromptService
         from litellm import acompletion as completion
         import json
         import logging

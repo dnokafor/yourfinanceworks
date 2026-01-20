@@ -204,7 +204,7 @@ async def app_lifespan(app: FastAPI):
 
         # Shutdown: flush Kafka producers
         try:
-            from core.services.ocr_service import flush_all_producers
+            from commercial.ai.services.ocr_service import flush_all_producers
             flush_all_producers(10.0)
         except Exception:
             pass

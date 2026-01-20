@@ -1661,7 +1661,7 @@ async def trigger_full_audit(
         tenant_session.close()
 
     logger.info("trigger_full_audit: License check passed, proceeding with audit scan")
-    from core.services.ocr_service import publish_fraud_audit_task
+    from commercial.ai.services.ocr_service import publish_fraud_audit_task
     from core.models.models_per_tenant import Expense, BankStatementTransaction
     from datetime import datetime, timezone, timedelta
 
@@ -1734,7 +1734,7 @@ async def trigger_reprocess_all(
         tenant_session.close()
 
     logger.info("trigger_reprocess_all: License check passed, proceeding with reprocess scan")
-    from core.services.ocr_service import publish_fraud_audit_task
+    from commercial.ai.services.ocr_service import publish_fraud_audit_task
     from core.models.models_per_tenant import Expense, BankStatementTransaction, Invoice
     from datetime import datetime, timezone, timedelta
 

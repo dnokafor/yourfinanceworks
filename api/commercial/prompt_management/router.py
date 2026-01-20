@@ -10,8 +10,8 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field, field_validator
 
 from core.models.database import get_db, get_tenant_context
-from core.models.prompt_templates import PromptTemplate
-from core.services.prompt_service import PromptService, get_prompt_service
+from commercial.prompt_management.models.prompt_templates import PromptTemplate
+from commercial.prompt_management.services.prompt_service import PromptService, get_prompt_service
 from core.routers.auth import get_current_user
 from core.models.models import MasterUser
 from core.utils.feature_gate import require_feature

@@ -82,8 +82,12 @@ const Clients = () => {
     const fetchClients = async () => {
       setLoading(true);
       try {
-        const skip = (page - 1) * pageSize;
-        const data = await clientApi.getClients(skip, pageSize, labelFilter || undefined);
+        // Ensure page and pageSize are valid numbers
+        const currentPage = typeof page === 'number' ? Math.max(1, page) : 1;
+        const currentPageSize = typeof pageSize === 'number' ? Math.max(1, pageSize) : 50;
+        const skip = (currentPage - 1) * currentPageSize;
+
+        const data = await clientApi.getClients(skip, currentPageSize, labelFilter || undefined);
         setClients(data.items);
         setTotalClients(data.total);
       } catch (error) {
@@ -192,7 +196,12 @@ const Clients = () => {
                 {/* Page Size */}
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground">{t('common.page_size', { defaultValue: 'Page Size' })}</span>
-                  <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
+                  <Select value={String(pageSize)} onValueChange={(v) => { 
+                    // Ensure v is a string before converting to number
+                    const pageSizeValue = typeof v === 'string' ? Number(v) : 50;
+                    setPageSize(pageSizeValue); 
+                    setPage(1); 
+                  }}>
                     <SelectTrigger className="w-[100px] h-10 rounded-lg border-border/50 bg-muted/30">
                       <SelectValue />
                     </SelectTrigger>
@@ -243,8 +252,12 @@ const Clients = () => {
                       onClick={async () => {
                         try {
                           await clientApi.bulkLabels(selectedIds, 'add', bulkLabel.trim());
-                          const skip = (page - 1) * pageSize;
-                          const data = await clientApi.getClients(skip, pageSize, labelFilter || undefined);
+                          // Ensure page and pageSize are valid numbers
+                          const currentPage = typeof page === 'number' ? Math.max(1, page) : 1;
+                          const currentPageSize = typeof pageSize === 'number' ? Math.max(1, pageSize) : 50;
+                          const skip = (currentPage - 1) * currentPageSize;
+
+                          const data = await clientApi.getClients(skip, currentPageSize, labelFilter || undefined);
                           setClients(data.items);
                           setTotalClients(data.total);
                           setSelectedIds([]);
@@ -267,8 +280,12 @@ const Clients = () => {
                       onClick={async () => {
                         try {
                           await clientApi.bulkLabels(selectedIds, 'remove', bulkLabel.trim());
-                          const skip = (page - 1) * pageSize;
-                          const data = await clientApi.getClients(skip, pageSize, labelFilter || undefined);
+                          // Ensure page and pageSize are valid numbers
+                          const currentPage = typeof page === 'number' ? Math.max(1, page) : 1;
+                          const currentPageSize = typeof pageSize === 'number' ? Math.max(1, pageSize) : 50;
+                          const skip = (currentPage - 1) * currentPageSize;
+
+                          const data = await clientApi.getClients(skip, currentPageSize, labelFilter || undefined);
                           setClients(data.items);
                           setTotalClients(data.total);
                           setSelectedIds([]);

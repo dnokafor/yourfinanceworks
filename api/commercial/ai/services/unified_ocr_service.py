@@ -93,7 +93,7 @@ class TextExtractionEngine:
         """Initialize text extraction components."""
         try:
             # Initialize enhanced PDF extractor with OCR fallback
-            from core.services.enhanced_pdf_extractor import EnhancedPDFTextExtractor
+            from commercial.ai.services.enhanced_pdf_extractor import EnhancedPDFTextExtractor
             self.pdf_extractor = EnhancedPDFTextExtractor(self.config.ai_config)
             logger.info("✅ Enhanced PDF text extractor initialized")
         except ImportError as e:
@@ -102,7 +102,7 @@ class TextExtractionEngine:
         
         try:
             # Initialize bank statement OCR processor
-            from core.services.bank_statement_ocr_processor import BankStatementOCRProcessor
+            from commercial.ai_bank_statement.services.bank_statement_ocr_processor import BankStatementOCRProcessor
             self.ocr_processor = BankStatementOCRProcessor(self.config.ai_config)
             logger.info("✅ Bank statement OCR processor initialized")
         except ImportError as e:
@@ -190,7 +190,7 @@ class StructuredDataEngine:
         """Initialize structured data extraction components."""
         try:
             # Import OCR service functions
-            from core.services.ocr_service import _run_ocr
+            from commercial.ai.services.ocr_service import _run_ocr
             self.ai_ocr_function = _run_ocr
             logger.info("✅ AI vision OCR function initialized")
         except ImportError as e:

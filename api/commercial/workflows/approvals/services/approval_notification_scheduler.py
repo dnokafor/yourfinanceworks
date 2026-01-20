@@ -11,7 +11,7 @@ from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 
-from api.config import APP_NAME
+from config import APP_NAME
 from core.models.models_per_tenant import (
     ExpenseApproval, User, ApprovalRule, Expense
 )

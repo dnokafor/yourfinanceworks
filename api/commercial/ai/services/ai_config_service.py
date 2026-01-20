@@ -98,7 +98,22 @@ class AIConfigService:
         try:
             db_config = cls._get_database_config(db, require_ocr, component)
             if db_config:
-                logger.info(f"Using AI config from database for {component}: {db_config['provider_name']}/{db_config['model_name']}")
+                # Fallback missing or local default URLs to environment variables
+                env_config = cls._get_env_config(component)
+                if env_config:
+                    # Priority 1: Provider URL / API Base
+                    # If DB has localhost/127.0.0.1 or is empty, use environment
+                    db_url = db_config.get("provider_url")
+                    env_url = env_config.get("provider_url")
+                    if env_url and (not db_url or "localhost" in db_url or "127.0.0.1" in db_url):
+                        db_config["provider_url"] = env_url
+
+                    # Priority 2: Other missing fields
+                    for key in ["model_name", "provider_name", "api_key"]:
+                        if not db_config.get(key) and env_config.get(key):
+                            db_config[key] = env_config[key]
+
+                logger.info(f"Using AI config from database for {component}: {db_config['provider_name']}/{db_config['model_name']} at {db_config.get('provider_url')}")
                 return db_config
         except Exception as e:
             logger.debug(f"Database AI config fetch failed for {component}: {e}")
@@ -131,6 +146,9 @@ class AIConfigService:
                         # Ensure basic fields exist
                         if custom_config.get("provider_name") and custom_config.get("model_name"):
                              custom_config["source"] = "database_reviewer_custom"
+                             # Ensure ocr_enabled is true for reviewer component to allow LLM calls
+                             if "ocr_enabled" not in custom_config:
+                                 custom_config["ocr_enabled"] = True
                              return custom_config
 
             # Fallback to default active config for other components or if reviewer uses default

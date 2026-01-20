@@ -12,8 +12,8 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 from contextlib import contextmanager
 
-from core.settings.ocr_config import get_ocr_config, check_ocr_dependencies
-from core.exceptions.bank_ocr_exceptions import (
+from commercial.ai.settings.ocr_config import get_ocr_config, check_ocr_dependencies
+from commercial.ai.exceptions.bank_ocr_exceptions import (
     OCRUnavailableError,
     OCRTimeoutError,
     OCRProcessingError,
@@ -206,7 +206,7 @@ class BankStatementOCRProcessor:
 
         if self.db_session:
             try:
-                from core.services.ai_config_service import AIConfigService
+                from commercial.ai.services.ai_config_service import AIConfigService
                 return AIConfigService.get_ai_config(
                     self.db_session,
                     component="bank_statement",

@@ -1,10 +1,13 @@
 
 import asyncio
+from typing import Optional, Union, List, Dict, Any
 import logging
 import os
 import signal
 from datetime import datetime, timezone
 import json
+import tempfile
+from pathlib import Path
 
 from sqlalchemy import text
 
@@ -14,15 +17,16 @@ from sqlalchemy import create_engine, select, func
 from core.models.database import get_db, get_master_db, set_tenant_context, clear_tenant_context
 from core.models.models import Tenant
 from core.models.models_per_tenant import (
-    Invoice, Expense, BankStatement, Settings
+    Invoice, Expense, BankStatement, Settings,
+    ExpenseAttachment, InvoiceAttachment, BankStatementAttachment
 )
-from core.services.ai_config_service import AIConfigService
+from commercial.ai.services.ai_config_service import AIConfigService
 from core.services.review_service import ReviewService
-from core.services.invoice_ai_service import InvoiceAIService
+from commercial.ai_invoice.services.invoice_ai_service import InvoiceAIService
 from core.services.statement_service import StatementService
-from core.services.ocr_service import _run_ocr
+from commercial.ai.services.ocr_service import _run_ocr
 from core.services.tenant_database_manager import tenant_db_manager
-from core.services.prompt_service import get_prompt_service
+from commercial.prompt_management.services.prompt_service import get_prompt_service
 from workers.ocr_consumer import ProcessingStatus
 
 logger = logging.getLogger(__name__)
@@ -37,9 +41,108 @@ class ReviewProcessorWorker:
         self._kafka_consumer = None
         self._setup_signal_handlers()
 
+    async def _get_statement_service(self, db: Session, config: dict, prompt_name: str = "raw_text_extraction"):
+        """Get a configured StatementService instance."""
+        try:
+            return StatementService(
+                ai_config=config,
+                db_session=db,
+                prompt_name=prompt_name
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize StatementService: {e}")
+            return None
+
     def _setup_signal_handlers(self):
         for sig in (signal.SIGINT, signal.SIGTERM):
             signal.signal(sig, self._handle_exit)
+
+    async def _resolve_local_file(self, db: Session, tenant_id: int, file_path: str, record=None) -> tuple:
+        """
+        Ensures a file is available locally. Checks multiple paths and downloads from cloud if needed.
+        Returns (local_path, is_temporary)
+        """
+        if not file_path:
+            return None, False
+
+        # 1. Check local_cache_path if record has it
+        if record and hasattr(record, 'local_cache_path') and record.local_cache_path:
+            if os.path.exists(record.local_cache_path) and os.path.getsize(record.local_cache_path) > 0:
+                logger.debug(f"Using cached local file: {record.local_cache_path}")
+                return record.local_cache_path, False
+
+        # 2. Try various local paths
+        search_paths = []
+        if os.path.isabs(file_path):
+            search_paths.append(file_path)
+        else:
+            # Paths relative to /app (project root in Docker)
+            search_paths.append(os.path.join("/app", file_path))
+            if not file_path.startswith("attachments/"):
+                search_paths.append(os.path.join("/app/attachments", file_path))
+
+            # Paths relative to current working directory (for local dev)
+            search_paths.append(file_path)
+            if not file_path.startswith("attachments/"):
+                search_paths.append(os.path.join("attachments", file_path))
+
+        for p in search_paths:
+            if os.path.exists(p) and os.path.isfile(p):
+                logger.debug(f"Found local file at: {p}")
+                return p, False
+
+        # 3. Fallback to Cloud Storage Download
+        logger.info(f"File {file_path} not found locally, attempting cloud storage download for tenant {tenant_id}...")
+        try:
+            from commercial.cloud_storage.service import CloudStorageService
+            from commercial.cloud_storage.config import get_cloud_storage_config
+
+            cloud_config = get_cloud_storage_config()
+            cloud_storage_service = CloudStorageService(db, cloud_config)
+
+            # Try raw path first
+            s3_key = file_path
+            result = await cloud_storage_service.retrieve_file(
+                file_key=s3_key,
+                tenant_id=str(tenant_id),
+                user_id=1, # System
+                generate_url=False
+            )
+
+            # If not found, try with 'attachments/' prefix which is common for some types
+            if (not result.success or not result.metadata) and not s3_key.startswith("attachments/"):
+                logger.debug(f"Retrying cloud download with attachments/ prefix for {s3_key}")
+                result = await cloud_storage_service.retrieve_file(
+                    file_key=f"attachments/{s3_key}",
+                    tenant_id=str(tenant_id),
+                    user_id=1,
+                    generate_url=False
+                )
+
+            if result.success and result.metadata and 'content' in result.metadata:
+                ext = Path(file_path).suffix
+                with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+                    tmp.write(result.metadata['content'])
+                    temp_path = tmp.name
+
+                logger.info(f"Successfully downloaded cloud file to temporary path: {temp_path}")
+
+                # Update local cache path if model supports it (like BankStatement)
+                if record and hasattr(record, 'local_cache_path'):
+                    try:
+                        record.local_cache_path = temp_path
+                        db.commit()
+                    except Exception as e:
+                        logger.warning(f"Failed to update local_cache_path for record: {e}")
+
+                return temp_path, True
+            else:
+                logger.warning(f"Cloud retrieval failed for {file_path}: {result.error_message}")
+
+        except Exception as e:
+            logger.error(f"Error during cloud retrieval for {file_path}: {e}")
+
+        return None, False
 
     def _handle_exit(self, signum, frame):
         logger.info(f"Received signal {signum}, shutting down Review Processor...")
@@ -170,28 +273,31 @@ class ReviewProcessorWorker:
         """Process a single review trigger event"""
         try:
             tenant_id = event.get("tenant_id")
-            trigger_type = event.get("trigger_type")
+            entity_type = event.get("entity_type")
+            entity_id = event.get("entity_id")
+            model_override = event.get("model_override")
+            prompt_override = event.get("prompt_override")
 
-            if not tenant_id:
-                logger.warning(f"Received review event without tenant_id: {event}")
+            if not tenant_id or not entity_type or not entity_id:
+                logger.warning(f"Received review event without tenant_id, entity_type, or entity_id: {event}")
                 return
 
-            logger.info(f"Processing review event: {trigger_type} for tenant {tenant_id}")
+            logger.info(f"Processing event-driven review for {entity_type} {entity_id} for tenant {tenant_id}")
+            if model_override:
+                logger.info(f"Using model override: {model_override}")
+            if prompt_override:
+                logger.info(f"Using prompt override: {prompt_override[:50]}...")
 
-            # Get tenant from master DB
-            master_db = next(get_master_db())
-            try:
-                tenant = master_db.query(Tenant).filter(Tenant.id == tenant_id, Tenant.is_active == True).first()
-                if not tenant:
-                    logger.warning(f"Tenant {tenant_id} not found or inactive")
-                    return
+            if entity_type == "invoice":
+                await self.process_single_invoice(tenant_id, entity_id, model_override, prompt_override)
+            elif entity_type == "expense":
+                await self.process_single_expense(tenant_id, entity_id, model_override, prompt_override)
+            elif entity_type in ["bank_statement", "statement"]:
+                await self.process_single_bank_statement(tenant_id, entity_id, model_override, prompt_override)
+            else:
+                logger.warning(f"Unsupported entity_type for event-driven review: {entity_type}")
 
-                # Process the tenant immediately
-                await self.process_tenant(tenant)
-                logger.info(f"Completed event-driven review processing for tenant {tenant_id}")
-
-            finally:
-                master_db.close()
+            logger.info(f"Completed event-driven review processing for {entity_type} {entity_id} for tenant {tenant_id}")
 
         except Exception as e:
             logger.error(f"Error processing review event: {e}", exc_info=True)
@@ -289,23 +395,16 @@ class ReviewProcessorWorker:
                 logger.debug(f"Review integration disabled for tenant {tenant.id}")
                 return False
 
-            review_service = ReviewService(session)
-            reviewer_config = AIConfigService.get_ai_config(session, component="reviewer", require_ocr=True)
-
-            if not reviewer_config:
-                logger.warning(f"Review worker enabled but no reviewer config found for tenant {tenant.id}")
-                return False
-
             logger.info(f"Starting review processing for tenant {tenant.id} with batch_size={self.batch_size}")
 
             # Process Invoices with batch size
-            await self.process_invoices(session, tenant, review_service, reviewer_config)
-            
+            await self.process_invoices_batch(session, tenant)
+
             # Process Expenses with batch size
-            await self.process_expenses(session, tenant, review_service, reviewer_config)
+            await self.process_expenses_batch(session, tenant)
 
             # Process Bank Statements with batch size
-            await self.process_bank_statements(session, tenant, review_service, reviewer_config)
+            await self.process_bank_statements_batch(session, tenant)
 
             return True  # Review integration is enabled for this tenant
 
@@ -316,9 +415,166 @@ class ReviewProcessorWorker:
             session.close()
             clear_tenant_context()
 
-    async def process_invoices(self, db: Session, tenant: Tenant, review_service: ReviewService, config: dict):
+    async def process_single_invoice(self, tenant_id: int, invoice_id: int, model_override: Optional[str] = None, prompt_override: Optional[str] = None):
+        """Processes a single invoice for review, typically triggered by an event."""
+        logger.info(f"Processing single invoice {invoice_id} for tenant {tenant_id} (event-driven)")
+
+        set_tenant_context(tenant_id)
+        try:
+            SessionLocal_tenant = tenant_db_manager.get_tenant_session(tenant_id)
+            db = SessionLocal_tenant()
+            try:
+                invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+                if not invoice:
+                    logger.error(f"Invoice {invoice_id} not found for tenant {tenant_id}")
+                    return
+
+                # Resolve effective path
+                effective_path = invoice.attachment_path
+                if not effective_path:
+                    att = db.query(InvoiceAttachment).filter(InvoiceAttachment.invoice_id == invoice.id).first()
+                    if att:
+                        effective_path = att.file_path
+
+                if not effective_path:
+                    logger.error(f"No attachment found for Invoice {invoice_id}")
+                    return
+
+                invoice._effective_review_path = effective_path
+
+                review_service = ReviewService(db)
+                reviewer_config = AIConfigService.get_ai_config(db, component="reviewer", require_ocr=True)
+
+                if not reviewer_config:
+                    logger.warning(f"Review worker enabled but no reviewer config found for tenant {tenant_id}")
+                    return
+
+                if model_override:
+                    reviewer_config["model_name"] = model_override
+                    logger.info(f"Invoice {invoice_id}: Using model override: {model_override}")
+
+                if prompt_override:
+                    reviewer_config["prompt_override"] = prompt_override
+                    logger.info(f"Invoice {invoice_id}: Using prompt override")
+
+                await self._process_invoice_item(db, invoice, tenant_id, review_service, reviewer_config)
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Error processing single invoice {invoice_id} for tenant {tenant_id}: {e}", exc_info=True)
+        finally:
+            clear_tenant_context()
+
+    async def process_single_expense(self, tenant_id: int, expense_id: int, model_override: Optional[str] = None, prompt_override: Optional[str] = None):
+        """Processes a single expense for review, typically triggered by an event."""
+        logger.info(f"Processing single expense {expense_id} for tenant {tenant_id} (event-driven)")
+
+        set_tenant_context(tenant_id)
+        try:
+            SessionLocal_tenant = tenant_db_manager.get_tenant_session(tenant_id)
+            db = SessionLocal_tenant()
+            try:
+                expense = db.query(Expense).filter(Expense.id == expense_id).first()
+                if not expense:
+                    logger.error(f"Expense {expense_id} not found for tenant {tenant_id}")
+                    return
+
+                # Resolve effective path
+                effective_path = expense.receipt_path
+                if not effective_path:
+                    att = db.query(ExpenseAttachment).filter(ExpenseAttachment.expense_id == expense.id).first()
+                    if att:
+                        effective_path = att.file_path
+
+                if not effective_path:
+                    logger.error(f"No receipt/attachment found for Expense {expense_id}")
+                    return
+
+                expense._effective_review_path = effective_path
+
+                review_service = ReviewService(db)
+                reviewer_config = AIConfigService.get_ai_config(db, component="reviewer", require_ocr=True)
+
+                if not reviewer_config:
+                    logger.warning(f"Review worker enabled but no reviewer config found for tenant {tenant_id}")
+                    return
+
+                if model_override:
+                    reviewer_config["model_name"] = model_override
+                    logger.info(f"Expense {expense_id}: Using model override: {model_override}")
+
+                if prompt_override:
+                    reviewer_config["prompt_override"] = prompt_override
+                    logger.info(f"Expense {expense_id}: Using prompt override")
+
+                await self._process_expense_item(db, expense, tenant_id, review_service, reviewer_config)
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Error processing single expense {expense_id} for tenant {tenant_id}: {e}", exc_info=True)
+        finally:
+            clear_tenant_context()
+
+    async def process_single_bank_statement(self, tenant_id: int, statement_id: int, model_override: Optional[str] = None, prompt_override: Optional[str] = None):
+        """Processes a single bank statement for review, typically triggered by an event."""
+        logger.info(f"Processing single bank statement {statement_id} for tenant {tenant_id} (event-driven)")
+
+        set_tenant_context(tenant_id)
+        try:
+            SessionLocal_tenant = tenant_db_manager.get_tenant_session(tenant_id)
+            db = SessionLocal_tenant()
+            try:
+                statement = db.query(BankStatement).filter(BankStatement.id == statement_id).first()
+                if not statement:
+                    logger.error(f"Bank Statement {statement_id} not found for tenant {tenant_id}")
+                    return
+
+                # Resolve effective path
+                effective_path = statement.file_path
+                if not effective_path:
+                    att = db.query(BankStatementAttachment).filter(BankStatementAttachment.statement_id == statement.id).first()
+                    if att:
+                        effective_path = att.file_path
+
+                if not effective_path:
+                    logger.error(f"No file/attachment found for BankStatement {statement_id}")
+                    return
+
+                statement._effective_review_path = effective_path
+
+                review_service = ReviewService(db)
+                reviewer_config = AIConfigService.get_ai_config(db, component="reviewer", require_ocr=True)
+
+                if not reviewer_config:
+                    logger.warning(f"Review worker enabled but no reviewer config found for tenant {tenant_id}")
+                    return
+
+                if model_override:
+                    reviewer_config["model_name"] = model_override
+                    logger.info(f"Bank Statement {statement_id}: Using model override: {model_override}")
+
+                if prompt_override:
+                    reviewer_config["prompt_override"] = prompt_override
+                    logger.info(f"Bank Statement {statement_id}: Using prompt override")
+
+                await self._process_bank_statement_item(db, statement, tenant_id, review_service, reviewer_config)
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Error processing single bank statement {statement_id} for tenant {tenant_id}: {e}", exc_info=True)
+        finally:
+            clear_tenant_context()
+
+    async def process_invoices_batch(self, db: Session, tenant: Tenant):
+        """Processes a batch of invoices for review, typically for polling."""
+        review_service = ReviewService(db)
+        reviewer_config = AIConfigService.get_ai_config(db, component="reviewer", require_ocr=True)
+
+        if not reviewer_config:
+            logger.warning(f"Review worker enabled but no reviewer config found for tenant {tenant.id}")
+            return
+
         # Fetch invoices needing review
-        # Condition: review_status in ('not_started', 'pending')
         all_invoices = db.query(Invoice).filter(
             Invoice.review_status.in_(["not_started", "pending"])
         ).limit(self.batch_size).all()
@@ -327,87 +583,141 @@ class ReviewProcessorWorker:
             return
 
         logger.info(f"Found {len(all_invoices)} invoices to review for tenant {tenant.id}")
-        for inv in all_invoices:
-            logger.debug(f"Invoice {inv.id}: status='{inv.review_status}', attachment_path='{inv.attachment_path}'")
+
+        # Fetch related attachments for these invoices
+        invoice_ids = [i.id for i in all_invoices]
+        attachments = db.query(InvoiceAttachment).filter(
+            InvoiceAttachment.invoice_id.in_(invoice_ids)
+        ).all()
+        attachment_map = {a.invoice_id: a.file_path for a in attachments}
 
         # Separate invoices with and without attachments
-        invoices_with_attachment = [i for i in all_invoices if i.attachment_path]
-        invoices_without_attachment = [i for i in all_invoices if not i.attachment_path]
+        invoices_with_attachment = []
+        invoices_without_attachment = []
 
-        logger.info(f"Invoices with attachments: {len(invoices_with_attachment)}, without attachments: {len(invoices_without_attachment)}")
-
-        if invoices_with_attachment:
-            logger.info(f"Processing {len(invoices_with_attachment)} invoices with attachments")
-
-        # Instantiate service with reviewer component
-        invoice_service = InvoiceAIService(db, component="reviewer")
+        for inv in all_invoices:
+            effective_path = inv.attachment_path or attachment_map.get(inv.id)
+            if effective_path:
+                inv._effective_review_path = effective_path
+                invoices_with_attachment.append(inv)
+            else:
+                invoices_without_attachment.append(inv)
 
         for invoice in invoices_with_attachment:
             if not self.running: break
+            await self._process_invoice_item(db, invoice, tenant.id, review_service, reviewer_config)
 
-            logger.info(f"Reviewing Invoice {invoice.id}...")
-            invoice.review_status = "pending"
-            db.commit()
-
-            try:
-                # Re-extract data using reviewer config and specific prompt
-                prompt_service = get_prompt_service(db)
-                reviewer_prompt = prompt_service.get_prompt(
-                    name="invoice_review_extraction",
-                    variables={"text": "{{text}}"},
-                    provider_name=config.get("provider_name"),
-                    fallback_prompt="Extract invoice data with absolute precision for a forensic review."
-                )
-
-                extract_result = await invoice_service.extract_invoice_data(
-                    invoice.attachment_path, 
-                    custom_prompt=reviewer_prompt
-                )
-
-                if extract_result.get("success"):
-                     review_data = extract_result.get("data", {})
-                     review_service.compare_and_store_review(invoice, review_data)
-                else:
-                    logger.error(f"Review extraction failed for Invoice {invoice.id}: {extract_result.get('error')}")
-                    invoice.review_status = "failed"
-                    db.commit()
-
-            except Exception as e:
-                logger.error(f"Exception reviewing Invoice {invoice.id}: {e}")
-                invoice.review_status = "failed"
-                db.commit()
-
-        # Handle invoices without attachments - mark as reviewed with no diff
+        # Handle invoices without attachments
         if invoices_without_attachment:
-            logger.info(f"Marking {len(invoices_without_attachment)} invoices without attachments as reviewed")
             for invoice in invoices_without_attachment:
                 if not self.running: break
                 try:
-                    logger.info(f"Updating Invoice {invoice.id} status from '{invoice.review_status}' to 'reviewed' (no attachment)")
                     invoice.review_status = "reviewed"
                     invoice.review_result = {"note": "No attachment available for review"}
                     invoice.reviewed_at = datetime.now(timezone.utc)
-                    # Flush changes to ensure they're written to database
-                    db.flush()
                     db.commit()
-                    # Refresh object to ensure we have the latest state from database
-                    db.refresh(invoice)
-                    logger.info(f"Successfully marked Invoice {invoice.id} as reviewed (no attachment). Status is now: '{invoice.review_status}'")
-
-                    # Verify the change is persisted by querying again
-                    verify_invoice = db.query(Invoice).filter(Invoice.id == invoice.id).first()
-                    logger.info(f"Database verification: Invoice {invoice.id} status is '{verify_invoice.review_status}'")
                 except Exception as e:
                     logger.error(f"Exception marking Invoice {invoice.id} as reviewed: {e}")
-                    try:
-                        invoice.review_status = "failed"
-                        db.commit()
-                    except Exception as commit_error:
-                        logger.error(f"Failed to commit error status for Invoice {invoice.id}: {commit_error}")
+                    invoice.review_status = "failed"
+                    db.commit()
 
-    async def process_expenses(self, db: Session, tenant: Tenant, review_service: ReviewService, config: dict):
-        # Fetch expenses needing review
-        # Condition: review_status in ('not_started', 'pending')
+    async def _process_invoice_item(self, db: Session, invoice: Invoice, tenant_id: int, review_service: ReviewService, config: dict):
+        """Helper to process a single invoice item."""
+        local_path, is_temp = await self._resolve_local_file(db, tenant_id, invoice._effective_review_path, invoice)
+        if not local_path:
+            logger.error(f"Could not resolve file for Invoice {invoice.id}: {invoice._effective_review_path}")
+            invoice.review_status = "failed"
+            db.commit()
+            return
+
+        logger.info(f"Reviewing Invoice {invoice.id}...")
+        invoice.review_status = "pending"
+        db.commit()
+
+        try:
+            # Pass 1: Extract RAW data from document
+            logger.info(f"Pass 1: Extracting raw context from invoice {invoice.id}...")
+            raw_context = ""
+
+            # Fetch OCR config for Pass 1 (vision support)
+            # TODO: Future updates should allow users to explicitly configure both vision (OCR) and text-based (Reviewer) models in the AI Configuration tab.
+            ocr_config = AIConfigService.get_ai_config(db, component="ocr", require_ocr=True) or config
+
+            if local_path.lower().endswith('.pdf'):
+                try:
+                    svc = await self._get_statement_service(db, ocr_config)
+                    if svc:
+                        docs = svc.load_pdf_with_langchain(local_path)
+                        p_docs = svc.preprocess_documents(docs)
+                        raw_context = "\n\n".join([doc.page_content for doc in p_docs])
+                except Exception as e:
+                    logger.warning(f"Pass 1: PDF extraction failed: {e}")
+
+            if not raw_context:
+                prompt_service = get_prompt_service(db)
+                raw_text_prompt = prompt_service.get_prompt(
+                    name="raw_text_extraction",
+                    variables={},
+                    provider_name=ocr_config.get("provider_name"),
+                    fallback_prompt="Extract all text from this invoice exactly as it appears."
+                )
+
+                # Always use OCR config for vision-capable Pass 1
+                first_pass_result = await _run_ocr(file_path=local_path, ai_config=ocr_config, custom_prompt=raw_text_prompt)
+                if isinstance(first_pass_result, dict):
+                    raw_context = first_pass_result.get("raw") or first_pass_result.get("text") or json.dumps(first_pass_result, indent=2)
+                else:
+                    raw_context = str(first_pass_result)
+
+            if raw_context:
+                # Pass 2: Apply reviewer prompt to raw text
+                logger.info(f"Pass 2: Applying reviewer prompt to invoice {invoice.id}...")
+                # Use LLM to re-process the data with reviewer prompt
+                from commercial.ai.services.ocr_service import _convert_raw_ocr_to_json
+                review_data = await _convert_raw_ocr_to_json(
+                    raw_content=raw_context,
+                    model_name=config.get("model_name", "gpt-4"),
+                    provider_name=config.get("provider_name", "openai"),
+                    kwargs={
+                        "model": config.get("model_name", "gpt-4"),
+                        "api_key": config.get("api_key"),
+                        "base_url": config.get("provider_url")
+                    },
+                    db_session=db,
+                    custom_prompt=config.get("prompt_override")
+                )
+
+                if review_data and "error" not in review_data:
+                    review_service.compare_and_store_review(invoice, review_data)
+                else:
+                    logger.error(f"Pass 2 failed for Invoice {invoice.id}")
+                    invoice.review_status = "failed"
+                    db.commit()
+            else:
+                logger.error(f"Pass 1 extraction failed for Invoice {invoice.id}")
+                invoice.review_status = "failed"
+                db.commit()
+
+        except Exception as e:
+            logger.error(f"Exception reviewing Invoice {invoice.id}: {e}")
+            invoice.review_status = "failed"
+            db.commit()
+        finally:
+            if is_temp and os.path.exists(local_path):
+                try:
+                    os.remove(local_path)
+                except Exception:
+                    pass
+
+    async def process_expenses_batch(self, db: Session, tenant: Tenant):
+        """Processes a batch of expenses for review, typically for polling."""
+        review_service = ReviewService(db)
+        reviewer_config = AIConfigService.get_ai_config(db, component="reviewer", require_ocr=True)
+
+        if not reviewer_config:
+            logger.warning(f"Review worker enabled but no reviewer config found for tenant {tenant.id}")
+            return
+
         all_expenses = db.query(Expense).filter(
             Expense.review_status.in_(["not_started", "pending"])
         ).limit(self.batch_size).all()
@@ -417,51 +727,28 @@ class ReviewProcessorWorker:
 
         logger.info(f"Found {len(all_expenses)} expenses to review for tenant {tenant.id}")
 
-        # Separate expenses with and without receipts
-        expenses_with_receipt = [e for e in all_expenses if e.receipt_path]
-        expenses_without_receipt = [e for e in all_expenses if not e.receipt_path]
+        expense_ids = [e.id for e in all_expenses]
+        expense_attachments = db.query(ExpenseAttachment).filter(
+            ExpenseAttachment.expense_id.in_(expense_ids)
+        ).all()
+        attachment_map = {a.expense_id: a.file_path for a in expense_attachments}
 
-        if expenses_with_receipt:
-            logger.info(f"Processing {len(expenses_with_receipt)} expenses with receipts")
+        expenses_with_receipt = []
+        expenses_without_receipt = []
+
+        for exp in all_expenses:
+            effective_path = exp.receipt_path or attachment_map.get(exp.id)
+            if effective_path:
+                exp._effective_review_path = effective_path
+                expenses_with_receipt.append(exp)
+            else:
+                expenses_without_receipt.append(exp)
 
         for expense in expenses_with_receipt:
-             if not self.running: break
+            if not self.running: break
+            await self._process_expense_item(db, expense, tenant.id, review_service, reviewer_config)
 
-             logger.info(f"Reviewing Expense {expense.id}...")
-             expense.review_status = "pending"
-             db.commit()
-
-             try:
-                 # Use dedicated reviewer prompt for expenses
-                 prompt_service = get_prompt_service(db)
-                 reviewer_prompt = prompt_service.get_prompt(
-                     name="expense_review_extraction",
-                     variables={"raw_content": "{{raw_content}}"},
-                     provider_name=config.get("provider_name"),
-                     fallback_prompt="Extract expense data with meticulous attention to subtotals and taxes."
-                 )
-
-                 result = await _run_ocr(
-                     file_path=expense.receipt_path,
-                     ai_config=config,
-                     custom_prompt=reviewer_prompt
-                 )
-
-                 if isinstance(result, dict) and "error" not in result:
-                      review_service.compare_and_store_review(expense, result)
-                 else:
-                      logger.error(f"Review extraction failed for Expense {expense.id}")
-                      expense.review_status = "failed"
-                      db.commit()
-
-             except Exception as e:
-                 logger.error(f"Exception reviewing Expense {expense.id}: {e}")
-                 expense.review_status = "failed"
-                 db.commit()
-
-        # Handle expenses without receipts - mark as reviewed with no diff
         if expenses_without_receipt:
-            logger.info(f"Marking {len(expenses_without_receipt)} expenses without receipts as reviewed")
             for expense in expenses_without_receipt:
                 if not self.running: break
                 try:
@@ -469,14 +756,106 @@ class ReviewProcessorWorker:
                     expense.review_result = {"note": "No receipt available for review"}
                     expense.reviewed_at = datetime.now(timezone.utc)
                     db.commit()
-                    logger.info(f"Marked Expense {expense.id} as reviewed (no receipt)")
                 except Exception as e:
                     logger.error(f"Exception marking Expense {expense.id} as reviewed: {e}")
                     expense.review_status = "failed"
                     db.commit()
 
-    async def process_bank_statements(self, db: Session, tenant: Tenant, review_service: ReviewService, config: dict):
-        # Fetch statements needing review
+    async def _process_expense_item(self, db: Session, expense: Expense, tenant_id: int, review_service: ReviewService, config: dict):
+        """Helper to process a single expense item."""
+        local_path, is_temp = await self._resolve_local_file(db, tenant_id, expense._effective_review_path, expense)
+        if not local_path:
+            logger.error(f"Could not resolve file for Expense {expense.id}: {expense._effective_review_path}")
+            expense.review_status = "failed"
+            db.commit()
+            return
+
+        logger.info(f"Reviewing Expense {expense.id}...")
+        expense.review_status = "pending"
+        db.commit()
+
+        try:
+            logger.info(f"Pass 1: Extracting raw context from expense {expense.id}...")
+            raw_context = ""
+
+            # Fetch OCR config for Pass 1 (vision support)
+            # TODO: Future updates should allow users to explicitly configure both vision (OCR) and text-based (Reviewer) models in the AI Configuration tab.
+            ocr_config = AIConfigService.get_ai_config(db, component="ocr", require_ocr=True) or config
+
+            if local_path.lower().endswith('.pdf'):
+                try:
+                    svc = await self._get_statement_service(db, ocr_config)
+                    if svc:
+                        docs = svc.load_pdf_with_langchain(local_path)
+                        p_docs = svc.preprocess_documents(docs)
+                        raw_context = "\n\n".join([doc.page_content for doc in p_docs])
+                except Exception as e:
+                    logger.warning(f"Pass 1: PDF extraction failed for expense {expense.id}: {e}")
+
+            if not raw_context:
+                prompt_service = get_prompt_service(db)
+                raw_text_prompt = prompt_service.get_prompt(
+                    name="raw_text_extraction",
+                    variables={},
+                    provider_name=ocr_config.get("provider_name"),
+                    fallback_prompt="Transcribe all text from this receipt exactly."
+                )
+
+                # Always use OCR config for vision-capable Pass 1
+                first_pass_result = await _run_ocr(file_path=local_path, ai_config=ocr_config, custom_prompt=raw_text_prompt)
+                if isinstance(first_pass_result, dict):
+                    raw_context = first_pass_result.get("raw") or first_pass_result.get("text") or json.dumps(first_pass_result, indent=2)
+                else:
+                    raw_context = str(first_pass_result)
+
+            if raw_context:
+                logger.info(f"Pass 2: Applying reviewer prompt to expense {expense.id}...")
+                # Use LLM to re-process the data with reviewer prompt
+                from commercial.ai.services.ocr_service import _convert_raw_ocr_to_json
+                result = await _convert_raw_ocr_to_json(
+                    raw_content=raw_context,
+                    model_name=config.get("model_name", "gpt-4"),
+                    provider_name=config.get("provider_name", "openai"),
+                    kwargs={
+                        "model": config.get("model_name", "gpt-4"),
+                        "api_key": config.get("api_key"),
+                        "base_url": config.get("provider_url")
+                    },
+                    db_session=db,
+                    custom_prompt=config.get("prompt_override")
+                )
+
+                if result and "error" not in result:
+                    review_service.compare_and_store_review(expense, result)
+                else:
+                    logger.error(f"Pass 2 failed for Expense {expense.id}")
+                    expense.review_status = "failed"
+                    db.commit()
+            else:
+                logger.error(f"Pass 1 failed for Expense {expense.id}")
+                expense.review_status = "failed"
+                db.commit()
+
+        except Exception as e:
+            logger.error(f"Exception reviewing Expense {expense.id}: {e}")
+            expense.review_status = "failed"
+            db.commit()
+        finally:
+            if is_temp and os.path.exists(local_path):
+                try:
+                    os.remove(local_path)
+                except Exception:
+                    pass
+
+    async def process_bank_statements_batch(self, db: Session, tenant: Tenant):
+        """Processes a batch of bank statements for review, typically for polling."""
+        review_service = ReviewService(db)
+        reviewer_config = AIConfigService.get_ai_config(db, component="reviewer", require_ocr=True)
+
+        if not reviewer_config:
+            logger.warning(f"Review worker enabled but no reviewer config found for tenant {tenant.id}")
+            return
+
         all_stmts = db.query(BankStatement).filter(
             BankStatement.review_status.in_(["not_started", "pending"]),
             BankStatement.status == ProcessingStatus.PROCESSED.value
@@ -487,49 +866,28 @@ class ReviewProcessorWorker:
 
         logger.info(f"Found {len(all_stmts)} statements to review for tenant {tenant.id}")
 
-        # Separate statements with and without files
-        stmts_with_file = [s for s in all_stmts if s.file_path]
-        stmts_without_file = [s for s in all_stmts if not s.file_path]
+        stmt_ids = [s.id for s in all_stmts]
+        stmt_attachments = db.query(BankStatementAttachment).filter(
+            BankStatementAttachment.statement_id.in_(stmt_ids)
+        ).all()
+        attachment_map = {a.statement_id: a.file_path for a in stmt_attachments}
 
-        if stmts_with_file:
-            logger.info(f"Processing {len(stmts_with_file)} statements with files")
+        stmts_with_file = []
+        stmts_without_file = []
 
-        # Instantiate service with reviewer prompt name
-        # Note: StatementService is an alias for UniversalBankTransactionExtractor
-        statement_service = StatementService(
-            ai_config=config, 
-            db_session=db, 
-            prompt_name="bank_statement_review_extraction"
-        )
+        for stmt in all_stmts:
+            effective_path = stmt.file_path or attachment_map.get(stmt.id)
+            if effective_path:
+                stmt._effective_review_path = effective_path
+                stmts_with_file.append(stmt)
+            else:
+                stmts_without_file.append(stmt)
 
         for stmt in stmts_with_file:
-             if not self.running: break
+            if not self.running: break
+            await self._process_bank_statement_item(db, stmt, tenant.id, review_service, reviewer_config)
 
-             logger.info(f"Reviewing Bank Statement {stmt.id}...")
-             stmt.review_status = "pending"
-             db.commit()
-
-             try:
-                  # Process PDF to get transactions
-                  # 1. Load docs
-                  docs = statement_service.load_pdf_with_langchain(stmt.file_path)
-                  # 2. Preprocess (chunking etc)
-                  p_docs = statement_service.preprocess_documents(docs)
-                  # 3. Extract
-                  transactions = statement_service.extract_transactions_from_documents(p_docs)
-
-                  # Store results
-                  review_data = {"transactions": transactions}
-                  review_service.compare_and_store_review(stmt, review_data)
-
-             except Exception as e:
-                  logger.error(f"Exception reviewing Statement {stmt.id}: {e}")
-                  stmt.review_status = "failed"
-                  db.commit()
-
-        # Handle statements without files - mark as reviewed with no diff
         if stmts_without_file:
-            logger.info(f"Marking {len(stmts_without_file)} statements without files as reviewed")
             for stmt in stmts_without_file:
                 if not self.running: break
                 try:
@@ -537,11 +895,40 @@ class ReviewProcessorWorker:
                     stmt.review_result = {"note": "No file available for review"}
                     stmt.reviewed_at = datetime.now(timezone.utc)
                     db.commit()
-                    logger.info(f"Marked Bank Statement {stmt.id} as reviewed (no file)")
                 except Exception as e:
                     logger.error(f"Exception marking Bank Statement {stmt.id} as reviewed: {e}")
                     stmt.review_status = "failed"
                     db.commit()
+
+    async def _process_bank_statement_item(self, db: Session, stmt: BankStatement, tenant_id: int, review_service: ReviewService, config: dict):
+        """Helper to process a single bank statement item."""
+        local_path, is_temp = await self._resolve_local_file(db, tenant_id, stmt._effective_review_path, stmt)
+        if not local_path:
+            logger.error(f"Could not resolve file for Bank Statement {stmt.id}: {stmt._effective_review_path}")
+            stmt.review_status = "failed"
+            db.commit()
+            return
+
+        logger.info(f"Reviewing Bank Statement {stmt.id}...")
+        stmt.review_status = "pending"
+        db.commit()
+
+        try:
+            statement_service = await self._get_statement_service(db, config, "bank_statement_review_extraction")
+            if not statement_service:
+                raise Exception("StatementService not available")
+
+            docs = statement_service.load_pdf_with_langchain(local_path)
+            p_docs = statement_service.preprocess_documents(docs)
+            transactions = statement_service.extract_transactions_from_documents(p_docs)
+
+            review_data = {"transactions": transactions}
+            review_service.compare_and_store_review(stmt, review_data)
+
+        except Exception as e:
+            logger.error(f"Exception reviewing Statement {stmt.id}: {e}")
+            stmt.review_status = "failed"
+            db.commit()
 
 if __name__ == "__main__":
     worker = ReviewProcessorWorker()

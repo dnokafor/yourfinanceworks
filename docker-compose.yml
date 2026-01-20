@@ -436,6 +436,7 @@ services:
       # LLM Configuration for Reviewer
       - LLM_API_BASE=http://host.docker.internal:11434
       - OLLAMA_API_BASE=http://host.docker.internal:11434
+      - LLM_MODEL_EXPENSES=llama3.2-vision:11b
     depends_on:
       postgres-master:
         condition: service_healthy

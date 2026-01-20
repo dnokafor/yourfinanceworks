@@ -155,7 +155,7 @@ export interface Invoice {
   created_by_username?: string;
   created_by_email?: string;
   // Review fields
-  review_status?: 'not_started' | 'pending' | 'diff_found' | 'no_diff' | 'reviewed' | 'failed';
+  review_status?: 'not_started' | 'pending' | 'diff_found' | 'no_diff' | 'reviewed' | 'failed' | 'rejected';
   review_result?: any;
   reviewed_at?: string;
 }
@@ -478,9 +478,10 @@ export interface Expense {
   created_by_username?: string;
   created_by_email?: string;
   // Review fields
-  review_status?: 'not_started' | 'pending' | 'diff_found' | 'no_diff' | 'reviewed' | 'failed';
+  review_status?: 'not_started' | 'pending' | 'diff_found' | 'no_diff' | 'reviewed' | 'failed' | 'rejected';
   review_result?: any;
   reviewed_at?: string;
+  is_inventory_consumption?: boolean;
 }
 
 export interface ExpenseAttachmentMeta {
@@ -525,7 +526,7 @@ export interface BankStatementSummary {
   created_by_username?: string;
   created_by_email?: string;
   // Review fields
-  review_status?: 'not_started' | 'pending' | 'diff_found' | 'no_diff' | 'reviewed' | 'failed';
+  review_status?: 'not_started' | 'pending' | 'diff_found' | 'no_diff' | 'reviewed' | 'failed' | 'rejected';
   review_result?: any;
   reviewed_at?: string;
 }
@@ -609,6 +610,7 @@ export const bankStatementApi = {
     );
   },
   acceptReview: (statementId: number) => apiRequest<{ success: boolean; statement: BankStatementSummary }>(`/statements/${statementId}/accept-review`, { method: 'POST' }),
+  rejectReview: (statementId: number) => apiRequest<{ success: boolean; statement: BankStatementSummary }>(`/statements/${statementId}/reject-review`, { method: 'POST' }),
   reReview: (statementId: number) => apiRequest<{ success: boolean; statement: BankStatementSummary }>(`/statements/${statementId}/review`, { method: 'POST' }),
   cancelReview: (statementId: number) => apiRequest<{ success: boolean; statement: BankStatementSummary }>(`/statements/${statementId}/cancel-review`, { method: 'POST' }),
 
@@ -1444,7 +1446,11 @@ export const approvalApi = {
 // Client API methods
 export const clientApi = {
   getClients: async (skip: number = 0, limit: number = 100, label?: string): Promise<{ items: Client[], total: number }> => {
-    let url = `/clients/?skip=${skip}&limit=${limit}`;
+    // Ensure skip and limit are valid numbers
+    const skipNum = typeof skip === 'number' ? skip : parseInt(String(skip), 10) || 0;
+    const limitNum = typeof limit === 'number' ? limit : parseInt(String(limit), 10) || 100;
+    
+    let url = `/clients/?skip=${skipNum}&limit=${limitNum}`;
     if (label) url += `&label_filter=${encodeURIComponent(label)}`;
     return apiRequest<{ items: Client[], total: number }>(url);
   },
@@ -1630,6 +1636,10 @@ export const invoiceApi = {
         recurring_frequency: apiInvoice.recurring_frequency,
         has_attachment: apiInvoice.has_attachment || false,
         attachment_filename: apiInvoice.attachment_filename || undefined,
+        // Review fields
+        review_status: apiInvoice.review_status,
+        review_result: apiInvoice.review_result,
+        reviewed_at: apiInvoice.reviewed_at,
       }));
       return mappedInvoices;
     } catch (error) {
@@ -1673,6 +1683,10 @@ export const invoiceApi = {
         created_by_user_id: apiInvoice.created_by_user_id,
         created_by_username: apiInvoice.created_by_username,
         created_by_email: apiInvoice.created_by_email,
+        // Review fields
+        review_status: apiInvoice.review_status,
+        review_result: apiInvoice.review_result,
+        reviewed_at: apiInvoice.reviewed_at
       }));
 
       return { items: mappedInvoices, total: response.total };
@@ -1733,6 +1747,10 @@ export const invoiceApi = {
         created_by_user_id: apiResponse.created_by_user_id,
         created_by_username: apiResponse.created_by_username,
         created_by_email: apiResponse.created_by_email,
+        // Review fields
+        review_status: apiResponse.review_status,
+        review_result: apiResponse.review_result,
+        reviewed_at: apiResponse.reviewed_at
       };
 
       return invoice;
@@ -1909,6 +1927,7 @@ export const invoiceApi = {
   duplicate: (id: number) => apiRequest<Invoice>(`/invoices/${id}/duplicate`, { method: 'POST' }),
   getHistory: (id: number) => apiRequest<InvoiceHistory[]>(`/invoices/${id}/history`),
   acceptReview: (id: number) => apiRequest<Invoice>(`/invoices/${id}/accept-review`, { method: 'POST' }),
+  rejectReview: (id: number) => apiRequest<Invoice>(`/invoices/${id}/reject-review`, { method: 'POST' }),
   reReview: (id: number) => apiRequest<Invoice>(`/invoices/${id}/review`, { method: 'POST' }),
   cancelReview: (id: number) => apiRequest<Invoice>(`/invoices/${id}/cancel-review`, { method: 'POST' }),
 
@@ -2088,6 +2107,7 @@ export const expenseApi = {
     return response.json();
   },
   acceptReview: (id: number) => apiRequest<Expense>(`/expenses/${id}/accept-review`, { method: 'POST' }),
+  rejectReview: (id: number) => apiRequest<Expense>(`/expenses/${id}/reject-review`, { method: 'POST' }),
   reReview: (id: number) => apiRequest<Expense>(`/expenses/${id}/review`, { method: 'POST' }),
   cancelReview: (id: number) => apiRequest<Expense>(`/expenses/${id}/cancel-review`, { method: 'POST' }),
   listAttachments: async (expenseId: number) => {

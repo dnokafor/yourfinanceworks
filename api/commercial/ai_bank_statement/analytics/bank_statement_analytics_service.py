@@ -14,7 +14,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 
 from sqlalchemy.orm import Session
-from core.services.ocr_service import track_ai_usage, publish_ocr_usage_metrics
+from commercial.ai.services.ocr_service import track_ai_usage, publish_ocr_usage_metrics
 
 logger = logging.getLogger(__name__)
 

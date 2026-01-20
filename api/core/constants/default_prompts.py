@@ -353,43 +353,43 @@ Return ONLY valid JSON:""",
     {
         "name": "expense_review_extraction",
         "category": "ocr",
-        "description": "Detailed reviewer prompt for expense/receipt extraction",
-        "template_content": """You are a Professional Expense Auditor. Your task is to perform a high-scrutiny extraction of this receipt/expense document.
+        "description": "Detailed reviewer prompt for expense/receipt re-extraction from OCR data",
+        "template_content": """You are a Professional Expense Auditor performing high-scrutiny re-extraction from OCR data.
 
-Instructions:
-1. Verify the exact vendor name and store location if available.
-2. Confirm the exact date and time (if present).
-3. Strictly separate the subtotal, tax amounts, and final total.
-4. Identify the expense category with high confidence.
-5. Look for any handwritten notes or alterations on the receipt.
-
-Required JSON format:
-{
-  "amount": 0.00,
-  "currency": "string",
-  "expense_date": "YYYY-MM-DD",
-  "category": "string",
-  "vendor": "string",
-  "tax_rate": 0.00,
-  "tax_amount": 0.00,
-  "total_amount": 0.00,
-  "payment_method": "string",
-  "reference_number": "string",
-  "notes": "string"
-}
+CRITICAL INSTRUCTIONS:
+1. Extract the EXACT vendor name from the data. If unclear or missing, return null. NEVER guess or hallucinate brand names (e.g. 'Starbucks', 'Walmart') if not explicitly present in the OCR output.
+2. Extract the exact date and time if present.
+3. Strictly separate subtotal, tax amounts, and final total.
+4. Identify expense category with high confidence.
+5. Note any discrepancies or unusual patterns.
 
 OCR Output:
 {{raw_content}}
 
-Return ONLY valid JSON:""",
+Return ONLY valid JSON with these exact keys:
+{
+  "amount": <number or null>,
+  "currency": "<3-letter code or null>",
+  "expense_date": "<YYYY-MM-DD or null>",
+  "category": "<category or null>",
+  "vendor": "<exact vendor name or null>",
+  "tax_rate": <number or null>,
+  "tax_amount": <number or null>,
+  "total_amount": <number or null>,
+  "payment_method": "<method or null>",
+  "reference_number": "<reference or null>",
+  "notes": "<notes or null>"
+}
+
+If a field is not present in the OCR output, set it to null. Return ONLY the JSON object.""",
         "template_variables": ["raw_content"],
         "output_format": "json",
         "default_values": {},
-        "version": 1,
+        "version": 4,
         "is_active": True,
         "provider_overrides": {
-            "openai": "You are an Expense Auditor. Extract receipt data with meticulous attention to subtotals and taxes.",
-            "anthropic": "As a specialist in financial compliance, extract data from this receipt text. Ensure the total matches the sum of individual items and taxes."
+            "openai": "You are an Expense Auditor. Re-extract receipt data with meticulous attention to subtotals and taxes. NEVER hallucinate vendor names - only extract what is clearly present in the OCR data.",
+            "anthropic": "As a financial compliance specialist, re-extract data from this OCR output with absolute precision. Verify vendor names are exactly as shown - do not guess or infer brand names."
         }
     },
     {
@@ -431,5 +431,23 @@ Return ONLY valid JSON:""",
             "openai": "You are a Bank Reconciliation Specialist. Extract every transaction with high fidelity and standardized formatting.",
             "anthropic": "As an expert in banking data analysis, meticulously extract all transaction entries. Ensure absolute accuracy in transaction dates and signed amounts."
         }
-    }
+    },
+    {
+        "name": "raw_text_extraction",
+        "category": "ocr",
+        "description": "Extract all text from a document image accurately without structured JSON constraints",
+        "template_content": """You are a document extraction expert. Extract all text from this image exactly as it appears.
+Include vendor names, dates, amounts, line items, and any handwritten notes.
+Preserve the layout as much as possible using text/markdown.
+Return ONLY the extracted text, no explanations.""",
+        "template_variables": [],
+        "output_format": "text",
+        "default_values": {},
+        "version": 1,
+        "is_active": True,
+        "provider_overrides": {
+            "openai": "Extract all text from this document image accurately. Preserve layout and details.",
+            "anthropic": "As a document specialist, transcribe all text from this image with high fidelity, including fine print and peripheral data."
+        }
+    },
 ]

@@ -11,12 +11,12 @@ import ssl
 import time
 from sqlalchemy.orm import Session
 from core.models.models_per_tenant import Settings, Expense, ExpenseAttachment
-from core.services.ocr_service import _run_ocr, queue_or_process_attachment
+from commercial.ai.services.ocr_service import _run_ocr, queue_or_process_attachment
 from core.services.currency_service import CurrencyService
 from core.services.inventory_service import InventoryService
 from core.services.inventory_integration_service import InventoryIntegrationService
-from core.services.email_classification_service import EmailClassificationService
-from core.services.ai_config_service import AIConfigService
+from commercial.ai_expense.services.email_classification_service import EmailClassificationService
+from commercial.ai.services.ai_config_service import AIConfigService
 from core.constants.expense_status import ExpenseStatus
 import tempfile
 import mimetypes

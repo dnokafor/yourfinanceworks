@@ -235,7 +235,7 @@ async def process_statement_pdf(
         
         # Process the file using the unified OCR service
         try:
-            from core.services.unified_ocr_service import UnifiedOCRService, DocumentType, OCRConfig
+            from commercial.ai.services.unified_ocr_service import UnifiedOCRService, DocumentType, OCRConfig
             
             # Configure OCR service with AI config from database
             ai_config = None
@@ -283,7 +283,7 @@ async def process_statement_pdf(
         except Exception as e:
             # Handle OCR-specific exceptions with detailed user feedback
             try:
-                from core.exceptions.bank_ocr_exceptions import (
+                from commercial.ai.exceptions.bank_ocr_exceptions import (
                     OCRUnavailableError,
                     OCRTimeoutError,
                     OCRProcessingError,

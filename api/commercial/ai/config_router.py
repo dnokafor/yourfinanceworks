@@ -7,7 +7,7 @@ from core.models.database import get_db
 from core.routers.auth import get_current_user
 from core.models.models import MasterUser
 from core.models.models_per_tenant import AIConfig as AIConfigModel
-from core.schemas.ai_config import (
+from commercial.ai.schemas.ai_config import (
     AIConfigCreate,
     AIConfigUpdate,
     AIConfig as AIConfigSchema,

@@ -12,7 +12,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from jinja2 import Template, TemplateError
 
-from core.models.prompt_templates import PromptTemplate, PromptUsageLog
+from commercial.prompt_management.models.prompt_templates import PromptTemplate, PromptUsageLog
 from core.models.database import get_tenant_context
 from core.utils.data_helpers import ensure_dict
 
@@ -97,13 +97,16 @@ class PromptService:
         if cache_key in self._template_cache:
             return self._template_cache[cache_key]
 
-        # Query database
-        template = (
-            self.db_session.query(PromptTemplate)
-            .filter(PromptTemplate.name == name, PromptTemplate.is_active == True)
-            .order_by(PromptTemplate.version.desc())
-            .first()
-        )
+        template = None
+
+        # Query database if session is available and valid
+        if self.db_session and hasattr(self.db_session, 'query'):
+            template = (
+                self.db_session.query(PromptTemplate)
+                .filter(PromptTemplate.name == name, PromptTemplate.is_active == True)
+                .order_by(PromptTemplate.version.desc())
+                .first()
+            )
 
         if template:
             # Check for provider-specific override
@@ -212,12 +215,24 @@ class PromptService:
             return self._format_simple_prompt(template.template_content, variables)
 
     def _format_simple_prompt(self, prompt: str, variables: Dict[str, Any]) -> str:
-        """Simple string formatting fallback."""
+        """Simple formatting fallback using Jinja2."""
         try:
-            return prompt.format(**variables)
-        except KeyError as e:
-            logger.warning(f"Missing variable in simple formatting: {e}")
-            return prompt
+            return Template(prompt).render(**variables).strip()
+        except Exception as e:
+            logger.warning(f"Jinja2 fallback formatting failed: {e}")
+            try:
+                # Last resort: simple string replacement for common variables
+                result = prompt
+                for key, value in variables.items():
+                    placeholder = f"{{{{ {key} }}}}"
+                    if placeholder in result:
+                        result = result.replace(placeholder, str(value))
+                    placeholder_no_space = f"{{{{{key}}}}}"
+                    if placeholder_no_space in result:
+                        result = result.replace(placeholder_no_space, str(value))
+                return result
+            except Exception:
+                return prompt
 
     def log_usage(
         self,
@@ -245,6 +260,10 @@ class PromptService:
             input_preview: Preview of input (first 500 chars)
             output_preview: Preview of output (first 500 chars)
         """
+        if not self.db_session or not hasattr(self.db_session, 'add'):
+            logger.debug("Skipping prompt usage logging: No valid database session available")
+            return
+
         try:
             # Get template ID
             template = self._get_template(template_name)
@@ -312,6 +331,9 @@ class PromptService:
         """
         try:
             # Check if template already exists (any version)
+            if not self.db_session or not hasattr(self.db_session, 'query'):
+                raise ValueError("Database session required to create prompt")
+
             existing = (
                 self.db_session.query(PromptTemplate)
                 .filter(PromptTemplate.name == name)
@@ -369,6 +391,9 @@ class PromptService:
     def _check_version_limit(self, name: str, max_versions: int = 5) -> bool:
         """Check if prompt has reached maximum version limit."""
         try:
+            if not self.db_session or not hasattr(self.db_session, 'query'):
+                return False
+
             version_count = (
                 self.db_session.query(PromptTemplate)
                 .filter(PromptTemplate.name == name, PromptTemplate.is_active == True)
@@ -424,6 +449,9 @@ class PromptService:
             Updated PromptTemplate instance or None
         """
         try:
+            if not self.db_session or not hasattr(self.db_session, 'query'):
+                return None
+
             # Get latest existing template
             existing = (
                 self.db_session.query(PromptTemplate)
@@ -495,6 +523,9 @@ class PromptService:
             List of PromptTemplate instances
         """
         try:
+            if not self.db_session or not hasattr(self.db_session, 'query'):
+                return []
+
             query = self.db_session.query(PromptTemplate)
 
             if category:
@@ -564,6 +595,9 @@ class PromptService:
     ) -> Optional[PromptTemplate]:
         """Reset a prompt template to its default version."""
         try:
+            if not self.db_session or not hasattr(self.db_session, 'query'):
+                return None
+
             # Find the default version (version 1)
             default_template = (
                 self.db_session.query(PromptTemplate)
@@ -629,6 +663,9 @@ class PromptService:
     ) -> Optional[PromptTemplate]:
         """Restore a specific version of a prompt template."""
         try:
+            if not self.db_session or not hasattr(self.db_session, 'query'):
+                return None
+
             # Find the version to restore (including inactive versions)
             source_template = (
                 self.db_session.query(PromptTemplate)
@@ -691,6 +728,9 @@ class PromptService:
     def list_prompt_versions(self, name: str) -> List[PromptTemplate]:
         """List all versions of a specific prompt template (including inactive)."""
         try:
+            if not self.db_session or not hasattr(self.db_session, 'query'):
+                return []
+
             templates = (
                 self.db_session.query(PromptTemplate)
                 .filter(PromptTemplate.name == name)
@@ -717,6 +757,9 @@ class PromptService:
             True if successful, False otherwise
         """
         try:
+            if not self.db_session or not hasattr(self.db_session, 'query'):
+                return False
+
             # Get all versions of the template
             templates = (
                 self.db_session.query(PromptTemplate)
@@ -766,6 +809,17 @@ class PromptService:
             Dictionary with usage statistics
         """
         try:
+            if not self.db_session or not hasattr(self.db_session, 'query'):
+                return {
+                    "total_usage": 0,
+                    "successful_usage": 0,
+                    "success_rate": 0.0,
+                    "avg_processing_time_ms": 0.0,
+                    "total_tokens": 0,
+                    "provider_stats": {},
+                    "days_analyzed": days,
+                }
+
             from datetime import timedelta
 
             cutoff_date = datetime.utcnow() - timedelta(days=days)

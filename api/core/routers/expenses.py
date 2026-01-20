@@ -23,7 +23,7 @@ from core.services.search_service import search_service
 from core.utils.rbac import require_non_viewer
 from core.utils.audit import log_audit_event
 from core.utils.file_deletion import delete_file_from_storage
-from core.services.ocr_service import queue_or_process_attachment, cancel_ocr_tasks_for_expense
+from commercial.ai.services.ocr_service import queue_or_process_attachment, cancel_ocr_tasks_for_expense
 from core.constants.error_codes import EXPENSE_LINKED_TO_INVOICE
 from core.constants.expense_status import ExpenseStatus
 from core.utils.timezone import get_tenant_timezone_aware_datetime
@@ -834,6 +834,26 @@ async def accept_review(
     db.refresh(expense)
     return expense
 
+@router.post("/{expense_id:int}/reject-review", response_model=ExpenseSchema)
+async def reject_review(
+    expense_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    require_non_viewer(current_user, "review expenses")
+
+    expense = db.query(Expense).filter(Expense.id == expense_id).first()
+    if not expense:
+        raise HTTPException(status_code=404, detail="Expense not found")
+
+    review_service = ReviewService(db)
+    success = review_service.reject_review(expense)
+
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to reject review")
+
+    return expense
+
 @router.post("/{expense_id:int}/review", response_model=ExpenseSchema)
 async def run_review(
     expense_id: int,
@@ -897,11 +917,11 @@ async def cancel_expense_review(
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
 
-    # Can only cancel if review is pending or not_started
-    if expense.review_status not in ["pending", "not_started"]:
+    # Can only cancel if review is pending, not_started, rejected, or failed
+    if expense.review_status not in ["pending", "not_started", "rejected", "failed"]:
         raise HTTPException(
             status_code=400, 
-            detail=f"Cannot cancel review with status '{expense.review_status}'. Only pending or not_started reviews can be cancelled."
+            detail=f"Cannot cancel review with status '{expense.review_status}'. Only pending, rejected, failed, or not_started reviews can be cancelled."
         )
 
     # Cancel the review
@@ -1849,12 +1869,18 @@ async def reprocess_expense(
 
         # Check if expense is already being processed
         if ProcessingLock.is_locked(db, "expense", expense_id):
-            lock_info = ProcessingLock.get_active_lock_info(db, "expense", expense_id)
-            return {
-                "message": "Expense is already being processed",
-                "status": "already_processing",
-                "lock_info": lock_info
-            }
+            # If expense is in a terminal state but locked, it's a stale lock
+            if expense.analysis_status in ["done", "failed"]:
+                logger.info(f"Releasing stale lock for expense {expense_id} in terminal state '{expense.analysis_status}'")
+                ProcessingLock.release_lock(db, "expense", expense_id)
+                db.commit()
+            else:
+                lock_info = ProcessingLock.get_active_lock_info(db, "expense", expense_id)
+                return {
+                    "message": "Expense is already being processed",
+                    "status": "already_processing",
+                    "lock_info": lock_info
+                }
 
         # Acquire processing lock
         request_id = f"reprocess_{expense_id}_{datetime.now(timezone.utc).timestamp()}"

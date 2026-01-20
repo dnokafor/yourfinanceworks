@@ -9,7 +9,7 @@ import os
 import logging
 from dataclasses import dataclass, asdict
 from typing import Optional, Dict, Any, List
-from core.exceptions.bank_ocr_exceptions import OCRConfigurationError
+from commercial.ai.exceptions.bank_ocr_exceptions import OCRConfigurationError
 
 logger = logging.getLogger(__name__)
 

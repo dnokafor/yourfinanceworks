@@ -132,7 +132,7 @@ class BatchProcessingService:
         # 1. First tries to get config from database (settings)
         # 2. Falls back to environment variables if database config not available
         # 3. Handles errors gracefully
-        from core.services.ai_config_service import AIConfigService
+        from commercial.ai.services.ai_config_service import AIConfigService
         ai_config = AIConfigService.get_ai_config(self.db, component="ocr", require_ocr=False)
         
         if not ai_config:
@@ -1037,7 +1037,7 @@ Respond with ONLY one word: invoice, expense, or statement. Do not include any e
 
         # Try to get Kafka producer
         try:
-            from core.services.ocr_service import _get_kafka_producer_for
+            from commercial.ai.services.ocr_service import _get_kafka_producer_for
 
             producer, _ = _get_kafka_producer_for(
                 f"KAFKA_{document_type.upper()}_TOPIC",

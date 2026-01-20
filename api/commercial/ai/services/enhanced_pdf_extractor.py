@@ -12,8 +12,8 @@ from pathlib import Path
 from typing import Tuple, Optional, Dict, Any, List
 from dataclasses import dataclass
 
-from core.settings.ocr_config import get_ocr_config, is_ocr_available
-from core.exceptions.bank_ocr_exceptions import (
+from commercial.ai.settings.ocr_config import get_ocr_config, is_ocr_available
+from commercial.ai.exceptions.bank_ocr_exceptions import (
     OCRProcessingError,
     OCRInvalidFileError
 )
@@ -124,7 +124,7 @@ class EnhancedPDFTextExtractor:
     def ocr_processor(self):
         """Lazy-loaded OCR processor."""
         if self._ocr_processor is None:
-            from .bank_statement_ocr_processor import BankStatementOCRProcessor
+            from commercial.ai_bank_statement.services.bank_statement_ocr_processor import BankStatementOCRProcessor
             self._ocr_processor = BankStatementOCRProcessor(self.ai_config)
         return self._ocr_processor
 
@@ -312,7 +312,7 @@ class EnhancedPDFTextExtractor:
 
         # Track using the analytics service
         try:
-            from core.services.bank_statement_analytics_service import track_bank_statement_extraction
+            from commercial.ai_bank_statement.analytics.bank_statement_analytics_service import track_bank_statement_extraction
             from core.models.database import get_db
             
             # Get database session for tracking

@@ -412,8 +412,14 @@ class EncryptionService:
         """
         with self._cache_lock:
             if tenant_id is not None:
-                self._key_cache.pop(tenant_id, None)
-                self._cache_timestamps.pop(tenant_id, None)
+                # Find all keys for this tenant (format: "{tenant_id}:{iters}")
+                keys_to_remove = [
+                    k for k in self._key_cache.keys()
+                    if str(k).startswith(f"{tenant_id}:")
+                ]
+                for key in keys_to_remove:
+                    self._key_cache.pop(key, None)
+                    self._cache_timestamps.pop(key, None)
                 logger.info(f"Cleared cache for tenant {tenant_id}")
             else:
                 self._key_cache.clear()

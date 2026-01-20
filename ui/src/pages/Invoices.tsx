@@ -64,6 +64,8 @@ const Invoices = () => {
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [selectedReviewInvoice, setSelectedReviewInvoice] = useState<Invoice | null>(null);
   const [isAcceptingReview, setIsAcceptingReview] = useState(false);
+  const [isRejectingReview, setIsRejectingReview] = useState(false);
+  const [isRetriggeringReview, setIsRetriggeringReview] = useState(false);
 
   const handleReviewClick = (invoice: Invoice) => {
     setSelectedReviewInvoice(invoice);
@@ -84,6 +86,38 @@ const Invoices = () => {
       toast.error('Failed to accept review');
     } finally {
       setIsAcceptingReview(false);
+    }
+  };
+
+  const handleRejectReview = async () => {
+    if (!selectedReviewInvoice) return;
+
+    try {
+      setIsRejectingReview(true);
+      await invoiceApi.rejectReview(selectedReviewInvoice.id);
+      toast.success('Review dismissed');
+      setReviewModalOpen(false);
+      fetchInvoices();
+    } catch (error) {
+      toast.error('Failed to dismiss review');
+    } finally {
+      setIsRejectingReview(false);
+    }
+  };
+
+  const handleRetriggerReview = async () => {
+    if (!selectedReviewInvoice) return;
+
+    try {
+      setIsRetriggeringReview(true);
+      await invoiceApi.reReview(selectedReviewInvoice.id);
+      toast.success('Review re-triggered');
+      setReviewModalOpen(false);
+      fetchInvoices();
+    } catch (error) {
+      toast.error('Failed to re-trigger review');
+    } finally {
+      setIsRetriggeringReview(false);
     }
   };
 
@@ -980,15 +1014,17 @@ const Invoices = () => {
                             ) : invoice.review_status === 'reviewed' || invoice.review_status === 'no_diff' ? (
                               <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Reviewed</Badge>
                             ) : (
-                              <div className="flex flex-col gap-1 items-start">
+                                <div className="flex flex-col gap-1 items-start">
                                 <Badge variant="outline" className={
-                                  invoice.review_status === 'pending' 
-                                    ? "bg-blue-50 text-blue-700 border-blue-200" 
+                                  invoice.review_status === 'pending'
+                                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                                    : invoice.review_status === 'rejected'
+                                    ? "bg-amber-50 text-amber-700 border-amber-200"
                                     : "bg-muted/50 text-muted-foreground border-transparent"
                                 }>
-                                  {invoice.review_status === 'pending' ? 'Review Pending' : t('common.not_started', { defaultValue: 'Not Started' })}
+                                  {invoice.review_status === 'pending' ? 'Review Pending' : invoice.review_status === 'rejected' ? 'Review Dismissed' : t('common.not_started', { defaultValue: 'Not Started' })}
                                 </Badge>
-                                {(!invoice.review_status || invoice.review_status === 'not_started' || invoice.review_status === 'failed') && (
+                                {(!invoice.review_status || invoice.review_status === 'not_started' || invoice.review_status === 'failed' || invoice.review_status === 'rejected') && (
                                   <Button 
                                     size="sm" 
                                     variant="ghost" 
@@ -999,18 +1035,18 @@ const Invoices = () => {
                                     Trigger Review
                                   </Button>
                                 )}
-                                {invoice.review_status === 'pending' && (
-                                  <Button 
-                                    size="sm" 
-                                    variant="ghost" 
+                                {(invoice.review_status === 'pending' || invoice.review_status === 'rejected') && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
                                     className="h-6 text-[10px] text-destructive hover:bg-destructive/5 p-0 px-1"
                                     onClick={() => handleCancelReview(invoice.id)}
                                   >
                                     <X className="h-2.5 w-2.5 mr-1" />
-                                    Cancel Review
+                                    {invoice.review_status === 'rejected' ? 'Clear Status' : 'Cancel Review'}
                                   </Button>
                                 )}
-                              </div>
+                                </div>
                             )}
                           </TableCell>
                           <TableCell className="hidden lg:table-cell">
@@ -1139,7 +1175,11 @@ const Invoices = () => {
           }}
           reviewResult={selectedReviewInvoice.review_result || {}}
           onAccept={handleAcceptReview}
+          onReject={handleRejectReview}
+          onRetrigger={handleRetriggerReview}
           isAccepting={isAcceptingReview}
+          isRejecting={isRejectingReview}
+          isRetriggering={isRetriggeringReview}
           type="invoice"
         />
       )}

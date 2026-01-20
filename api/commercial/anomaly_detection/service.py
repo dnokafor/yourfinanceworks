@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 
-from core.services.ai_config_service import AIConfigService
+from commercial.ai.services.ai_config_service import AIConfigService
 from core.services.feature_config_service import FeatureConfigService
 from core.models.models_per_tenant import Anomaly
 from .base import BaseAnomalyRule, AnomalyResult

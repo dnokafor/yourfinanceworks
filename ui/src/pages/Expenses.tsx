@@ -148,6 +148,8 @@ const Expenses = () => {
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [selectedReviewExpense, setSelectedReviewExpense] = useState<Expense | null>(null);
   const [isAcceptingReview, setIsAcceptingReview] = useState(false);
+  const [isRejectingReview, setIsRejectingReview] = useState(false);
+  const [isRetriggeringReview, setIsRetriggeringReview] = useState(false);
 
   const handleReviewClick = (expense: Expense) => {
     setSelectedReviewExpense(expense);
@@ -166,6 +168,36 @@ const Expenses = () => {
       toast.error('Failed to accept review');
     } finally {
       setIsAcceptingReview(false);
+    }
+  };
+
+  const handleRejectReview = async () => {
+    if (!selectedReviewExpense) return;
+    setIsRejectingReview(true);
+    try {
+      await expenseApi.rejectReview(selectedReviewExpense.id);
+      toast.success('Review dismissed');
+      setReviewModalOpen(false);
+      fetchExpenses();
+    } catch (error) {
+      toast.error('Failed to dismiss review');
+    } finally {
+      setIsRejectingReview(false);
+    }
+  };
+
+  const handleRetriggerReview = async () => {
+    if (!selectedReviewExpense) return;
+    setIsRetriggeringReview(true);
+    try {
+      await expenseApi.reReview(selectedReviewExpense.id);
+      toast.success('Review re-triggered');
+      setReviewModalOpen(false);
+      fetchExpenses();
+    } catch (error) {
+      toast.error('Failed to re-trigger review');
+    } finally {
+      setIsRetriggeringReview(false);
     }
   };
 
@@ -1239,11 +1271,13 @@ const Expenses = () => {
                               <Badge variant="outline" className={
                                 e.review_status === 'pending'
                                   ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : e.review_status === 'rejected'
+                                  ? "bg-amber-50 text-amber-700 border-amber-200"
                                   : "bg-muted/50 text-muted-foreground border-transparent"
                               }>
-                                {e.review_status === 'pending' ? 'Review Pending' : t('common.not_started', { defaultValue: 'Not Started' })}
+                                {e.review_status === 'pending' ? 'Review Pending' : e.review_status === 'rejected' ? 'Review Dismissed' : t('common.not_started', { defaultValue: 'Not Started' })}
                               </Badge>
-                              {(!e.review_status || e.review_status === 'not_started' || e.review_status === 'failed') && (
+                              {(!e.review_status || e.review_status === 'not_started' || e.review_status === 'failed' || e.review_status === 'rejected') && (
                                 <Button
                                   size="sm"
                                   variant="ghost"
@@ -1254,7 +1288,7 @@ const Expenses = () => {
                                   Trigger Review
                                 </Button>
                               )}
-                              {e.review_status === 'pending' && (
+                              {(e.review_status === 'pending' || e.review_status === 'rejected') && (
                                 <Button
                                   size="sm"
                                   variant="ghost"
@@ -1262,7 +1296,7 @@ const Expenses = () => {
                                   onClick={() => handleCancelReview(e.id)}
                                 >
                                   <X className="h-2.5 w-2.5 mr-1" />
-                                  Cancel Review
+                                  {e.review_status === 'rejected' ? 'Clear Status' : 'Cancel Review'}
                                 </Button>
                               )}
                             </div>
@@ -1717,7 +1751,11 @@ const Expenses = () => {
           originalData={selectedReviewExpense}
           reviewResult={selectedReviewExpense.review_result}
           onAccept={handleAcceptReview}
+          onReject={handleRejectReview}
+          onRetrigger={handleRetriggerReview}
           isAccepting={isAcceptingReview}
+          isRejecting={isRejectingReview}
+          isRetriggering={isRetriggeringReview}
           type="expense"
         />
       )}

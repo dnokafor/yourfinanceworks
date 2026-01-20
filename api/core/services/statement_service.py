@@ -10,8 +10,8 @@ from typing import Any, Dict, List, Optional, Union
 
 import requests
 from sqlalchemy.orm import Session
-from core.services.ocr_service import track_ai_usage, track_ocr_usage
-from core.services.prompt_service import get_prompt_service
+from commercial.ai.services.ocr_service import track_ai_usage, track_ocr_usage
+from commercial.prompt_management.services.prompt_service import get_prompt_service
 from core.utils.file_validation import validate_file_path
 
 logger = logging.getLogger(__name__)
@@ -260,16 +260,17 @@ class UniversalBankTransactionExtractor:
         self.temperature = temperature
         self.request_timeout = request_timeout
         self.db_session = db_session
+        self.prompt_name = prompt_name
         self.prompt_service = get_prompt_service(db_session)
 
-        logger.info(f"🚀 Initializing UniversalBankTransactionExtractor: {self.provider_name} / {self.model_name}")
+        logger.info(f"🚀 Initializing UniversalBankTransactionExtractor: {self.provider_name} / {self.model_name}, prompt_name={self.prompt_name}")
 
         # Test provider connection
         # self._test_provider_connection()
 
         # Initialize enhanced PDF text extractor with OCR fallback
         try:
-            from core.services.enhanced_pdf_extractor import EnhancedPDFTextExtractor
+            from commercial.ai.services.enhanced_pdf_extractor import EnhancedPDFTextExtractor
             self.text_extractor = EnhancedPDFTextExtractor(ai_config)
             logger.info("✅ Enhanced PDF text extractor with OCR fallback initialized")
         except ImportError as e:
@@ -363,19 +364,33 @@ class UniversalBankTransactionExtractor:
             kwargs["api_base"] = self.provider_url
 
         # Provider-specific configurations
-        if self.provider_name == "ollama" and not self.provider_url:
-            env_api_base = os.environ.get("OLLAMA_API_BASE") or os.environ.get("LLM_API_BASE")
-            kwargs["api_base"] = env_api_base or "http://localhost:11434"
+        if self.provider_name == "ollama":
+            # If provider_url is missing or localhost/127.0.0.1, check for environment override
+            if not self.provider_url or "localhost" in self.provider_url or "127.0.0.1" in self.provider_url:
+                env_api_base = os.environ.get("OLLAMA_API_BASE") or os.environ.get("LLM_API_BASE")
+                if env_api_base:
+                    kwargs["api_base"] = env_api_base
+                elif not self.provider_url:
+                    kwargs["api_base"] = "http://localhost:11434"
 
         return kwargs
 
     def _create_extraction_prompt(self) -> PromptTemplate:
         """Create extraction prompt optimized for universal providers"""
 
+        # 0. Check for explicit prompt override in ai_config
+        prompt_override = self.ai_config.get("prompt_override")
+        if prompt_override:
+            logger.info(f"Using prompt override for {self.prompt_name}")
+            return PromptTemplate(
+                template=prompt_override,
+                input_variables=["text"]
+            )
+
         # Try to get prompt from service
         try:
             prompt_template = self.prompt_service.get_prompt(
-                name="bank_transaction_extraction",
+                name=self.prompt_name,
                 variables={"text": "{{text}}"},  # Preserve placeholder for late binding
                 provider_name=self.provider_name,
                 fallback_prompt="""You are a financial data extraction expert. Your task is to extract ALL bank transactions from the text below.
@@ -389,12 +404,12 @@ RULES:
 6. Only extract actual transactions, not headers or summaries
 
 TEXT:
-{text}
+{{text}}
 
 Return ONLY a JSON array like this example:
 [
-  {{"date": "2024-01-15", "description": "GROCERY STORE", "amount": -45.67, "transaction_type": "debit", "balance": 1234.56}},
-  {{"date": "2024-01-16", "description": "SALARY DEPOSIT", "amount": 2500.00, "transaction_type": "credit", "balance": 3689.89}}
+  {"date": "2024-01-15", "description": "GROCERY STORE", "amount": -45.67, "transaction_type": "debit", "balance": 1234.56},
+  {"date": "2024-01-16", "description": "SALARY DEPOSIT", "amount": 2500.00, "transaction_type": "credit", "balance": 3689.89}
 ]
 
 JSON:"""
@@ -420,12 +435,12 @@ RULES:
 6. Only extract actual transactions, not headers or summaries
 
 TEXT:
-{text}
+{{text}}
 
 Return ONLY a JSON array like this example:
 [
-  {{"date": "2024-01-15", "description": "GROCERY STORE", "amount": -45.67, "transaction_type": "debit", "balance": 1234.56}},
-  {{"date": "2024-01-16", "description": "SALARY DEPOSIT", "amount": 2500.00, "transaction_type": "credit", "balance": 3689.89}}
+  {"date": "2024-01-15", "description": "GROCERY STORE", "amount": -45.67, "transaction_type": "debit", "balance": 1234.56},
+  {"date": "2024-01-16", "description": "SALARY DEPOSIT", "amount": 2500.00, "transaction_type": "credit", "balance": 3689.89}
 ]
 
 JSON:"""
@@ -809,7 +824,7 @@ JSON:"""
 
             # Track failed extraction attempt
             try:
-                from core.services.bank_statement_analytics_service import track_bank_statement_extraction
+                from commercial.ai_bank_statement.analytics.bank_statement_analytics_service import track_bank_statement_extraction
                 from core.models.database import get_db
 
                 db = next(get_db())
@@ -829,7 +844,7 @@ JSON:"""
 
             # Import OCR exceptions for specific error handling
             try:
-                from core.exceptions.bank_ocr_exceptions import OCRUnavailableError, OCRTimeoutError, OCRProcessingError
+                from commercial.ai.exceptions.bank_ocr_exceptions import OCRUnavailableError, OCRTimeoutError, OCRProcessingError
 
                 if isinstance(e, (OCRUnavailableError, OCRTimeoutError, OCRProcessingError)):
                     # Re-raise OCR-specific exceptions for upstream handling
@@ -959,7 +974,7 @@ JSON:"""
 
         # Track using the analytics service
         try:
-            from core.services.bank_statement_analytics_service import track_bank_statement_extraction
+            from commercial.ai_bank_statement.analytics.bank_statement_analytics_service import track_bank_statement_extraction
             from core.models.database import get_db
 
             # Get database session for tracking
@@ -1058,7 +1073,7 @@ JSON:"""
 
             # Release processing lock for bank statement
             try:
-                from core.services.ocr_service import release_processing_lock
+                from commercial.ai.services.ocr_service import release_processing_lock
                 release_processing_lock("bank_statement", statement_id)
             except Exception as lock_error:
                 logger.warning(f"Failed to release processing lock for bank statement {statement_id}: {lock_error}")
@@ -1268,12 +1283,12 @@ RULES:
 6. Only extract actual transactions, not headers or summaries
 
 TEXT:
-{text}
+{{text}}
 
 Return ONLY a JSON array like this example:
 [
-  {{"date": "2024-01-15", "description": "GROCERY STORE", "amount": -45.67, "transaction_type": "debit", "balance": 1234.56}},
-  {{"date": "2024-01-16", "description": "SALARY DEPOSIT", "amount": 2500.00, "transaction_type": "credit", "balance": 3689.89}}
+  {"date": "2024-01-15", "description": "GROCERY STORE", "amount": -45.67, "transaction_type": "debit", "balance": 1234.56},
+  {"date": "2024-01-16", "description": "SALARY DEPOSIT", "amount": 2500.00, "transaction_type": "credit", "balance": 3689.89}
 ]
 
 JSON:"""
@@ -1922,12 +1937,12 @@ RULES:
 6. Only extract actual transactions, not headers or summaries
 
 TEXT:
-{text}
+{{text}}
 
 Return ONLY a JSON array like this example:
 [
-  {{"date": "2024-01-15", "description": "GROCERY STORE", "amount": -45.67, "transaction_type": "debit", "balance": 1234.56}},
-  {{"date": "2024-01-16", "description": "SALARY DEPOSIT", "amount": 2500.00, "transaction_type": "credit", "balance": 3689.89}}
+  {"date": "2024-01-15", "description": "GROCERY STORE", "amount": -45.67, "transaction_type": "debit", "balance": 1234.56},
+  {"date": "2024-01-16", "description": "SALARY DEPOSIT", "amount": 2500.00, "transaction_type": "credit", "balance": 3689.89}
 ]
 
 JSON:"""
@@ -2303,7 +2318,7 @@ def process_bank_pdf_with_llm(pdf_path: str, ai_config: Optional[Dict[str, Any]]
     except Exception as e:
         # Handle OCR-specific exceptions with proper error messages
         try:
-            from core.exceptions.bank_ocr_exceptions import (
+            from commercial.ai.exceptions.bank_ocr_exceptions import (
                 OCRUnavailableError,
                 OCRTimeoutError, 
                 OCRProcessingError,

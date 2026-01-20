@@ -31,7 +31,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Service imports
-from core.services.ocr_service import (
+from commercial.ai.services.ocr_service import (
     apply_ocr_extraction_to_expense,
     parse_number,
     first_key,
@@ -45,7 +45,7 @@ from core.utils.timezone import get_tenant_timezone_aware_datetime
 from core.models.database import set_tenant_context
 from core.services.tenant_database_manager import tenant_db_manager
 from sqlalchemy.orm import Session
-from core.exceptions.bank_ocr_exceptions import (
+from commercial.ai.exceptions.bank_ocr_exceptions import (
     OCRTimeoutError, 
     OCRProcessingError, 
     is_retryable_ocr_error,
@@ -294,7 +294,7 @@ class ExpenseMessageHandler(BaseMessageHandler):
         try:
             with tenant_context(tenant_id):
                 with database_session(tenant_id) as db:
-                    from core.services.unified_ocr_service import UnifiedOCRService, DocumentType, OCRConfig
+                    from commercial.ai.services.unified_ocr_service import UnifiedOCRService, DocumentType, OCRConfig
                     from commercial.batch_processing.service import BatchProcessingService
                     from core.models.models_per_tenant import Expense, ExpenseAttachment, AIConfig as AIConfigModel, User
                     from datetime import datetime, timezone
@@ -496,18 +496,18 @@ class ExpenseMessageHandler(BaseMessageHandler):
                         self.logger.info(f"Expense {expense_id} manually overridden; skipping OCR")
                         return ProcessingResult(success=True, committed=True)
 
-                    # Check if already done - skip reprocessing
-                    if getattr(exp, "analysis_status", None) == ProcessingStatus.DONE.value:
-                        self.logger.info(f"Expense {expense_id} already done. Skipping reprocessing.")
-                        await self._commit_message(consumer, message)
-                        return ProcessingResult(success=True, committed=True)
+                    # Skip already done check to allow reprocessing
+                    # if getattr(exp, "analysis_status", None) == ProcessingStatus.DONE.value:
+                    #     self.logger.info(f"Expense {expense_id} already done. Skipping reprocessing.")
+                    #     await self._commit_message(consumer, message)
+                    #     return ProcessingResult(success=True, committed=True)
 
-                    # Check if already failed - prevent infinite retry loop
-                    if getattr(exp, "analysis_status", None) == ProcessingStatus.FAILED.value:
-                        self.logger.warning(f"Expense {expense_id} marked as FAILED. Skipping retry loop.")
-                        await self._commit_message(consumer, message)
-                        await self._publish_ocr_result(expense_id, tenant_id, "failed")
-                        return ProcessingResult(success=False, committed=True, should_retry=False)
+                    # Skip already failed check to allow manual reprocessing
+                    # if getattr(exp, "analysis_status", None) == ProcessingStatus.FAILED.value:
+                    #     self.logger.warning(f"Expense {expense_id} marked as FAILED. Skipping retry loop.")
+                    #     await self._commit_message(consumer, message)
+                    #     await self._publish_ocr_result(expense_id, tenant_id, "failed")
+                    #     return ProcessingResult(success=False, committed=True, should_retry=False)
 
                     # Update expense status
                     try:
@@ -598,7 +598,7 @@ class ExpenseMessageHandler(BaseMessageHandler):
         """Send failed message to Dead Letter Queue"""
         try:
             from confluent_kafka import Producer
-            from core.services.ocr_service import _get_kafka_producer
+            from commercial.ai.services.ocr_service import _get_kafka_producer
 
             producer, _ = _get_kafka_producer()
             if producer:
@@ -675,7 +675,7 @@ class BankStatementMessageHandler(BaseMessageHandler):
                 with database_session(tenant_id) as db:
                     from core.models.models_per_tenant import AIConfig as AIConfigModel, BankStatement, BankStatementAttachment
                     from core.services.statement_service import process_bank_pdf_with_llm
-                    from core.services.unified_ocr_service import UnifiedOCRService, DocumentType, OCRConfig
+                    from commercial.ai.services.unified_ocr_service import UnifiedOCRService, DocumentType, OCRConfig
                     from datetime import datetime, timezone
 
                     # Get AI config
@@ -917,7 +917,7 @@ class BankStatementMessageHandler(BaseMessageHandler):
 
     async def _handle_statement_error(self, consumer, message, db, stmt, error: Exception, attempt: int, payload: Dict[str, Any]) -> ProcessingResult:
         """Handle bank statement processing errors"""
-        from core.services.ocr_service import publish_bank_statement_task
+        from commercial.ai.services.ocr_service import publish_bank_statement_task
 
         statement_id = stmt.id
         retry_delay = calculate_backoff_delay(attempt)
@@ -1195,7 +1195,7 @@ class InvoiceMessageHandler(BaseMessageHandler):
                     ai_conf = await self._get_ai_config(db)
 
                     # Process invoice
-                    extracted_data = await process_pdf_with_ai(file_path, ai_conf)
+                    extracted_data = await process_pdf_with_ai(file_path, ai_conf, db=db)
 
                     # Create Invoice record from extracted data
                     created_invoice_id = None
@@ -1326,7 +1326,7 @@ class InvoiceMessageHandler(BaseMessageHandler):
                     ai_conf = await self._get_ai_config(db)
 
                     # Process invoice
-                    extracted_data = await process_pdf_with_ai(file_path, ai_conf)
+                    extracted_data = await process_pdf_with_ai(file_path, ai_conf, db=db)
 
                     # Process client information
                     client_info = await self._process_client_info(db, extracted_data)
@@ -1709,7 +1709,7 @@ class OCRConsumer:
                     continue
 
                 try:
-                    from core.services.ocr_service import queue_or_process_attachment
+                    from commercial.ai.services.ocr_service import queue_or_process_attachment
                     await queue_or_process_attachment(db, tenant_id, expense.id, attachment.id, str(attachment.file_path))
                     self.logger.info(f"Requeued queued expense_id={expense.id} tenant_id={tenant_id}")
                 except Exception as e:

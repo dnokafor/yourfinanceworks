@@ -258,7 +258,7 @@ async def ai_chat(
             print("No AI config found in database, checking environment variables...")
             logger.info("No AI config found in database, checking environment variables...")
 
-            from core.services.ai_config_service import AIConfigService
+            from commercial.ai.services.ai_config_service import AIConfigService
             env_config = AIConfigService.get_ai_config(db, component="chat", require_ocr=False)
 
             if not env_config:

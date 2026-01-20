@@ -26,7 +26,7 @@ from core.schemas.bank_statement import (
 from datetime import datetime, timezone
 from core.utils.timezone import get_tenant_timezone_aware_datetime
 from fastapi.responses import FileResponse
-from core.services.ocr_service import publish_bank_statement_task
+from commercial.ai.services.ocr_service import publish_bank_statement_task
 from core.utils.audit import log_audit_event
 from sqlalchemy.orm import joinedload
 from core.services.attribution_service import AttributionService
@@ -1541,6 +1541,26 @@ async def accept_review(
     db.refresh(statement)
     return statement
 
+@router.post("/{statement_id}/reject-review", response_model=BankStatementResponse)
+async def reject_review(
+    statement_id: int,
+    db: Session = Depends(get_db),
+    current_user: MasterUser = Depends(get_current_user)
+):
+    require_non_viewer(current_user, "review bank statements")
+
+    statement = db.query(BankStatement).filter(BankStatement.id == statement_id).first()
+    if not statement:
+        raise HTTPException(status_code=404, detail="Bank statement not found")
+
+    review_service = ReviewService(db)
+    success = review_service.reject_review(statement)
+
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to reject review")
+
+    return statement
+
 @router.post("/{statement_id}/review", response_model=BankStatementResponse)
 async def run_review(
     statement_id: int,
@@ -1601,11 +1621,11 @@ async def cancel_statement_review(
     if not statement:
         raise HTTPException(status_code=404, detail="Bank statement not found")
 
-    # Can only cancel if review is pending or not_started
-    if statement.review_status not in ["pending", "not_started"]:
+    # Can only cancel if review is pending, not_started, rejected, or failed
+    if statement.review_status not in ["pending", "not_started", "rejected", "failed"]:
         raise HTTPException(
             status_code=400, 
-            detail=f"Cannot cancel review with status '{statement.review_status}'. Only pending or not_started reviews can be cancelled."
+            detail=f"Cannot cancel review with status '{statement.review_status}'. Only pending, rejected, failed, or not_started reviews can be cancelled."
         )
 
     # Cancel the review

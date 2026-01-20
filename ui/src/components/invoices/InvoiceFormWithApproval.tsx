@@ -53,7 +53,8 @@ export function InvoiceFormWithApproval({
   useEffect(() => {
     const checkClients = async () => {
       try {
-        const clients = await clientApi.getClients();
+        const clientsResponse = await clientApi.getClients();
+        const clients = clientsResponse.items;
         setHasClients(Array.isArray(clients) && clients.length > 0);
       } catch (error) {
         console.error('Failed to fetch clients:', error);
@@ -144,7 +145,8 @@ export function InvoiceFormWithApproval({
   const checkClientsAgain = async () => {
     try {
       setLoadingClients(true);
-      const clients = await clientApi.getClients();
+      const clientsResponse = await clientApi.getClients();
+      const clients = clientsResponse.items;
       setHasClients(Array.isArray(clients) && clients.length > 0);
     } catch (error) {
       console.error('Failed to fetch clients:', error);

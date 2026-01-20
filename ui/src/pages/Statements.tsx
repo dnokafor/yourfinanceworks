@@ -194,6 +194,8 @@ export default function Statements() {
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [selectedReviewStatement, setSelectedReviewStatement] = useState<BankStatementSummary | null>(null);
   const [isAcceptingReview, setIsAcceptingReview] = useState(false);
+  const [isRejectingReview, setIsRejectingReview] = useState(false);
+  const [isRetriggeringReview, setIsRetriggeringReview] = useState(false);
 
   const handleReviewClick = (statement: BankStatementSummary) => {
     setSelectedReviewStatement(statement);
@@ -214,6 +216,38 @@ export default function Statements() {
       toast.error('Failed to accept review');
     } finally {
       setIsAcceptingReview(false);
+    }
+  };
+
+  const handleRejectReview = async () => {
+    if (!selectedReviewStatement) return;
+
+    try {
+      setIsRejectingReview(true);
+      await bankStatementApi.rejectReview(selectedReviewStatement.id);
+      toast.success('Review dismissed');
+      setReviewModalOpen(false);
+      loadList();
+    } catch (error) {
+      toast.error('Failed to dismiss review');
+    } finally {
+      setIsRejectingReview(false);
+    }
+  };
+
+  const handleRetriggerReview = async () => {
+    if (!selectedReviewStatement) return;
+
+    try {
+      setIsRetriggeringReview(true);
+      await bankStatementApi.reReview(selectedReviewStatement.id);
+      toast.success('Review re-triggered');
+      setReviewModalOpen(false);
+      loadList();
+    } catch (error) {
+      toast.error('Failed to re-trigger review');
+    } finally {
+      setIsRetriggeringReview(false);
     }
   };
 
@@ -1216,16 +1250,18 @@ export default function Statements() {
                           ) : (
                             <div className="flex flex-col gap-1 items-start">
                               <Badge variant="outline" className={
-                                s.review_status === 'pending' 
-                                  ? "bg-blue-50 text-blue-700 border-blue-200" 
+                                s.review_status === 'pending'
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : s.review_status === 'rejected'
+                                  ? "bg-amber-50 text-amber-700 border-amber-200"
                                   : "bg-muted/50 text-muted-foreground border-transparent"
                               }>
-                                {s.review_status === 'pending' ? t('statements.review_status.pending') : t('common.not_started', { defaultValue: 'Not Started' })}
+                                {s.review_status === 'pending' ? t('statements.review_status.pending', { defaultValue: 'Review Pending' }) : s.review_status === 'rejected' ? 'Review Dismissed' : t('common.not_started', { defaultValue: 'Not Started' })}
                               </Badge>
-                              {(!s.review_status || s.review_status === 'not_started' || s.review_status === 'failed') && (
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost" 
+                              {(!s.review_status || s.review_status === 'not_started' || s.review_status === 'failed' || s.review_status === 'rejected') && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
                                   className="h-6 text-[10px] text-primary hover:bg-primary/5 p-0 px-1"
                                   onClick={() => handleRunReview(s.id)}
                                 >
@@ -1233,15 +1269,15 @@ export default function Statements() {
                                   Trigger Review
                                 </Button>
                               )}
-                              {s.review_status === 'pending' && (
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost" 
+                              {(s.review_status === 'pending' || s.review_status === 'rejected') && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
                                   className="h-6 text-[10px] text-destructive hover:bg-destructive/5 p-0 px-1"
                                   onClick={() => handleCancelReview(s.id)}
                                 >
                                   <X className="h-2.5 w-2.5 mr-1" />
-                                  Cancel Review
+                                  {s.review_status === 'rejected' ? 'Clear Status' : 'Cancel Review'}
                                 </Button>
                               )}
                             </div>
@@ -1403,12 +1439,20 @@ export default function Statements() {
               // For statement, we can pass relevant metadata or summary
               filename: selectedReviewStatement.original_filename,
               extracted_count: selectedReviewStatement.extracted_count,
+              formatted_extracted_count: selectedReviewStatement.extracted_count, // Fallback if modal looked for something else
+              transaction_count: selectedReviewStatement.extracted_count,
               status: selectedReviewStatement.status,
-              // Ideally backend should provide structured data for comparison in review_result but for statement mostly metadata
             }}
-            reviewResult={selectedReviewStatement.review_result || {}}
+            reviewResult={{
+              ...(selectedReviewStatement.review_result || {}),
+              transaction_count: selectedReviewStatement.review_result?.transactions?.length ?? 0
+            }}
             onAccept={handleAcceptReview}
+            onReject={handleRejectReview}
+            onRetrigger={handleRetriggerReview}
             isAccepting={isAcceptingReview}
+            isRejecting={isRejectingReview}
+            isRetriggering={isRetriggeringReview}
             type="statement"
           />
         )}

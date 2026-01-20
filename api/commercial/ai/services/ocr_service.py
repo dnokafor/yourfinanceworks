@@ -9,8 +9,8 @@ from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from core.models.models_per_tenant import AIConfig as AIConfigModel
-from core.settings.ocr_config import get_ocr_config, check_ocr_dependencies, is_ocr_available
-from core.exceptions.bank_ocr_exceptions import (
+from commercial.ai.settings.ocr_config import get_ocr_config, check_ocr_dependencies, is_ocr_available
+from commercial.ai.exceptions.bank_ocr_exceptions import (
     OCRUnavailableError,
     OCRDependencyMissingError,
     OCRConfigurationError
@@ -103,100 +103,86 @@ async def apply_ocr_extraction_to_expense(
             logger.error(f"OCR transport error for expense {expense.id}: {expense.analysis_error}")
             return
 
-        # Try to parse JSON embedded in raw text
-        parsed_json = _extract_json_from_text(extracted_text)
-        if isinstance(parsed_json, dict) and len(parsed_json) > 1:
-            extracted.update(parsed_json)
-            logger.info(f"Parsed embedded JSON keys: {list(parsed_json.keys())}")
-        else:
-            # Try to parse markdown-formatted response
-            parsed_markdown = _parse_markdown_formatted_response(extracted_text)
-            if parsed_markdown and len(parsed_markdown) > 0:
-                extracted.update(parsed_markdown)
-                logger.info(f"Parsed markdown response keys: {list(parsed_markdown.keys())}")
-            else:
-                try:
-                    heur = _heuristic_parse_text(extracted_text)
-                    if heur:
-                        extracted.update(heur)
-                        logger.info(f"Heuristic parse extracted keys: {list(heur.keys())}")
+            logger.error(f"OCR transport error for expense {expense.id}: {expense.analysis_error}")
+            return
 
-                        # Validate heuristic timestamp extraction quality
-                        if "receipt_timestamp" in heur:
-                            timestamp_str = heur["receipt_timestamp"]
-                            try:
-                                from dateutil import parser as dateparser
-                                parsed_dt = dateparser.parse(str(timestamp_str))
-                                # Check if the parsed date is reasonable (not too far in future/past)
-                                now = datetime.now(timezone.utc)
-                                year_diff = abs(parsed_dt.year - now.year)
-                                if year_diff > 5:  # More than 5 years difference seems suspicious
-                                    logger.warning(f"Heuristic timestamp seems unreasonable: {timestamp_str} (parsed as {parsed_dt})")
-                                    logger.info("Timestamp extraction quality check failed, attempting AI LLM fallback...")
-                                    # Retry with AI LLM for better timestamp extraction
-                                    retry_ai_config = ai_config or _get_ai_config_from_env()
-                                    if retry_ai_config and not ai_extraction_attempted and file_path:
-                                        try:
-                                            logger.info("🔄 Retrying with AI LLM due to questionable timestamp...")
-                                            ai_result = await _run_ocr(file_path, ai_config=retry_ai_config)
-                                            if ai_result and isinstance(ai_result, dict) and "receipt_timestamp" in ai_result:
-                                                # Validate AI result timestamp
-                                                ai_timestamp = ai_result["receipt_timestamp"]
-                                                try:
-                                                    ai_parsed_dt = dateparser.parse(str(ai_timestamp))
-                                                    ai_year_diff = abs(ai_parsed_dt.year - now.year)
-                                                    if ai_year_diff <= 5:  # AI result is more reasonable
-                                                        logger.info(f"✅ AI LLM provided better timestamp: {ai_timestamp}")
-                                                        extracted.update(ai_result)
-                                                    else:
-                                                        logger.warning(f"❌ AI LLM timestamp also questionable: {ai_timestamp}")
-                                                except Exception:
-                                                    logger.warning("❌ AI LLM timestamp parsing failed")
-                                            else:
-                                                logger.warning("❌ AI LLM retry did not provide timestamp")
-                                        except Exception as retry_error:
-                                            logger.error(f"AI LLM retry failed: {retry_error}")
-                                    else:
-                                        logger.info("AI LLM retry not available for timestamp validation")
-                            except Exception as e:
-                                logger.warning(f"Failed to validate heuristic timestamp '{timestamp_str}': {e}")
-                    else:
-                        logger.info("Heuristic parsing returned no data, attempting AI LLM extraction...")
-                        # Retry with AI LLM if available and not already attempted
-                        retry_ai_config = ai_config or _get_ai_config_from_env()
-                        if retry_ai_config and not ai_extraction_attempted and file_path:
-                            try:
-                                logger.info("🔄 Retrying with AI LLM due to failed heuristic parsing...")
-                                ai_result = await _run_ocr(file_path, ai_config=retry_ai_config)
-                                if ai_result and isinstance(ai_result, dict) and len(ai_result) > 1:
-                                    logger.info("✅ AI LLM retry successful, using AI results")
-                                    extracted.update(ai_result)
+        # Attempt to parse structrued data from raw text using multiple strategies
+        parsed_data = None
+        parsing_method = None
+
+        # Strategy 1: JSON extraction
+        parsed_data = _extract_json_from_text(extracted_text)
+        if parsed_data and isinstance(parsed_data, dict) and len(parsed_data) > 1:
+            parsing_method = "json"
+            extracted.update(parsed_data)
+            logger.info(f"Parsed embedded JSON keys: {list(parsed_data.keys())}")
+
+        # Strategy 2: Markdown extraction
+        if not parsing_method:
+            parsed_data = _parse_markdown_formatted_response(extracted_text)
+            if parsed_data and len(parsed_data) > 0:
+                parsing_method = "markdown"
+                extracted.update(parsed_data)
+                logger.info(f"Parsed markdown response keys: {list(parsed_data.keys())}")
+
+        # Strategy 3: Heuristic extraction & AI Fallback
+        if not parsing_method:
+            parsed_data = _heuristic_parse_text(extracted_text)
+            if parsed_data:
+                parsing_method = "heuristic"
+                extracted.update(parsed_data)
+                logger.info(f"Heuristic parse extracted keys: {list(parsed_data.keys())}")
+
+                # Quality Control: Check for suspicious timestamp if using heuristics
+                if "receipt_timestamp" in parsed_data:
+                    timestamp_str = parsed_data["receipt_timestamp"]
+                    try:
+                        from dateutil import parser as dateparser
+                        parsed_dt = dateparser.parse(str(timestamp_str))
+                        # Check if the parsed date is reasonable (not too far in future/past)
+                        now = datetime.now(timezone.utc)
+                        year_diff = abs(parsed_dt.year - now.year)
+
+                        if year_diff > 5:  # More than 5 years difference seems suspicious
+                            logger.warning(f"Heuristic timestamp seems unreasonable: {timestamp_str} (parsed as {parsed_dt})")
+
+                            # Retry with AI if needed
+                            if not ai_extraction_attempted:
+                                ai_result = await _retry_ocr_with_ai(
+                                    file_path, ai_config, db, "questionable timestamp"
+                                )
+
+                                if ai_result and isinstance(ai_result, dict) and "receipt_timestamp" in ai_result:
+                                    # Validate AI result timestamp
+                                    ai_timestamp = ai_result["receipt_timestamp"]
+                                    try:
+                                        ai_parsed_dt = dateparser.parse(str(ai_timestamp))
+                                        ai_year_diff = abs(ai_parsed_dt.year - now.year)
+                                        if ai_year_diff <= 5:
+                                            logger.info(f"✅ AI LLM provided better timestamp: {ai_timestamp}")
+                                            extracted.update(ai_result)
+                                        else:
+                                            logger.warning(f"❌ AI LLM timestamp also questionable: {ai_timestamp}")
+                                    except Exception:
+                                        logger.warning("❌ AI LLM timestamp parsing failed")
                                 else:
-                                    logger.warning("❌ AI LLM retry also failed")
-                            except Exception as retry_error:
-                                logger.error(f"AI LLM retry failed: {retry_error}")
-                        else:
-                            logger.info("AI LLM retry not available (no config or already attempted)")
-                except Exception as e:
-                    logger.warning(f"Heuristic parse failed: {e}")
-                    logger.info("Heuristic parsing failed, attempting AI LLM extraction...")
-                    # Retry with AI LLM if available and not already attempted
-                    retry_ai_config = ai_config or _get_ai_config_from_env()
-                    if retry_ai_config and not ai_extraction_attempted and file_path:
-                        try:
-                            logger.info("🔄 Retrying with AI LLM due to heuristic parsing failure...")
-                            ai_result = await _run_ocr(file_path, ai_config=retry_ai_config)
-                            if ai_result and isinstance(ai_result, dict) and len(ai_result) > 1:
-                                logger.info("✅ AI LLM retry successful, using AI results")
-                                extracted.update(ai_result)
-                            else:
-                                logger.warning("❌ AI LLM retry also failed")
-                        except Exception as retry_error:
-                            logger.error(f"AI LLM retry failed: {retry_error}")
+                                    logger.warning("❌ AI LLM retry did not provide timestamp")
+                    except Exception as e:
+                         logger.warning(f"Failed to validate heuristic timestamp '{timestamp_str}': {e}")
+            else:
+                # Heuristic failed completely
+                logger.info("Heuristic parsing returned no data, attempting AI LLM extraction...")
+                if not ai_extraction_attempted:
+                    ai_result = await _retry_ocr_with_ai(
+                        file_path, ai_config, db, "failed heuristic parsing"
+                    )
+                    if ai_result:
+                        logger.info("✅ AI LLM retry successful, using AI results")
+                        extracted.update(ai_result)
                     else:
-                        logger.info("AI LLM retry not available (no config or already attempted)")
-
-    # Amount/total
+                        logger.warning("❌ AI LLM retry also failed")
+                else:
+                    logger.info("AI LLM retry not available (already attempted)")
     # Extract amount/total from receipt
     # Note: We'll handle amount updates after extracting all fields
     extracted_amount = parse_number(first_key(extracted, [
@@ -430,8 +416,8 @@ logger = logging.getLogger(__name__)
 
 
 # Import unified AI configuration service
-from core.services.ai_config_service import AIConfigService
-from core.services.prompt_service import get_prompt_service
+from commercial.ai.services.ai_config_service import AIConfigService
+from commercial.prompt_management.services.prompt_service import get_prompt_service
 
 def _get_ai_config_from_env() -> Optional[Dict[str, Any]]:
     """
@@ -606,9 +592,9 @@ def _parse_markdown_formatted_response(text: str) -> Optional[Dict[str, Any]]:
     data: Dict[str, Any] = {}
 
     # Pattern to match markdown list items with key-value pairs
-    # Matches: * **Key:** value (note: colon is inside the bold markers)
+    # Matches: * **Key:** value or * **Key**: value
     # Only match lines that start with * (list marker)
-    pattern = r'^\*\s+\*\*([^*:]+):\*\*\s*(.+?)$'
+    pattern = r'^\*\s+\*\*([^*:]+)\*\*[:\s]+(.+?)$'
 
     matches = re.finditer(pattern, text, re.MULTILINE)
 
@@ -907,7 +893,24 @@ def _heuristic_parse_text(text: str) -> Optional[Dict[str, Any]]:
     # Vendor
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
     if lines:
-       data["vendor"] = lines[0][:80]
+        # Define common headers to skip for vendor extraction
+        skip_headers = [
+            "**receipt data**", "**key fields**", "**summary**", "**receipt**",
+            "receipt details", "transaction details", "extraction results"
+        ]
+
+        for line in lines:
+            curr_line = line.strip().lower()
+            # Skip common markdown headers and logical headers
+            if curr_line.startswith(("**", "#", "##")) or any(h in curr_line for h in skip_headers):
+                continue
+
+            data["vendor"] = line[:80]
+            break
+
+        # Fallback to first line if everything was skipped
+        if "vendor" not in data and lines:
+            data["vendor"] = lines[0][:80]
 
     return data if data else None
 
@@ -932,7 +935,14 @@ def _looks_like_base64_encrypted(value: str) -> bool:
     return base64_pattern.match(value) and len(value) > 30
 
 
-async def _convert_raw_ocr_to_json(raw_content: str, model_name: str, provider_name: str, kwargs: Dict[str, Any], db_session: Session) -> Optional[Dict[str, Any]]:
+async def _convert_raw_ocr_to_json(
+    raw_content: str,
+    model_name: str,
+    provider_name: str,
+    kwargs: Dict[str, Any],
+    db_session: Session,
+    custom_prompt: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
     """
     Use LLM to convert raw OCR output (markdown, text, etc.) to structured JSON.
     This is a second-pass conversion when the first OCR attempt returns non-JSON format.
@@ -940,28 +950,31 @@ async def _convert_raw_ocr_to_json(raw_content: str, model_name: str, provider_n
     try:
         logger.info(f"Converting raw OCR output to JSON using {provider_name}/{model_name}")
 
-        # Define fallback prompt once to avoid duplication
-        fallback_ocr_prompt = (
-            "You are a data extraction expert. The following is OCR output from a receipt or invoice in various formats (markdown, text, etc.). "
-            "Convert it to a compact JSON object with these keys: amount, currency, expense_date (YYYY-MM-DD), category, vendor, tax_rate, tax_amount, total_amount, payment_method, reference_number, notes, receipt_timestamp (YYYY-MM-DD HH:MM:SS if available). "
-            "For receipt_timestamp, use the exact time from the receipt if visible. "
-            "If a field is unknown or not present, set it to null. "
-            "Return ONLY the JSON object, no markdown, no explanations.\n\n"
-            f"OCR Output:\n{raw_content}"
-        )
-
-        # Try to get prompt from service
-        try:
-            prompt_service = get_prompt_service(db_session)
-            conversion_prompt = prompt_service.get_prompt(
-                name="ocr_data_conversion",
-                variables={"raw_content": raw_content},
-                provider_name=provider_name,
-                fallback_prompt=fallback_ocr_prompt
+        if custom_prompt:
+            conversion_prompt = custom_prompt.replace("{{raw_content}}", raw_content)
+        else:
+            # Define fallback prompt once to avoid duplication
+            fallback_ocr_prompt = (
+                "You are a data extraction expert. The following is OCR output from a receipt or invoice in various formats (markdown, text, etc.). "
+                "Convert it to a compact JSON object with these keys: amount, currency, expense_date (YYYY-MM-DD), category, vendor, tax_rate, tax_amount, total_amount, payment_method, reference_number, notes, receipt_timestamp (YYYY-MM-DD HH:MM:SS if available). "
+                "For receipt_timestamp, use the exact time from the receipt if visible. "
+                "If a field is unknown or not present, set it to null. "
+                "Return ONLY the JSON object, no markdown, no explanations.\n\n"
+                "OCR Output:\n{{raw_content}}"
             )
-        except Exception as e:
-            logger.warning(f"Failed to get OCR conversion prompt from service: {e}")
-            conversion_prompt = fallback_ocr_prompt
+
+            # Try to get prompt from service
+            try:
+                prompt_service = get_prompt_service(db_session)
+                conversion_prompt = prompt_service.get_prompt(
+                    name="ocr_data_conversion",
+                    variables={"raw_content": raw_content},
+                    provider_name=provider_name,
+                    fallback_prompt=fallback_ocr_prompt
+                )
+            except Exception as e:
+                logger.warning(f"Failed to get OCR conversion prompt from service: {e}")
+                conversion_prompt = fallback_ocr_prompt.replace("{{raw_content}}", raw_content)
 
         messages = [
             {
@@ -974,9 +987,14 @@ async def _convert_raw_ocr_to_json(raw_content: str, model_name: str, provider_n
         if provider_name.lower() == "ollama":
             try:
                 import ollama
+                # Get base_url from kwargs or use default
+                base_url = kwargs.get("base_url") or os.environ.get("OLLAMA_API_BASE") or "http://localhost:11434"
+
+                # Create Ollama client with custom host
+                client = ollama.Client(host=base_url)
                 response = await asyncio.get_event_loop().run_in_executor(
                     None,
-                    lambda: ollama.chat(model=model_name, messages=messages, stream=False)
+                    lambda: client.chat(model=model_name, messages=messages, stream=False)
                 )
                 content = response.get("message", {}).get("content", "")
             except Exception as e:
@@ -1018,17 +1036,25 @@ def _extract_json_from_text(text: str) -> Optional[Dict[str, Any]]:
     import re
 
     # Strip markdown code blocks if present
-    text = re.sub(r'```json\s*', '', text)
+    text = re.sub(r'```json\s*', '', text, flags=re.IGNORECASE)
     text = re.sub(r'```\s*', '', text)
 
-    # Strip markdown headers and formatting
+    # Strip common prefixes from LLMs that can interfere with parsing
+    text = re.sub(r'^(page\s+\d+:|response:|here is the json:|json:|analysis\s*result:)\s*', '', text, flags=re.IGNORECASE | re.MULTILINE)
+
+    # Strip markdown headers, formatting, and list bullets
     text = re.sub(r'^\*\*[^*]+\*\*\s*$', '', text, flags=re.MULTILINE)
     text = re.sub(r'^\*\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^[#\*]+\s+.*?:.*$', '', text, flags=re.MULTILINE) # Handle "## Vendor: ..."
+    text = re.sub(r'^[-\*]\s+', '', text, flags=re.MULTILINE) # Handle bullets
 
     try:
         # Quick path: whole text is JSON
         return json.loads(text)
     except Exception:
+        # If text is too long, don't log the full version in warning
+        log_text = text if len(text) < 500 else f"{text[:250]}...{text[-250:]}"
+        logger.warning(f"Failed to parse JSON from text: {log_text}")
         pass
 
     # Find the first balanced {...} block
@@ -1381,63 +1407,103 @@ def cancel_ocr_tasks_for_expense(expense_id: int) -> None:
     # No-op: If using Kafka, consider producing a cancel message or managing an outbox/processing table.
 
 
+async def _retry_ocr_with_ai(
+    file_path: Optional[str], 
+    ai_config: Optional[Dict[str, Any]], 
+    db_session: Session, 
+    reason: str
+) -> Optional[Dict[str, Any]]:
+    """
+    Retry OCR extraction using AI LLM when initial extraction is poor.
+    Returns the parsed result dict or None.
+    """
+    if not file_path:
+        return None
+
+    retry_ai_config = ai_config or _get_ai_config_from_env()
+    if not retry_ai_config:
+        logger.info("AI LLM retry not available (no config)")
+        return None
+
+    try:
+        logger.info(f"🔄 Retrying with AI LLM due to {reason}...")
+        ai_result = await _run_ocr(file_path, ai_config=retry_ai_config, db_session=db_session)
+        if ai_result and isinstance(ai_result, dict) and len(ai_result) > 1:
+             return ai_result
+        else:
+             return None
+    except Exception as retry_error:
+        logger.error(f"AI LLM retry failed: {retry_error}")
+        return None
+
+
 async def _run_ocr(file_path: str, custom_prompt: Optional[str] = None, ai_config: Optional[Dict[str, Any]] = None, db_session: Optional[Session] = None) -> Dict[str, Any]:
     """Run OCR using the configured AI provider. Supports multiple providers via LiteLLM."""
+    OCR_VERSION = "2024.01.24.02"  # Marker to verify code freshness
     try:
-        # Use AI config from database if available, otherwise fallback to environment variables
+        # 1. Resolve configuration (Priority: ai_config > environment variables)
+        provider_name = None
+        model_name = None
+        base_url = None
+        api_key = None
+        ocr_enabled = True # Default to true for env fallback
+
         if ai_config:
-            provider_name = ai_config.get("provider_name", "ollama")
-            model_name = ai_config.get("model_name", "llama3.2-vision:11b")
-            # Default to env vars if not explicitly set in config
-            base_url = ai_config.get("provider_url") or os.environ.get("OLLAMA_API_BASE") or os.environ.get("LLM_API_BASE") or "http://localhost:11434"
+            provider_name = ai_config.get("provider", ai_config.get("provider_name"))
+            model_name = ai_config.get("model", ai_config.get("model_name"))
+            base_url = ai_config.get("api_base", ai_config.get("provider_url"))
             api_key = ai_config.get("api_key")
+            ocr_enabled = ai_config.get("ocr_enabled", False)
 
-            logger.info(f"🔧 OCR using AI config: provider={provider_name} model={model_name} file={file_path}")
+            if provider_name:
+                provider_name = provider_name.lower()
 
-            # Check if OCR is enabled for this provider configuration
-            if not ai_config.get("ocr_enabled", False):
-                logger.warning(f"⚠️ OCR not enabled for provider '{provider_name}'. Please enable OCR in AI configuration settings.")
-                return {
-                    "error": f"OCR not enabled for provider '{provider_name}'. Please enable OCR in AI configuration settings.",
-                    "ocr_not_enabled": True
-                }
-        else:
-            # Fallback to environment variables (legacy behavior)
-            # Detect provider from environment variables
-            env_api_base = os.getenv("LLM_API_BASE") or os.getenv("OLLAMA_API_BASE")
-            env_api_key = os.getenv("LLM_API_KEY")
+        # 2. Resolve missing fields from environment variables
+        env_api_base = os.getenv("LLM_API_BASE") or os.getenv("OLLAMA_API_BASE")
+        env_api_key = os.getenv("LLM_API_KEY")
 
-            if env_api_base and ("openrouter.ai" in env_api_base or "openrouter" in env_api_base):
+        if not provider_name:
+            if env_api_base and ("openrouter" in env_api_base or "openrouter.ai" in env_api_base):
                 provider_name = "openrouter"
             elif env_api_base and ("api.openai.com" in env_api_base or "openai" in env_api_base):
                 provider_name = "openai"
-            elif env_api_base and ("anthropic" in env_api_base):
+            elif env_api_base and ("anthropic" in env_api_base or "claude" in env_api_base):
                 provider_name = "anthropic"
-            elif env_api_base and ("google" in env_api_base):
+            elif env_api_base and ("google" in env_api_base or "gemini" in env_api_base):
                 provider_name = "google"
             elif env_api_base or os.getenv("OLLAMA_MODEL"):
                 provider_name = "ollama"
             elif env_api_key:
-                provider_name = "openai"  # Default to OpenAI if API key present
+                provider_name = "openai"
             else:
-                provider_name = "ollama"  # Final fallback
+                provider_name = "ollama"
 
+        if not model_name:
             model_name = os.getenv("LLM_MODEL_EXPENSES", os.getenv("OLLAMA_MODEL", "llama3.2-vision:11b"))
+
+        if not base_url:
             base_url = env_api_base or "http://localhost:11434"
+
+        if not api_key:
             api_key = env_api_key
-            logger.info(f"⚠️ OCR using environment variables: provider={provider_name} model={model_name} endpoint={base_url} file={file_path}")
+
+        if ai_config:
+            logger.info(f"[OCR {OCR_VERSION}] Using explicit config with env fallbacks: {provider_name}/{model_name} at {base_url}")
+        else:
+            logger.info(f"[OCR {OCR_VERSION}] Using environment fallback: {provider_name}/{model_name} at {base_url}")
+
+        # 3. Capability Check (Respect provided configuration directly)
+        if not ocr_enabled:
+            logger.warning(f"⚠️ OCR not enabled for provider '{provider_name}'. Please enable OCR in AI configuration settings.")
+            return {
+                "error": f"OCR not enabled for provider '{provider_name}'.",
+                "ocr_not_enabled": True
+            }
 
         # Handle different providers
         if provider_name == "ollama":
-            # Use Ollama OCR library for Ollama provider
-            # Don't append /api/generate if it's already a non-Ollama provider URL
-            if not base_url.endswith("/api/generate") and "openrouter.ai" not in base_url and "api.openai.com" not in base_url:
-                ocr_endpoint = f"{base_url}/api/generate"
-            else:
-                ocr_endpoint = base_url
-
-            from ollama_ocr import OCRProcessor  # type: ignore
-            ocr = OCRProcessor(model_name=model_name, base_url=ocr_endpoint)
+            import ollama
+            # Use direct Ollama client for better vision support and JSON mode
             prompt = custom_prompt or (
                 "You are an OCR parser. Extract key expense fields from this receipt/invoice image and respond ONLY with valid JSON. "
                 "Required JSON structure:\n"
@@ -1455,34 +1521,56 @@ async def _run_ocr(file_path: str, custom_prompt: Optional[str] = None, ai_confi
                 '  "notes": "<notes or null>",\n'
                 '  "receipt_timestamp": "<YYYY-MM-DD HH:MM:SS or null>"\n'
                 "}\n"
-                "For receipt_timestamp, extract the exact date and time from the receipt if visible. Look for timestamps like '14:32', '2:45 PM', etc. "
-                "If a field is not found on the receipt, set it to null. "
-                "CRITICAL: Return ONLY the JSON object with these exact keys. Do NOT return CSV, do NOT return comma-separated values, do NOT return markdown. "
-                "Example: {\"amount\": 13.97, \"currency\": \"USD\", \"expense_date\": \"2023-09-13\", \"vendor\": \"Store Name\", ...}"
+                "Extract the actual data from the vision image. If a field is not found, set it to null. "
+                "CRITICAL: Return ONLY the JSON object. Do NOT return markdown, do NOT include prose."
             )
-            loop = asyncio.get_running_loop()
-            import time
-            t0 = time.time()
-            result = await loop.run_in_executor(
-                None,
-                lambda: ocr.process_image(
-                    image_path=file_path, format_type="json", custom_prompt=prompt, language="English"
-                ),
-            )
-            dt = (time.time() - t0) * 1000
-            if isinstance(result, str):
-                logger.info(f"OCR raw result (str) length={len(result)} duration_ms={dt:.0f}")
-            else:
-                try:
-                    logger.info(f"OCR result keys={list(result.keys()) if isinstance(result, dict) else 'n/a'} duration_ms={dt:.0f}")
-                except Exception:
-                    logger.info(f"OCR result type={type(result)} duration_ms={dt:.0f}")
-            if isinstance(result, str):
-                parsed = _extract_json_from_text(result)
-                if parsed is not None:
-                    return parsed
-                return {"raw": result}
-            return result or {}
+
+            try:
+                # Use base_url to create client
+                client = ollama.Client(host=base_url)
+
+                # Load image as bytes
+                with open(file_path, "rb") as f:
+                    img_bytes = f.read()
+
+                messages = [
+                    {
+                        "role": "user",
+                        "content": prompt,
+                        "images": [img_bytes]
+                    }
+                ]
+
+                import time
+                t0 = time.time()
+
+                # Use format="json" if requested
+                options = {"temperature": 0.1}
+                response = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: client.chat(
+                        model=model_name, 
+                        messages=messages, 
+                        format="json" if custom_prompt is None else None, # Only force JSON for standard extraction
+                        options=options,
+                        stream=False
+                    )
+                )
+
+                result = response.get("message", {}).get("content", "")
+                dt = (time.time() - t0) * 1000
+                logger.info(f"Ollama OCR raw result length={len(result)} duration_ms={dt:.0f}")
+
+                if result:
+                    parsed = _extract_json_from_text(result)
+                    if parsed is not None:
+                        return parsed
+                    return {"raw": result}
+                return {}
+
+            except Exception as e:
+                logger.error(f"Ollama direct OCR processing failed: {e}")
+                return {"error": str(e)}
 
         else:
             # Use LiteLLM for other providers (OpenAI, Anthropic, Google, etc.)
@@ -1811,7 +1899,7 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
     ai_extraction_attempted = False
 
     try:
-        from core.services.unified_ocr_service import UnifiedOCRService, DocumentType, OCRConfig
+        from commercial.ai.services.unified_ocr_service import UnifiedOCRService, DocumentType, OCRConfig
 
         # Use AI config from database or fallback to environment variables
         effective_ai_config = ai_config or _get_ai_config_from_env()
@@ -1839,16 +1927,16 @@ async def process_attachment_inline(db: Session, expense_id: int, attachment_id:
             logger.error(f"❌ Unified OCR extraction failed: {ocr_result.error_message}")
             # Fallback to legacy OCR for backward compatibility
             logger.info("Falling back to legacy OCR processing...")
-            result = await _run_ocr(file_path, ai_config=effective_ai_config)
+            result = await _run_ocr(file_path, ai_config=effective_ai_config, db_session=db)
             ai_extraction_attempted = True
 
     except ImportError as e:
         logger.warning(f"UnifiedOCRService not available, using legacy OCR: {e}")
-        result = await _run_ocr(file_path, ai_config=effective_ai_config)
+        result = await _run_ocr(file_path, ai_config=effective_ai_config, db_session=db)
         ai_extraction_attempted = True
     except Exception as e:
         logger.error(f"UnifiedOCRService failed, using legacy OCR: {e}")
-        result = await _run_ocr(file_path, ai_config=effective_ai_config)
+        result = await _run_ocr(file_path, ai_config=effective_ai_config, db_session=db)
         ai_extraction_attempted = True
 
     # Track AI usage if ai_config was used and OCR was actually attempted
@@ -2013,18 +2101,27 @@ def acquire_processing_lock(resource_type: str, resource_id: int, timeout_minute
     try:
         from core.models.processing_lock import ProcessingLock
         from core.models.database import get_db
-        from datetime import timedelta
 
-        # Get a new database session for lock acquisition
-        db = get_db()
+        db_gen = get_db()
         try:
-            with next(db) as session:
-                return ProcessingLock.acquire_lock(session, resource_type, resource_id, timeout_minutes)
+            session = next(db_gen)
+            acquired = ProcessingLock.acquire_lock(session, resource_type, resource_id, lock_duration_minutes=timeout_minutes)
+            if acquired:
+                session.commit()
+                logger.info(f"Acquired processing lock for {resource_type} {resource_id}")
+            return acquired
+        except StopIteration:
+            logger.error(f"Failed to get database session for lock acquisition")
+            return False
         except Exception as e:
             logger.error(f"Failed to acquire processing lock for {resource_type} {resource_id}: {e}")
             return False
         finally:
-            db.close()
+            try:
+                # Trigger generator cleanup (finally block in get_db)
+                db_gen.close()
+            except:
+                pass
     except Exception as e:
         logger.error(f"Error in acquire_processing_lock for {resource_type} {resource_id}: {e}")
         return False
@@ -2034,21 +2131,26 @@ def release_processing_lock(resource_type: str, resource_id: int) -> bool:
     try:
         from core.models.processing_lock import ProcessingLock
         from core.models.database import get_db
-        from sqlalchemy.orm import Session
 
-        # Get a new database session for lock release
-        db = get_db()
+        db_gen = get_db()
         try:
-            with next(db) as session:
-                released = ProcessingLock.release_lock(session, resource_type, resource_id)
-                if released:
-                    logger.info(f"Released processing lock for {resource_type} {resource_id}")
-                return released
+            session = next(db_gen)
+            released = ProcessingLock.release_lock(session, resource_type, resource_id)
+            if released:
+                session.commit()
+                logger.info(f"Released processing lock for {resource_type} {resource_id}")
+            return released
+        except StopIteration:
+            logger.error(f"Failed to get database session for lock release")
+            return False
         except Exception as e:
             logger.error(f"Failed to release processing lock for {resource_type} {resource_id}: {e}")
             return False
         finally:
-            db.close()
+            try:
+                db_gen.close()
+            except:
+                pass
     except Exception as e:
         logger.error(f"Error in release_processing_lock for {resource_type} {resource_id}: {e}")
         return False

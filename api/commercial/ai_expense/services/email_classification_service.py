@@ -3,8 +3,8 @@ import json
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 
-from core.services.ai_config_service import AIConfigService
-from core.services.prompt_service import get_prompt_service
+from commercial.ai.services.ai_config_service import AIConfigService
+from commercial.prompt_management.services.prompt_service import get_prompt_service
 
 logger = logging.getLogger(__name__)
 
@@ -91,14 +91,14 @@ class EmailClassificationService:
                     "has_attachments": has_attachments
                 },
                 provider_name=ai_config.get("provider_name"),
-                fallback_prompt=f"""Analyze this email and determine if it contains a receipt, invoice, expense, or purchase confirmation.
+                fallback_prompt="""Analyze this email and determine if it contains a receipt, invoice, expense, or purchase confirmation.
 
-Subject: {subject}
-From: {sender}
-Has Attachments: {has_attachments}
+Subject: {{subject}}
+From: {{sender}}
+Has Attachments: {{has_attachments}}
 
 Email Body Preview:
-{body}
+{{body}}
 
 Common expense email patterns:
 - Receipt from stores/restaurants (e.g., "Your receipt from...", "Thank you for your purchase")
@@ -115,11 +115,11 @@ NOT expense emails:
 - General correspondence
 
 Respond with ONLY valid JSON in this exact format:
-{{
+{
   "is_expense": true or false,
   "confidence": 0.0 to 1.0,
   "reasoning": "brief explanation (max 100 chars)"
-}}"""
+}"""
             )
             return prompt
         except Exception as e:

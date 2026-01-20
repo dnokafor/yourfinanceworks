@@ -28,6 +28,7 @@ ui/next-env.d.ts
 
 
 api/.coverage
+api/.hypothesis
 api/venv
 api/**/__pycache__
 api/.env

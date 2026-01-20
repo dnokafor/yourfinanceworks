@@ -509,7 +509,10 @@ async def create_invoice(
             "attachment_count": len(new_attachments),
             "created_by_user_id": invoice.created_by_user_id,
             "created_by_username": created_by_username,
-            "created_by_email": created_by_email
+            "created_by_email": created_by_email,
+            "review_status": invoice.review_status,
+            "review_result": invoice.review_result,
+            "reviewed_at": invoice.reviewed_at.isoformat() if invoice.reviewed_at else None
         }
     except HTTPException as he:
         logger.error(f"HTTPException in create_invoice: {he.status_code} - {he.detail}")
@@ -693,7 +696,10 @@ async def clone_invoice(
             "has_attachment": False,
             "attachment_filename": None,
             "attachments": [],
-            "attachment_count": 0
+            "attachment_count": 0,
+            "review_status": cloned_invoice.review_status,
+            "review_result": cloned_invoice.review_result,
+            "reviewed_at": cloned_invoice.reviewed_at.isoformat() if cloned_invoice.reviewed_at else None
         }
     except HTTPException:
         raise
@@ -793,7 +799,10 @@ async def read_invoices(
                 "attachment_filename": get_attachment_info(invoice, new_attachments)[1],
                 "created_by_user_id": invoice.created_by_user_id,
                 "created_by_username": created_by_username,
-                "created_by_email": created_by_email
+                "created_by_email": created_by_email,
+                "review_status": invoice.review_status,
+                "review_result": invoice.review_result,
+                "reviewed_at": invoice.reviewed_at.isoformat() if invoice.reviewed_at else None
             }
             result.append(invoice_dict)
 
@@ -1346,7 +1355,10 @@ async def read_invoice(
             "attachment_count": len(new_attachments),
             "created_by_user_id": invoice.created_by_user_id,
             "created_by_username": created_by_username,
-            "created_by_email": created_by_email
+            "created_by_email": created_by_email,
+            "review_status": invoice.review_status,
+            "review_result": invoice.review_result,
+            "reviewed_at": invoice.reviewed_at.isoformat() if invoice.reviewed_at else None
         }
 
         return invoice_dict
@@ -3160,7 +3172,7 @@ async def upload_invoice_attachment_new(
         task_id = None
         if attachment_type == "document" and file_ext in {'.pdf', '.jpg', '.jpeg', '.png'}:
             try:
-                from core.services.ocr_service import publish_invoice_task
+                from commercial.ai.services.ocr_service import publish_invoice_task
                 import uuid
 
                 # Generate task ID for tracking
@@ -3210,7 +3222,7 @@ async def upload_invoice_attachment_new(
 
         # Release processing lock for invoice if it was used
         try:
-            from core.services.ocr_service import release_processing_lock
+            from commercial.ai.services.ocr_service import release_processing_lock
             invoice_id_for_lock = invoice_id
             released = release_processing_lock("invoice", invoice_id_for_lock)
             if released:
@@ -3408,6 +3420,26 @@ async def accept_review(
     db.refresh(invoice)
     return invoice
 
+@router.post("/{invoice_id}/reject-review", response_model=InvoiceSchema)
+async def reject_review(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    require_non_viewer(current_user, "review invoices")
+
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    review_service = ReviewService(db)
+    success = review_service.reject_review(invoice)
+
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to reject review")
+
+    return invoice
+
 @router.post("/{invoice_id}/review", response_model=InvoiceSchema)
 async def run_review(
     invoice_id: int,
@@ -3492,11 +3524,11 @@ async def cancel_invoice_review(
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
 
-    # Can only cancel if review is pending or not_started
-    if invoice.review_status not in ["pending", "not_started"]:
+    # Can only cancel if review is pending, not_started, rejected, or failed
+    if invoice.review_status not in ["pending", "not_started", "rejected", "failed"]:
         raise HTTPException(
             status_code=400, 
-            detail=f"Cannot cancel review with status '{invoice.review_status}'. Only pending or not_started reviews can be cancelled."
+            detail=f"Cannot cancel review with status '{invoice.review_status}'. Only pending, rejected, failed, or not_started reviews can be cancelled."
         )
 
     # Cancel the review
