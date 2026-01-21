@@ -396,20 +396,26 @@ class UniversalBankTransactionExtractor:
                 fallback_prompt="""You are a financial data extraction expert. Your task is to extract ALL bank transactions from the text below.
 
 RULES:
-1. Look for dates, descriptions, and amounts
-2. Amounts with "-" or in parentheses are debits (money out)
-3. Positive amounts are credits (money in)
-4. Convert dates to YYYY-MM-DD format
-5. Extract merchant names clearly
-6. Only extract actual transactions, not headers or summaries
+1. Look for dates, descriptions, and amounts.
+2. Identify the transaction type:
+   - 'debit': Money leaving the account (Withdrawals, Payments, Transfers Out, etc.).
+   - 'credit': Money entering the account (Deposits, Salary, Transfers In, Interest, etc.).
+3. Use context such as column headers (Withdrawal/Debit vs Deposit/Credit) or keywords in the description to determine the type.
+4. Normalize the 'amount':
+   - For 'debit' transactions, the amount MUST BE NEGATIVE (e.g., -45.67).
+   - For 'credit' transactions, the amount MUST BE POSITIVE (e.g., 2500.00).
+   - Ignore existing signs or parentheses if they contradict the identified transaction type.
+5. Convert dates to YYYY-MM-DD format.
+6. Extract merchant names or transaction descriptions clearly.
+7. Only extract actual transactions, not headers, sub-totals, or account summaries.
 
 TEXT:
 {{text}}
 
-Return ONLY a JSON array like this example:
+Return ONLY a JSON array like this:
 [
-  {"date": "2024-01-15", "description": "GROCERY STORE", "amount": -45.67, "transaction_type": "debit", "balance": 1234.56},
-  {"date": "2024-01-16", "description": "SALARY DEPOSIT", "amount": 2500.00, "transaction_type": "credit", "balance": 3689.89}
+  {"date": "2024-01-15", "description": "WALMART", "amount": -45.67, "transaction_type": "debit", "balance": 1234.56},
+  {"date": "2024-01-16", "description": "ABC CORP SALARY", "amount": 2500.00, "transaction_type": "credit", "balance": 3734.56}
 ]
 
 JSON:"""
@@ -424,23 +430,29 @@ JSON:"""
         except Exception as e:
             logger.warning(f"Failed to get bank transaction extraction prompt from service: {e}")
             # Fallback to hardcoded template
-            template = """You are a financial data extraction expert. Extract bank transactions from the text below.
+            template = """You are a financial data extraction expert. Your task is to extract ALL bank transactions from the text below.
 
 RULES:
-1. Look for dates, descriptions, and amounts
-2. Amounts with "-" or in parentheses are debits (money out)
-3. Positive amounts are credits (money in)
-4. Convert dates to YYYY-MM-DD format
-5. Extract merchant names clearly
-6. Only extract actual transactions, not headers or summaries
+1. Look for dates, descriptions, and amounts.
+2. Identify the transaction type:
+   - 'debit': Money leaving the account (Withdrawals, Payments, Transfers Out, etc.).
+   - 'credit': Money entering the account (Deposits, Salary, Transfers In, Interest, etc.).
+3. Use context such as column headers (Withdrawal/Debit vs Deposit/Credit) or keywords in the description to determine the type.
+4. Normalize the 'amount':
+   - For 'debit' transactions, the amount MUST BE NEGATIVE (e.g., -45.67).
+   - For 'credit' transactions, the amount MUST BE POSITIVE (e.g., 2500.00).
+   - Ignore existing signs or parentheses if they contradict the identified transaction type.
+5. Convert dates to YYYY-MM-DD format.
+6. Extract merchant names or transaction descriptions clearly.
+7. Only extract actual transactions, not headers, sub-totals, or account summaries.
 
 TEXT:
 {{text}}
 
-Return ONLY a JSON array like this example:
+Return ONLY a JSON array like this:
 [
-  {"date": "2024-01-15", "description": "GROCERY STORE", "amount": -45.67, "transaction_type": "debit", "balance": 1234.56},
-  {"date": "2024-01-16", "description": "SALARY DEPOSIT", "amount": 2500.00, "transaction_type": "credit", "balance": 3689.89}
+  {"date": "2024-01-15", "description": "WALMART", "amount": -45.67, "transaction_type": "debit", "balance": 1234.56},
+  {"date": "2024-01-16", "description": "ABC CORP SALARY", "amount": 2500.00, "transaction_type": "credit", "balance": 3734.56}
 ]
 
 JSON:"""
@@ -881,9 +893,24 @@ JSON:"""
                 else:
                     df[col] = None
 
-        # Data type conversions
+        # Data type conversions and sign synchronization
         if 'amount' in df.columns:
             df['amount'] = pd.to_numeric(df['amount'], errors='coerce')
+            
+            # Synchronize signs with transaction_type
+            if 'transaction_type' in df.columns:
+                def sync_sign(row):
+                    amt = row['amount']
+                    ttype = str(row['transaction_type']).lower()
+                    if pd.isna(amt): return amt
+                    
+                    if ttype == 'debit' and amt > 0:
+                        return -amt
+                    elif ttype == 'credit' and amt < 0:
+                        return abs(amt)
+                    return amt
+                
+                df['amount'] = df.apply(sync_sign, axis=1)
 
         if 'balance' in df.columns:
             df['balance'] = pd.to_numeric(df['balance'], errors='coerce')
@@ -936,9 +963,17 @@ JSON:"""
             except:
                 continue
 
-            # Validate amount
+            # Validate amount and synchronize sign
             try:
-                txn['amount'] = float(txn['amount'])
+                val = float(txn['amount'])
+                ttype = str(txn.get('transaction_type', '')).lower()
+                
+                if ttype == 'debit' and val > 0:
+                    txn['amount'] = -val
+                elif ttype == 'credit' and val < 0:
+                    txn['amount'] = abs(val)
+                else:
+                    txn['amount'] = val
             except:
                 continue
 
@@ -1272,23 +1307,29 @@ class BankTransactionExtractor:
     def _create_extraction_prompt(self) -> PromptTemplate:
         """Create extraction prompt optimized for local models"""
 
-        template = """You are a financial data extraction expert. Extract bank transactions from the text below.
+        template = """You are a financial data extraction expert. Your task is to extract ALL bank transactions from the text below.
 
 RULES:
-1. Look for dates, descriptions, and amounts
-2. Amounts with "-" or in parentheses are debits (money out)
-3. Positive amounts are credits (money in)
-4. Convert dates to YYYY-MM-DD format
-5. Extract merchant names clearly
-6. Only extract actual transactions, not headers or summaries
+1. Look for dates, descriptions, and amounts.
+2. Identify the transaction type:
+   - 'debit': Money leaving the account (Withdrawals, Payments, Transfers Out, etc.).
+   - 'credit': Money entering the account (Deposits, Salary, Transfers In, Interest, etc.).
+3. Use context such as column headers (Withdrawal/Debit vs Deposit/Credit) or keywords in the description to determine the type.
+4. Normalize the 'amount':
+   - For 'debit' transactions, the amount MUST BE NEGATIVE (e.g., -45.67).
+   - For 'credit' transactions, the amount MUST BE POSITIVE (e.g., 2500.00).
+   - Ignore existing signs or parentheses if they contradict the identified transaction type.
+5. Convert dates to YYYY-MM-DD format.
+6. Extract merchant names or transaction descriptions clearly.
+7. Only extract actual transactions, not headers, sub-totals, or account summaries.
 
 TEXT:
 {{text}}
 
-Return ONLY a JSON array like this example:
+Return ONLY a JSON array like this:
 [
-  {"date": "2024-01-15", "description": "GROCERY STORE", "amount": -45.67, "transaction_type": "debit", "balance": 1234.56},
-  {"date": "2024-01-16", "description": "SALARY DEPOSIT", "amount": 2500.00, "transaction_type": "credit", "balance": 3689.89}
+  {"date": "2024-01-15", "description": "WALMART", "amount": -45.67, "transaction_type": "debit", "balance": 1234.56},
+  {"date": "2024-01-16", "description": "ABC CORP SALARY", "amount": 2500.00, "transaction_type": "credit", "balance": 3734.56}
 ]
 
 JSON:"""

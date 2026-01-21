@@ -157,22 +157,25 @@ Document path: {{file_path}}""",
     "description": "Extract bank transactions from statement text",
     "template_content": """You are a financial data extraction expert. Your task is to extract ALL bank transactions from the text below.
 
-CRITICAL INSTRUCTIONS:
-1. Extract EVERY SINGLE transaction - do not skip any
-2. Look for transaction patterns: date + description + amount
-3. Transactions may be in tables, lists, or narrative format
-4. Amounts with "-" or in parentheses are debits (money out, use negative numbers)
-5. Positive amounts are credits (money in, use positive numbers)
-6. Convert ALL dates to YYYY-MM-DD format
-7. Extract merchant/vendor names clearly from descriptions
-8. ONLY extract actual transactions - skip headers, summaries, totals, and account information
+RULES:
+1. Look for dates, descriptions, and amounts.
+2. Identify the transaction type:
+   - 'debit': Money leaving the account (Withdrawals, Payments, Transfers Out, etc.).
+   - 'credit': Money entering the account (Deposits, Salary, Transfers In, Interest, etc.).
+3. Use context such as column headers (Withdrawal/Debit vs Deposit/Credit) or keywords in the description to determine the type.
+4. Normalize the 'amount':
+   - For 'debit' transactions, the amount MUST BE NEGATIVE (e.g., -45.67).
+   - For 'credit' transactions, the amount MUST BE POSITIVE (e.g., 2500.00).
+   - Ignore existing signs or parentheses if they contradict the identified transaction type.
+5. Convert dates to YYYY-MM-DD format.
+6. Extract merchant names or transaction descriptions clearly.
+7. Only extract actual transactions, not headers, sub-totals, or account summaries.
 
 STEP-BY-STEP PROCESS:
-1. First, scan the ENTIRE text to identify all transaction entries
-2. For each transaction, extract: date, description, amount, transaction_type, balance (if available)
-3. Validate that you found ALL transactions (count them)
-4. Double-check you didn't miss any transactions at the beginning or end
-5. Return a complete JSON array with ALL transactions
+1. Scan the ENTIRE text to identify all transaction entries.
+2. For each transaction, extract: date, description, amount, transaction_type, balance (if available).
+3. Validate that you found ALL transactions.
+4. Return a complete JSON array with ALL transactions.
 
 TEXT:
 {{text}}
@@ -186,15 +189,9 @@ Return ONLY a valid JSON array. Each transaction must have these fields:
 
 Example format:
 [
-  {"date": "2024-01-15", "description": "GROCERY STORE", "amount": -45.67, "transaction_type": "debit", "balance": 1234.56},
-  {"date": "2024-01-16", "description": "SALARY DEPOSIT", "amount": 2500.00, "transaction_type": "credit", "balance": 3689.89},
-  {"date": "2024-01-17", "description": "ELECTRIC BILL", "amount": -125.00, "transaction_type": "debit", "balance": 3564.89}
+  {"date": "2024-01-15", "description": "WALMART", "amount": -45.67, "transaction_type": "debit", "balance": 1234.56},
+  {"date": "2024-01-16", "description": "ABC CORP SALARY", "amount": 2500.00, "transaction_type": "credit", "balance": 3734.56}
 ]
-
-VALIDATION:
-- Ensure you extracted ALL transactions from the text
-- Verify each transaction has date, description, and amount
-- Confirm amounts are correctly signed (negative for debits, positive for credits)
 
 JSON:""",
         "template_variables": ["text"],
@@ -398,12 +395,18 @@ If a field is not present in the OCR output, set it to null. Return ONLY the JSO
         "description": "High-fidelity prompt for bank statement transaction review",
         "template_content": """You are a Bank Reconciliation Specialist. Your task is to perform an exhaustive extraction of ALL transactions from this bank statement for a verification audit.
 
-CRITICAL INSTRUCTIONS:
-1. You must find EVERY SINGLE transaction. Compare the count against any summary totals provided in the text.
-2. Correctly sign amounts: negative for debits (money out), positive for credits (money in).
-3. Standardize all dates to YYYY-MM-DD.
-4. Clean the merchant/vendor names by removing noise from the description strings.
-5. If there are multiple pages or sections, ensure continuity.
+RULES:
+1. Extract EVERY SINGLE transaction. Compare the count against summary totals if provided.
+2. Identify the transaction type:
+   - 'debit': Money leaving the account (Withdrawals, Payments, Transfers Out, etc.).
+   - 'credit': Money entering the account (Deposits, Salary, Transfers In, Interest, etc.).
+3. Use context such as column headers (Withdrawal/Debit vs Deposit/Credit) or keywords in the description to determine the type.
+4. Normalize the 'amount':
+   - For 'debit' transactions, the amount MUST BE NEGATIVE (e.g., -45.67).
+   - For 'credit' transactions, the amount MUST BE POSITIVE (e.g., 2500.00).
+   - Ignore existing signs or parentheses if they contradict the identified transaction type.
+5. Convert ALL dates to YYYY-MM-DD format.
+6. Clean the merchant/vendor names by removing noise from the strings.
 
 Required JSON format:
 {
@@ -425,11 +428,11 @@ Return ONLY valid JSON:""",
         "template_variables": ["text"],
         "output_format": "json",
         "default_values": {},
-        "version": 1,
+        "version": 2,
         "is_active": True,
         "provider_overrides": {
-            "openai": "You are a Bank Reconciliation Specialist. Extract every transaction with high fidelity and standardized formatting.",
-            "anthropic": "As an expert in banking data analysis, meticulously extract all transaction entries. Ensure absolute accuracy in transaction dates and signed amounts."
+            "openai": "You are a Bank Reconciliation Specialist. Extract every transaction with high fidelity. Ensure all amounts are correctly signed based on context.",
+            "anthropic": "As an expert in banking data analysis, meticulously extract all transaction entries. Identify transaction types from context and ensure correct negative/positive signs for amounts."
         }
     },
     {
