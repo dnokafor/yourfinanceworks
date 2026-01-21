@@ -359,3 +359,8 @@ class ExpenseListResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PaginatedDeletedExpenses(BaseModel):
+    items: List[DeletedExpense]
+    total: int
+
+

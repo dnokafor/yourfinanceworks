@@ -6,13 +6,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { api } from "@/lib/api";
+import { bankStatementApi } from "@/lib/api";
 import { toast } from "sonner";
 import { formatDate } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { PageHeader } from "@/components/ui/professional-layout";
 import { ProfessionalCard } from "@/components/ui/professional-card";
 import { ProfessionalButton } from "@/components/ui/professional-button";
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
 interface DeletedStatement {
   id: number;
@@ -33,10 +34,15 @@ const StatementRecycleBin = () => {
   const [emptyRecycleBinModalOpen, setEmptyRecycleBinModalOpen] = useState(false);
   const [isBinCollapsed, setIsBinCollapsed] = useState(true);
   const [userInteracted, setUserInteracted] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   useEffect(() => {
     fetchDeletedStatements();
-  }, []);
+  }, [currentPage]);
 
   useEffect(() => {
     // Auto-collapse when bin is empty and not loading, but only if user hasn't interacted
@@ -48,8 +54,10 @@ const StatementRecycleBin = () => {
   const fetchDeletedStatements = async () => {
     try {
       setLoading(true);
-      const data = await api.get<DeletedStatement[]>('/statements/recycle-bin');
-      setDeletedStatements(data);
+      const skip = (currentPage - 1) * pageSize;
+      const response = await bankStatementApi.getDeletedStatements(skip, pageSize);
+      setDeletedStatements(response.items);
+      setTotalCount(response.total);
     } catch (error) {
       console.error('Failed to fetch deleted statements:', error);
       toast.error(t('statementRecycleBin.failed_to_load_deleted_statements'));
@@ -60,7 +68,7 @@ const StatementRecycleBin = () => {
 
   const handleRestore = async (statementId: number) => {
     try {
-      await api.post(`/statements/${statementId}/restore`, { new_status: 'processed' });
+      await bankStatementApi.restoreStatement(statementId, 'processed');
       toast.success(t('statementRecycleBin.statement_restored_successfully'));
       fetchDeletedStatements();
     } catch (error) {
@@ -78,7 +86,7 @@ const StatementRecycleBin = () => {
     if (!statementToDelete) return;
 
     try {
-      await api.delete(`/statements/${statementToDelete}/permanent`);
+      await bankStatementApi.permanentlyDeleteStatement(statementToDelete);
       toast.success(t('statementRecycleBin.statement_permanently_deleted'));
       fetchDeletedStatements();
     } catch (error) {
@@ -101,7 +109,7 @@ const StatementRecycleBin = () => {
 
   const confirmEmptyRecycleBin = async () => {
     try {
-      await api.post('/statements/recycle-bin/empty');
+      await bankStatementApi.emptyRecycleBin();
       toast.success(t('statementRecycleBin.recycle_bin_emptied_successfully'));
       fetchDeletedStatements();
     } catch (error) {
@@ -109,6 +117,12 @@ const StatementRecycleBin = () => {
       toast.error(t('statementRecycleBin.failed_to_empty_recycle_bin'));
     } finally {
       setEmptyRecycleBinModalOpen(false);
+    }
+  };
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
     }
   };
 
@@ -144,7 +158,7 @@ const StatementRecycleBin = () => {
                           {t('statementRecycleBin.deleted_statements')}
                         </h3>
                         <p className="text-sm text-muted-foreground">
-                          {deletedStatements.length} {t('statementRecycleBin.items', 'items')}
+                          {totalCount} {t('statementRecycleBin.items', 'items')}
                         </p>
                       </div>
                       <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform duration-300 ${isBinCollapsed ? '' : 'rotate-180'}`} />
@@ -252,6 +266,45 @@ const StatementRecycleBin = () => {
                     </TableBody>
                   </Table>
                 </div>
+                {totalPages > 1 && (
+                  <div className="mt-4">
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={() => handlePageChange(currentPage - 1)}
+                            className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                          />
+                        </PaginationItem>
+                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                          let pageNum = currentPage;
+                          if (totalPages <= 5) pageNum = i + 1;
+                          else if (currentPage <= 3) pageNum = i + 1;
+                          else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                          else pageNum = currentPage - 2 + i;
+
+                          return (
+                            <PaginationItem key={pageNum}>
+                              <PaginationLink
+                                onClick={() => handlePageChange(pageNum)}
+                                isActive={currentPage === pageNum}
+                                className="cursor-pointer"
+                              >
+                                {pageNum}
+                              </PaginationLink>
+                            </PaginationItem>
+                          );
+                        })}
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={() => handlePageChange(currentPage + 1)}
+                            className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  </div>
+                )}
               </CollapsibleContent>
             </div>
           </ProfessionalCard>

@@ -17,7 +17,7 @@ from core.models.database import get_db
 from core.models.models_per_tenant import Expense, ExpenseAttachment, User, Invoice, BankStatementTransaction
 from core.models.models import MasterUser
 from core.routers.auth import get_current_user
-from core.schemas.expense import ExpenseCreate, ExpenseUpdate, Expense as ExpenseSchema, DeletedExpense, RecycleBinExpenseResponse, RestoreExpenseRequest, ExpenseListResponse
+from core.schemas.expense import ExpenseCreate, ExpenseUpdate, Expense as ExpenseSchema, DeletedExpense, RecycleBinExpenseResponse, RestoreExpenseRequest, ExpenseListResponse, PaginatedDeletedExpenses
 from core.services.currency_service import CurrencyService
 from core.services.search_service import search_service
 from core.utils.rbac import require_non_viewer
@@ -1208,7 +1208,7 @@ async def update_expense(
 
 # Recycle Bin Endpoints (must come before /{expense_id} route)
 
-@router.get("/recycle-bin", response_model=List[DeletedExpense])
+@router.get("/recycle-bin", response_model=PaginatedDeletedExpenses)
 async def get_deleted_expenses(
     skip: int = 0,
     limit: int = 100,
@@ -1217,9 +1217,13 @@ async def get_deleted_expenses(
 ):
     """Get all deleted expenses in the recycle bin"""
     try:
-        deleted_expenses = db.query(Expense).filter(
+        query = db.query(Expense).filter(
             Expense.is_deleted == True
-        ).offset(skip).limit(limit).all()
+        )
+
+        total_count = query.count()
+
+        deleted_expenses = query.offset(skip).limit(limit).all()
 
         result = []
         for expense in deleted_expenses:
@@ -1255,7 +1259,10 @@ async def get_deleted_expenses(
             }
             result.append(expense_dict)
 
-        return result
+        return {
+            "items": result,
+            "total": total_count
+        }
     except Exception as e:
         logger.error(f"Error getting deleted expenses: {str(e)}")
         raise HTTPException(

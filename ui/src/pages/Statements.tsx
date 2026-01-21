@@ -28,6 +28,7 @@ import { ProfessionalCard } from '@/components/ui/professional-card';
 import { ProfessionalButton } from '@/components/ui/professional-button';
 import { LicenseAlert } from '@/components/ui/license-alert';
 import { CurrencyDisplay } from '@/components/ui/currency-display';
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { useQuery } from '@tanstack/react-query';
 import { settingsApi } from '@/lib/api';
 import { ReviewDiffModal } from '@/components/ReviewDiffModal';
@@ -303,6 +304,11 @@ export default function Statements() {
   const [statementToPermanentlyDelete, setStatementToPermanentlyDelete] = useState<number | null>(null);
   const [emptyRecycleBinModalOpen, setEmptyRecycleBinModalOpen] = useState(false);
 
+  // Recycle bin pagination
+  const [recycleBinCurrentPage, setRecycleBinCurrentPage] = useState(1);
+  const [recycleBinPageSize] = useState(10);
+  const [recycleBinTotalCount, setRecycleBinTotalCount] = useState(0);
+
   useEffect(() => {
     const loadClients = async () => {
       try {
@@ -473,6 +479,12 @@ export default function Statements() {
     prevDeletedCount.current = deletedStatements.length;
   }, [deletedStatements.length, recycleBinLoading, showRecycleBin]);
 
+  useEffect(() => {
+    if (showRecycleBin) {
+      fetchDeletedStatements();
+    }
+  }, [showRecycleBin, recycleBinCurrentPage]);
+
   const openStatement = async (id: number) => {
     setSelected(id);
     setDetailLoading(true);
@@ -629,6 +641,12 @@ export default function Statements() {
       }
       toast.success(t('statements.bulk_delete_success', { count: selectedIds.length, defaultValue: 'Statements deleted successfully' }));
       await loadList();
+      // Refresh recycle bin if it's currently open
+      if (showRecycleBin) {
+        // Reset to first page since total count may have changed
+        setRecycleBinCurrentPage(1);
+        await fetchDeletedStatements();
+      }
       setSelectedIds([]);
       setBulkDeleteModalOpen(false);
     } catch (e: any) {
@@ -660,8 +678,10 @@ export default function Statements() {
   const fetchDeletedStatements = async () => {
     try {
       setRecycleBinLoading(true);
-      const data = await bankStatementApi.getDeletedStatements();
-      setDeletedStatements(data);
+      const skip = (recycleBinCurrentPage - 1) * recycleBinPageSize;
+      const response = await bankStatementApi.getDeletedStatements(skip, recycleBinPageSize);
+      setDeletedStatements(response.items);
+      setRecycleBinTotalCount(response.total);
     } catch (error) {
       console.error('Failed to fetch deleted statements:', error);
       toast.error('Failed to load recycle bin');
@@ -711,8 +731,10 @@ export default function Statements() {
   };
 
   const handleToggleRecycleBin = () => {
-    setShowRecycleBin(!showRecycleBin);
-    if (!showRecycleBin) {
+    const willShow = !showRecycleBin;
+    setShowRecycleBin(willShow);
+    if (willShow) {
+      setRecycleBinCurrentPage(1); // Reset to first page when opening
       fetchDeletedStatements();
     }
   };
@@ -823,7 +845,9 @@ export default function Statements() {
                       </div>
                       <div>
                         <h3 className="font-bold text-xl text-foreground">{t('statementRecycleBin.title', { defaultValue: 'Recycle Bin' })}</h3>
-                        <p className="text-sm text-muted-foreground">Recover or permanently delete statements</p>
+                        <p className="text-sm text-muted-foreground">
+                          {recycleBinTotalCount} {t('statementRecycleBin.items', 'items')} • Recover or permanently delete statements
+                        </p>
                       </div>
                     </div>
                     {deletedStatements.length > 0 && (
@@ -933,6 +957,46 @@ export default function Statements() {
                       </TableBody>
                     </Table>
                   </div>
+                  {Math.ceil(recycleBinTotalCount / recycleBinPageSize) > 1 && (
+                    <div className="mt-4">
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious
+                              onClick={() => setRecycleBinCurrentPage(prev => Math.max(1, prev - 1))}
+                              className={recycleBinCurrentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                            />
+                          </PaginationItem>
+                          {Array.from({ length: Math.min(5, Math.ceil(recycleBinTotalCount / recycleBinPageSize)) }, (_, i) => {
+                            let pageNum = recycleBinCurrentPage;
+                            const totalPages = Math.ceil(recycleBinTotalCount / recycleBinPageSize);
+                            if (totalPages <= 5) pageNum = i + 1;
+                            else if (recycleBinCurrentPage <= 3) pageNum = i + 1;
+                            else if (recycleBinCurrentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                            else pageNum = recycleBinCurrentPage - 2 + i;
+
+                            return (
+                              <PaginationItem key={pageNum}>
+                                <PaginationLink
+                                  onClick={() => setRecycleBinCurrentPage(pageNum)}
+                                  isActive={recycleBinCurrentPage === pageNum}
+                                  className="cursor-pointer"
+                                >
+                                  {pageNum}
+                                </PaginationLink>
+                              </PaginationItem>
+                            );
+                          })}
+                          <PaginationItem>
+                            <PaginationNext
+                              onClick={() => setRecycleBinCurrentPage(prev => Math.min(Math.ceil(recycleBinTotalCount / recycleBinPageSize), prev + 1))}
+                              className={recycleBinCurrentPage >= Math.ceil(recycleBinTotalCount / recycleBinPageSize) ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    </div>
+                  )}
                 </div>
               </ProfessionalCard>
             </CollapsibleContent>

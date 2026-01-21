@@ -6,10 +6,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { api } from "@/lib/api";
+import { invoiceApi } from "@/lib/api";
 import { toast } from "sonner";
 import { formatDate } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
 interface DeletedInvoice {
   id: number;
@@ -32,10 +33,15 @@ const RecycleBin = () => {
   const [emptyRecycleBinModalOpen, setEmptyRecycleBinModalOpen] = useState(false);
   const [isBinCollapsed, setIsBinCollapsed] = useState(true);
   const [userInteracted, setUserInteracted] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   useEffect(() => {
     fetchDeletedInvoices();
-  }, []);
+  }, [currentPage]);
 
   useEffect(() => {
     // Auto-collapse when bin is empty and not loading, but only if user hasn't interacted
@@ -47,8 +53,10 @@ const RecycleBin = () => {
   const fetchDeletedInvoices = async () => {
     try {
       setLoading(true);
-      const data = await api.get<DeletedInvoice[]>('/invoices/recycle-bin');
-      setDeletedInvoices(data);
+      const skip = (currentPage - 1) * pageSize;
+      const response = await invoiceApi.getDeletedInvoices(skip, pageSize);
+      setDeletedInvoices(response.items);
+      setTotalCount(response.total);
     } catch (error) {
       console.error('Failed to fetch deleted invoices:', error);
       toast.error(t('recycleBin.failed_to_load_deleted_invoices'));
@@ -59,7 +67,7 @@ const RecycleBin = () => {
 
   const handleRestore = async (invoiceId: number) => {
     try {
-      await api.post(`/invoices/${invoiceId}/restore`, { new_status: 'draft' });
+      await invoiceApi.restoreInvoice(invoiceId, 'draft');
       toast.success(t('recycleBin.invoice_restored_successfully'));
       fetchDeletedInvoices();
     } catch (error) {
@@ -80,7 +88,7 @@ const RecycleBin = () => {
     if (!invoiceToDelete) return;
 
     try {
-      await api.delete(`/invoices/${invoiceToDelete}/permanent`);
+      await invoiceApi.permanentlyDeleteInvoice(invoiceToDelete);
       toast.success(t('recycleBin.invoice_permanently_deleted'));
       fetchDeletedInvoices();
     } catch (error) {
@@ -110,7 +118,7 @@ const RecycleBin = () => {
 
   const confirmEmptyRecycleBin = async () => {
     try {
-      await api.post('/invoices/recycle-bin/empty');
+      await invoiceApi.emptyRecycleBin();
       toast.success(t('recycleBin.recycle_bin_emptied_successfully'));
       fetchDeletedInvoices();
     } catch (error) {
@@ -118,6 +126,12 @@ const RecycleBin = () => {
       toast.error(t('recycleBin.failed_to_empty_recycle_bin'));
     } finally {
       setEmptyRecycleBinModalOpen(false);
+    }
+  };
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
     }
   };
 
@@ -155,7 +169,7 @@ const RecycleBin = () => {
                   <CardTitle>{t('recycleBin.deleted_invoices')}</CardTitle>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">
-                      {deletedInvoices.length} {t('recycleBin.items', 'items')}
+                      {totalCount} {t('recycleBin.items', 'items')}
                     </span>
                     <ChevronDown className={`h-4 w-4 transition-transform ${isBinCollapsed ? '' : 'rotate-180'}`} />
                   </div>
@@ -236,6 +250,45 @@ const RecycleBin = () => {
                 </TableBody>
               </Table>
             </div>
+            {totalPages > 1 && (
+              <div className="mt-4">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum = currentPage;
+                      if (totalPages <= 5) pageNum = i + 1;
+                      else if (currentPage <= 3) pageNum = i + 1;
+                      else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                      else pageNum = currentPage - 2 + i;
+
+                      return (
+                        <PaginationItem key={pageNum}>
+                          <PaginationLink
+                            onClick={() => handlePageChange(pageNum)}
+                            isActive={currentPage === pageNum}
+                            className="cursor-pointer"
+                          >
+                            {pageNum}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                    })}
+                    <PaginationItem>
+                      <PaginationNext
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
               </CardContent>
             </CollapsibleContent>
           </Card>
@@ -246,15 +299,15 @@ const RecycleBin = () => {
       <AlertDialog open={permanentDeleteModalOpen} onOpenChange={setPermanentDeleteModalOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('invoices.permanent_delete_confirm_title', 'Permanently Delete Invoice')}</AlertDialogTitle>
+            <AlertDialogTitle>{t('recycleBin.permanent_delete_confirm_title')}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t('invoices.permanent_delete_confirm_description', 'Are you sure you want to permanently delete this invoice? This action cannot be undone and the invoice will be completely removed from the system.')}
+              {t('recycleBin.permanent_delete_confirm_description')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel', 'Cancel')}</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmPermanentDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              {t('invoices.permanent_delete', 'Permanently Delete')}
+              {t('recycleBin.permanent_delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -264,16 +317,16 @@ const RecycleBin = () => {
       <AlertDialog open={emptyRecycleBinModalOpen} onOpenChange={setEmptyRecycleBinModalOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('recycleBin.empty_recycle_bin_confirm_title', 'Empty Recycle Bin')}</AlertDialogTitle>
+            <AlertDialogTitle>{t('recycleBin.empty_recycle_bin_confirm_title')}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t('recycleBin.empty_recycle_bin_confirm_description', 'Are you sure you want to permanently delete all invoices in the recycle bin? This action cannot be undone and all deleted invoices will be completely removed from the system.')}
+              {t('recycleBin.empty_recycle_bin_confirm_description')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel', 'Cancel')}</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmEmptyRecycleBin} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               <Trash2 className="mr-2 h-4 w-4" />
-              {t('recycleBin.empty_recycle_bin', 'Empty Recycle Bin')}
+              {t('recycleBin.empty_recycle_bin')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

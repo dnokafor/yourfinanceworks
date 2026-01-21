@@ -19,7 +19,7 @@ from core.models.database import get_db
 from core.models.models_per_tenant import Invoice, Client, User, InvoiceItem, DiscountRule, Settings, InvoiceAttachment
 from core.models.models import MasterUser
 from core.routers.payments import Payment
-from core.schemas.invoice import InvoiceCreate, InvoiceUpdate, Invoice as InvoiceSchema, InvoiceWithClient, InvoiceHistory, InvoiceHistoryCreate, RecycleBinResponse, DeletedInvoice, RestoreInvoiceRequest, PaginatedInvoices
+from core.schemas.invoice import InvoiceCreate, InvoiceUpdate, Invoice as InvoiceSchema, InvoiceWithClient, InvoiceHistory, InvoiceHistoryCreate, RecycleBinResponse, DeletedInvoice, RestoreInvoiceRequest, PaginatedInvoices, PaginatedDeletedInvoices
 from core.routers.auth import get_current_user
 from core.services.tenant_database_manager import tenant_db_manager
 from core.services.currency_service import CurrencyService
@@ -856,7 +856,7 @@ async def bulk_labels(
         logger.error(f"Error in bulk_labels: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to update labels")
 
-@router.get("/recycle-bin")
+@router.get("/recycle-bin", response_model=PaginatedDeletedInvoices)
 async def get_deleted_invoices(
     skip: int = 0,
     limit: int = 100,
@@ -865,9 +865,13 @@ async def get_deleted_invoices(
 ):
     """Get all deleted invoices in the recycle bin"""
     try:
-        deleted_invoices = db.query(Invoice).filter(
+        query = db.query(Invoice).filter(
             Invoice.is_deleted == True
-        ).offset(skip).limit(limit).all()
+        )
+
+        total_count = query.count()
+
+        deleted_invoices = query.offset(skip).limit(limit).all()
 
         # Build response with additional info
         result = []
@@ -893,11 +897,16 @@ async def get_deleted_invoices(
                 "deleted_by": invoice.deleted_by,
                 "deleted_by_username": invoice.deleted_by_user.email if invoice.deleted_by_user else None,
                 "items": [],  # Add items if needed
-                "show_discount_in_pdf": invoice.show_discount_in_pdf
+                "show_discount_in_pdf": invoice.show_discount_in_pdf,
+                "description": invoice.notes, # Map notes to description if needed by schema
+                "custom_fields": invoice.custom_fields
             }
             result.append(invoice_dict)
 
-        return result
+        return {
+            "items": result,
+            "total": total_count
+        }
 
     except Exception as e:
         logger.error(f"Error getting deleted invoices: {str(e)}")

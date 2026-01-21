@@ -80,6 +80,10 @@ class RestoreStatementRequest(BaseModel):
     """Request schema for restoring a statement"""
     new_status: Optional[str] = "processed"  # Status to set when restoring
 
+class PaginatedDeletedBankStatements(BaseModel):
+    items: List[DeletedBankStatement]
+    total: int
+
 class PaginatedBankStatements(BaseModel):
     statements: List[BankStatementResponse]
     total: int

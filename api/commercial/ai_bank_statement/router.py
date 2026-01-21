@@ -22,6 +22,7 @@ from core.schemas.bank_statement import (
     RecycleBinStatementResponse,
     RestoreStatementRequest,
     PaginatedBankStatements,
+    PaginatedDeletedBankStatements,
 )
 from datetime import datetime, timezone
 from core.utils.timezone import get_tenant_timezone_aware_datetime
@@ -545,7 +546,7 @@ async def merge_statements(
         )
 
 
-@router.get("/recycle-bin", response_model=List[DeletedBankStatement])
+@router.get("/recycle-bin", response_model=PaginatedDeletedBankStatements)
 async def get_deleted_statements(
     skip: int = 0,
     limit: int = 100,
@@ -563,15 +564,13 @@ async def get_deleted_statements(
         raise HTTPException(status_code=401, detail="Tenant context required")
 
     try:
-        deleted_statements = (
-            db.query(BankStatement)
-            .filter(
-                BankStatement.tenant_id == tenant_id, BankStatement.is_deleted == True
-            )
-            .offset(skip)
-            .limit(limit)
-            .all()
+        query = db.query(BankStatement).filter(
+            BankStatement.tenant_id == tenant_id, BankStatement.is_deleted == True
         )
+
+        total_count = query.count()
+
+        deleted_statements = query.offset(skip).limit(limit).all()
 
         result = []
         for statement in deleted_statements:
@@ -621,7 +620,10 @@ async def get_deleted_statements(
             }
             result.append(statement_dict)
 
-        return result
+        return {
+            "items": result,
+            "total": total_count
+        }
 
     except Exception as e:
         logger.error(f"Error getting deleted statements: {str(e)}")

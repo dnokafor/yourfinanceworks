@@ -94,7 +94,8 @@ export function BulkExpenseModal({ open, onOpenChange, onSuccess }: BulkExpenseM
         imported_from_attachment: expense.files.length > 0,
       }));
 
-      const createdExpenses = await expenseApi.bulkCreateExpenses(expensePayloads as any);
+      const response = await expenseApi.bulkCreateExpenses(expensePayloads as any);
+      const createdExpenses = response;
 
       // Upload attachments for each expense
       let uploadErrors = 0;

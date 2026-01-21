@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CurrencyDisplay } from '@/components/ui/currency-display';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -143,6 +143,11 @@ const Expenses = () => {
   const prevDeletedCount = useRef<number>(0);
   const [expenseToPermanentlyDelete, setExpenseToPermanentlyDelete] = useState<number | null>(null);
   const [emptyRecycleBinModalOpen, setEmptyRecycleBinModalOpen] = useState(false);
+
+  // Recycle bin pagination
+  const [recycleBinCurrentPage, setRecycleBinCurrentPage] = useState(1);
+  const [recycleBinPageSize] = useState(10);
+  const [recycleBinTotalCount, setRecycleBinTotalCount] = useState(0);
 
   // Review state
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
@@ -308,6 +313,12 @@ const Expenses = () => {
     }
     prevDeletedCount.current = deletedExpenses.length;
   }, [deletedExpenses.length, recycleBinLoading, showRecycleBin]);
+
+  useEffect(() => {
+    if (showRecycleBin) {
+      fetchDeletedExpenses();
+    }
+  }, [showRecycleBin, recycleBinCurrentPage]);
 
 
   const fetchExpenses = useCallback(async () => {
@@ -571,8 +582,10 @@ const Expenses = () => {
   const fetchDeletedExpenses = async () => {
     try {
       setRecycleBinLoading(true);
-      const data = await expenseApi.getDeletedExpenses();
-      setDeletedExpenses(data);
+      const skip = (recycleBinCurrentPage - 1) * recycleBinPageSize;
+      const response = await expenseApi.getDeletedExpenses(skip, recycleBinPageSize);
+      setDeletedExpenses(response.items);
+      setRecycleBinTotalCount(response.total);
     } catch (error) {
       console.error('Failed to fetch deleted expenses:', error);
       toast.error('Failed to load recycle bin');
@@ -622,8 +635,10 @@ const Expenses = () => {
   };
 
   const handleToggleRecycleBin = () => {
-    setShowRecycleBin(!showRecycleBin);
-    if (!showRecycleBin) {
+    const willShow = !showRecycleBin;
+    setShowRecycleBin(willShow);
+    if (willShow) {
+      setRecycleBinCurrentPage(1); // Reset to first page when opening
       fetchDeletedExpenses();
     }
   };
@@ -720,7 +735,9 @@ const Expenses = () => {
                     </div>
                     <div>
                       <h3 className="font-bold text-xl text-foreground">{t('expenseRecycleBin.title', { defaultValue: 'Recycle Bin' })}</h3>
-                      <p className="text-sm text-muted-foreground">Recover or permanently delete expenses</p>
+                      <p className="text-sm text-muted-foreground">
+                        {recycleBinTotalCount} {t('expenseRecycleBin.items', 'items')} • Recover or permanently delete expenses
+                      </p>
                     </div>
                   </div>
                   {deletedExpenses.length > 0 && (
@@ -809,6 +826,46 @@ const Expenses = () => {
                       )}
                     </TableBody>
                   </Table>
+                  {Math.ceil(recycleBinTotalCount / recycleBinPageSize) > 1 && (
+                    <div className="mt-4">
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious
+                              onClick={() => setRecycleBinCurrentPage(prev => Math.max(1, prev - 1))}
+                              className={recycleBinCurrentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                            />
+                          </PaginationItem>
+                          {Array.from({ length: Math.min(5, Math.ceil(recycleBinTotalCount / recycleBinPageSize)) }, (_, i) => {
+                            let pageNum = recycleBinCurrentPage;
+                            const totalPages = Math.ceil(recycleBinTotalCount / recycleBinPageSize);
+                            if (totalPages <= 5) pageNum = i + 1;
+                            else if (recycleBinCurrentPage <= 3) pageNum = i + 1;
+                            else if (recycleBinCurrentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                            else pageNum = recycleBinCurrentPage - 2 + i;
+
+                            return (
+                              <PaginationItem key={pageNum}>
+                                <PaginationLink
+                                  onClick={() => setRecycleBinCurrentPage(pageNum)}
+                                  isActive={recycleBinCurrentPage === pageNum}
+                                  className="cursor-pointer"
+                                >
+                                  {pageNum}
+                                </PaginationLink>
+                              </PaginationItem>
+                            );
+                          })}
+                          <PaginationItem>
+                            <PaginationNext
+                              onClick={() => setRecycleBinCurrentPage(prev => Math.min(Math.ceil(recycleBinTotalCount / recycleBinPageSize), prev + 1))}
+                              className={recycleBinCurrentPage >= Math.ceil(recycleBinTotalCount / recycleBinPageSize) ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    </div>
+                  )}
                 </div>
               </div>
             </ProfessionalCard>
@@ -1034,6 +1091,16 @@ const Expenses = () => {
                                 const result = await expenseApi.getExpensesPaginated({ category: categoryFilter, label: labelFilter || undefined, unlinkedOnly, skip: (page - 1) * pageSize, limit: pageSize, excludeStatus: 'pending_approval' });
                                 setExpenses(result.expenses);
                                 setTotalExpenses(result.total);
+                                // Refresh recycle bin if it's currently open
+                                if (showRecycleBin) {
+                                  console.log('🔄 Expenses bulk delete: Refreshing recycle bin, showRecycleBin:', showRecycleBin);
+                                  // Reset to first page since total count may have changed
+                                  setRecycleBinCurrentPage(1);
+                                  await fetchDeletedExpenses();
+                                  console.log('✅ Expenses bulk delete: Recycle bin refreshed');
+                                } else {
+                                  console.log('ℹ️ Expenses bulk delete: Recycle bin not open, skipping refresh');
+                                }
                                 setSelectedIds([]);
                                 toast.success(`Successfully deleted ${selectedIds.length} expense${selectedIds.length > 1 ? 's' : ''}`);
                               } catch (e: any) {

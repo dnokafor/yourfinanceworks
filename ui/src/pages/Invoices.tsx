@@ -57,6 +57,12 @@ const Invoices = () => {
   const [permanentDeleteModalOpen, setPermanentDeleteModalOpen] = useState(false);
   const [invoiceToPermanentlyDelete, setInvoiceToPermanentlyDelete] = useState<number | null>(null);
   const [emptyRecycleBinModalOpen, setEmptyRecycleBinModalOpen] = useState(false);
+
+  // Recycle bin pagination
+  const [recycleBinCurrentPage, setRecycleBinCurrentPage] = useState(1);
+  const [recycleBinPageSize] = useState(10);
+  const [recycleBinTotalCount, setRecycleBinTotalCount] = useState(0);
+
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
 
@@ -205,6 +211,12 @@ const Invoices = () => {
     prevDeletedCount.current = deletedInvoices.length;
   }, [deletedInvoices.length, recycleBinLoading, showRecycleBin]);
 
+  useEffect(() => {
+    if (showRecycleBin) {
+      fetchDeletedInvoices();
+    }
+  }, [showRecycleBin, recycleBinCurrentPage]);
+
   const fetchInvoices = useCallback(async () => {
     setLoading(true);
     try {
@@ -228,9 +240,12 @@ const Invoices = () => {
   const fetchDeletedInvoices = async () => {
     try {
       setRecycleBinLoading(true);
-      const data = await api.get<DeletedInvoice[]>('/invoices/recycle-bin');
-      setDeletedInvoices(data);
+      const skip = (recycleBinCurrentPage - 1) * recycleBinPageSize;
+      const response = await invoiceApi.getDeletedInvoices(skip, recycleBinPageSize);
+      setDeletedInvoices(response.items);
+      setRecycleBinTotalCount(response.total);
     } catch (error) {
+      console.error('Failed to fetch deleted invoices:', error);
       toast.error(t('recycleBin.failed_to_load_deleted_invoices'));
     } finally {
       setRecycleBinLoading(false);
@@ -289,7 +304,13 @@ const Invoices = () => {
       setTotalInvoices(data.total);
       // Refresh recycle bin if open
       if (showRecycleBin) {
-        fetchDeletedInvoices();
+        console.log('🔄 Invoices bulk delete: Refreshing recycle bin, showRecycleBin:', showRecycleBin);
+        // Reset to first page since total count may have changed
+        setRecycleBinCurrentPage(1);
+        await fetchDeletedInvoices();
+        console.log('✅ Invoices bulk delete: Recycle bin refreshed');
+      } else {
+        console.log('ℹ️ Invoices bulk delete: Recycle bin not open, skipping refresh');
       }
     } catch (error) {
       let errorMessage = error instanceof Error ? error.message : 'Failed to delete invoices';
@@ -422,8 +443,10 @@ const Invoices = () => {
   };
 
   const handleToggleRecycleBin = () => {
-    setShowRecycleBin(!showRecycleBin);
-    if (!showRecycleBin) {
+    const willShow = !showRecycleBin;
+    setShowRecycleBin(willShow);
+    if (willShow) {
+      setRecycleBinCurrentPage(1); // Reset to first page when opening
       fetchDeletedInvoices();
     }
   };
@@ -531,7 +554,9 @@ const Invoices = () => {
                     </div>
                     <div>
                       <h3 className="font-bold text-xl text-foreground">{t('recycleBin.title')}</h3>
-                      <p className="text-sm text-muted-foreground">Recover or permanently delete invoices</p>
+                      <p className="text-sm text-muted-foreground">
+                        {recycleBinTotalCount} {t('recycleBin.items', 'items')} • Recover or permanently delete invoices
+                      </p>
                     </div>
                   </div>
                   {deletedInvoices.length > 0 && canPerformAction && (
@@ -624,6 +649,46 @@ const Invoices = () => {
                       )}
                     </TableBody>
                   </Table>
+                  {Math.ceil(recycleBinTotalCount / recycleBinPageSize) > 1 && (
+                    <div className="mt-4">
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious
+                              onClick={() => setRecycleBinCurrentPage(prev => Math.max(1, prev - 1))}
+                              className={recycleBinCurrentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                            />
+                          </PaginationItem>
+                          {Array.from({ length: Math.min(5, Math.ceil(recycleBinTotalCount / recycleBinPageSize)) }, (_, i) => {
+                            let pageNum = recycleBinCurrentPage;
+                            const totalPages = Math.ceil(recycleBinTotalCount / recycleBinPageSize);
+                            if (totalPages <= 5) pageNum = i + 1;
+                            else if (recycleBinCurrentPage <= 3) pageNum = i + 1;
+                            else if (recycleBinCurrentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                            else pageNum = recycleBinCurrentPage - 2 + i;
+
+                            return (
+                              <PaginationItem key={pageNum}>
+                                <PaginationLink
+                                  onClick={() => setRecycleBinCurrentPage(pageNum)}
+                                  isActive={recycleBinCurrentPage === pageNum}
+                                  className="cursor-pointer"
+                                >
+                                  {pageNum}
+                                </PaginationLink>
+                              </PaginationItem>
+                            );
+                          })}
+                          <PaginationItem>
+                            <PaginationNext
+                              onClick={() => setRecycleBinCurrentPage(prev => Math.min(Math.ceil(recycleBinTotalCount / recycleBinPageSize), prev + 1))}
+                              className={recycleBinCurrentPage >= Math.ceil(recycleBinTotalCount / recycleBinPageSize) ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    </div>
+                  )}
                 </div>
               </div>
             </ProfessionalCard>

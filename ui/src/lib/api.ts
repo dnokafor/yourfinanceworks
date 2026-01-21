@@ -660,8 +660,8 @@ export const bankStatementApi = {
   },
 
   // Recycle bin methods
-  getDeletedStatements: () =>
-    apiRequest<DeletedBankStatement[]>('/statements/recycle-bin'),
+  getDeletedStatements: (skip: number = 0, limit: number = 100) =>
+    apiRequest<{ items: DeletedBankStatement[]; total: number }>(`/statements/recycle-bin?skip=${skip}&limit=${limit}`),
   restoreStatement: (id: number, newStatus: string = 'processed') =>
     apiRequest(`/statements/${id}/restore`, {
       method: 'POST',
@@ -1799,8 +1799,8 @@ export const invoiceApi = {
     }),
 
   // Recycle bin methods
-  getDeletedInvoices: () =>
-    apiRequest<any[]>('/invoices/recycle-bin'),
+  getDeletedInvoices: (skip: number = 0, limit: number = 100) =>
+    apiRequest<{ items: any[]; total: number }>(`/invoices/recycle-bin?skip=${skip}&limit=${limit}`),
   restoreInvoice: (id: number, newStatus: string = 'draft') =>
     apiRequest(`/invoices/${id}/restore`, {
       method: 'POST',
@@ -2147,7 +2147,7 @@ export const expenseApi = {
   bulkCreateExpenses: (expenses: Omit<Expense, 'id' | 'created_at' | 'updated_at' | 'receipt_filename'>[]) =>
     apiRequest<Expense[]>(`/expenses/bulk-create`, {
       method: 'POST',
-      body: JSON.stringify(expenses),
+      body: JSON.stringify({ expenses }),
     }),
 
   // Basic Expense Analytics (for Expenses page summary)
@@ -2204,8 +2204,8 @@ export const expenseApi = {
   },
 
   // Recycle bin methods
-  getDeletedExpenses: () =>
-    apiRequest<DeletedExpense[]>('/expenses/recycle-bin'),
+  getDeletedExpenses: (skip: number = 0, limit: number = 100) =>
+    apiRequest<{ items: DeletedExpense[]; total: number }>(`/expenses/recycle-bin?skip=${skip}&limit=${limit}`),
   restoreExpense: (id: number, newStatus: string = 'recorded') =>
     apiRequest(`/expenses/${id}/restore`, {
       method: 'POST',

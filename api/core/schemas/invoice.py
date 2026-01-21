@@ -161,7 +161,12 @@ class RecycleBinResponse(BaseModel):
 
 class RestoreInvoiceRequest(BaseModel):
     """Request schema for restoring an invoice"""
-    new_status: Optional[str] = "draft"  # Status to set when restoring 
+    new_status: Optional[str] = "draft"  # Status to set when restoring
+
+class PaginatedDeletedInvoices(BaseModel):
+    items: List[DeletedInvoice]
+    total: int
+
 class PaginatedInvoices(BaseModel):
     items: List[InvoiceWithClient]
     total: int
