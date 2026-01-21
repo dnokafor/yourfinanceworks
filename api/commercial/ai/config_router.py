@@ -127,6 +127,30 @@ async def create_ai_config(
         db.add(db_config)
         db.commit()
         db.refresh(db_config)
+
+        # Log audit event to tenant database
+        try:
+            from core.utils.audit import log_audit_event
+            log_audit_event(
+                db=db,
+                user_id=current_user.id,
+                user_email=current_user.email,
+                action="CREATE_AI_CONFIG",
+                resource_type="ai_config",
+                resource_id=str(db_config.id),
+                resource_name=db_config.name or f"AI Config {db_config.id}",
+                details={
+                    "config_name": db_config.name or f"AI Config {db_config.id}",
+                    "config_provider": db_config.provider,
+                    "config_id": db_config.id,
+                    "is_default": db_config.is_default
+                },
+                status="success"
+            )
+        except Exception as e:
+            logger.error(f"Failed to log AI config creation: {e}")
+            pass  # Continue even if audit logging fails
+
         return db_config
     except HTTPException:
         raise
@@ -171,6 +195,31 @@ async def update_ai_config(
 
         db.commit()
         db.refresh(db_config)
+
+        # Log audit event to tenant database
+        try:
+            from core.utils.audit import log_audit_event
+            log_audit_event(
+                db=db,
+                user_id=current_user.id,
+                user_email=current_user.email,
+                action="UPDATE_AI_CONFIG",
+                resource_type="ai_config",
+                resource_id=str(config_id),
+                resource_name=db_config.name or f"AI Config {config_id}",
+                details={
+                    "config_name": db_config.name or f"AI Config {config_id}",
+                    "config_provider": db_config.provider,
+                    "config_id": config_id,
+                    "updated_fields": list(update_data.keys()),
+                    "is_default": db_config.is_default
+                },
+                status="success"
+            )
+        except Exception as e:
+            logger.error(f"Failed to log AI config update: {e}")
+            pass  # Continue even if audit logging fails
+
         return db_config
     except HTTPException:
         raise
@@ -200,6 +249,29 @@ async def delete_ai_config(
 
         db.delete(db_config)
         db.commit()
+
+        # Log audit event to tenant database
+        try:
+            from core.utils.audit import log_audit_event
+            log_audit_event(
+                db=db,
+                user_id=current_user.id,
+                user_email=current_user.email,
+                action="DELETE_AI_CONFIG",
+                resource_type="ai_config",
+                resource_id=str(config_id),
+                resource_name=db_config.name or f"AI Config {config_id}",
+                details={
+                    "config_name": db_config.name or f"AI Config {config_id}",
+                    "config_provider": db_config.provider,
+                    "config_id": config_id
+                },
+                status="success"
+            )
+        except Exception as e:
+            logger.error(f"Failed to log AI config deletion: {e}")
+            pass  # Continue even if audit logging fails
+
         return {"message": "AI configuration deleted successfully"}
     except HTTPException:
         raise

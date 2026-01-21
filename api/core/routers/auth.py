@@ -981,8 +981,8 @@ async def cancel_invite(
     db.delete(invite)
     db.commit()
 
-    # Log audit event in master database
-    log_audit_event_master(
+    # Log audit event in tenant database
+    log_audit_event(
         db=db,
         user_id=current_user.id,
         user_email=current_user.email,
@@ -997,32 +997,8 @@ async def cancel_invite(
             "cancelled_by": current_user.email,
             "cancelled_at": datetime.now(timezone.utc).isoformat()
         },
-        tenant_id=current_user.tenant_id,
         status="success"
     )
-
-    # Log audit event in tenant database as well
-    tenant_db = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
-    try:
-        log_audit_event(
-            db=tenant_db,
-            user_id=current_user.id,
-            user_email=current_user.email,
-            action="DELETE",
-            resource_type="invite",
-            resource_id=str(invite_id),
-            resource_name=f"Invite for {invite_email}",
-            details={
-                "cancelled_invite_id": invite_id,
-                "cancelled_email": invite_email,
-                "cancelled_role": invite_role,
-                "cancelled_by": current_user.email,
-                "cancelled_at": datetime.now(timezone.utc).isoformat()
-            },
-            status="success"
-        )
-    finally:
-        tenant_db.close()
 
     return {"message": f"Invite for {invite_email} has been cancelled"}
 
@@ -1144,26 +1120,7 @@ async def accept_invite(
     invite.accepted_at = datetime.now(timezone.utc)
     db.commit()
 
-    # Log audit event in master database for invite acceptance
-    log_audit_event_master(
-        db=db,
-        user_id=0,  # No specific user ID since this is self-registration
-        user_email=invite.email,
-        action="ACCEPT",
-        resource_type="invite",
-        resource_id=str(invite.id),
-        resource_name=f"Invite accepted by {invite.email}",
-        details={
-            "invite_id": invite.id,
-            "accepted_email": invite.email,
-            "role": invite.role,
-            "accepted_at": datetime.now(timezone.utc).isoformat()
-        },
-        tenant_id=invite.tenant_id,
-        status="success"
-    )
-
-    # Log audit event in tenant database as well
+    # Log audit event in tenant database
     set_tenant_context(invite.tenant_id)
     tenant_db = tenant_db_manager.get_tenant_session(invite.tenant_id)()
     try:
@@ -1171,7 +1128,7 @@ async def accept_invite(
             db=tenant_db,
             user_id=0,  # No specific user ID since this is self-registration
             user_email=invite.email,
-            action="ACCEPT",
+            action="ACCEPT_INVITE",
             resource_type="invite",
             resource_id=str(invite.id),
             resource_name=f"Invite accepted by {invite.email}",
@@ -1884,8 +1841,52 @@ async def remove_user_from_organization(
         if not user:
             raise HTTPException(status_code=404, detail="User not found in this organization")
 
-        # Cannot remove user from their primary tenant
-        raise HTTPException(status_code=400, detail="Cannot remove user from their home organization")
+        # For primary tenant users, delete them completely (like Super Admin does)
+        # Delete from tenant database first
+        try:
+            from core.services.tenant_database_manager import tenant_db_manager
+            from core.models.models_per_tenant import User as TenantUser
+
+            tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
+            tenant_user = tenant_session.query(TenantUser).filter(
+                TenantUser.id == user_id
+            ).first()
+
+            if tenant_user:
+                tenant_session.delete(tenant_user)
+                tenant_session.commit()
+
+            tenant_session.close()
+        except Exception:
+            pass  # Continue even if tenant deletion fails
+
+        # Delete from master database
+        db.delete(user)
+        db.commit()
+
+        # Also log to tenant database for organization audit visibility
+        try:
+            from core.utils.audit import log_audit_event
+            tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
+            log_audit_event(
+                db=tenant_session,
+                user_id=current_user.id,
+                user_email=current_user.email,
+                action="DELETE_USER",
+                resource_type="user",
+                resource_id=str(user_id),
+                resource_name=f"{user.first_name} {user.last_name}",
+                details={
+                    "deleted_user_email": user.email,
+                    "deletion_type": "organization_deletion"
+                },
+                status="success"
+            )
+            tenant_session.close()
+        except Exception:
+            pass  # Continue even if tenant audit logging fails
+
+        return {"message": f"User {user.email} has been deleted from the organization"}
 
     # Get user details for logging
     user = db.query(MasterUser).filter(MasterUser.id == user_id).first()
@@ -1904,6 +1905,28 @@ async def remove_user_from_organization(
     remove_user_from_tenant_database(user_id, current_user.tenant_id)
 
     db.commit()
+
+    # Also log to tenant database for organization audit visibility
+    try:
+        from core.utils.audit import log_audit_event
+        tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
+        log_audit_event(
+            db=tenant_session,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="REMOVE_USER_FROM_ORGANIZATION",
+            resource_type="user",
+            resource_id=str(user_id),
+            resource_name=f"{user.first_name} {user.last_name}",
+            details={
+                "removed_user_email": user.email,
+                "removal_type": "organization_removal"
+            },
+            status="success"
+        )
+        tenant_session.close()
+    except Exception:
+        pass  # Continue even if tenant audit logging fails
 
     return {"message": f"User {user.email} has been removed from the organization"}
 

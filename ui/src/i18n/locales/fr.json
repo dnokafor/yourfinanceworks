@@ -1647,6 +1647,8 @@
     "user_updated": "Utilisateur mis à jour avec succès",
     "user_deleted": "Utilisateur supprimé avec succès",
     "confirm_delete": "Êtes-vous sûr de vouloir supprimer cet utilisateur ?",
+    "delete_user_title": "Supprimer l'Utilisateur",
+    "delete_user_confirmation_text": "Êtes-vous sûr de vouloir supprimer {{userEmail}} ? Cette action ne peut pas être annulée.",
     "no_users": "Aucun utilisateur trouvé",
     "organization_users": "Utilisateurs de l'organisation",
     "manageorganization_users": "Gérez et invitez les membres de l'équipe à votre organisation",

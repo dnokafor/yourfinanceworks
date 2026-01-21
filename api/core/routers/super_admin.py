@@ -948,11 +948,16 @@ async def delete_user(
         db=master_db,
         user_id=current_user.id,
         user_email=current_user.email,
-        action="DELETE",
+        action="DELETE_USER",
         resource_type="user",
         resource_id=str(user_id),
         resource_name=f"{user.first_name} {user.last_name}",
-        details={"deleted_user_email": user.email},
+        details={
+            "deleted_user_email": user.email,
+            "deleted_from_tenant": user.tenant_id,
+            "deletion_type": "super_admin_deletion",
+            "performed_by_super_admin": True
+        },
         tenant_id=current_user.tenant_id,
         status="success"
     )

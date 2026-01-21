@@ -101,6 +101,7 @@ export default function UsersPage() {
   const [cancelling, setCancelling] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [passwordRequirements, setPasswordRequirements] = useState<any>(null);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   // Check permission to access users page
   useEffect(() => {
@@ -378,19 +379,23 @@ export default function UsersPage() {
     }
   };
 
-  const handleDeleteUser = async (userId: number, userEmail: string) => {
-    if (!confirm(t('users.confirmDeleteUser', { email: userEmail }))) {
-      return;
-    }
+  const handleDeleteUser = (user: User) => {
+    setUserToDelete(user);
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return;
 
     setDeletingUser(true);
     try {
-      await userApi.deleteUser(userId);
+      await userApi.deleteUser(userToDelete.id);
       toast.success(t('users.userDeleted'));
       fetchUsers();
+      setUserToDelete(null);
     } catch (err: any) {
       console.error("Failed to delete user:", err);
       toast.error(getErrorMessage(err, t));
+      setUserToDelete(null);
     } finally {
       setDeletingUser(false);
     }
@@ -646,7 +651,7 @@ export default function UsersPage() {
                           },
                           {
                             label: t('users.delete'),
-                            onClick: () => handleDeleteUser(user.id, user.email),
+                            onClick: () => handleDeleteUser(user),
                             disabled: deletingUser || user.id === currentUserId,
                             variant: 'destructive'
                           }
@@ -796,6 +801,31 @@ export default function UsersPage() {
               </AlertDialogAction>
             </AlertDialogFooter>
           </form>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete User Confirmation Dialog */}
+      <AlertDialog open={!!userToDelete} onOpenChange={open => { if (!open) setUserToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('users.delete_user_title')}</AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogDescription>
+            {t('users.delete_user_confirmation_text', { userEmail: userToDelete?.email || '' })}
+          </AlertDialogDescription>
+          <AlertDialogFooter className="flex gap-2">
+            <AlertDialogCancel disabled={deletingUser}>
+              {t('common.cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteUser}
+              disabled={deletingUser}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {deletingUser ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {t('users.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 

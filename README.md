@@ -237,7 +237,7 @@ The system includes automatic database health monitoring:
 
 For database-related issues, see the comprehensive troubleshooting guide:
 
-- [Database Troubleshooting Guide](api/docs/TROUBLESHOOTING_MISSING_TENANT_DATABASES.md)
+- [Database Troubleshooting Guide](docs/technical-notes/TROUBLESHOOTING_MISSING_TENANT_DATABASES.md)
 
 ## 📧 Email Invoice Delivery
 
