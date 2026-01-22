@@ -674,7 +674,7 @@ class BankStatementMessageHandler(BaseMessageHandler):
             with tenant_context(tenant_id):
                 with database_session(tenant_id) as db:
                     from core.models.models_per_tenant import AIConfig as AIConfigModel, BankStatement, BankStatementAttachment
-                    from core.services.statement_service import process_bank_pdf_with_llm
+                    from core.services.statement_service import process_bank_pdf_with_llm, is_bank_llm_reachable, BankLLMUnavailableError
                     from commercial.ai.services.unified_ocr_service import UnifiedOCRService, DocumentType, OCRConfig
                     from datetime import datetime, timezone
 
@@ -738,6 +738,12 @@ class BankStatementMessageHandler(BaseMessageHandler):
 
                     # Update statement with final results
                     created_statement_id = None
+
+                    # Verify LLM reachability if no transactions found
+                    if not txns:
+                         if not is_bank_llm_reachable(ai_conf):
+                             raise BankLLMUnavailableError("Bank LLM is unreachable and no transactions were extracted during batch processing.")
+
                     try:
                         statement.status = ProcessingStatus.PROCESSED.value
                         statement.extracted_count = len(txns) if txns else 0
@@ -840,7 +846,7 @@ class BankStatementMessageHandler(BaseMessageHandler):
             with tenant_context(tenant_id):
                 with database_session(tenant_id) as db:
                     from core.models.models_per_tenant import BankStatement, AIConfig as AIConfigModel
-                    from core.services.statement_service import process_bank_pdf_with_llm, is_bank_llm_reachable
+                    from core.services.statement_service import process_bank_pdf_with_llm, is_bank_llm_reachable, BankLLMUnavailableError
 
                     # Get AI config
                     ai_conf = await self._get_ai_config(db)
@@ -882,10 +888,14 @@ class BankStatementMessageHandler(BaseMessageHandler):
                         self.logger.info(f"Extracted {len(txns)} transactions for statement_id={statement_id}")
 
                         # Handle processing results
-                        if not txns and llm_ok:
-                            # LLM worked but no transactions found - accept as processed
-                            await self._handle_zero_transactions(db, stmt)
-                            return ProcessingResult(success=True, committed=True)
+                        if not txns:
+                            if llm_ok:
+                                # LLM worked but no transactions found - accept as processed
+                                await self._handle_zero_transactions(db, stmt)
+                                return ProcessingResult(success=True, committed=True)
+                            else:
+                                # LLM unreachable and no transactions - fail correctly
+                                raise BankLLMUnavailableError("Bank LLM is unreachable and no transactions were extracted.")
 
                         # Detect extraction method
                         ext = file_path.lower().split('.')[-1]

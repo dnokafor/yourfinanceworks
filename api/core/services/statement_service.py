@@ -511,6 +511,10 @@ JSON:"""
             return []
         except Exception as e:
             logger.error(f"Error in LiteLLM extraction: {e}")
+            # Check for connection errors to raise BankLLMUnavailableError
+            error_str = str(e).lower()
+            if "connection" in error_str or "unreachable" in error_str or "timeout" in error_str:
+                raise BankLLMUnavailableError(f"LLM connection failed: {e}")
             return []
 
     def _parse_response(self, response: str) -> List[Dict]:
@@ -730,6 +734,8 @@ JSON:"""
                 else:
                     logger.info(f"   No transactions found in chunk {i+1}")
 
+            except BankLLMUnavailableError:
+                raise
             except Exception as e:
                 logger.error(f"Error processing chunk {i+1}: {e}")
                 continue
@@ -1880,6 +1886,8 @@ JSON:"""
                 logger.info(f"Successfully processed {len(result) if isinstance(result, list) else 'unknown'} transactions")
             return result
 
+        except BankLLMUnavailableError:
+            raise
         except Exception as e:
             logger.error(f"Error processing PDF: {e}")
             return pd.DataFrame() if pd else []
@@ -2359,6 +2367,9 @@ def process_bank_pdf_with_llm(pdf_path: str, ai_config: Optional[Dict[str, Any]]
     except Exception as e:
         # Handle OCR-specific exceptions with proper error messages
         try:
+            if isinstance(e, BankLLMUnavailableError):
+                raise
+
             from commercial.ai.exceptions.bank_ocr_exceptions import (
                 OCRUnavailableError,
                 OCRTimeoutError, 
