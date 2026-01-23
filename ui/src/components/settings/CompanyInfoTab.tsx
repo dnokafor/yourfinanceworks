@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Building2, Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
     ProfessionalCard,
     ProfessionalCardHeader,
@@ -36,6 +37,8 @@ export const CompanyInfoTab: React.FC<CompanyInfoTabProps> = ({
         logo: "",
     });
     const [timezone, setTimezone] = useState("UTC");
+    const [allowJoinLookup, setAllowJoinLookup] = useState(true);
+    const [joinLookupExactMatch, setJoinLookupExactMatch] = useState(false);
     const [logoFile, setLogoFile] = useState<File | null>(null);
     const [logoPreview, setLogoPreview] = useState<string>("");
     const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -53,6 +56,12 @@ export const CompanyInfoTab: React.FC<CompanyInfoTabProps> = ({
             }
             if (settings.timezone) {
                 setTimezone(settings.timezone);
+            }
+            if (settings.allow_join_lookup !== undefined) {
+                setAllowJoinLookup(settings.allow_join_lookup);
+            }
+            if (settings.join_lookup_exact_match !== undefined) {
+                setJoinLookupExactMatch(settings.join_lookup_exact_match);
             }
         }
     }, [settings]);
@@ -129,7 +138,9 @@ export const CompanyInfoTab: React.FC<CompanyInfoTabProps> = ({
                     ...companyInfo,
                     logo: currentLogo
                 },
-                timezone: timezone
+                timezone: timezone,
+                allow_join_lookup: allowJoinLookup,
+                join_lookup_exact_match: joinLookupExactMatch
             });
         } catch (error) {
             console.error("Failed to save company info:", error);
@@ -246,6 +257,34 @@ export const CompanyInfoTab: React.FC<CompanyInfoTabProps> = ({
                         </SelectContent>
                     </Select>
                     <p className="text-sm text-muted-foreground">{t('settings.organization_timezone')}</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-border/50">
+                    <div className="flex items-center justify-between space-x-4">
+                        <div className="space-y-0.5">
+                            <Label className="text-base font-semibold">{t('settings.company_info.allow_join_lookup', 'Allow users to find this organization')}</Label>
+                            <p className="text-sm text-muted-foreground">
+                                {t('settings.company_info.allow_join_lookup_hint', 'If enabled, users can find this organization when searching to join.')}
+                            </p>
+                        </div>
+                        <Switch
+                            checked={allowJoinLookup}
+                            onCheckedChange={setAllowJoinLookup}
+                        />
+                    </div>
+                    <div className="flex items-center justify-between space-x-4">
+                        <div className="space-y-0.5">
+                            <Label className="text-base font-semibold">{t('settings.company_info.join_lookup_exact_match', 'Exact match only')}</Label>
+                            <p className="text-sm text-muted-foreground">
+                                {t('settings.company_info.join_lookup_exact_match_hint', 'Users must type the exact name to find this organization.')}
+                            </p>
+                        </div>
+                        <Switch
+                            checked={joinLookupExactMatch}
+                            onCheckedChange={setJoinLookupExactMatch}
+                            disabled={!allowJoinLookup}
+                        />
+                    </div>
                 </div>
 
                 <div className="space-y-4 pt-2">

@@ -708,6 +708,8 @@ export interface Settings {
   enable_ai_assistant?: boolean;
   timezone?: string;
   email_settings?: any;
+  allow_join_lookup?: boolean;
+  join_lookup_exact_match?: boolean;
 }
 
 // AI Configuration types

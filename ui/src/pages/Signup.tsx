@@ -251,14 +251,18 @@ const Signup: React.FC = () => {
 
     // Validate passwords match
     if (formData.password !== formData.confirmPassword) {
-      setError(t('auth.signup.validation.passwords_not_match'));
+      const msg = t('auth.signup.validation.passwords_not_match');
+      setError(msg);
+      toast.error(msg);
       setLoading(false);
       return;
     }
 
     // Validate password strength
     if (!passwordRequirements) {
-      setError('Password requirements not loaded. Please try again.');
+      const msg = 'Password requirements not loaded. Please try again.';
+      setError(msg);
+      toast.error(msg);
       setLoading(false);
       return;
     }
@@ -288,35 +292,45 @@ const Signup: React.FC = () => {
     }
 
     if (passwordErrors.length > 0) {
-      setError(passwordErrors.join('. '));
+      const msg = passwordErrors.join('. ');
+      setError(msg);
+      toast.error(msg);
       setLoading(false);
       return;
     }
 
     // Validate email availability
     if (emailStatus.available === false) {
-      setError(t('auth.signup.validation.email_not_available'));
+      const msg = t('auth.signup.validation.email_not_available');
+      setError(msg);
+      toast.error(msg);
       setLoading(false);
       return;
     }
 
     // If we're still checking email availability, wait for it to complete
     if (emailStatus.checking) {
-      setError(t('auth.signup.validation.waiting_email_check'));
+      const msg = t('auth.signup.validation.waiting_email_check');
+      setError(msg);
+      toast.error(msg);
       setLoading(false);
       return;
     }
 
     // Validate organization name availability
     if (organizationNameStatus.available === false) {
-      setError(t('auth.signup.validation.org_not_available'));
+      const msg = t('auth.signup.validation.org_not_available');
+      setError(msg);
+      toast.error(msg);
       setLoading(false);
       return;
     }
 
     // If we're still checking availability, wait for it to complete
     if (organizationNameStatus.checking) {
-      setError(t('auth.signup.validation.waiting_org_check'));
+      const msg = t('auth.signup.validation.waiting_org_check');
+      setError(msg);
+      toast.error(msg);
       setLoading(false);
       return;
     }
@@ -351,6 +365,7 @@ const Signup: React.FC = () => {
           setShowSuccessModal(true);
         } else {
           setError(result.message);
+          toast.error(result.message);
         }
       }
     } catch (err: any) {

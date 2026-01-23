@@ -888,7 +888,11 @@
       "company_address": "Company Address",
       "tax_id": "Tax ID / EIN",
       "company_logo": "Company Logo",
-      "email_readonly_hint": "Company email cannot be changed here."
+      "email_readonly_hint": "Company email cannot be changed here.",
+      "allow_join_lookup": "Allow users to find this organization",
+      "allow_join_lookup_hint": "If enabled, users can find this organization when searching to join.",
+      "join_lookup_exact_match": "Exact match only",
+      "join_lookup_exact_match_hint": "Users must type the exact name to find this organization."
     },
     "logo_preview": "Logo Preview",
     "upload_logo": "Upload Logo",

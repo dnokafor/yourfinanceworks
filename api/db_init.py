@@ -93,15 +93,22 @@ def ensure_required_columns(database_url):
                 columns = inspector.get_columns("tenants")
                 existing_columns = {col["name"] for col in columns}
 
-                if "is_enabled" not in existing_columns:
-                    logger.info("Adding missing column to tenants: is_enabled")
-                    conn.execute(
-                        text(
-                            "ALTER TABLE tenants ADD COLUMN is_enabled BOOLEAN NOT NULL DEFAULT TRUE"
+                required_columns_tenants = {
+                    "is_enabled": "BOOLEAN NOT NULL DEFAULT TRUE",
+                    "allow_join_lookup": "BOOLEAN NOT NULL DEFAULT TRUE",
+                    "join_lookup_exact_match": "BOOLEAN NOT NULL DEFAULT FALSE",
+                }
+
+                for col_name, col_definition in required_columns_tenants.items():
+                    if col_name not in existing_columns:
+                        logger.info(f"Adding missing column to tenants: {col_name}")
+                        conn.execute(
+                            text(
+                                f"ALTER TABLE tenants ADD COLUMN {col_name} {col_definition}"
+                            )
                         )
-                    )
-                    conn.commit()
-                    logger.info("Successfully added column to tenants: is_enabled")
+                        conn.commit()
+                        logger.info(f"Successfully added column to tenants: {col_name}")
 
         return True
 

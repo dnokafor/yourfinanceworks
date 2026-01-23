@@ -29,16 +29,36 @@ class OrganizationJoinService:
         self.db = db
         self.default_expiry_days = 30  # Requests expire after 30 days
 
+    def _find_tenant_by_name(self, organization_name: str) -> Optional[Tenant]:
+        """
+        Helper method to find a tenant by name, respecting discovery settings.
+        """
+        search_name = organization_name.strip()
+        # Search for tenants that match the name and are active/allow lookup
+        query = self.db.query(Tenant).filter(
+            Tenant.is_active == True,
+            Tenant.allow_join_lookup == True
+        )
+
+        # ilike matching initially
+        tenants = query.filter(Tenant.name.ilike(f"%{search_name}%")).all()
+
+        for t in tenants:
+            if t.join_lookup_exact_match:
+                if t.name.lower() == search_name.lower():
+                    return t
+            else:
+                # Fuzzy match is allowed
+                return t
+
+        return None
+
     def lookup_organization(self, organization_name: str) -> OrganizationLookupResult:
         """
         Look up an organization by name to see if it exists.
         """
         try:
-            # Search for tenant by name (case-insensitive)
-            tenant = self.db.query(Tenant).filter(
-                Tenant.name.ilike(f"%{organization_name.strip()}%"),
-                Tenant.is_active == True
-            ).first()
+            tenant = self._find_tenant_by_name(organization_name)
 
             if tenant:
                 return OrganizationLookupResult(
@@ -64,11 +84,8 @@ class OrganizationJoinService:
         Create a new organization join request.
         """
         try:
-            # First, verify the organization exists
-            tenant = self.db.query(Tenant).filter(
-                Tenant.name.ilike(f"%{request_data.organization_name.strip()}%"),
-                Tenant.is_active == True
-            ).first()
+            # First, verify the organization exists and allows requests
+            tenant = self._find_tenant_by_name(request_data.organization_name)
 
             if not tenant:
                 return OrganizationJoinResponse(

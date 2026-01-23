@@ -859,7 +859,11 @@
       "company_address": "Dirección de la Empresa",
       "tax_id": "ID Fiscal / EIN",
       "company_logo": "Logo de la Empresa",
-      "email_readonly_hint": "El correo de la empresa no puede ser cambiado aquí."
+      "email_readonly_hint": "El correo de la empresa no se puede cambiar aquí.",
+      "allow_join_lookup": "Permitir que los usuarios encuentren esta organización",
+      "allow_join_lookup_hint": "Si está habilitado, los usuarios podrán encontrar la organización al buscar unirse.",
+      "join_lookup_exact_match": "Solo coincidencia exacta",
+      "join_lookup_exact_match_hint": "Los usuarios deben escribir el nombre exacto para encontrar la organización."
     },
     "company_name": "Nombre de la Empresa",
     "company_email": "Correo de la Empresa",

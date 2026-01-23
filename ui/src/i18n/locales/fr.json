@@ -879,7 +879,11 @@
       "company_address": "Adresse de l'Entreprise",
       "tax_id": "Numéro de TVA / EIN",
       "company_logo": "Logo de l'Entreprise",
-      "email_readonly_hint": "L'e-mail de l'entreprise ne peut pas être modifié ici."
+      "email_readonly_hint": "L'e-mail de l'entreprise ne peut pas être modifié ici.",
+      "allow_join_lookup": "Autoriser les utilisateurs à trouver cette organisation",
+      "allow_join_lookup_hint": "Si activé, les utilisateurs peuvent trouver cette organisation lors de la recherche pour la rejoindre.",
+      "join_lookup_exact_match": "Correspondance exacte uniquement",
+      "join_lookup_exact_match_hint": "Les utilisateurs doivent taper le nom exact pour trouver cette organisation."
     },
     "logo_preview": "Aperçu du Logo",
     "upload_logo": "Télécharger le Logo",

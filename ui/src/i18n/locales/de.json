@@ -835,7 +835,11 @@
       "company_address": "Firmenadresse",
       "tax_id": "Steuernummer / EIN",
       "company_logo": "Firmenlogo",
-      "email_readonly_hint": "Die Firmen-E-Mail kann hier nicht geändert werden."
+      "email_readonly_hint": "Die Firmen-E-Mail kann hier nicht geändert werden.",
+      "allow_join_lookup": "Nutzern das Finden dieser Organisation erlauben",
+      "allow_join_lookup_hint": "Wenn aktiviert, können Nutzer diese Organisation bei der Suche nach Beitritten finden.",
+      "join_lookup_exact_match": "Nur genaue Übereinstimmung",
+      "join_lookup_exact_match_hint": "Nutzer müssen den exakten Namen eingeben, um diese Organisation zu finden."
     },
     "logo_preview": "Logovorschau",
     "upload_logo": "Logo hochladen",

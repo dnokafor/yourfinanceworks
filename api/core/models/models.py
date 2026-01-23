@@ -108,6 +108,8 @@ class Tenant(Base):
     tax_id = Column(String, nullable=True)
     company_logo_url = Column(String, nullable=True)
     enable_ai_assistant = Column(Boolean, default=False)
+    allow_join_lookup = Column(Boolean, default=True, nullable=False)
+    join_lookup_exact_match = Column(Boolean, default=False, nullable=False)
     
     # Currency settings
     default_currency = Column(String, default="USD", nullable=False)

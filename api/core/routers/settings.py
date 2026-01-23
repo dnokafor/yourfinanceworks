@@ -94,7 +94,9 @@ async def get_settings(
             "invoice_settings": invoice_settings,
             "enable_ai_assistant": tenant.enable_ai_assistant or False,
             "ai_chat_history_retention_days": ai_chat_history_retention_days,
-            "timezone": timezone
+            "timezone": timezone,
+            "allow_join_lookup": tenant.allow_join_lookup if tenant.allow_join_lookup is not None else True,
+            "join_lookup_exact_match": tenant.join_lookup_exact_match if tenant.join_lookup_exact_match is not None else False
         }
 
         # If AI assistant is enabled, validate license status
@@ -142,6 +144,13 @@ async def update_settings(
         tenant.phone = company_info.get("phone", tenant.phone)
         tenant.address = company_info.get("address", tenant.address)
         tenant.tax_id = company_info.get("tax_id", tenant.tax_id)
+
+        # Update organization join settings
+        if "allow_join_lookup" in settings:
+            tenant.allow_join_lookup = settings["allow_join_lookup"]
+        if "join_lookup_exact_match" in settings:
+            tenant.join_lookup_exact_match = settings["join_lookup_exact_match"]
+
         # Logo is managed separately via /upload-logo endpoint, don't update it here
 
     # Update AI assistant setting
