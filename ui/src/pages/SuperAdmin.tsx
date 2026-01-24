@@ -639,14 +639,14 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
             <TabsTrigger value="users" className="text-xs md:text-sm min-w-0 flex-shrink-0 gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md py-2.5 transition-all font-medium justify-center">{t('superAdmin.users_tab')}</TabsTrigger>
             <TabsTrigger value="databases" className="text-xs md:text-sm min-w-0 flex-shrink-0 gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md py-2.5 transition-all font-medium justify-center">{t('superAdmin.databases_tab')}</TabsTrigger>
             <TabsTrigger value="anomalies" className="text-xs md:text-sm min-w-0 flex-shrink-0 gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md py-2.5 transition-all font-medium justify-center flex items-center gap-2">
-              FinanceWorks Insights
+              {t('superAdmin.financeworks_insights_tab')}
               {isAnomaliesEnabled && totalAnomalies > 0 && (
                 <Badge variant="destructive" className="ml-1 h-5 px-1.5 flex items-center justify-center text-[10px]">
                   {totalAnomalies}
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="licensing" className="text-xs md:text-sm min-w-0 flex-shrink-0 gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md py-2.5 transition-all font-medium justify-center">Licensing</TabsTrigger>
+            <TabsTrigger value="licensing" className="text-xs md:text-sm min-w-0 flex-shrink-0 gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md py-2.5 transition-all font-medium justify-center">{t('superAdmin.licensing_tab')}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="tenants" className="space-y-4">
@@ -1117,32 +1117,31 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
                     <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
                       <AlertTriangle className="w-8 h-8 text-blue-600 dark:text-blue-400" />
                     </div>
-                    <h3 className="text-2xl font-bold text-foreground mb-3">Business License Required</h3>
+                    <h3 className="text-2xl font-bold text-foreground mb-3">{t('superAdmin.business_license_required')}</h3>
                     <p className="text-muted-foreground mb-8 max-w-lg mx-auto leading-relaxed">
-                      FinanceWorks Insights provides AI-powered anomaly detection, forensic auditing, and risk assessment for your financial data.
-                      Upgrade to a business license to access advanced fraud detection and financial intelligence features.
+                      {t('superAdmin.business_license_description')}
                     </p>
                     <div className="bg-background/80 backdrop-blur-sm rounded-xl p-6 mb-8 max-w-lg mx-auto shadow-sm border border-border/50">
                       <h4 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                         <Shield className="h-4 w-4 text-primary" />
-                        With Business License, you get:
+                        {t('superAdmin.with_business_license_get')}
                       </h4>
                       <ul className="text-left space-y-3 text-sm text-foreground/80">
                         <li className="flex items-start">
                           <div className="mr-3 p-0.5 bg-green-100 rounded-full mt-0.5"><div className="w-2 h-2 bg-green-600 rounded-full" /></div>
-                          <span>AI-powered anomaly detection across expenses, invoices, and transactions</span>
+                          <span>{t('superAdmin.ai_powered_anomaly_detection')}</span>
                         </li>
                         <li className="flex items-start">
                           <div className="mr-3 p-0.5 bg-green-100 rounded-full mt-0.5"><div className="w-2 h-2 bg-green-600 rounded-full" /></div>
-                          <span>Senior Forensic Auditor AI for deep financial analysis</span>
+                          <span>{t('superAdmin.senior_forensic_auditor_ai')}</span>
                         </li>
                         <li className="flex items-start">
                           <div className="mr-3 p-0.5 bg-green-100 rounded-full mt-0.5"><div className="w-2 h-2 bg-green-600 rounded-full" /></div>
-                          <span>Risk scoring and intelligent fraud detection</span>
+                          <span>{t('superAdmin.risk_scoring_intelligent_fraud_detection')}</span>
                         </li>
                         <li className="flex items-start">
                           <div className="mr-3 p-0.5 bg-green-100 rounded-full mt-0.5"><div className="w-2 h-2 bg-green-600 rounded-full" /></div>
-                          <span>Cross-tenant anomaly monitoring and alerts</span>
+                          <span>{t('superAdmin.cross_tenant_anomaly_monitoring')}</span>
                         </li>
                       </ul>
                     </div>
@@ -1152,7 +1151,7 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
                         onClick={() => window.location.href = '/settings?tab=license'}
                         size="lg"
                       >
-                        Upgrade to Business License
+                        {t('superAdmin.upgrade_to_business_license')}
                       </Button>
                     </div>
                   </div>
@@ -1166,20 +1165,20 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
                       <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
                         <div className="flex items-center gap-2">
                           <AlertTriangle className="h-5 w-5 text-red-500" />
-                          <h2 className="text-xl font-semibold">Flagged High-Risk Items</h2>
+                          <h2 className="text-xl font-semibold">{t('superAdmin.flagged_high_risk_items')}</h2>
                         </div>
                         <div className="flex items-center gap-2">
                           <Button variant="outline" size="sm" onClick={fetchAnomalies}>
                             <Database className="h-4 w-4 mr-2" />
-                            Refresh List
+                            {t('superAdmin.refresh_list')}
                           </Button>
                           <Button variant="outline" size="sm" onClick={handleReprocessAll} className="bg-orange-600 hover:bg-orange-700 text-white">
                             <RotateCcw className="h-4 w-4 mr-2" />
-                            Reprocess All
+                            {t('superAdmin.reprocess_all')}
                           </Button>
                           <Button variant="default" size="sm" onClick={handleRunAudit} className="bg-red-600 hover:bg-red-700 text-white">
                             <ShieldCheck className="h-4 w-4 mr-2" />
-                            Run Audit Scan
+                            {t('superAdmin.run_audit_scan')}
                           </Button>
                         </div>
                       </div>
@@ -1200,7 +1199,7 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
                           {anomalies.length === 0 ? (
                             <TableRow>
                               <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                                No high-risk items detected across the platform.
+                                {t('superAdmin.no_high_risk_items')}
                               </TableCell>
                             </TableRow>
                           ) : (
@@ -1307,24 +1306,24 @@ const SuperAdminDashboardContent: React.FC<{ user: any; t: (key: string, options
                   <div className="p-6">
                     <div className="flex items-center gap-2 mb-4">
                       <ShieldCheck className="h-5 w-5 text-primary" />
-                      <h3 className="font-semibold text-primary">Auditor Recommendations</h3>
+                      <h3 className="font-semibold text-primary">{t('superAdmin.auditor_recommendations')}</h3>
                     </div>
                     <div className="space-y-4">
                       <div className="text-sm">
-                        <p className="font-medium text-primary/80 mb-1">Recommended Next Steps:</p>
+                        <p className="font-medium text-primary/80 mb-1">{t('superAdmin.recommended_next_steps')}</p>
                         <ul className="list-disc pl-4 space-y-2 text-muted-foreground">
-                          <li>Review digital audit trail for flagged vendors</li>
-                          <li>Correlate round-number trends with specific users</li>
-                          <li>Verify physical receipts for temporal anomalies</li>
-                          <li>Cross-reference split transactions with annual budget caps</li>
+                          <li>{t('superAdmin.review_digital_audit_trail')}</li>
+                          <li>{t('superAdmin.correlate_round_number_trends')}</li>
+                          <li>{t('superAdmin.verify_physical_receipts')}</li>
+                          <li>{t('superAdmin.cross_reference_split_transactions')}</li>
                         </ul>
                       </div>
                       <div className="pt-4 border-t border-primary/10">
                         <div className="p-3 bg-white/50 dark:bg-black/20 rounded-lg border border-primary/10">
-                          <p className="text-[10px] uppercase tracking-wider font-bold text-primary/60 mb-1">AI Insights Status</p>
+                          <p className="text-[10px] uppercase tracking-wider font-bold text-primary/60 mb-1">{t('superAdmin.ai_insights_status')}</p>
                           <div className="flex items-center gap-2">
                             <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                            <span className="text-xs font-medium">Senior Forensic Auditor Active</span>
+                            <span className="text-xs font-medium">{t('superAdmin.senior_forensic_auditor_active')}</span>
                           </div>
                         </div>
                       </div>

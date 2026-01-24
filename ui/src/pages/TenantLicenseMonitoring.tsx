@@ -77,7 +77,7 @@ export const TenantLicenseMonitoring: React.FC = () => {
       setAllowPasswordSignup(signupSettings.allow_password_signup);
       setAllowSsoSignup(signupSettings.allow_sso_signup);
     } catch (err) {
-      toast.error("Failed to load license monitoring data");
+      toast.error(t('superAdmin.license_capacity_monitoring.load_error', 'Failed to load license monitoring data'));
     } finally {
       setLoading(false);
     }
@@ -90,10 +90,10 @@ export const TenantLicenseMonitoring: React.FC = () => {
   const handleUpdateExemption = async (tenantId: number, counts: boolean) => {
     try {
       await superAdminApi.updateTenantCapacityControl(tenantId, counts);
-      toast.success(counts ? "Tenant now counts against license" : "Tenant now exempt from license");
+      toast.success(counts ? t('superAdmin.license_capacity_monitoring.tenant_counts_license', 'Tenant now counts against license') : t('superAdmin.license_capacity_monitoring.tenant_exempt_license', 'Tenant now exempt from license'));
       setTenants(prev => prev.map(t => t.id === tenantId ? { ...t, count_against_license: counts } : t));
     } catch (err) {
-      toast.error("Failed to update tenant exemption");
+      toast.error(t('superAdmin.license_capacity_monitoring.update_exemption_error', 'Failed to update tenant exemption'));
     }
   };
 
@@ -103,14 +103,14 @@ export const TenantLicenseMonitoring: React.FC = () => {
     try {
       const result = await superAdminApi.activateGlobalLicense(globalKey.trim());
       if (result.success) {
-        toast.success("Global license activated successfully");
+        toast.success(t('superAdmin.license_capacity_monitoring.global_license_activated', 'Global license activated successfully'));
         setGlobalKey('');
         fetchData();
       } else {
-        toast.error(result.message || "Activation failed");
+        toast.error(result.message || t('superAdmin.license_capacity_monitoring.activation_failed', 'Activation failed'));
       }
     } catch (err: any) {
-      toast.error(err.message || "Failed to activate global license");
+      toast.error(err.message || t('superAdmin.license_capacity_monitoring.activate_global_error', 'Failed to activate global license'));
     } finally {
       setActivating(false);
     }
@@ -121,13 +121,13 @@ export const TenantLicenseMonitoring: React.FC = () => {
     try {
       const result = await superAdminApi.deactivateGlobalLicense();
       if (result.success) {
-        toast.success("Global license deactivated successfully");
+        toast.success(t('superAdmin.license_capacity_monitoring.global_license_deactivated', 'Global license deactivated successfully'));
         fetchData();
       } else {
-        toast.error(result.message || "Deactivation failed");
+        toast.error(result.message || t('superAdmin.license_capacity_monitoring.deactivation_failed', 'Deactivation failed'));
       }
     } catch (err: any) {
-      toast.error(err.message || "Failed to deactivate global license");
+      toast.error(err.message || t('superAdmin.license_capacity_monitoring.deactivate_global_error', 'Failed to deactivate global license'));
     } finally {
       setDeactivatingGlobal(false);
       setShowDeactivateGlobalDialog(false);
@@ -146,9 +146,9 @@ export const TenantLicenseMonitoring: React.FC = () => {
       if (type === 'password') setAllowPasswordSignup(value);
       else setAllowSsoSignup(value);
       
-      toast.success("Global signup settings updated");
+      toast.success(t('superAdmin.license_capacity_monitoring.signup_settings_updated', 'Global signup settings updated'));
     } catch (err) {
-      toast.error("Failed to update signup settings");
+      toast.error(t('superAdmin.license_capacity_monitoring.update_signup_error', 'Failed to update signup settings'));
     } finally {
       setSavingSettings(false);
     }
@@ -167,8 +167,8 @@ export const TenantLicenseMonitoring: React.FC = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="License & Capacity Monitoring"
-        description="Monitor system-wide license usage and manage organization exemptions."
+        title={t('superAdmin.license_capacity_monitoring.title')}
+        description={t('superAdmin.license_capacity_monitoring.description')}
       />
 
       {/* Global License Overview */}
@@ -177,16 +177,16 @@ export const TenantLicenseMonitoring: React.FC = () => {
           <ProfessionalCardHeader>
             <ProfessionalCardTitle className="flex items-center">
               <Shield className="h-5 w-5 mr-2 text-primary" />
-              Global License Status
+              {t('superAdmin.license_capacity_monitoring.global_license_status')}
             </ProfessionalCardTitle>
           </ProfessionalCardHeader>
           <ProfessionalCardContent>
             <div className="space-y-4">
               <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
-                <span className="text-sm font-medium">Status</span>
+                <span className="text-sm font-medium">{t('superAdmin.license_capacity_monitoring.status')}</span>
                 <div className="flex items-center gap-2">
                   <Badge variant={status?.global_license_info ? "default" : "secondary"}>
-                    {status?.global_license_info ? "Active" : "Inactive/None"}
+                    {status?.global_license_info ? t('superAdmin.license_capacity_monitoring.active') : t('superAdmin.license_capacity_monitoring.inactive')}
                   </Badge>
                 </div>
               </div>
@@ -194,20 +194,20 @@ export const TenantLicenseMonitoring: React.FC = () => {
               {status?.global_license_info && (
                 <>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Customer</span>
+                    <span className="text-sm text-muted-foreground">{t('superAdmin.license_capacity_monitoring.customer')}</span>
                     <span className="text-sm font-medium">{status.global_license_info.customer_name}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Expires At</span>
+                    <span className="text-sm text-muted-foreground">{t('superAdmin.license_capacity_monitoring.expires_at')}</span>
                     <span className="text-sm font-medium">
                       {new Date(status.global_license_info.expires_at).toLocaleDateString()}
                     </span>
                   </div>
                   {status.global_license_info.license_scope && (
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">License Scope</span>
+                      <span className="text-sm text-muted-foreground">{t('superAdmin.license_capacity_monitoring.license_scope')}</span>
                       <Badge variant="outline" className="text-xs">
-                        {status.global_license_info.license_scope === "global" ? "System-wide (Global)" : "Local"}
+                        {status.global_license_info.license_scope === "global" ? t('superAdmin.license_capacity_monitoring.system_wide') : t('superAdmin.license_capacity_monitoring.local')}
                       </Badge>
                     </div>
                   )}
@@ -215,19 +215,19 @@ export const TenantLicenseMonitoring: React.FC = () => {
               )}
 
               <div className="flex justify-between items-center border-t pt-4">
-                <span className="text-sm font-medium">Capacity Usage</span>
+                <span className="text-sm font-medium">{t('superAdmin.license_capacity_monitoring.capacity_usage')}</span>
                 <div className="text-right">
                   <span className={`text-lg font-bold ${isOverLimit ? 'text-destructive' : 'text-primary'}`}>
                     {countedTenantCount}
                   </span>
-                  <span className="text-sm text-muted-foreground"> / {maxTenants || 'Unlimited'} Organizations</span>
+                  <span className="text-sm text-muted-foreground"> / {maxTenants || 'Unlimited'} {t('superAdmin.license_capacity_monitoring.organizations')}</span>
                 </div>
               </div>
 
               {isOverLimit && (
                 <div className="p-3 bg-destructive/10 text-destructive rounded-lg flex items-start gap-2 text-sm">
                   <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-                  <p>Capacity exceeded! Some organizations may be disabled until you upgrade your license or mark some as exempt.</p>
+                  <p>{t('superAdmin.license_capacity_monitoring.capacity_exceeded')}</p>
                 </div>
               )}
             </div>
@@ -239,21 +239,21 @@ export const TenantLicenseMonitoring: React.FC = () => {
           <ProfessionalCardHeader>
             <ProfessionalCardTitle className="flex items-center">
               <Key className="h-5 w-5 mr-2 text-primary" />
-              System-wide Activation
+              {t('superAdmin.license_capacity_monitoring.system_wide_activation')}
             </ProfessionalCardTitle>
           </ProfessionalCardHeader>
           <ProfessionalCardContent>
             <div className="space-y-4">
               <div className="p-3 bg-blue-50 text-blue-800 rounded-lg flex items-start gap-2 text-xs">
                 <Info className="h-4 w-4 shrink-0" />
-                <p>Activating a global license applies features and tenant limits to all organizations that do not have their own local license.</p>
+                <p>{t('superAdmin.license_capacity_monitoring.global_license_info')}</p>
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="global-key">License Key (JWT)</Label>
+                <Label htmlFor="global-key">{t('superAdmin.license_capacity_monitoring.license_key')}</Label>
                 <ProfessionalTextarea
                   id="global-key"
-                  placeholder="Paste global license key..."
+                  placeholder={t('superAdmin.license_capacity_monitoring.license_key_placeholder')}
                   value={globalKey}
                   onChange={(e) => setGlobalKey(e.target.value)}
                   className="font-mono text-xs h-24"
@@ -267,7 +267,7 @@ export const TenantLicenseMonitoring: React.FC = () => {
                   loading={activating}
                   disabled={!globalKey.trim()}
                 >
-                  Activate System-wide
+                  {t('superAdmin.license_capacity_monitoring.activate_system_wide')}
                 </ProfessionalButton>
 
                 {status?.global_license_info && (
@@ -278,26 +278,25 @@ export const TenantLicenseMonitoring: React.FC = () => {
                         className="text-destructive border-destructive/20 hover:bg-destructive/10 hover:text-destructive shadow-sm"
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
-                        Deactivate
+                        {t('superAdmin.license_capacity_monitoring.deactivate')}
                       </ProfessionalButton>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Deactivate System-wide License?</AlertDialogTitle>
+                        <AlertDialogTitle>{t('superAdmin.license_capacity_monitoring.deactivate_system_wide_license')}</AlertDialogTitle>
                         <AlertDialogDescription>
-                          This will remove the global license from the system. 
-                          All organizations relying on this global license for features and tenant capacity will revert to trial or core mode.
+                          {t('superAdmin.license_capacity_monitoring.deactivate_system_wide_description')}
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
                         <AlertDialogAction 
                           onClick={handleDeactivateGlobal} 
                           disabled={deactivatingGlobal}
                           className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         >
                           {deactivatingGlobal ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                          Confirm Deactivation
+                          {t('superAdmin.license_capacity_monitoring.confirm_deactivation')}
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
@@ -314,7 +313,7 @@ export const TenantLicenseMonitoring: React.FC = () => {
         <ProfessionalCardHeader>
           <ProfessionalCardTitle className="flex items-center">
             <Lock className="h-5 w-5 mr-2 text-primary" />
-            Global Signup Controls
+            {t('superAdmin.license_capacity_monitoring.global_signup_controls')}
           </ProfessionalCardTitle>
         </ProfessionalCardHeader>
         <ProfessionalCardContent>
@@ -323,9 +322,9 @@ export const TenantLicenseMonitoring: React.FC = () => {
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <Key className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-semibold text-sm">Password Registration</span>
+                  <span className="font-semibold text-sm">{t('superAdmin.license_capacity_monitoring.password_registration')}</span>
                 </div>
-                <p className="text-xs text-muted-foreground">Allow new users to create accounts using email/password.</p>
+                <p className="text-xs text-muted-foreground">{t('superAdmin.license_capacity_monitoring.password_registration_description')}</p>
               </div>
               <Switch 
                 checked={allowPasswordSignup} 
@@ -338,9 +337,9 @@ export const TenantLicenseMonitoring: React.FC = () => {
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <Globe className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-semibold text-sm">SSO Registration</span>
+                  <span className="font-semibold text-sm">{t('superAdmin.license_capacity_monitoring.sso_registration')}</span>
                 </div>
-                <p className="text-xs text-muted-foreground">Allow new users to sign up via Google or Azure SSO.</p>
+                <p className="text-xs text-muted-foreground">{t('superAdmin.license_capacity_monitoring.sso_registration_description')}</p>
               </div>
               <Switch 
                 checked={allowSsoSignup} 
@@ -353,9 +352,9 @@ export const TenantLicenseMonitoring: React.FC = () => {
           <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
             <div className="text-xs text-amber-800 space-y-1">
-              <p className="font-bold uppercase tracking-tight">Important Security Note</p>
-              <p>Disabling registration prevents unauthorized users from creating new organizations. Users with active invitations can still join their respective organizations regardless of these settings.</p>
-              <p>The system's absolute first user (Initial Admin) can always sign up via any method to ensure the platform remains manageable.</p>
+              <p className="font-bold uppercase tracking-tight">{t('superAdmin.license_capacity_monitoring.important_security_note')}</p>
+              <p>{t('superAdmin.license_capacity_monitoring.security_note_description')}</p>
+              <p>{t('superAdmin.license_capacity_monitoring.initial_admin_note')}</p>
             </div>
           </div>
         </ProfessionalCardContent>
@@ -366,17 +365,17 @@ export const TenantLicenseMonitoring: React.FC = () => {
         <ProfessionalCardHeader>
           <ProfessionalCardTitle className="flex items-center">
             <Building className="h-5 w-5 mr-2 text-primary" />
-            Organization Capacity Control
+            {t('superAdmin.license_capacity_monitoring.organization_capacity_control')}
           </ProfessionalCardTitle>
         </ProfessionalCardHeader>
         <ProfessionalCardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Organization</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>License Type</TableHead>
-                <TableHead className="w-[300px]">Capacity Control</TableHead>
+                <TableHead>{t('superAdmin.license_capacity_monitoring.organization')}</TableHead>
+                <TableHead>{t('superAdmin.license_capacity_monitoring.status')}</TableHead>
+                <TableHead>{t('superAdmin.license_capacity_monitoring.license_type')}</TableHead>
+                <TableHead className="w-[300px]">{t('superAdmin.license_capacity_monitoring.capacity_control')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -385,7 +384,7 @@ export const TenantLicenseMonitoring: React.FC = () => {
                   <TableCell className="font-medium">{tenant.name}</TableCell>
                   <TableCell>
                     <Badge variant={tenant.is_active ? "default" : "secondary"}>
-                      {tenant.is_active ? "Active" : "Inactive"}
+                      {tenant.is_active ? t('superAdmin.license_capacity_monitoring.active') : t('common.inactive')}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -393,7 +392,7 @@ export const TenantLicenseMonitoring: React.FC = () => {
                       {/* Note: In a full impl we'd fetch local status too, 
                           but for now we show if they count against global */}
                       <Info className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>{tenant.count_against_license ? "Counts against limit" : "Exempt"}</span>
+                      <span>{tenant.count_against_license ? t('superAdmin.license_capacity_monitoring.counts_against_limit') : t('superAdmin.license_capacity_monitoring.exempt')}</span>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -404,11 +403,11 @@ export const TenantLicenseMonitoring: React.FC = () => {
                     >
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="counts" id={`counts-${tenant.id}`} />
-                        <Label htmlFor={`counts-${tenant.id}`} className="cursor-pointer">Counts</Label>
+                        <Label htmlFor={`counts-${tenant.id}`} className="cursor-pointer">{t('superAdmin.license_capacity_monitoring.counts')}</Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="exempt" id={`exempt-${tenant.id}`} />
-                        <Label htmlFor={`exempt-${tenant.id}`} className="cursor-pointer font-semibold text-primary">Exempt</Label>
+                        <Label htmlFor={`exempt-${tenant.id}`} className="cursor-pointer font-semibold text-primary">{t('superAdmin.license_capacity_monitoring.exempt')}</Label>
                       </div>
                     </RadioGroup>
                   </TableCell>
@@ -417,7 +416,7 @@ export const TenantLicenseMonitoring: React.FC = () => {
               {tenants.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={4} className="text-center h-24 text-muted-foreground">
-                    No organizations found
+                    {t('superAdmin.license_capacity_monitoring.no_organizations_found')}
                   </TableCell>
                 </TableRow>
               )}
