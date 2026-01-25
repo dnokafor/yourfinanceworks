@@ -132,7 +132,7 @@ async def delete_client_note(
     set_tenant_context(current_user.tenant_id)
     SessionLocal = tenant_db_manager.get_tenant_session(current_user.tenant_id)
     db = SessionLocal()
-    
+
     try:
         # Check if client exists
         db_client = db.query(Client).filter(Client.id == client_id).first()

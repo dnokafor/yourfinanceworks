@@ -790,6 +790,8 @@
     "client_deleted": "Client supprimé avec succès",
     "confirm_delete": "Êtes-vous sûr de vouloir supprimer ce client ?",
     "no_clients": "Aucun client trouvé",
+    "summarize_with_ai": "Résumer avec l'IA",
+    "client_notes_summary": "Résumé des Notes Client",
     "no_clients_description": "Ajoutez votre premier client pour commencer à créer des factures professionnelles et suivre les paiements.",
     "add_first_client": "Ajouter votre premier client",
     "add_client": "Ajouter un Nouveau Client",

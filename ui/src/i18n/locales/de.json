@@ -748,6 +748,8 @@
     "client_deleted": "Kunde erfolgreich gelöscht",
     "confirm_delete": "Sind Sie sicher, dass Sie diesen Kunden löschen möchten?",
     "no_clients": "Keine Kunden gefunden",
+    "summarize_with_ai": "Mit KI zusammenfassen",
+    "client_notes_summary": "Zusammenfassung der Kundennotizen",
     "no_clients_description": "Fügen Sie Ihren ersten Kunden hinzu, um mit der Erstellung professioneller Rechnungen und der Verfolgung von Zahlungen zu beginnen.",
     "add_first_client": "Ersten Kunden hinzufügen",
     "add_client": "Neuen Kunden hinzufügen",

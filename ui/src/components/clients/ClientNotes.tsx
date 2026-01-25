@@ -3,7 +3,7 @@ import { crmApi, ClientNote, getErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { ProfessionalTextarea } from "@/components/ui/professional-textarea";
 import { ProfessionalButton } from "@/components/ui/professional-button";
-import { Loader2, Edit, Save, X, Trash2, Plus } from "lucide-react";
+import { Loader2, Edit, Save, X, Trash2, Plus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { ProfessionalCard, ProfessionalCardContent, ProfessionalCardHeader, ProfessionalCardTitle } from "@/components/ui/professional-card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -23,7 +23,9 @@ export function ClientNotes({ clientId }: ClientNotesProps) {
   const [updating, setUpdating] = useState(false);
   const [noteToDelete, setNoteToDelete] = useState<ClientNote | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const { t } = useTranslation();
+  const [summarizing, setSummarizing] = useState(false);
+  const [summary, setSummary] = useState<string | null>(null);
+  const { t, i18n } = useTranslation();
 
   useEffect(() => {
     const fetchNotes = async () => {
@@ -105,11 +107,51 @@ export function ClientNotes({ clientId }: ClientNotesProps) {
     }
   };
 
+  // Helper to map language code to full name for the AI prompt
+  const getLanguageName = (code: string) => {
+    const languages: Record<string, string> = {
+      'en': 'English',
+      'es': 'Spanish',
+      'fr': 'French',
+      'de': 'German'
+    };
+    return languages[code] || 'English';
+  };
+
+  const handleSummarize = async () => {
+    if (notes.length === 0) return;
+
+    setSummarizing(true);
+    try {
+      const language = getLanguageName(i18n.language?.split('-')[0] || 'en');
+      const response = await crmApi.summarizeClientNotes(clientId, language);
+      if (response.success && response.data) {
+        setSummary(response.data.summary);
+      } else {
+        toast.error(response.error || "Failed to summarize notes.");
+      }
+    } catch (error) {
+      toast.error(getErrorMessage(error, t));
+    } finally {
+      setSummarizing(false);
+    }
+  };
+
   return (
     <>
       <ProfessionalCard className="w-full max-w-4xl mx-auto mt-8 backdrop-blur-sm bg-card/95 shadow-xl border-primary/10">
-        <ProfessionalCardHeader className="pb-6 border-b border-border/50">
+        <ProfessionalCardHeader className="pb-6 border-b border-border/50 flex flex-row items-center justify-between">
           <ProfessionalCardTitle className="text-xl font-bold">{t('clients.client_notes')}</ProfessionalCardTitle>
+          <ProfessionalButton
+            onClick={handleSummarize}
+            disabled={summarizing || notes.length === 0}
+            variant="outline"
+            size="sm"
+            className={notes.length === 0 ? "opacity-50 cursor-not-allowed" : ""}
+            leftIcon={summarizing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+          >
+            {t('clients.summarize_with_ai')}
+          </ProfessionalButton>
         </ProfessionalCardHeader>
         <ProfessionalCardContent className="pt-6">
           <div className="space-y-6">
@@ -239,6 +281,24 @@ export function ClientNotes({ clientId }: ClientNotesProps) {
             >
               {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {t('common.delete')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    <Dialog open={!!summary} onOpenChange={(open) => !open && setSummary(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                {t('clients.client_notes_summary')}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4 whitespace-pre-wrap leading-relaxed text-sm">
+            {summary}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setSummary(null)}>
+              {t('common.close')}
             </Button>
           </DialogFooter>
         </DialogContent>

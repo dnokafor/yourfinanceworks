@@ -1496,6 +1496,10 @@ export const crmApi = {
     apiRequest(`/crm/clients/${clientId}/notes/${noteId}`, {
       method: 'DELETE',
     }),
+  summarizeClientNotes: (clientId: number, language: string = "English") =>
+    apiRequest<{ success: boolean; data?: { summary: string; provider: string; model: string }; error?: string }>(`/ai/summarize-client-notes/${clientId}?language=${encodeURIComponent(language)}`, {
+      method: 'POST',
+    }),
 };
 
 // Currency API methods
