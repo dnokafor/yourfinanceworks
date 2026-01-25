@@ -41,13 +41,27 @@ export function InAppNotifications({ className }: InAppNotificationsProps) {
   const [open, setOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
+  // Initial load on mount and background polling
+  useEffect(() => {
+    loadUnreadCount();
+
+    // Background polling every 60 seconds when closed
+    // (Existing logic handled unread count only when 'open' was true)
+    const interval = setInterval(() => {
+      if (!open) {
+        loadUnreadCount();
+      }
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, [open]);
+
+  // More frequent polling when popover is open
   useEffect(() => {
     if (open) {
       loadNotifications();
-      // Load initial unread count when popover opens
       loadUnreadCount();
 
-      // Poll for new notifications every 30 seconds only when popover is open
       const interval = setInterval(() => {
         loadUnreadCount();
       }, 30000);

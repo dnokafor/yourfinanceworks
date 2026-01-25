@@ -1361,6 +1361,12 @@ export const approvalApi = {
       body: JSON.stringify({ status: 'rejected', rejection_reason: reason, notes }),
     }),
 
+  // Unsubmit an expense approval request
+  unsubmitExpenseApproval: (expenseId: number) =>
+    apiRequest<{ success: boolean; message: string; }>(`/approvals/expenses/${expenseId}/unsubmit`, {
+      method: 'POST',
+    }),
+
   // Get approval history for an expense
   getApprovalHistory: (expenseId: number) =>
     apiRequest<{ history: ApprovalHistoryEntry[]; }>(`/approvals/history/${expenseId}`),
@@ -1404,6 +1410,12 @@ export const approvalApi = {
     apiRequest<{ id: number; status: string; invoice_id: number }>(`/approvals/invoices/${approvalId}/reject`, {
       method: 'POST',
       body: JSON.stringify({ rejection_reason: reason, notes }),
+    }),
+
+  // Unsubmit an invoice approval request
+  unsubmitInvoiceApproval: (invoiceId: number) =>
+    apiRequest<{ success: boolean; message: string; }>(`/approvals/invoices/${invoiceId}/unsubmit`, {
+      method: 'POST',
     }),
 
 
