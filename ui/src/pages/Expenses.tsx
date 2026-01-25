@@ -1320,7 +1320,7 @@ const Expenses = () => {
                                 <span className="text-muted-foreground text-xs">—</span>
                               )}
                             </div>
-                            {e.analysis_status && canPerformActions() && (
+                            {(e.analysis_status || (e.attachments_count && e.attachments_count > 0) || e.imported_from_attachment) && canPerformActions() && e.status !== 'pending_approval' && e.status !== 'approved' && (
                               <Button
                                 variant="ghost"
                                 size="sm"

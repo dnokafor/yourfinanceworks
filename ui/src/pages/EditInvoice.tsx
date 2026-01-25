@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Trash, Loader2, Package, Plus, FileText, DollarSign, Calendar, AlertTriangle, CheckCircle, Clock, History, Eye, Download, File, ArrowLeft } from "lucide-react";
+import { Trash, Loader2, Package, Plus, FileText, DollarSign, Calendar, AlertTriangle, CheckCircle, Clock, History, Eye, Download, File, ArrowLeft, RotateCcw } from "lucide-react";
 import { useTranslation } from 'react-i18next';
 import { CurrencyDisplay } from '@/components/ui/currency-display';
 import { pdf } from '@react-pdf/renderer';
@@ -51,7 +51,7 @@ const EditInvoice = () => {
     if (invoice?.id) {
       const fetchHistory = async () => {
         try {
-          const history = await invoiceApi.getInvoiceHistory(invoice.id);
+          const history = await invoiceApi.getHistory(invoice.id);
           setInvoiceHistory(history);
         } catch (error) {
           console.warn("Failed to fetch invoice history:", error);
@@ -261,6 +261,27 @@ const EditInvoice = () => {
       setLivePreviewLoading(false);
     }
   };
+  // Handle trigger review functionality
+  const handleTriggerReview = async () => {
+    if (!invoice?.id) return;
+
+    try {
+      const addNotification = (window as any).addAINotification;
+      addNotification?.('processing', 'Triggering Review', `The AI agent is starting the review for invoice #${invoice.number}...`);
+
+      await invoiceApi.reReview(invoice.id);
+
+      addNotification?.('success', 'Review Triggered', `Review successfully triggered for invoice #${invoice.number}.`);
+      toast.success(t('invoices.review_triggered_success', { defaultValue: 'Review triggered successfully' }));
+
+      // Refresh data
+      const data = await invoiceApi.getInvoice(invoice.id);
+      setInvoice(data);
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to trigger review');
+    }
+  };
+
 
   // Handle history entry click
   const handleHistoryEntryClick = async (entry: InvoiceHistory) => {
@@ -365,6 +386,15 @@ const EditInvoice = () => {
               >
                 {t('editInvoice.livePreview')}
               </ProfessionalButton>
+              {(!invoice.review_status || invoice.review_status === 'not_started' || invoice.review_status === 'failed' || invoice.review_status === 'rejected') && (
+                <ProfessionalButton
+                  variant="outline"
+                  onClick={handleTriggerReview}
+                  leftIcon={<RotateCcw className="h-4 w-4" />}
+                >
+                  {t('invoices.trigger_review', { defaultValue: 'Trigger Review' })}
+                </ProfessionalButton>
+              )}
               <ProfessionalButton
                 variant="outline"
                 onClick={() => setShowAllHistoryModal(true)}

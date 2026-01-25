@@ -318,7 +318,8 @@ export default function ExpensesEdit() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>{t('expenses.details')}</CardTitle>
-              {((form as any)?.analysis_status === 'pending' || (form as any)?.analysis_status === 'queued' || (form as any)?.analysis_status === 'failed' || (form as any)?.analysis_status === 'done') && (
+              {((form as any)?.analysis_status || (attachments && attachments.length > 0)) && 
+              form.status !== 'pending_approval' && form.status !== 'approved' && (
                 <Button
                   variant="outline"
                   size="sm"

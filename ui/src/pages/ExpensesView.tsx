@@ -129,6 +129,21 @@ export default function ExpensesView() {
 
 
 
+  const [unsubmitLoading, setUnsubmitLoading] = useState(false);
+  const handleUnsubmit = async () => {
+    try {
+      setUnsubmitLoading(true);
+      await approvalApi.unsubmitExpenseApproval(Number(id));
+      toast.success('Approval request unsubmitted successfully');
+      // Refresh the page
+      navigate(0);
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to unsubmit approval request');
+    } finally {
+      setUnsubmitLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <>
@@ -154,6 +169,17 @@ export default function ExpensesView() {
                   approval={approval}
                   onAction={handleApprovalAction}
                 />
+              )}
+              {form.status === 'pending_approval' && (
+                <Button
+                  onClick={handleUnsubmit}
+                  variant="outline"
+                  disabled={unsubmitLoading}
+                  className="border-amber-200 text-amber-700 hover:bg-amber-50"
+                >
+                  <AlertCircle className="mr-2 h-4 w-4" />
+                  {t('expenses.unsubmit', { defaultValue: 'Unsubmit' })}
+                </Button>
               )}
               {(!approval || approval.status !== 'pending') && (
                 <Button
@@ -244,7 +270,8 @@ export default function ExpensesView() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>{t('expenses.details')}</CardTitle>
-                {((form as any)?.analysis_status === 'pending' || (form as any)?.analysis_status === 'queued' || (form as any)?.analysis_status === 'failed' || (form as any)?.analysis_status === 'done') && (
+                {((form as any)?.analysis_status || (attachments && attachments.length > 0)) && 
+                  form.status !== 'pending_approval' && form.status !== 'approved' && (
                   <Button
                     variant="outline"
                     size="sm"

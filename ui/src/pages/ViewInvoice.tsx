@@ -11,7 +11,7 @@ import { CurrencySelector } from '@/components/ui/currency-selector';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { CalendarIcon, ArrowLeft, Edit, Eye, Loader2 } from 'lucide-react';
+import { CalendarIcon, Edit, Eye, Loader2, AlertCircle, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { invoiceApi, Invoice, approvalApi, INVOICE_STATUSES, settingsApi, Settings } from '@/lib/api';
@@ -111,7 +111,7 @@ export default function ViewInvoice() {
   // Handle live preview functionality
   const handleLivePreview = async () => {
     if (!invoice || !settings) return;
-    
+
     setLivePreviewLoading(true);
     setShowLivePreviewModal(true);
 
@@ -135,6 +135,42 @@ export default function ViewInvoice() {
       setShowLivePreviewModal(false);
     } finally {
       setLivePreviewLoading(false);
+    }
+  };
+  // Handle trigger review functionality
+  const handleTriggerReview = async () => {
+    if (!invoice?.id) return;
+
+    try {
+      const addNotification = (window as any).addAINotification;
+      addNotification?.('processing', 'Triggering Review', `The AI agent is starting the review for invoice #${invoice.number}...`);
+
+      await invoiceApi.reReview(invoice.id);
+
+      addNotification?.('success', 'Review Triggered', `Review successfully triggered for invoice #${invoice.number}.`);
+      toast.success(t('invoices.review_triggered_success', { defaultValue: 'Review triggered successfully' }));
+
+      // Refresh data
+      const inv = await invoiceApi.getInvoice(invoice.id);
+      setInvoice(inv);
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to trigger review');
+    }
+  };
+
+
+  const [unsubmitLoading, setUnsubmitLoading] = useState(false);
+  const handleUnsubmit = async () => {
+    try {
+      setUnsubmitLoading(true);
+      await approvalApi.unsubmitInvoiceApproval(Number(id));
+      toast.success('Approval request unsubmitted successfully');
+      // Refresh the page
+      navigate(0);
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to unsubmit approval request');
+    } finally {
+      setUnsubmitLoading(false);
     }
   };
 
@@ -191,6 +227,26 @@ export default function ViewInvoice() {
                   approval={approval as any}
                   onAction={handleApprovalAction}
                 />
+              )}
+              {invoice.status === 'pending_approval' && (
+                <Button
+                  onClick={handleUnsubmit}
+                  variant="outline"
+                  disabled={unsubmitLoading}
+                  className="border-amber-200 text-amber-700 hover:bg-amber-50"
+                >
+                  <AlertCircle className="mr-2 h-4 w-4" />
+                  {t('invoices.unsubmit', { defaultValue: 'Unsubmit' })}
+                </Button>
+              )}
+              {(!invoice.review_status || invoice.review_status === 'not_started' || invoice.review_status === 'failed' || invoice.review_status === 'rejected') && (
+                <ProfessionalButton
+                  variant="outline"
+                  onClick={handleTriggerReview}
+                  leftIcon={<RotateCcw className="h-4 w-4" />}
+                >
+                  {t('invoices.trigger_review', { defaultValue: 'Trigger Review' })}
+                </ProfessionalButton>
               )}
               {invoice.status !== 'pending_approval' && (
                 <Button
