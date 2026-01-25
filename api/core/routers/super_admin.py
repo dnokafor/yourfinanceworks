@@ -634,7 +634,8 @@ async def get_users(
     current_user: MasterUser = Depends(require_super_admin)
 ):
     """List users. If tenant_id is provided, compute role for that tenant; otherwise show role for each user's primary tenant."""
-    query = master_db.query(MasterUser)
+    # Only list active users by default
+    query = master_db.query(MasterUser).filter(MasterUser.is_active == True)
 
     if tenant_id:
         # Users whose primary tenant matches
@@ -877,7 +878,7 @@ async def update_user(
     # Update basic fields in master database
     basic_fields = ['first_name', 'last_name', 'email', 'role']
     for field in basic_fields:
-        if field in user_data and user_data[field]:
+        if field in user_data:
             setattr(user, field, user_data[field])
 
     if 'password' in user_data and user_data['password']:
@@ -894,7 +895,17 @@ async def update_user(
 
     # Handle tenant memberships if provided
     if 'tenant_ids' in user_data:
+        from core.utils.user_sync import remove_user_from_tenant_database
         tenant_ids = [int(tid) for tid in user_data['tenant_ids']]
+
+        # Find existing memberships to identify removals
+        existing_memberships = master_db.execute(
+            user_tenant_association.select().where(
+                user_tenant_association.c.user_id == user_id
+            )
+        ).fetchall()
+        existing_tenant_ids = {row.tenant_id for row in existing_memberships}
+        removed_tenant_ids = existing_tenant_ids - set(tenant_ids)
 
         # Remove existing memberships
         master_db.execute(
@@ -919,10 +930,18 @@ async def update_user(
                 tenant_user = tenant_session.query(TenantUser).filter(TenantUser.id == user_id).first()
                 if tenant_user:
                     tenant_user.role = role_for_tenant
+                    tenant_user.is_active = True  # Ensure active if re-enabling
                     tenant_session.commit()
                 tenant_session.close()
             except Exception:
                 pass
+
+        # Sync removals to tenant databases
+        for tenant_id in removed_tenant_ids:
+            try:
+                remove_user_from_tenant_database(user_id, tenant_id)
+            except Exception as e:
+                logger.error(f"Failed to sync removal for user {user_id} in tenant {tenant_id}: {e}")
 
     master_db.commit()
     master_db.refresh(user)
@@ -955,15 +974,15 @@ async def delete_user(
         ).first()
 
         if tenant_user:
-            tenant_session.delete(tenant_user)
+            tenant_user.is_active = False
             tenant_session.commit()
 
         tenant_session.close()
     except Exception as e:
-        pass  # Continue even if tenant deletion fails
+        pass  # Continue even if tenant deactivation fails
 
-    # Delete from master database
-    master_db.delete(user)
+    # Deactivate in master database (soft delete)
+    user.is_active = False
     master_db.commit()
 
     # Log audit event in master database
@@ -1133,6 +1152,7 @@ async def super_admin_update_user_role_for_tenant(
         tenant_user = tenant_session.query(TenantUser).filter(TenantUser.id == user_id).first()
         if tenant_user:
             tenant_user.role = role_update.role
+            tenant_user.is_active = True  # Ensure active if re-enabling
             tenant_session.commit()
         tenant_session.close()
     except Exception:

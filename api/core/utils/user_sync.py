@@ -124,9 +124,9 @@ def remove_user_from_tenant_database(user_id: int, tenant_id: int) -> bool:
             ).first()
             
             if tenant_user:
-                tenant_db.delete(tenant_user)
+                tenant_user.is_active = False
                 tenant_db.commit()
-                logger.info(f"Successfully removed user {user_id} from tenant {tenant_id}")
+                logger.info(f"Successfully deactivated user {user_id} in tenant {tenant_id}")
                 return True
             else:
                 logger.info(f"User {user_id} not found in tenant {tenant_id} database")

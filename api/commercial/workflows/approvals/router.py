@@ -83,11 +83,12 @@ async def get_available_approvers(
         # Import here to avoid circular imports
         from core.models.models_per_tenant import User
 
-        # Get all users except the current user who are not viewers
+        # Get all users except the current user who are not viewers and are active
         approvers = db.query(User).filter(
             and_(
                 User.id != current_user.id,
-                User.role != "viewer"  # Exclude viewers from approver list
+                User.role != "viewer",  # Exclude viewers from approver list
+                User.is_active == True  # Ensure only active users are listed
             )
         ).order_by(User.first_name, User.last_name).all()
 
@@ -120,21 +121,21 @@ async def submit_expense_for_approval(
 ):
     """
     Submit an expense for approval.
-    
+
     This endpoint allows users to submit their expenses for approval according to
     configured approval rules. The system will automatically assign appropriate
     approvers based on expense amount, category, and organizational rules.
-    
+
     Args:
         expense_id: ID of the expense to submit for approval
         submission_data: Submission details including optional notes
         current_user: Currently authenticated user
         approval_service: Approval service instance
         db: Database session
-        
+
     Returns:
         List of created ExpenseApproval records
-        
+
     Raises:
         HTTPException: 400 if expense is invalid or already in approval workflow
         HTTPException: 403 if user lacks permission to submit this expense
@@ -144,14 +145,14 @@ async def submit_expense_for_approval(
     try:
         # Verify user has permission to submit expenses for approval
         require_approval_submission(current_user, "submit expenses for approval")
-        
+
         # Validate expense_id matches the one in submission_data
         if submission_data.expense_id != expense_id:
             raise HTTPException(
                 status_code=400,
                 detail="Expense ID in URL does not match expense ID in request body"
             )
-        
+
         # Submit expense for approval
         approvals = approval_service.submit_for_approval(
             expense_id=expense_id,
@@ -159,13 +160,13 @@ async def submit_expense_for_approval(
             notes=submission_data.notes,
             approver_id=submission_data.approver_id
         )
-        
+
         # Create notification and reminder for approvers
         from core.models.models_per_tenant import ReminderNotification, Expense, Reminder, ReminderStatus, ReminderPriority, RecurrencePattern
         from datetime import timedelta
         now = datetime.now(timezone.utc)
         expense = db.query(Expense).filter(Expense.id == expense_id).first()
-        
+
         for approval in approvals:
             if approval.approver_id:
                 # Create in-app notification with expense_id in subject for navigation
@@ -262,7 +263,11 @@ async def submit_expense_for_approval(
         raise HTTPException(status_code=409, detail=e.to_dict())
     except ApprovalWorkflowError as e:
         logger.error(f"Workflow error for expense {expense_id}: {str(e)}")
-        raise HTTPException(status_code=422, detail=e.to_dict())
+        # Extract the actual reason from the error details if available
+        # The reason contains the specific validation error like "Receipt attachment is required"
+        error_message = e.details.get('reason', e.user_message) if hasattr(e, 'details') else str(e)
+        raise HTTPException(status_code=422, detail=error_message)
+
     except ApprovalServiceError as e:
         logger.error(f"Approval service error for expense {expense_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=e.to_dict())
@@ -303,47 +308,102 @@ async def get_pending_approvals(
             offset=offset
         )
 
-        # Get total count for pagination
+        # Calculate total count across all tenants
         from core.models.models_per_tenant import ExpenseApproval, Expense
         from core.schemas.approval import ApprovalStatus
-        total = db.query(ExpenseApproval).filter(
-            and_(
-                ExpenseApproval.approver_id == current_user.id,
-                ExpenseApproval.status == ApprovalStatus.PENDING,
-                ExpenseApproval.is_current_level == True
-            )
-        ).count()
+        from core.services.tenant_database_manager import tenant_db_manager
+        from core.models.database import get_master_db
+        from core.models.models import user_tenant_association, Tenant
+        from sqlalchemy import select
 
-        # Enrich approvals with expense data
+        # Get user's tenant IDs
+        master_db = next(get_master_db())
+        stmt = select(user_tenant_association.c.tenant_id).where(
+            and_(
+                user_tenant_association.c.user_id == current_user.id,
+                user_tenant_association.c.is_active == True
+            )
+        )
+        result = master_db.execute(stmt)
+        tenant_ids = [row[0] for row in result]
+
+        # Get tenant names for display
+        tenant_names = {}
+        tenants = master_db.query(Tenant).filter(Tenant.id.in_(tenant_ids)).all()
+        for tenant in tenants:
+            tenant_names[tenant.id] = tenant.name
+        master_db.close()
+
+        # Calculate total across all tenants
+        total = 0
+        for tenant_id in tenant_ids:
+            try:
+                TenantSession = tenant_db_manager.get_tenant_session(tenant_id)
+                tenant_db = TenantSession()
+                try:
+                    count = tenant_db.query(ExpenseApproval).filter(
+                        and_(
+                            ExpenseApproval.approver_id == current_user.id,
+                            ExpenseApproval.status == ApprovalStatus.PENDING,
+                            ExpenseApproval.is_current_level == True
+                        )
+                    ).count()
+                    total += count
+                finally:
+                    tenant_db.close()
+            except Exception as e:
+                logger.error(f"Error counting approvals from tenant {tenant_id}: {e}")
+                continue
+
+        # Enrich approvals with expense data from correct tenant database
         enriched_approvals = []
         for approval in pending_approvals:
-            expense = db.query(Expense).filter(Expense.id == approval.expense_id).first()
-            approval_dict = {
-                "id": approval.id,
-                "expense_id": approval.expense_id,
-                "approver_id": approval.approver_id,
-                "approval_rule_id": approval.approval_rule_id,
-                "status": approval.status,
-                "rejection_reason": approval.rejection_reason,
-                "notes": approval.notes,
-                "submitted_at": approval.submitted_at.isoformat(),
-                "decided_at": approval.decided_at.isoformat() if approval.decided_at else None,
-                "approval_level": approval.approval_level,
-                "is_current_level": approval.is_current_level,
-                "expense": {
-                    "id": expense.id,
-                    "amount": float(expense.amount),
-                    "currency": expense.currency,
-                    "expense_date": expense.expense_date,
-                    "category": expense.category or "General",
-                    "vendor": expense.vendor,
-                    "status": expense.status,
-                    "notes": expense.notes
-                } if expense else None
-            }
-            enriched_approvals.append(approval_dict)
+            try:
+                # Get the tenant database for this approval
+                approval_tenant_id = getattr(approval, 'tenant_id', None)
+                if not approval_tenant_id:
+                    logger.warning(f"Approval {approval.id} missing tenant_id")
+                    continue
 
-        logger.info(f"Retrieved {len(pending_approvals)} pending approvals (total: {total}) for user {current_user.id}")
+                TenantSession = tenant_db_manager.get_tenant_session(approval_tenant_id)
+                tenant_db = TenantSession()
+
+                try:
+                    expense = tenant_db.query(Expense).filter(Expense.id == approval.expense_id).first()
+                    approval_dict = {
+                        "id": approval.id,
+                        "expense_id": approval.expense_id,
+                        "approver_id": approval.approver_id,
+                        "approval_rule_id": approval.approval_rule_id,
+                        "status": approval.status,
+                        "rejection_reason": approval.rejection_reason,
+                        "notes": approval.notes,
+                        "submitted_at": approval.submitted_at.isoformat(),
+                        "decided_at": approval.decided_at.isoformat() if approval.decided_at else None,
+                        "approval_level": approval.approval_level,
+                        "is_current_level": approval.is_current_level,
+                        "tenant_id": approval_tenant_id,
+                        "tenant_name": tenant_names.get(approval_tenant_id, f"Org {approval_tenant_id}"),
+                        "expense": {
+                            "id": expense.id,
+                            "amount": float(expense.amount),
+                            "currency": expense.currency,
+                            "expense_date": expense.expense_date,
+                            "category": expense.category or "General",
+                            "vendor": expense.vendor,
+                            "status": expense.status,
+                            "notes": expense.notes
+                        } if expense else None
+                    }
+                    enriched_approvals.append(approval_dict)
+                finally:
+                    tenant_db.close()
+
+            except Exception as e:
+                logger.error(f"Error enriching approval {approval.id}: {e}")
+                continue
+
+        logger.info(f"Retrieved {len(pending_approvals)} pending approvals (total: {total}) for user {current_user.id} across {len(tenant_ids)} organizations")
 
         return {
             "approvals": enriched_approvals,
@@ -381,7 +441,7 @@ async def get_pending_approvals_summary(
         logger.info(f"Retrieved approval summary for user {current_user.id}: {summary.total_pending} pending")
 
         return summary
-        
+
     except Exception as e:
         logger.error(f"Error retrieving approval summary for user {current_user.id}: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -590,14 +650,14 @@ async def reject_expense(
     """
     try:
         require_non_viewer(current_user)
-        
+
         # Validate decision status
         if decision_data.status.value != "rejected":
             raise HTTPException(
                 status_code=400,
                 detail="Use the reject endpoint only for rejections. Use approve endpoint for approvals."
             )
-        
+
         # Validate rejection reason is provided
         if not decision_data.rejection_reason or not decision_data.rejection_reason.strip():
             raise HTTPException(
@@ -1519,6 +1579,49 @@ async def deactivate_approval_delegation(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/expenses/{expense_id}/unsubmit", response_model=dict)
+async def unsubmit_expense_approval(
+    expense_id: int,
+    current_user: MasterUser = Depends(get_current_user),
+    approval_service: ApprovalService = Depends(get_approval_service),
+    db: Session = Depends(get_db)
+):
+    """
+    Unsubmit an expense approval request.
+    This reverts the expense status and cancels pending approvals.
+    """
+    try:
+        require_non_viewer(current_user)
+
+        # Unsubmit the expense
+        success = approval_service.unsubmit_expense_approval(
+            expense_id=expense_id,
+            submitter_id=current_user.id
+        )
+
+        # Log audit event
+        log_audit_event(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="expense_approval_unsubmitted",
+            resource_type="expense",
+            resource_id=str(expense_id),
+            details={"expense_id": expense_id}
+        )
+
+        logger.info(f"User {current_user.id} unsubmitted expense {expense_id}")
+
+        return {"message": "Expense approval request unsubmitted successfully", "success": success}
+
+    except InvalidApprovalState as e:
+        logger.warning(f"Invalid state unsubmitting expense {expense_id}: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error unsubmitting expense {expense_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 # Invoice Approval Endpoints
 
 @router.post("/invoices/{invoice_id}/submit-approval", response_model=List[dict])
@@ -1658,6 +1761,49 @@ async def submit_invoice_for_approval(
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         logger.error(f"Unexpected error submitting invoice {invoice_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/invoices/{invoice_id}/unsubmit", response_model=dict)
+async def unsubmit_invoice_approval(
+    invoice_id: int,
+    current_user: MasterUser = Depends(get_current_user),
+    approval_service: ApprovalService = Depends(get_approval_service),
+    db: Session = Depends(get_db)
+):
+    """
+    Unsubmit an invoice approval request.
+    This reverts the invoice status and cancels pending approvals.
+    """
+    try:
+        require_non_viewer(current_user)
+
+        # Unsubmit the invoice
+        success = approval_service.unsubmit_invoice_approval(
+            invoice_id=invoice_id,
+            submitter_id=current_user.id
+        )
+
+        # Log audit event
+        log_audit_event(
+            db=db,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            action="invoice_approval_unsubmitted",
+            resource_type="invoice",
+            resource_id=str(invoice_id),
+            details={"invoice_id": invoice_id}
+        )
+
+        logger.info(f"User {current_user.id} unsubmitted invoice {invoice_id}")
+
+        return {"message": "Invoice approval request unsubmitted successfully", "success": success}
+
+    except InvalidApprovalState as e:
+        logger.warning(f"Invalid state unsubmitting invoice {invoice_id}: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error unsubmitting invoice {invoice_id}: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

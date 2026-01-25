@@ -178,8 +178,10 @@ def get_current_user(
     if current_tenant_id and current_tenant_id != user.tenant_id:
         # User is accessing a different tenant, get their role from that tenant's database
         try:
-            from core.routers.super_admin import tenant_session_context
-            with tenant_session_context(current_tenant_id) as tenant_db:
+            from core.services.tenant_database_manager import tenant_db_manager
+            TenantSession = tenant_db_manager.get_tenant_session(current_tenant_id)
+            tenant_db = TenantSession()
+            try:
                 tenant_user = tenant_db.query(TenantUser).filter(TenantUser.id == user.id).first()
                 if tenant_user:
                     # Create a copy of the master user with the tenant-specific role
@@ -221,8 +223,10 @@ def get_current_user(
                         updated_at=user.updated_at
                     )
                     return user_copy
+            finally:
+                tenant_db.close()
         except Exception as e:
-            logger.warning(f"Failed to get tenant-specific role for user {email} in tenant {current_tenant_id}: {e}")
+            logger.warning(f"Failed to get tenant-specific role for user {user.email} in tenant {current_tenant_id}: {e}")
             # Fall back to master user if tenant lookup fails
 
     return user
@@ -1349,8 +1353,9 @@ async def update_user_role(
             tenant_user = tenant_db.query(TenantUser).filter(TenantUser.id == user_id).first()
             if tenant_user:
                 tenant_user.role = role_update.role
+                tenant_user.is_active = True  # Reactivate if they were previously deactivated
                 tenant_db.commit()
-                logger.info(f"Updated role in tenant database for user {user.email}")
+                logger.info(f"Updated role and active status in tenant database for user {user.email}")
             else:
                 # Create tenant user mirror if missing
                 new_tenant_user = TenantUser(
@@ -1360,6 +1365,7 @@ async def update_user_role(
                     first_name=user.first_name,
                     last_name=user.last_name,
                     role=role_update.role,
+                    is_active=True,
                     is_verified=user.is_verified,
                     is_superuser=False
                 )
@@ -1546,6 +1552,7 @@ async def admin_activate_user(
             existing_tenant_user.first_name = activation_data.first_name or invite.first_name
             existing_tenant_user.last_name = activation_data.last_name or invite.last_name
             existing_tenant_user.role = invite.role
+            existing_tenant_user.is_active = True
             existing_tenant_user.is_verified = True
             existing_tenant_user.is_superuser = False
             existing_tenant_user.must_reset_password = master_user.must_reset_password
@@ -1860,110 +1867,66 @@ async def remove_user_from_organization(
 
     from core.models.models import user_tenant_association
     from core.utils.user_sync import remove_user_from_tenant_database
+    from core.models.database import get_tenant_context
 
-    # Check if user has access to this tenant
-    membership = db.execute(
-        user_tenant_association.select().where(
-            user_tenant_association.c.user_id == user_id,
-            user_tenant_association.c.tenant_id == current_user.tenant_id
-        )
+    current_tenant_id = get_tenant_context()
+    if not current_tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    # 1. First, check if this is the user's primary organization
+    user = db.query(MasterUser).filter(
+        MasterUser.id == user_id,
+        MasterUser.tenant_id == current_tenant_id
     ).first()
 
-    if not membership:
-        # Check if it's their primary tenant
-        user = db.query(MasterUser).filter(
-            MasterUser.id == user_id,
-            MasterUser.tenant_id == current_user.tenant_id
+    is_primary = user is not None
+
+    # 2. If not primary, check if they have a non-primary membership
+    if not is_primary:
+        membership = db.execute(
+            user_tenant_association.select().where(
+                user_tenant_association.c.user_id == user_id,
+                user_tenant_association.c.tenant_id == current_tenant_id
+            )
         ).first()
-        if not user:
+
+        if not membership:
             raise HTTPException(status_code=404, detail="User not found in this organization")
 
-        # For primary tenant users, delete them completely (like Super Admin does)
-        # Delete from tenant database first
-        try:
-            from core.services.tenant_database_manager import tenant_db_manager
-            from core.models.models_per_tenant import User as TenantUser
+        # Get user for logging purposes
+        user = db.query(MasterUser).filter(MasterUser.id == user_id).first()
 
-            tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
-            tenant_user = tenant_session.query(TenantUser).filter(
-                TenantUser.id == user_id
-            ).first()
+    # At this point, we know the user has access to this organization (either primary or association)
+    user_email = user.email
+    user_name = f"{user.first_name} {user.last_name}" if user.first_name or user.last_name else user.email
 
-            if tenant_user:
-                tenant_session.delete(tenant_user)
-                tenant_session.commit()
+    # 3. CRITICAL: Deactivate in tenant database (always do this if they had access)
+    logger.info(f"[USER REMOVAL] Deactivating user {user_id} in tenant {current_tenant_id}")
+    success = remove_user_from_tenant_database(user_id, current_tenant_id)
+    logger.info(f"[USER REMOVAL] Deactivation result: {success}")
 
-            tenant_session.close()
-        except Exception:
-            pass  # Continue even if tenant deletion fails
-
-        # Capture user details for audit logging before deletion
-        user_name = f"{user.first_name} {user.last_name}" if user.first_name or user.last_name else user.email
-        user_email = user.email
-
-        # Delete from master database
-        db.delete(user)
-        db.commit()
-
-        # Also log to tenant database for organization audit visibility
-        try:
-            from core.utils.audit import log_audit_event
-            from core.services.tenant_database_manager import tenant_db_manager
-
-            # Get tenant session and set as current context for audit logging
-            tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
-
-            # Use the tenant session directly for audit logging
-            log_audit_event(
-                db=tenant_session,
-                user_id=current_user.id,
-                user_email=current_user.email,
-                action="DELETE_USER",
-                resource_type="user",
-                resource_id=str(user_id),
-                resource_name=user_name,
-                details={
-                    "deleted_user_email": user_email,
-                    "deleted_user_name": user_name,
-                    "deletion_type": "organization_deletion"
-                },
-                status="success"
-            )
-            tenant_session.close()
-        except Exception as e:
-            logger = logging.getLogger(__name__)
-            logger.error(f"Failed to log tenant audit event: {e}")
-
-        return {"message": f"User {user_email} has been deleted from the organization"}
-
-    # Get user details for logging
-    user = db.query(MasterUser).filter(MasterUser.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    # Remove from association table
+    # 4. Remove association from table (if it exists)
     db.execute(
         user_tenant_association.delete().where(
             user_tenant_association.c.user_id == user_id,
-            user_tenant_association.c.tenant_id == current_user.tenant_id
+            user_tenant_association.c.tenant_id == current_tenant_id
         )
     )
 
-    # Remove from tenant database
-    remove_user_from_tenant_database(user_id, current_user.tenant_id)
+    # 5. If it was their primary tenant, also deactivate the master user record (soft delete)
+    if is_primary:
+        logger.info(f"[USER REMOVAL] Deactivating master record for primary user {user_id}")
+        user.is_active = False
 
     db.commit()
 
-    # Also log to tenant database for organization audit visibility
+    # 6. Log audit event
     try:
         from core.utils.audit import log_audit_event
         from core.services.tenant_database_manager import tenant_db_manager
 
-        # Get tenant session and set as current context for audit logging
-        tenant_session = tenant_db_manager.get_tenant_session(current_user.tenant_id)()
-        user_name = f"{user.first_name} {user.last_name}" if user.first_name or user.last_name else user.email
+        tenant_session = tenant_db_manager.get_tenant_session(current_tenant_id)()
 
-        # Use the tenant session directly for audit logging
         log_audit_event(
             db=tenant_session,
             user_id=current_user.id,
@@ -1973,19 +1936,17 @@ async def remove_user_from_organization(
             resource_id=str(user_id),
             resource_name=user_name,
             details={
-                "removed_user_email": user.email,
-                "removed_user_name": user_name,
-                "removal_type": "organization_removal"
+                "removed_user_email": user_email,
+                "removed_from_tenant": current_tenant_id,
+                "was_primary": is_primary
             },
             status="success"
         )
         tenant_session.close()
     except Exception as e:
-        # Log the error for debugging
         logger.error(f"Failed to log tenant audit event: {e}")
-        pass  # Continue even if audit logging fails
 
-    return {"message": f"User {user.email} has been removed from the organization"}
+    return {"message": "User has been removed from the organization"}
 
 @router.get("/sso-status")
 async def get_sso_status():
