@@ -126,7 +126,7 @@ class UserGamificationProfile(Base):
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
     
     # Relationships
-    user = relationship("User")
+    user = relationship("User", back_populates="gamification_profile")
     achievements = relationship("UserAchievement", back_populates="profile", cascade="all, delete-orphan")
     streaks = relationship("UserStreak", back_populates="profile", cascade="all, delete-orphan")
     challenges = relationship("UserChallenge", back_populates="profile", cascade="all, delete-orphan")

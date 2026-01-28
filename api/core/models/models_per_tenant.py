@@ -40,6 +40,7 @@ class User(Base):
 
     # Relationships (no tenant relationship needed)
     notes = relationship("ClientNote", back_populates="user")
+    gamification_profile = relationship("UserGamificationProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
 class Client(Base):
     __tablename__ = "clients"
