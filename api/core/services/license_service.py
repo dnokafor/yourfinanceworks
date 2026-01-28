@@ -772,10 +772,14 @@ class LicenseService:
                 validation_type="installation_created",
                 validation_result="success",
             )
-        # REMOVED: Auto-sync logic to allow for custom installation IDs
-        # elif installation.installation_id != global_id:
-        #    ...
-
+        elif installation.installation_id != global_id and not installation.custom_installation_id:
+            # Auto-sync with global ID if no custom ID is set
+            # This is critical for cloud deployments where ID is injected via env var
+            logger.info(f"Syncing local installation ID from {installation.installation_id} to global ID {global_id}")
+            installation.installation_id = global_id
+            installation.original_installation_id = global_id
+            self.db.commit()
+            self.db.refresh(installation)
 
         return installation
 

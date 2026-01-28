@@ -117,15 +117,28 @@ async def auto_activate_license():
     Automatically activate a license if provided via environment variables.
     Used for cloud deployments where the license is injected into the container.
     """
+    # Support aliases for environment variables
     installation_id = os.getenv("INSTALLATION_ID")
-    license_key = os.getenv("LICENSE_KEY")
-    private_key_pem = os.getenv("DEPLOYMENT_PRIVATE_KEY")
-    auto_activate = os.getenv("AUTO_ACTIVATE_LICENSE", "false").lower() == "true"
+    license_key = os.getenv("LICENSE_KEY") or os.getenv("LICENSE")
+    private_key_pem = os.getenv("DEPLOYMENT_PRIVATE_KEY") or os.getenv("PRIVATE_KEY")
+    
+    # Default to True if license_key is provided
+    auto_activate_str = os.getenv("AUTO_ACTIVATE_LICENSE")
+    if auto_activate_str is None and license_key:
+        auto_activate = True
+    else:
+        auto_activate = str(auto_activate_str).lower() == "true"
 
     if not (installation_id or license_key or private_key_pem):
         return
 
     logger.info("Checking for injected license data for auto-activation...")
+    if installation_id:
+        logger.info(f"  - Installation ID: {installation_id}")
+    if license_key:
+        logger.info(f"  - License Key: [PROVIDED] (Auto-activate: {auto_activate})")
+    if private_key_pem:
+        logger.info(f"  - Private Key: [PROVIDED]")
 
     from core.models.database import get_master_db
     from core.services.license_service import LicenseService, KEYS_DIR, DEFAULT_KEY_ID, PUBLIC_KEYS
