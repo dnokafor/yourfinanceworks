@@ -252,6 +252,12 @@ def load_public_keys() -> Dict[str, str]:
             public_keys[version] = value
             print(f"Loaded public key {version} from environment variable")
 
+    # Load master public key from environment variable (highest priority for server_v1)
+    master_key_env = os.getenv("LICENSE_MASTER_PUBLIC_KEY")
+    if master_key_env:
+        public_keys["server_v1"] = master_key_env
+        print("Loaded master public key from LICENSE_MASTER_PUBLIC_KEY environment variable")
+
     # Load from files in keys directory
     if KEYS_DIR.exists():
         # Look for versioned keys: public_key_v2.pem, public_key_v3.pem, etc.

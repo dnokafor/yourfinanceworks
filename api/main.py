@@ -104,6 +104,104 @@ except Exception as e:
     logger.error(f"Database initialization failed: {str(e)}")
     logger.error(f"Traceback: {traceback.format_exc()}")
     # Don't raise the exception to allow the app to start even if DB init fails
+    # (Tables may not exist yet, they will be created by migrations if needed)
+
+async def auto_activate_license():
+    """
+    Automatically activate a license if provided via environment variables.
+    Used for cloud deployments where the license is injected into the container.
+    """
+    installation_id = os.getenv("INSTALLATION_ID")
+    license_key = os.getenv("LICENSE_KEY")
+    private_key_pem = os.getenv("DEPLOYMENT_PRIVATE_KEY")
+    auto_activate = os.getenv("AUTO_ACTIVATE_LICENSE", "false").lower() == "true"
+
+    if not (installation_id or license_key or private_key_pem):
+        return
+
+    logger.info("Checking for injected license data for auto-activation...")
+
+    from core.models.database import get_master_db
+    from core.services.license_service import LicenseService, KEYS_DIR, DEFAULT_KEY_ID, PUBLIC_KEYS
+    from core.models.models import GlobalInstallationInfo
+
+    db_gen = get_master_db()
+    db = next(db_gen)
+
+    try:
+        service = LicenseService(db, master_db=db)
+
+        # 1. Save private key and update public key if provided
+        if private_key_pem:
+            KEYS_DIR.mkdir(parents=True, exist_ok=True)
+            private_path = KEYS_DIR / f"private_key_{DEFAULT_KEY_ID}.pem"
+
+            # Save private key if it doesn't exist or is different
+            if not private_path.exists() or private_path.read_text() != private_key_pem:
+                try:
+                    private_path.write_text(private_key_pem)
+                    os.chmod(private_path, 0o600)
+                    logger.info(f"Saved injected private key to {private_path}")
+
+                    # Also try to update/generate public key for consistency
+                    try:
+                        from cryptography.hazmat.primitives import serialization
+                        from cryptography.hazmat.backends import default_backend
+
+                        pk = serialization.load_pem_private_key(
+                            private_key_pem.encode(),
+                            password=None,
+                            backend=default_backend()
+                        )
+                        pub_key = pk.public_key()
+                        pub_pem = pub_key.public_bytes(
+                            encoding=serialization.Encoding.PEM,
+                            format=serialization.PublicFormat.SubjectPublicKeyInfo
+                        ).decode("utf-8")
+
+                        public_path = KEYS_DIR / f"public_key_{DEFAULT_KEY_ID}.pem"
+                        public_path.write_text(pub_pem)
+
+                        # Update the in-memory public keys dict
+                        PUBLIC_KEYS[DEFAULT_KEY_ID] = pub_pem
+                        logger.info(f"Updated public key from injected private key")
+                    except Exception as pk_err:
+                        logger.warning(f"Could not update public key from private key: {pk_err}")
+                except Exception as save_err:
+                    logger.error(f"Failed to save injected private key: {save_err}")
+
+        # 2. Sync Installation ID if provided
+        if installation_id:
+            global_info = db.query(GlobalInstallationInfo).first()
+            if not global_info:
+                global_info = GlobalInstallationInfo(
+                    installation_id=installation_id,
+                    license_status="invalid"
+                )
+                db.add(global_info)
+                logger.info(f"Initialized global installation with injected ID: {installation_id}")
+            elif global_info.installation_id != installation_id:
+                old_id = global_info.installation_id
+                global_info.installation_id = installation_id
+                logger.info(f"Synchronized global installation ID from {old_id} to {installation_id}")
+            db.commit()
+
+        # 3. Auto-activate license if requested
+        if license_key and auto_activate:
+            # Check if already licensed
+            global_info = db.query(GlobalInstallationInfo).first()
+            if global_info and global_info.is_licensed and global_info.license_key == license_key:
+                logger.info("License already active and matches injected key.")
+            else:
+                result = service.activate_global_license(license_key)
+                if result.get("success"):
+                    logger.info("✅ Successfully auto-activated injected license.")
+                else:
+                    logger.warning(f"❌ Failed to auto-activate injected license: {result.get('message')}")
+    except Exception as e:
+        logger.error(f"Error during license auto-activation: {str(e)}")
+    finally:
+        db.close()
 
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
@@ -193,6 +291,12 @@ async def app_lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Failed to initialize processing lock recovery: {str(e)}")
 
+        # Auto-activate license if injected via environment variables
+        try:
+            await auto_activate_license()
+        except Exception as e:
+            logger.error(f"Failed to auto-activate license on startup: {str(e)}")
+
         yield
     finally:
         # Stop reminder background service
@@ -251,9 +355,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     except Exception:
         body = b"Unable to read request body"
         logger.error("Could not read request body")
-    
+
     errors = serialize_validation_errors(exc.errors())
-    
+
     return JSONResponse(
         status_code=400,
         content={"detail": errors, "body": body.decode('utf-8', errors='replace') if body else ""}
@@ -263,9 +367,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 async def pydantic_validation_exception_handler(request: Request, exc: ValidationError):
     logger.error(f"Pydantic validation error on {request.method} {request.url.path}")
     logger.error(f"Validation errors: {exc.errors()}")
-    
+
     errors = serialize_validation_errors(exc.errors())
-    
+
     return JSONResponse(
         status_code=400,
         content={"detail": errors}
