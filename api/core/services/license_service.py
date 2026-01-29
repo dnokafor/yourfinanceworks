@@ -1221,9 +1221,20 @@ class LicenseService:
 
         payload = verification["payload"]
 
-        # REQUIRE GLOBAL SCOPE FOR GLOBAL ACTIVATION
+        # Extract installation ID first (needed for scope check)
+        license_installation_id = payload.get("installation_id") or payload.get("metadata", {}).get("installation_id")
+
+        # CHECK LICENSE SCOPE FOR GLOBAL ACTIVATION
         license_scope = payload.get("license_scope") or payload.get("metadata", {}).get("license_scope")
-        if license_scope != "global":
+
+        # Allow activation if:
+        # 1. Explicitly global scope, OR
+        # 2. No scope specified (treat as global for backward compatibility), OR
+        # 3. Scope is "system" (alternative global scope), OR
+        # 4. Scope is "local" but installation ID matches (for system-wide deployment)
+        if license_scope and license_scope not in ["global", "system"] and not (
+            license_scope == "local" and license_installation_id == global_info.installation_id
+        ):
             self._log_global_validation(
                 action="activate_global",
                 status="failed",
@@ -1239,8 +1250,6 @@ class LicenseService:
                 "message": "Only global system licenses can be activated globally.",
                 "error": "SCOPE_MISMATCH"
             }
-
-        license_installation_id = payload.get("installation_id") or payload.get("metadata", {}).get("installation_id")
 
         if not license_installation_id:
              return {"success": False, "message": "License missing installation ID", "error": "MISSING_ID"}
