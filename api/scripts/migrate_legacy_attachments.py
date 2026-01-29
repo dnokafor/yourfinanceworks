@@ -224,7 +224,7 @@ class LegacyAttachmentMigrator:
                         'expense_id': expense.id,
                         'filename': expense.receipt_filename,
                         'content_type': self._guess_content_type(expense.receipt_filename),
-                        'size_bytes': self._get_file_size(expense.receipt_path),
+                        'file_size': self._get_file_size(expense.receipt_path),
                         'file_path': expense.receipt_path,
                         'uploaded_by': expense.user_id or 1,
                         'uploaded_at': expense.created_at or datetime.now(timezone.utc)

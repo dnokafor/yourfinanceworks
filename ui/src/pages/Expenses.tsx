@@ -1738,7 +1738,7 @@ const Expenses = () => {
                     <li key={att.id} className="flex items-center justify-between gap-3 border rounded p-2">
                       <div className="truncate text-sm">
                         {att.filename}
-                        {att.size_bytes ? <span className="ml-2 text-xs text-muted-foreground">({Math.round(att.size_bytes / 1024)} KB)</span> : null}
+                        {att.file_size ? <span className="ml-2 text-xs text-muted-foreground">({Math.round(att.file_size / 1024)} KB)</span> : null}
                       </div>
                       <div className="flex items-center gap-2">
                         <Button

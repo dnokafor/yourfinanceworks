@@ -2972,7 +2972,7 @@ async def get_invoice_attachment_info(
             "has_attachment": has_attachment,
             "filename": invoice.attachment_filename,
             "content_type": content_type or "application/octet-stream",
-            "size_bytes": size_bytes,
+            "file_size": size_bytes,
         }
     except HTTPException:
         raise

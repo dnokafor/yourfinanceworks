@@ -1802,7 +1802,7 @@ async def upload_receipt(
             expense_id=expense_id,
             filename=file.filename,
             content_type=file.content_type,
-            size_bytes=file_size,
+            file_size=file_size,
             file_path=file_path,
             uploaded_by=current_user.id,
         )
@@ -1881,7 +1881,7 @@ async def list_expense_attachments(
             "id": att.id,
             "filename": att.filename,
             "content_type": att.content_type,
-            "size_bytes": att.size_bytes,
+            "file_size": att.file_size,
             "uploaded_at": att.uploaded_at.isoformat() if att.uploaded_at else None,
             "analysis_status": att.analysis_status,
             "analysis_error": att.analysis_error,

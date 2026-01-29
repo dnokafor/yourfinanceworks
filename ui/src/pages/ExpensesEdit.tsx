@@ -703,8 +703,8 @@ export default function ExpensesEdit() {
                               </div>
                             )}
                           </div>
-                          {att.size_bytes && (
-                            <span>{(att.size_bytes / 1024).toFixed(1)} KB</span>
+                          {att.file_size && (
+                            <span>{(att.file_size / 1024).toFixed(1)} KB</span>
                           )}
                         </div>
 

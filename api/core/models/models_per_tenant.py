@@ -292,7 +292,7 @@ class ExpenseAttachment(Base):
     expense_id = Column(Integer, ForeignKey("expenses.id", ondelete="CASCADE"), nullable=False)
     filename = Column(String, nullable=False)
     content_type = Column(String, nullable=True)
-    size_bytes = Column(Integer, nullable=True)
+    file_size = Column(Integer, nullable=True)
     file_path = Column(String, nullable=False)
     uploaded_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=True)

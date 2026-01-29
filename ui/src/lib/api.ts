@@ -488,7 +488,7 @@ export interface ExpenseAttachmentMeta {
   id: number;
   filename: string;
   content_type?: string;
-  size_bytes?: number;
+  file_size?: number;
   uploaded_at?: string;
   analysis_status?: 'not_started' | 'processing' | 'done' | 'failed';
   analysis_error?: string;
@@ -1910,7 +1910,7 @@ export const invoiceApi = {
     document.body.removeChild(form);
   },
   getAttachmentInfo: (invoiceId: number) =>
-    apiRequest<{ has_attachment: boolean; filename?: string; content_type?: string; size_bytes?: number }>(`/invoices/${invoiceId}/attachment-info`),
+    apiRequest<{ has_attachment: boolean; filename?: string; content_type?: string; file_size?: number }>(`/invoices/${invoiceId}/attachment-info`),
   previewAttachmentBlob: async (invoiceId: number, attachmentId?: number): Promise<Blob> => {
     const token = localStorage.getItem('token');
     const tenantId = localStorage.getItem('selected_tenant_id') || (() => {

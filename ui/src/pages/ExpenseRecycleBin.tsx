@@ -6,24 +6,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { expenseApi } from "@/lib/api";
+import { expenseApi, type DeletedExpense } from "@/lib/api";
 import { toast } from "sonner";
 import { formatDate } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
-interface DeletedExpense {
-  id: number;
-  amount: number;
-  currency: string;
-  expense_date: string;
-  category: string;
-  vendor: string;
-  status: string;
-  deleted_at: string;
-  deleted_by_username: string;
-  created_by_username: string;
-}
+
 
 const ExpenseRecycleBin = () => {
   const { t } = useTranslation();

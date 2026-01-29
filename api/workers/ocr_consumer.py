@@ -375,7 +375,7 @@ class ExpenseMessageHandler(BaseMessageHandler):
                             expense_id=expense.id,
                             filename=original_filename,
                             file_path=file_path,
-                            size_bytes=payload.get("file_size", 0),
+                            file_size=payload.get("file_size", 0),
                             content_type=content_type
                         )
                         db.add(attachment)
