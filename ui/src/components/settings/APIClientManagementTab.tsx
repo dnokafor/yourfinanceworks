@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ProfessionalCard,
@@ -91,6 +92,12 @@ const DOCUMENT_TYPES = [
   { value: 'statement', label: 'Statements' }
 ];
 
+const getDocumentTypes = (t: any) => [
+  { value: 'invoice', label: t('settings.api_keys.invoice') },
+  { value: 'expense', label: t('settings.api_keys.expense') },
+  { value: 'statement', label: t('settings.api_keys.statement') }
+];
+
 const OAUTH_SCOPES = [
   { value: 'read', label: 'Read Access' },
   { value: 'write', label: 'Write Access' },
@@ -103,6 +110,7 @@ const OAUTH_SCOPES = [
 ];
 
 export const APIClientManagementTab: React.FC = () => {
+  const { t } = useTranslation();
   return (
     <FeatureGate
       feature="external_api"
@@ -112,32 +120,31 @@ export const APIClientManagementTab: React.FC = () => {
             <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
               <Key className="w-8 h-8 text-blue-600 dark:text-blue-400" />
             </div>
-            <h3 className="text-2xl font-bold text-foreground mb-3">Business License Required</h3>
+            <h3 className="text-2xl font-bold text-foreground mb-3">{t('settings.api_keys.business_license_required')}</h3>
             <p className="text-muted-foreground mb-8 max-w-lg mx-auto leading-relaxed">
-              API keys enable external system integration and automation - a clear indicator of business use.
-              Upgrade to a business license to create and manage API keys for your integrations.
+              {t('settings.api_keys.business_license_description')}
             </p>
             <div className="bg-background/80 backdrop-blur-sm rounded-xl p-6 mb-8 max-w-lg mx-auto shadow-sm border border-border/50">
               <h4 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                 <Shield className="h-4 w-4 text-primary" />
-                With Business License, you get:
+                {t('settings.api_keys.with_business_license_you_get')}
               </h4>
               <ul className="text-left space-y-3 text-sm text-foreground/80">
                 <li className="flex items-start">
                   <div className="mr-3 p-0.5 bg-green-100 rounded-full mt-0.5"><div className="w-2 h-2 bg-green-600 rounded-full" /></div>
-                  <span>Create up to 2 API keys for external integrations</span>
+                  <span>{t('settings.api_keys.create_up_to_2_api_keys')}</span>
                 </li>
                 <li className="flex items-start">
                   <div className="mr-3 p-0.5 bg-green-100 rounded-full mt-0.5"><div className="w-2 h-2 bg-green-600 rounded-full" /></div>
-                  <span>Configurable rate limits and security settings</span>
+                  <span>{t('settings.api_keys.configurable_rate_limits')}</span>
                 </li>
                 <li className="flex items-start">
                   <div className="mr-3 p-0.5 bg-green-100 rounded-full mt-0.5"><div className="w-2 h-2 bg-green-600 rounded-full" /></div>
-                  <span>Webhook notifications for real-time updates</span>
+                  <span>{t('settings.api_keys.webhook_notifications')}</span>
                 </li>
                 <li className="flex items-start">
                   <div className="mr-3 p-0.5 bg-green-100 rounded-full mt-0.5"><div className="w-2 h-2 bg-green-600 rounded-full" /></div>
-                  <span>IP whitelisting for enhanced security</span>
+                  <span>{t('settings.api_keys.ip_whitelisting')}</span>
                 </li>
               </ul>
             </div>
@@ -147,14 +154,14 @@ export const APIClientManagementTab: React.FC = () => {
                 onClick={() => window.location.href = '/settings?tab=license'}
                 size="lg"
               >
-                Activate Business License
+                {t('settings.api_keys.activate_business_license')}
               </ProfessionalButton>
               <ProfessionalButton
                 variant="outline"
                 onClick={() => window.open('https://docs.example.com/api-keys', '_blank')}
                 size="lg"
               >
-                Learn More
+                {t('settings.api_keys.learn_more')}
               </ProfessionalButton>
             </div>
           </ProfessionalCardContent>
@@ -167,6 +174,7 @@ export const APIClientManagementTab: React.FC = () => {
 };
 
 const APIClientManagementContent: React.FC = () => {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showOAuthDialog, setShowOAuthDialog] = useState(false);
@@ -448,13 +456,13 @@ const APIClientManagementContent: React.FC = () => {
     return (
       <ProfessionalCard variant="elevated">
         <ProfessionalCardHeader>
-          <ProfessionalCardTitle>API Clients</ProfessionalCardTitle>
+          <ProfessionalCardTitle>{t('settings.api_keys.api_clients')}</ProfessionalCardTitle>
         </ProfessionalCardHeader>
         <ProfessionalCardContent>
           <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">
             <RotateCcw className="h-6 w-6 animate-spin mb-4 text-primary" />
-            <h3 className="text-lg font-semibold text-foreground mb-1">Loading API Clients</h3>
-            <p>Please wait while we load your API clients...</p>
+            <h3 className="text-lg font-semibold text-foreground mb-1">{t('settings.api_keys.loading_api_clients')}</h3>
+            <p>{t('settings.api_keys.please_wait_load_api_clients')}</p>
           </div>
         </ProfessionalCardContent>
       </ProfessionalCard>
@@ -472,11 +480,11 @@ const APIClientManagementContent: React.FC = () => {
                 <Key className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold tracking-tight">API Clients</h2>
+                <h2 className="text-2xl font-bold tracking-tight">{t('settings.api_keys.api_clients')}</h2>
                 <div className="flex items-center gap-3 text-muted-foreground mt-1">
-                  <p>Manage your API keys and OAuth clients</p>
+                  <p>{t('settings.api_keys.manage_api_keys_oauth')}</p>
                   <Badge variant={clients.length >= 2 ? "destructive" : clients.length > 0 ? "secondary" : "outline"}>
-                    {clients.length}/2 Used
+                    {clients.length}/2 {t('settings.api_keys.used')}
                   </Badge>
                 </div>
               </div>
@@ -491,21 +499,21 @@ const APIClientManagementContent: React.FC = () => {
                     className={cn("w-full md:w-auto", clients.length >= 2 && "opacity-50 cursor-not-allowed")}
                   >
                     <Plus className="w-4 h-4 mr-2" />
-                    Create API Key
+                    {t('settings.api_keys.create_api_key')}
                   </ProfessionalButton>
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle className="text-xl">Create New API Key</DialogTitle>
+                    <DialogTitle className="text-xl">{t('settings.api_keys.create_new_api_key')}</DialogTitle>
                     <DialogDescription>
-                      Create a new API key for programmatic access to the invoice system.
+                      {t('settings.api_keys.create_api_key_description')}
                     </DialogDescription>
                   </DialogHeader>
 
                   {clients.length === 1 && (
                     <Alert className="bg-blue-50 border-blue-200">
                       <AlertDescription className="text-blue-800">
-                        <strong>Note:</strong> You can create 1 more API key. Maximum limit is 2 API keys per account.
+                        <strong>{t('settings.api_keys.note_can_create_1_more')}</strong>
                       </AlertDescription>
                     </Alert>
                   )}
@@ -513,7 +521,7 @@ const APIClientManagementContent: React.FC = () => {
                   <div className="space-y-6 py-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <ProfessionalInput
-                        label="Client Name *"
+                        label={t('settings.api_keys.client_name')}
                         value={createForm.client_name}
                         onChange={(e) => setCreateForm({ ...createForm, client_name: e.target.value })}
                         placeholder="My Accounting System"
@@ -525,13 +533,13 @@ const APIClientManagementContent: React.FC = () => {
                             checked={createForm.is_sandbox}
                             onCheckedChange={(checked) => setCreateForm({ ...createForm, is_sandbox: checked })}
                           />
-                          <Label className="text-base font-medium">Sandbox Mode</Label>
+                          <Label className="text-base font-medium">{t('settings.api_keys.sandbox_mode')}</Label>
                         </div>
                       </div>
                     </div>
 
                     <ProfessionalTextarea
-                      label="Description"
+                      label={t('settings.api_keys.description')}
                       value={createForm.client_description}
                       onChange={(e) => setCreateForm({ ...createForm, client_description: e.target.value })}
                       placeholder="Integration with accounting software"
@@ -539,9 +547,9 @@ const APIClientManagementContent: React.FC = () => {
                     />
 
                     <div>
-                      <Label className="text-sm font-medium mb-3 block">Allowed Document Types *</Label>
+                      <Label className="text-sm font-medium mb-3 block">{t('settings.api_keys.allowed_document_types')}</Label>
                       <div className="flex flex-wrap gap-4">
-                        {DOCUMENT_TYPES.map((type) => (
+                        {getDocumentTypes(t).map((type) => (
                           <div key={type.value} className="flex items-center space-x-2 bg-card p-3 rounded-lg border border-border/50 shadow-sm">
                             <Switch
                               id={type.value}
@@ -558,19 +566,19 @@ const APIClientManagementContent: React.FC = () => {
 
                     <div className="grid grid-cols-3 gap-4">
                       <ProfessionalInput
-                        label="Rate Limit (Per Minute)"
+                        label={t('settings.api_keys.rate_limit_per_minute')}
                         type="number"
                         value={createForm.rate_limit_per_minute}
                         onChange={(e) => setCreateForm({ ...createForm, rate_limit_per_minute: parseInt(e.target.value) })}
                       />
                       <ProfessionalInput
-                        label="Rate Limit (Per Hour)"
+                        label={t('settings.api_keys.rate_limit_per_hour')}
                         type="number"
                         value={createForm.rate_limit_per_hour}
                         onChange={(e) => setCreateForm({ ...createForm, rate_limit_per_hour: parseInt(e.target.value) })}
                       />
                       <ProfessionalInput
-                        label="Rate Limit (Per Day)"
+                        label={t('settings.api_keys.rate_limit_per_day')}
                         type="number"
                         value={createForm.rate_limit_per_day}
                         onChange={(e) => setCreateForm({ ...createForm, rate_limit_per_day: parseInt(e.target.value) })}
@@ -579,7 +587,7 @@ const APIClientManagementContent: React.FC = () => {
 
                     <div className="grid grid-cols-2 gap-4">
                       <ProfessionalInput
-                        label="Max Transaction Amount"
+                        label={t('settings.api_keys.max_transaction_amount')}
                         type="number"
                         step="0.01"
                         value={createForm.max_transaction_amount || ''}
@@ -587,23 +595,23 @@ const APIClientManagementContent: React.FC = () => {
                           ...createForm,
                           max_transaction_amount: e.target.value ? parseFloat(e.target.value) : undefined
                         })}
-                        placeholder="No limit"
+                        placeholder={t('settings.api_keys.no_limit')}
                         leftIcon={<span className="text-muted-foreground">$</span>}
                       />
                       <ProfessionalInput
-                        label="Expires in Days"
+                        label={t('settings.api_keys.expires_in_days')}
                         type="number"
                         value={createForm.expires_in_days || ''}
                         onChange={(e) => setCreateForm({
                           ...createForm,
                           expires_in_days: e.target.value ? parseInt(e.target.value) : undefined
                         })}
-                        placeholder="Never"
+                        placeholder={t('settings.api_keys.never')}
                       />
                     </div>
 
                     <ProfessionalInput
-                      label="Webhook URL"
+                      label={t('settings.api_keys.webhook_url')}
                       value={createForm.webhook_url}
                       onChange={(e) => setCreateForm({ ...createForm, webhook_url: e.target.value })}
                       placeholder="https://your-app.com/webhooks/invoice-system"
@@ -611,7 +619,7 @@ const APIClientManagementContent: React.FC = () => {
                     />
 
                     <div>
-                      <Label className="text-sm font-medium mb-2 block">Allowed IP Addresses</Label>
+                      <Label className="text-sm font-medium mb-2 block">{t('settings.api_keys.allowed_ip_addresses')}</Label>
                       <div className="flex gap-2">
                         <ProfessionalInput
                           value={ipAddressInput}
@@ -620,7 +628,7 @@ const APIClientManagementContent: React.FC = () => {
                           className="flex-1"
                         />
                         <ProfessionalButton type="button" onClick={addIpAddress} variant="outline">
-                          Add
+                          {t('settings.api_keys.add')}
                         </ProfessionalButton>
                       </div>
                       {createForm.allowed_ip_addresses && createForm.allowed_ip_addresses.length > 0 && (
@@ -636,10 +644,10 @@ const APIClientManagementContent: React.FC = () => {
 
                     <DialogFooter>
                       <ProfessionalButton variant="ghost" onClick={() => setShowCreateDialog(false)}>
-                        Cancel
+                        {t('settings.api_keys.cancel')}
                       </ProfessionalButton>
                       <ProfessionalButton variant="gradient" onClick={createApiKey}>
-                        Create API Key
+                        {t('settings.api_keys.create_api_key')}
                       </ProfessionalButton>
                     </DialogFooter>
                   </div>
@@ -681,23 +689,23 @@ const APIClientManagementContent: React.FC = () => {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-green-600">
                 <CheckCircle2 className="h-6 w-6" />
-                API Key Generated Successfully
+                {t('settings.api_keys.api_key_generated_successfully')}
               </DialogTitle>
               <DialogDescription>
-                Your new API key has been generated. Please copy and save it securely as it won't be shown again.
+                {t('settings.api_keys.api_key_generated_description')}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-6 pt-4">
               <Alert className="bg-amber-50 border-amber-200">
                 <LockKeyhole className="h-4 w-4 text-amber-600" />
                 <AlertDescription className="text-amber-800 font-medium">
-                  Please copy and save this API key securely. It will not be shown again for security reasons.
+                  {t('settings.api_keys.copy_and_save_securely')}
                 </AlertDescription>
               </Alert>
 
               <div className="space-y-4">
                 <ProfessionalInput
-                  label="Client ID"
+                  label={t('settings.api_keys.client_id')}
                   value={showApiKey.client_id}
                   readOnly
                   rightIcon={
@@ -713,7 +721,7 @@ const APIClientManagementContent: React.FC = () => {
                 />
 
                 <div className="space-y-2">
-                  <Label>API Key</Label>
+                  <Label>{t('settings.api_keys.api_key')}</Label>
                   <div className="flex gap-2">
                     <code className="flex-1 bg-muted p-3 rounded-lg border font-mono text-sm break-all">
                       {showApiKey.api_key}
@@ -730,19 +738,19 @@ const APIClientManagementContent: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg border border-border/50">
                   <div>
-                    <span className="text-sm font-semibold block mb-2">Rate Limits</span>
+                    <span className="text-sm font-semibold block mb-2">{t('settings.api_keys.rate_limits')}</span>
                     <ul className="space-y-1.5 text-sm text-muted-foreground">
-                      <li className="flex justify-between"><span>Per minute:</span> <span className="font-mono text-foreground">{showApiKey.rate_limits.per_minute}</span></li>
-                      <li className="flex justify-between"><span>Per hour:</span> <span className="font-mono text-foreground">{showApiKey.rate_limits.per_hour}</span></li>
-                      <li className="flex justify-between"><span>Per day:</span> <span className="font-mono text-foreground">{showApiKey.rate_limits.per_day}</span></li>
+                      <li className="flex justify-between"><span>{t('settings.api_keys.per_minute')}</span> <span className="font-mono text-foreground">{showApiKey.rate_limits.per_minute}</span></li>
+                      <li className="flex justify-between"><span>{t('settings.api_keys.per_hour')}</span> <span className="font-mono text-foreground">{showApiKey.rate_limits.per_hour}</span></li>
+                      <li className="flex justify-between"><span>{t('settings.api_keys.per_day')}</span> <span className="font-mono text-foreground">{showApiKey.rate_limits.per_day}</span></li>
                     </ul>
                   </div>
                   <div>
-                    <span className="text-sm font-semibold block mb-2">Document Types</span>
+                    <span className="text-sm font-semibold block mb-2">{t('settings.api_keys.document_types')}</span>
                     <div className="flex flex-wrap gap-1.5">
                       {showApiKey.allowed_document_types.map((type) => (
                         <Badge key={type} variant="secondary" className="text-xs">
-                          {type}
+                          {t(`settings.api_keys.${type}`)}
                         </Badge>
                       ))}
                     </div>
@@ -752,7 +760,7 @@ const APIClientManagementContent: React.FC = () => {
 
               <DialogFooter>
                 <ProfessionalButton onClick={() => setShowApiKey(null)} variant="gradient" className="w-full sm:w-auto">
-                  I've Saved the Key
+                  {t('settings.api_keys.ive_saved_the_key')}
                 </ProfessionalButton>
               </DialogFooter>
             </div>
@@ -870,9 +878,9 @@ const APIClientManagementContent: React.FC = () => {
               <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mb-6">
                 <Key className="w-10 h-10 text-muted-foreground/50" />
               </div>
-              <h3 className="text-2xl font-bold text-foreground mb-3">No API Clients Found</h3>
+              <h3 className="text-2xl font-bold text-foreground mb-3">{t('settings.api_keys.no_api_clients_found')}</h3>
               <p className="text-muted-foreground mb-8 max-w-md">
-                Get started by creating your first API key to enable external integrations. You can create up to 2 API keys per account.
+                {t('settings.api_keys.get_started_create_first_api_key')}
               </p>
               <ProfessionalButton
                 onClick={() => setShowCreateDialog(true)}
@@ -881,7 +889,7 @@ const APIClientManagementContent: React.FC = () => {
                 className="shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all"
               >
                 <Key className="w-5 h-5 mr-2" />
-                Create Your First API Key
+                {t('settings.api_keys.create_your_first_api_key')}
               </ProfessionalButton>
             </ProfessionalCardContent>
           </ProfessionalCard>

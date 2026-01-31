@@ -566,9 +566,9 @@ const AIConfigContent: React.FC<AIConfigTabProps> = ({
                             <div>
                                 <h3 className="text-lg font-semibold flex items-center gap-2">
                                     <ShieldCheck className="w-5 h-5 text-primary" />
-                                    Review Worker Settings
+                                    {t('settings.ai_config.review_worker_settings')}
                                 </h3>
-                                <p className="text-sm text-muted-foreground">Automatically review processed documents for potential inaccuracies.</p>
+                                <p className="text-sm text-muted-foreground">{t('settings.ai_config.review_worker_description')}</p>
                             </div>
                         </div>
 
@@ -576,9 +576,9 @@ const AIConfigContent: React.FC<AIConfigTabProps> = ({
                             <div className="flex items-start gap-3">
                                 <Zap className="w-5 h-5 text-yellow-600 mt-0.5" />
                                 <div className="space-y-1">
-                                    <h4 className="font-semibold text-yellow-800 dark:text-yellow-400">AI Usage Notice</h4>
+                                    <h4 className="font-semibold text-yellow-800 dark:text-yellow-400">{t('settings.ai_config.ai_usage_notice')}</h4>
                                     <p className="text-sm text-yellow-700 dark:text-yellow-500/80">
-                                        Enabling the Review Worker will perform a secondary AI analysis on every document, which will double your AI costs for processing.
+                                        {t('settings.ai_config.ai_usage_notice_description')}
                                     </p>
                                 </div>
                             </div>
@@ -586,8 +586,8 @@ const AIConfigContent: React.FC<AIConfigTabProps> = ({
 
                         <div className="flex items-center justify-between p-6 bg-muted/20 rounded-xl border border-border/50">
                             <div className="space-y-1">
-                                <Label htmlFor="review_worker" className="text-base font-semibold">Enable Review Worker</Label>
-                                <p className="text-sm text-muted-foreground">Background AI agent will verify extraction results.</p>
+                                <Label htmlFor="review_worker" className="text-base font-semibold">{t('settings.ai_config.enable_review_worker')}</Label>
+                                <p className="text-sm text-muted-foreground">{t('settings.ai_config.enable_review_worker_description')}</p>
                             </div>
                             <Switch
                                 id="review_worker"
@@ -604,7 +604,7 @@ const AIConfigContent: React.FC<AIConfigTabProps> = ({
                                         checked={reviewerConfig.use_custom_config}
                                         onCheckedChange={(checked) => setReviewerConfig((prev: any) => ({ ...prev, use_custom_config: checked }))}
                                     />
-                                    <Label htmlFor="use_custom_reviewer">Use Custom Reviewer AI Configuration</Label>
+                                    <Label htmlFor="use_custom_reviewer">{t('settings.ai_config.use_custom_reviewer_ai_configuration')}</Label>
                                 </div>
 
                                 {reviewerConfig.use_custom_config && (
@@ -615,7 +615,7 @@ const AIConfigContent: React.FC<AIConfigTabProps> = ({
                                             onCheckedChange={(checked) => setReviewerConfig((prev: any) => ({ ...prev, use_for_extraction: checked }))}
                                         />
                                         <Label htmlFor="use_for_extraction" className="flex items-center gap-1.5">
-                                            Use Reviewer model for extraction pass
+                                            {t('settings.ai_config.use_reviewer_model_for_extraction_pass')}
                                             <Badge variant="outline" className="text-[10px] h-4 px-1.5 font-normal">Pass 1</Badge>
                                         </Label>
                                     </div>
@@ -628,7 +628,7 @@ const AIConfigContent: React.FC<AIConfigTabProps> = ({
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-muted/30 rounded-xl border border-border/50">
                                         <div className="space-y-2">
-                                            <Label>Reviewer Provider</Label>
+                                            <Label>{t('settings.ai_config.reviewer_provider')}</Label>
                                             <Select
                                                 value={reviewerConfig.config.provider_name}
                                                 onValueChange={(value) => setReviewerConfig((prev: any) => ({
@@ -649,7 +649,7 @@ const AIConfigContent: React.FC<AIConfigTabProps> = ({
                                             </Select>
                                         </div>
                                         <div className="space-y-2">
-                                            <Label>Model Name</Label>
+                                            <Label>{t('settings.ai_config.reviewer_model_name')}</Label>
                                             <Input
                                                 value={reviewerConfig.config.model_name}
                                                 onChange={(e) => setReviewerConfig((prev: any) => ({
@@ -660,7 +660,7 @@ const AIConfigContent: React.FC<AIConfigTabProps> = ({
                                             />
                                         </div>
                                         <div className="space-y-2 md:col-span-2">
-                                            <Label>API Key (Optional override)</Label>
+                                            <Label>{t('settings.ai_config.reviewer_api_key_optional_override')}</Label>
                                             <Input
                                                 type="password"
                                                 value={reviewerConfig.config.api_key}
@@ -683,14 +683,14 @@ const AIConfigContent: React.FC<AIConfigTabProps> = ({
                                 disabled={isTriggeringReview}
                                 leftIcon={<RotateCcw className="h-4 w-4" />}
                             >
-                                View Review Progress
+                                {t('settings.ai_config.view_review_progress')}
                             </ProfessionalButton>
                             <ProfessionalButton
                                 onClick={() => saveReviewerSettingsMutation.mutate()}
                                 disabled={saveReviewerSettingsMutation.isPending}
                                 loading={saveReviewerSettingsMutation.isPending}
                             >
-                                Save Reviewer Settings
+                                {t('settings.ai_config.save_reviewer_settings')}
                             </ProfessionalButton>
                         </div>
                     </div>
