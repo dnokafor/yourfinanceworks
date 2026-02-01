@@ -270,7 +270,7 @@ export default function ExpensesView() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>{t('expenses.details')}</CardTitle>
-                {((form as any)?.analysis_status || (attachments && attachments.length > 0)) && 
+                {attachments && attachments.length > 0 &&
                   form.status !== 'pending_approval' && form.status !== 'approved' && (
                   <Button
                     variant="outline"
