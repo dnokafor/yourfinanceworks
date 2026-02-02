@@ -287,15 +287,17 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
     logger = logging.getLogger("registration")
     logger.info(f"Starting registration for {user.email}")
 
+    # Check if this is the first user in the entire system (Global Super Admin)
+    user_total_count = db.query(MasterUser).count()
+    is_global_first_user = user_total_count == 0
+
     # Check global signup controls
     from core.services.license_service import LicenseService
     license_service = LicenseService(db, master_db=db)
     license_status = license_service.get_license_status()
 
     if not license_status.get("allow_password_signup", True):
-        # We also want to check if it's the first global user, they should always be allowed
-        user_total_count = db.query(MasterUser).count()
-        if user_total_count > 0:
+        if not is_global_first_user:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Public registration is currently disabled. Please contact an administrator."
@@ -413,7 +415,7 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
             # Count tenants that count against the license
             current_tenants_count = db.query(Tenant).filter(Tenant.count_against_license == True).count()
 
-            if current_tenants_count >= max_tenants:
+            if not is_global_first_user and current_tenants_count >= max_tenants:
                 logger.error(f"Tenant limit reached: {current_tenants_count} >= {max_tenants}")
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -446,10 +448,6 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
         is_global_first_user = False  # Existing users are never the first global user
         logger.info(f"Using existing user {db_user.id} for {user.email}")
     else:
-        # Check if this is the first user in the entire system (Global Super Admin)
-        user_total_count = db.query(MasterUser).count()
-        is_global_first_user = user_total_count == 0
-
         # Determine if this user is the first one in the organization they just created
         is_org_first_user = not user.tenant_id
 
@@ -507,7 +505,7 @@ async def register(user: UserCreate, db: Session = Depends(get_master_db)):
             # Gating check
             # Only bypass license check for the FIRST user in the ENTIRE SYSTEM (global first user)
             # Not for every organization creator
-            if not (config.IGNORE_LICENSE_FOR_FIRST_SSO_USER and is_global_first_user):
+            if not is_global_first_user:
                 # Basic password registration is a core feature and doesn't require additional licensing
                 # Only check for commercial features, not basic user registration
                 pass

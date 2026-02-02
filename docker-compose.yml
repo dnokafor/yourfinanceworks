@@ -63,7 +63,6 @@ services:
       # Other settings
       - DEBUG=${DEBUG:-False}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - IGNORE_LICENSE_FOR_FIRST_SSO_USER=${IGNORE_LICENSE_FOR_FIRST_SSO_USER:-false}
       # License configuration (auto-activation)
       - LICENSE_KEY=${LICENSE_KEY:-}
       - INSTALLATION_ID=${INSTALLATION_ID:-inst-8c01b1afecff8981}
