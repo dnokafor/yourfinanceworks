@@ -163,6 +163,7 @@ services:
       - /app/venv
       - ./infra/docker/wait-for-it.sh:/wait-for-it.sh
       - encryption_keys:/app/keys
+      - license_keys:/app/core/keys
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 5s
@@ -318,6 +319,7 @@ services:
     volumes:
       - ./api:/app
       - encryption_keys:/app/keys
+      - license_keys:/app/core/keys
     command: ["python", "-m", "workers.ocr_consumer"]
 
   # Audit Worker for AI forensic analysis and fraud detection
@@ -364,6 +366,7 @@ services:
     volumes:
       - ./api:/app
       - encryption_keys:/app/keys
+      - license_keys:/app/core/keys
     command: ["python", "workers/audit_consumer.py"]
 
   # Email Worker for fetching and processing emails
@@ -412,6 +415,7 @@ services:
     volumes:
       - ./api:/app
       - encryption_keys:/app/keys
+      - license_keys:/app/core/keys
     command: ["python", "-m", "workers.email_processor"]
 
   # Review Worker for background AI verification
@@ -452,6 +456,7 @@ services:
     volumes:
       - ./api:/app
       - encryption_keys:/app/keys
+      - license_keys:/app/core/keys
     command: ["python", "-m", "workers.review_processor"]
 
   # # Ollama AI service
@@ -540,6 +545,7 @@ volumes:
   kafka_data:
   opensearch_data:
   encryption_keys:
+  license_keys:
 
 networks:
   invoice_app_network:
