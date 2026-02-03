@@ -9,7 +9,7 @@
 ### Current Dual License Model
 
 Your application uses:
-1. **GPLv3** - Open source license (copyleft)
+1. **AGPLv3** - Open source license (copyleft)
 2. **Commercial License** - Proprietary use without GPL restrictions
 
 ### Personal Free Use Integration
@@ -17,28 +17,28 @@ Your application uses:
 Personal free use works as a **third licensing tier** that complements the dual license:
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    YOUR SOFTWARE                         │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
-│  │   GPLv3      │  │   Personal   │  │  Commercial  │ │
-│  │   License    │  │   Free Use   │  │   License    │ │
-│  └──────────────┘  └──────────────┘  └──────────────┘ │
-│                                                          │
+┌────────────────────────────────────────────────────────┐
+│                    YOUR SOFTWARE                       │
+├────────────────────────────────────────────────────────┤
+│                                                        │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │   AGPLv3     │  │   Personal   │  │  Commercial  │  │
+│  │   License    │  │   Free Use   │  │   License    │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+│                                                        │
 │  Open Source      Self-Hosted       Proprietary Use    │
 │  Community        Personal Use      Business Use       │
 │  Modifications    No Restrictions   No GPL Obligations │
 │  Must Share       Free Forever      Paid License       │
-└─────────────────────────────────────────────────────────┘
+└────────────────────────────────────────────────────────┘
 ```
 
 ### Legal Framework
 
-#### 1. GPLv3 License (Open Source)
+#### 1. AGPLv3 License (Open Source)
 - **Who**: Developers, contributors, open source community
 - **Rights**: Can modify, distribute, use freely
-- **Obligations**: Must share modifications under GPLv3
+- **Obligations**: Must share modifications under AGPLv3
 - **Use Case**: Building on top, contributing back, learning
 
 #### 2. Personal Free Use (Self-Hosted)
@@ -57,7 +57,7 @@ Personal free use works as a **third licensing tier** that complements the dual 
 ### Why This Works Legally
 
 As the **copyright holder**, you can:
-1. Release under GPLv3 (open source)
+1. Release under AGPLv3 (open source)
 2. Grant personal use rights separately (free tier)
 3. Sell commercial licenses (paid tier)
 

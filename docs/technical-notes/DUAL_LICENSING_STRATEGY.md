@@ -2,14 +2,14 @@
 
 ## Overview
 
-This document outlines the transition from a Freemium model to a **Dual-Licensing Open Source Strategy** for the {APP_NAME} (IMS). This strategy aligns with the goal of open-sourcing the core product under **GPLv3** while sustaining the business through a **Commercial License** for proprietary enterprise modules.
+This document outlines the transition from a Freemium model to a **Dual-Licensing Open Source Strategy** for the {APP_NAME} (IMS). This strategy aligns with the goal of open-sourcing the core product under **AGPLv3** while sustaining the business through a **Commercial License** for proprietary enterprise modules.
 
 ---
 
 ## ⚖️ The Licensing Model
 
-### 1. Core Edition (GPLv3)
-**License:** GNU General Public License v3 (GPLv3)
+### 1. Core Edition (AGPLv3)
+**License:** GNU Affero General Public License v3 (AGPLv3)
 **Repository:** Public (e.g., GitHub)
 **Cost:** Free
 
@@ -42,13 +42,13 @@ The **Business Edition** consists of **Commercial Modules** that are installed o
 
 ## 🏗️ Technical Architecture: Core vs. Commercial
 
-To comply with GPLv3 and protect proprietary IP, the codebase will be physically separated.
+To comply with AGPLv3 and protect proprietary IP, the codebase will be physically separated.
 
 ### Directory Structure
 ```
 invoice_app/
 ├── api/
-│   ├── core/                  # GPLv3 Licensed Code
+│   ├── core/                  # AGPLv3 Licensed Code
 │   │   ├── routers/           # Core endpoints (invoices, expenses, ai)
 │   │   ├── services/          # Core logic
 │   │   └── models/            # Database models
@@ -61,7 +61,7 @@ invoice_app/
 ```
 
 ### Licensing Mechanism
-1. **Default State:** Application runs in "Core Mode" (GPLv3).
+1. **Default State:** Application runs in "Core Mode" (AGPLv3).
 2. **Activation:** Admin enters a **Commercial License Key**.
 3. **Validation:** System verifies the key against the License Server.
 4. **Loading:** If valid, the system dynamically loads/enables the **Commercial Modules**.
@@ -70,7 +70,7 @@ invoice_app/
 
 ## 🔄 Conversion Strategy
 
-### From Personal (Free) to Core (GPLv3)
+### From Personal (Free) to Core (AGPLv3)
 - **Existing Free Users** automatically become **Core Edition** users.
 - **No loss of functionality:** They retain all core features, including unlimited AI.
 - **Messaging:** "You are using the Open Source Core Edition."
@@ -97,7 +97,7 @@ We retain the "Upgrade to Business" prompts, but the messaging shifts from "Unlo
 1. **Refactor Codebase:** Separate `core` and `commercial` directories.
 2. **Update Feature Config:** Replace `personal_allowed` with `license_tier: 'core' | 'commercial'`.
 3. **Implement License Loader:** Logic to load commercial modules only when a valid license is present.
-4. **Open Source Release:** Publish `core` to public repository with GPLv3 license.
+4. **Open Source Release:** Publish `core` to public repository with AGPLv3 license.
 
 ### Phase 2: User Experience
 1. **Update UI:** Rename "Personal" to "Core Edition" and "Business" to "Business Edition".
@@ -114,7 +114,7 @@ We retain the "Upgrade to Business" prompts, but the messaging shifts from "Unlo
 ## 💰 Long-Term Viability
 
 This model ensures:
-1. **Compliance:** Strict separation satisfies GPLv3 requirements.
+1. **Compliance:** Strict separation satisfies AGPLv3 requirements.
 2. **Community:** Open sourcing the core attracts developers and users.
 3. **Revenue:** Enterprise features remain protected and monetized.
 4. **Sustainability:** A clear path from free user to paying customer.

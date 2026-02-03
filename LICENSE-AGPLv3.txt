@@ -1,5 +1,16 @@
 NOTICE: This project uses a split-licensing model.
-The GNU Affero General Public License v3.0 (AGPL-3.0) applies to all files within the 'api/core/' and 'ui/' directories, as well as shared root configuration files, unless otherwise specified.
+The GNU Affero General Public License v3.0 (AGPL-3.0) applies to all files within the 'api/core/' and 'ui/' directories, as well as the following root files unless otherwise specified:
+- CHANGELOG.md
+- CLA.md
+- CODE_OF_CONDUCT.md
+- CONTRIBUTING.md
+- README.md
+- SECURITY.md
+- SUPPORT.md
+- TESTING.md
+- docker-compose.yml
+- env.test
+- run-tests.sh
 Files within the 'api/commercial/' directory are NOT covered by this license and are subject to the terms of the Commercial License (see LICENSE-COMMERCIAL.txt).
 
                     GNU AFFERO GENERAL PUBLIC LICENSE

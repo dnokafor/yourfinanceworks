@@ -41,7 +41,7 @@ All commercial features are correctly located in the `api/commercial/` directory
 
 ## Updated Feature List
 
-### GPLv3 Features (Core - No Gating)
+### AGPLv3 Features (Core - No Gating)
 
 ✅ **Available to all users without license**:
 

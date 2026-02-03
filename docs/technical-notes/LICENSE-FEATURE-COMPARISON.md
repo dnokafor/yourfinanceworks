@@ -6,7 +6,7 @@ This document provides a comprehensive overview of features available under each
 
 - [License Overview](#license-overview)
 - [Quick Comparison Table](#quick-comparison-table)
-- [GPLv3 Features (Core)](#gplv3-features-core)
+- [AGPLv3 Features (Core)](#agplv3-features-core)
 - [Commercial Features](#commercial-features)
 - [Code Organization](#code-organization)
 - [Important Legal Notes](#important-legal-notes)
@@ -17,13 +17,13 @@ This document provides a comprehensive overview of features available under each
 
 YourFinanceWORKS is **dual-licensed** under two options:
 
-### 1. GNU General Public License v3 (GPLv3)
+### 1. GNU Affero General Public License v3 (AGPLv3)
 
-- **License File**: [`LICENSE-GPLv3.txt`](LICENSE-GPLv3.txt)
+- **License File**: [`LICENSE-AGPLv3.txt`](LICENSE-AGPLv3.txt)
 - **Code Location**: `api/core/`
 - **Use Case**: Open source projects, community use, learning
 - **Requirements**:
-  - Derivative works must be licensed under GPLv3
+  - Derivative works must be licensed under AGPLv3
   - Source code must be shared
   - Cannot be integrated into proprietary software
 - **Cost**: Free
@@ -43,7 +43,7 @@ YourFinanceWORKS is **dual-licensed** under two options:
 
 ## Quick Comparison Table
 
-| Feature Category                | GPLv3 (Core)              | Commercial                                               |
+| Feature Category                | AGPLv3 (Core)              | Commercial                                               |
 | ------------------------------- | ------------------------- | -------------------------------------------------------- |
 | **Basic Financial Management**  | ✅ Full                   | ✅ Full                                                  |
 | **Client & Invoice Management** | ✅ Full                   | ✅ Full                                                  |
@@ -69,9 +69,9 @@ YourFinanceWORKS is **dual-licensed** under two options:
 
 ---
 
-## GPLv3 Features (Core)
+## AGPLv3 Features (Core)
 
-All features in `api/core/` are available under the GPLv3 license.
+All features in `api/core/` are available under the AGPLv3 license.
 
 ### 🏦 Financial Management
 
@@ -523,7 +523,7 @@ All features in `api/commercial/` require a commercial license.
 
 ```text
 api/
-├── core/                          # GPLv3 Licensed
+├── core/                          # AGPLv3 Licensed
 │   ├── constants/                 # System constants
 │   ├── decorators/                # Utility decorators
 │   ├── exceptions/                # Custom exceptions
@@ -550,22 +550,22 @@ api/
 
 ### File Count Summary
 
-| Location          | Routers | Services | Total Files |
-| ----------------- | ------- | -------- | ----------- |
-| **GPLv3 (core/)** | 30      | 88       | 200+        |
-| **Commercial**    | 7       | 10+      | 50+         |
+| Location           | Routers | Services | Total Files |
+| ------------------ | ------- | -------- | ----------- |
+| **AGPLv3 (core/)** | 30      | 88       | 200+        |
+| **Commercial**     | 7       | 10+      | 50+         |
 
 ---
 
 ## Important Legal Notes
 
-### ⚠️ GPLv3 Copyleft Requirements
+### ⚠️ AGPLv3 Copyleft Requirements
 
-If you use the GPLv3 version:
+If you use the AGPLv3 version:
 
-1. **Source Code Sharing**: You must make your source code available to users
-2. **License Propagation**: Any derivative work must also be licensed under GPLv3
-3. **No Proprietary Integration**: You cannot integrate GPLv3 code into proprietary software
+1. **Source Code Sharing**: You must make your source code available to users, including users who access it over a network
+2. **License Propagation**: Any derivative work must also be licensed under AGPLv3
+3. **No Proprietary Integration**: You cannot integrate AGPLv3 code into proprietary software
 4. **Attribution**: You must maintain copyright notices and license information
 
 ### ✅ Commercial License Benefits
@@ -582,16 +582,16 @@ If you purchase a commercial license:
 
 #### Moving Features Between Licenses
 
-- **❌ CANNOT**: Take GPLv3 code and make it commercial-only
-- **❌ CANNOT**: Remove features from GPLv3 version after public release
-- **❌ CANNOT**: Relicense GPLv3 code as proprietary
+- **❌ CANNOT**: Take AGPLv3 code and make it commercial-only
+- **❌ CANNOT**: Remove features from AGPLv3 version after public release
+- **❌ CANNOT**: Relicense AGPLv3 code as proprietary
 
 #### What You CAN Do
 
 - **✅ CAN**: Dual-license NEW code from the start
-- **✅ CAN**: Move commercial features to GPLv3 (as a gift to community)
+- **✅ CAN**: Move commercial features to AGPLv3 (as a gift to community)
 - **✅ CAN**: Rewrite features independently for commercial version
-- **✅ CAN**: Keep minimal features in GPLv3, advanced in commercial
+- **✅ CAN**: Keep minimal features in AGPLv3, advanced in commercial
 
 ### 📞 Getting a Commercial License
 
@@ -614,7 +614,7 @@ To obtain a commercial license:
 
 For licensing questions:
 
-- **GPLv3 Questions**: See [LICENSE-GPLv3.txt](LICENSE-GPLv3.txt)
+- **AGPLv3 Questions**: See [LICENSE-AGPLv3.txt](LICENSE-AGPLv3.txt)
 - **Commercial Questions**: See [LICENSE-COMMERCIAL.txt](LICENSE-COMMERCIAL.txt)
 - **General Questions**: Contact [YOUR EMAIL ADDRESS]
 

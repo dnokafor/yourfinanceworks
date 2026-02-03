@@ -306,7 +306,21 @@ POST /api/v1/email/send-invoice
 
 - Python 3.11+
 - Node.js 18+
-- Docker (optional)
+- Docker (optional, but recommended)
+- **Ollama** (optional - for local LLM inference)
+
+  If you want to run AI features locally without cloud API costs:
+
+  ```bash
+  # Start Ollama server with optimized settings
+  OLLAMA_CONTEXT_LENGTH=64000 OLLAMA_HOST=0.0.0.0 OLLAMA_NUM_PARALLEL=2 ollama serve &
+
+  # Pull required models
+  ollama pull llama3.2-vision:11b  # For OCR and expense processing
+  ollama pull gpt-oss:latest       # For invoice and bank statement processing
+  ```
+
+  > **Note**: When using Docker Compose, Ollama should be running on your **host machine** (not in a container). The application will connect to it via `host.docker.internal:11434`.
 
 ### Installation
 
