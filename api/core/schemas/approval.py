@@ -11,6 +11,38 @@ class ApprovalStatus(str, Enum):
     REJECTED = "rejected"
 
 
+class ApprovalRuleCreate(BaseModel):
+    """Schema for creating approval rules"""
+    name: str = Field(..., description="Name of the approval rule")
+    description: Optional[str] = Field(None, description="Description of the rule")
+    amount_threshold: float = Field(..., description="Amount threshold for triggering approval")
+    currency: str = Field("USD", description="Currency for the threshold")
+    is_active: bool = Field(True, description="Whether the rule is active")
+
+
+class ApprovalRuleUpdate(BaseModel):
+    """Schema for updating approval rules"""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    amount_threshold: Optional[float] = None
+    currency: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class ApprovalRule(BaseModel):
+    """Schema for approval rule responses"""
+    id: int
+    name: str
+    description: Optional[str] = None
+    amount_threshold: float
+    currency: str
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 
 class ExpenseApprovalBase(BaseModel):
     """Base schema for expense approvals"""

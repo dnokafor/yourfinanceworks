@@ -1,5 +1,5 @@
 """
-Pytest configuration and fixtures for inventory testing
+Pytest configuration and fixtures for inventory and investment testing
 """
 import pytest
 from unittest.mock import Mock
@@ -11,6 +11,16 @@ from fastapi.testclient import TestClient
 from core.models.models_per_tenant import Base
 from main import app
 
+# Import investment models to ensure they're registered with the Base
+try:
+    from plugins.investments.models import (
+        InvestmentPortfolio, InvestmentHolding, InvestmentTransaction,
+        PortfolioType, SecurityType, AssetClass, TransactionType, DividendType
+    )
+    INVESTMENT_MODELS_AVAILABLE = True
+except ImportError:
+    INVESTMENT_MODELS_AVAILABLE = False
+
 # Create in-memory SQLite database for TestingSessionLocal
 engine = create_engine(
     "sqlite:///:memory:",
@@ -20,7 +30,7 @@ engine = create_engine(
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Create all tables once for TestingSessionLocal
+# Create all tables once for TestingSessionLocal (including investment tables if available)
 Base.metadata.create_all(bind=engine)
 
 def override_get_db():
@@ -260,6 +270,96 @@ def inventory_integration_service(db_session):
     """Create an inventory integration service instance"""
     from core.services.inventory_integration_service import InventoryIntegrationService
     return InventoryIntegrationService(db_session)
+
+
+# Investment-specific fixtures (only available if investment models are imported)
+if INVESTMENT_MODELS_AVAILABLE:
+    @pytest.fixture
+    def sample_investment_portfolio(db_session):
+        """Create a sample investment portfolio for testing"""
+        from plugins.investments.models import InvestmentPortfolio, PortfolioType
+        from datetime import datetime, timezone
+
+        portfolio = InvestmentPortfolio(
+            tenant_id=1,  # Add tenant_id for proper tenant isolation
+            name="Test Investment Portfolio",
+            portfolio_type=PortfolioType.TAXABLE,
+            is_archived=False,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
+        )
+        db_session.add(portfolio)
+        db_session.commit()
+        db_session.refresh(portfolio)
+        return portfolio
+
+    @pytest.fixture
+    def sample_investment_holding(db_session, sample_investment_portfolio):
+        """Create a sample investment holding for testing"""
+        from plugins.investments.models import InvestmentHolding, SecurityType, AssetClass
+        from datetime import datetime, timezone, date
+        from decimal import Decimal
+
+        holding = InvestmentHolding(
+            portfolio_id=sample_investment_portfolio.id,
+            security_symbol="AAPL",
+            security_name="Apple Inc.",
+            security_type=SecurityType.STOCK,
+            asset_class=AssetClass.STOCKS,
+            quantity=Decimal('100'),
+            cost_basis=Decimal('10000'),  # $100 per share
+            purchase_date=date(2024, 1, 1),
+            current_price=Decimal('150'),
+            is_closed=False,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
+        )
+        db_session.add(holding)
+        db_session.commit()
+        db_session.refresh(holding)
+        return holding
+
+    @pytest.fixture
+    def investment_portfolio_service(db_session):
+        """Create an investment portfolio service instance"""
+        from plugins.investments.services.portfolio_service import PortfolioService
+        return PortfolioService(db_session)
+
+    @pytest.fixture
+    def investment_holdings_service(db_session):
+        """Create an investment holdings service instance"""
+        from plugins.investments.services.holdings_service import HoldingsService
+        return HoldingsService(db_session)
+
+    @pytest.fixture
+    def investment_transaction_service(db_session):
+        """Create an investment transaction service instance"""
+        from plugins.investments.services.transaction_service import TransactionService
+        return TransactionService(db_session)
+
+    @pytest.fixture
+    def investment_analytics_service(db_session):
+        """Create an investment analytics service instance"""
+        from plugins.investments.services.analytics_service import AnalyticsService
+        return AnalyticsService(db_session)
+
+    @pytest.fixture
+    def investment_portfolio_repo(db_session):
+        """Create an investment portfolio repository instance"""
+        from plugins.investments.repositories.portfolio_repository import PortfolioRepository
+        return PortfolioRepository(db_session)
+
+    @pytest.fixture
+    def investment_holdings_repo(db_session):
+        """Create an investment holdings repository instance"""
+        from plugins.investments.repositories.holdings_repository import HoldingsRepository
+        return HoldingsRepository(db_session)
+
+    @pytest.fixture
+    def investment_transaction_repo(db_session):
+        """Create an investment transaction repository instance"""
+        from plugins.investments.repositories.transaction_repository import TransactionRepository
+        return TransactionRepository(db_session)
 
 
 # Test data factories

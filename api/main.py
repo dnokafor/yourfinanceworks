@@ -513,6 +513,26 @@ app.include_router(sync.router, prefix="/api/v1")            # Add the sync rout
 # Note: Some commercial features are temporarily in core import list but should be moved.
 # ------------------------------------------------------------------------------
 
+# --- Investment Management Plugin ---
+# Register the investment management plugin (commercial feature)
+try:
+    from plugins.investments import register_investment_plugin
+
+    # Register the investment plugin with the main application
+    # Note: MCP registry is not currently implemented in main app, so passing None
+    plugin_info = register_investment_plugin(
+        app=app,
+        mcp_registry=None,  # MCP registry not implemented yet
+        feature_gate=None   # Feature gate is handled via decorators in the plugin
+    )
+    logger.info(f"Registered investment plugin: {plugin_info['name']} v{plugin_info['version']}")
+    logger.info(f"Investment routes registered: {plugin_info['routes']}")
+
+except ImportError as e:
+    logger.warning(f"Investment plugin not available: {str(e)}")
+except Exception as e:
+    logger.error(f"Failed to register investment plugin: {str(e)}")
+
 # --- Features in Commercial Module ---
 if sso_router:
     app.include_router(sso_router, prefix="/api/v1")

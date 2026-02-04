@@ -1,0 +1,209 @@
+{
+  "name": "investment-management",
+  "version": "1.0.0",
+  "author": "YourFinanceWORKS",
+  "license": "Commercial",
+  "description": "Comprehensive investment portfolio tracking, performance analytics, and tax reporting capabilities for personal users and small businesses.",
+  "license_tier": "commercial",
+  "required_permissions": [
+    "read:portfolios",
+    "write:portfolios",
+    "read:holdings",
+    "write:holdings",
+    "read:transactions",
+    "write:transactions",
+    "read:analytics",
+    "export:tax_data"
+  ],
+  "api_routes": [
+    {
+      "prefix": "/api/v1/investments",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/portfolios",
+          "description": "Create a new investment portfolio",
+          "permission": "write:portfolios"
+        },
+        {
+          "method": "GET",
+          "path": "/portfolios",
+          "description": "List all portfolios for the current tenant",
+          "permission": "read:portfolios"
+        },
+        {
+          "method": "GET",
+          "path": "/portfolios/{portfolio_id}",
+          "description": "Get a specific portfolio by ID",
+          "permission": "read:portfolios"
+        },
+        {
+          "method": "PUT",
+          "path": "/portfolios/{portfolio_id}",
+          "description": "Update a portfolio",
+          "permission": "write:portfolios"
+        },
+        {
+          "method": "DELETE",
+          "path": "/portfolios/{portfolio_id}",
+          "description": "Delete a portfolio (only if no holdings exist)",
+          "permission": "write:portfolios"
+        },
+        {
+          "method": "POST",
+          "path": "/portfolios/{portfolio_id}/holdings",
+          "description": "Create a new holding in a portfolio",
+          "permission": "write:holdings"
+        },
+        {
+          "method": "GET",
+          "path": "/portfolios/{portfolio_id}/holdings",
+          "description": "List all holdings in a portfolio",
+          "permission": "read:holdings"
+        },
+        {
+          "method": "GET",
+          "path": "/holdings/{holding_id}",
+          "description": "Get a specific holding by ID",
+          "permission": "read:holdings"
+        },
+        {
+          "method": "PUT",
+          "path": "/holdings/{holding_id}",
+          "description": "Update a holding",
+          "permission": "write:holdings"
+        },
+        {
+          "method": "PATCH",
+          "path": "/holdings/{holding_id}/price",
+          "description": "Update the current price of a holding",
+          "permission": "write:holdings"
+        },
+        {
+          "method": "POST",
+          "path": "/portfolios/{portfolio_id}/transactions",
+          "description": "Record a new transaction",
+          "permission": "write:transactions"
+        },
+        {
+          "method": "GET",
+          "path": "/portfolios/{portfolio_id}/transactions",
+          "description": "List transactions for a portfolio",
+          "permission": "read:transactions"
+        },
+        {
+          "method": "GET",
+          "path": "/transactions/{transaction_id}",
+          "description": "Get a specific transaction by ID",
+          "permission": "read:transactions"
+        },
+        {
+          "method": "GET",
+          "path": "/portfolios/{portfolio_id}/performance",
+          "description": "Get portfolio performance metrics",
+          "permission": "read:analytics"
+        },
+        {
+          "method": "GET",
+          "path": "/portfolios/{portfolio_id}/allocation",
+          "description": "Get asset allocation analysis",
+          "permission": "read:analytics"
+        },
+        {
+          "method": "GET",
+          "path": "/portfolios/{portfolio_id}/dividends",
+          "description": "Get dividend history and summary",
+          "permission": "read:analytics"
+        },
+        {
+          "method": "GET",
+          "path": "/portfolios/{portfolio_id}/tax-export",
+          "description": "Export tax-related transaction data",
+          "permission": "export:tax_data"
+        }
+      ]
+    }
+  ],
+  "mcp_providers": [
+    {
+      "name": "investments",
+      "description": "Provides investment portfolio data to the AI assistant",
+      "methods": [
+        "get_portfolio_summary",
+        "get_holding_details",
+        "get_performance_summary",
+        "get_dividend_forecast",
+        "get_tax_summary"
+      ]
+    }
+  ],
+  "database_tables": [
+    "investment_portfolios",
+    "investment_holdings",
+    "investment_transactions"
+  ],
+  "supported_portfolio_types": [
+    "TAXABLE",
+    "RETIREMENT",
+    "BUSINESS"
+  ],
+  "supported_security_types": [
+    "STOCK",
+    "BOND",
+    "ETF",
+    "MUTUAL_FUND",
+    "CASH"
+  ],
+  "supported_asset_classes": [
+    "STOCKS",
+    "BONDS",
+    "CASH",
+    "REAL_ESTATE",
+    "COMMODITIES"
+  ],
+  "supported_transaction_types": [
+    "BUY",
+    "SELL",
+    "DIVIDEND",
+    "INTEREST",
+    "FEE",
+    "TRANSFER",
+    "CONTRIBUTION"
+  ],
+  "features": [
+    "Multi-tenant portfolio management",
+    "Holdings tracking with cost basis",
+    "Transaction recording and history",
+    "Performance analytics (inception-to-date)",
+    "Asset allocation analysis",
+    "Dividend tracking",
+    "Tax data export (CSV and JSON)",
+    "Manual price updates",
+    "Simple average cost basis calculation",
+    "MCP assistant integration",
+    "Comprehensive error handling",
+    "Input validation and duplicate prevention"
+  ],
+  "requirements": {
+    "minimum_license_tier": "commercial",
+    "database": "PostgreSQL",
+    "python_version": ">=3.8",
+    "dependencies": [
+      "fastapi",
+      "sqlalchemy",
+      "pydantic",
+      "decimal"
+    ]
+  },
+  "installation": {
+    "auto_register": true,
+    "migration_required": true,
+    "migration_file": "003_add_investment_tables.py"
+  },
+  "metadata": {
+    "category": "Financial Management",
+    "tags": ["investments", "portfolio", "analytics", "tax", "commercial"],
+    "documentation_url": "/docs/plugins/investment-management",
+    "support_contact": "support@yourfinanceworks.com"
+  }
+}
