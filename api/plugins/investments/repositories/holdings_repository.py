@@ -17,7 +17,6 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from ..models import InvestmentHolding, InvestmentPortfolio, SecurityType, AssetClass
-from core.models.database import SessionLocal
 
 
 class HoldingsRepository:
@@ -28,14 +27,16 @@ class HoldingsRepository:
     ownership. This ensures users can only access holdings from their own portfolios.
     """
 
-    def __init__(self, db_session: Session = None):
+    def __init__(self, db_session: Session):
         """
         Initialize the repository with a database session.
 
         Args:
-            db_session: SQLAlchemy session. If None, will create a new session.
+            db_session: SQLAlchemy session (required)
         """
-        self.db = db_session or SessionLocal()
+        if db_session is None:
+            raise ValueError("Database session is required")
+        self.db = db_session
 
     def create(
         self,
@@ -183,6 +184,28 @@ class HoldingsRepository:
         self.db.refresh(holding)
 
         return holding
+
+    def delete(self, holding_id: int) -> bool:
+        """
+        Delete a holding permanently.
+
+        Args:
+            holding_id: Holding ID
+
+        Returns:
+            True if holding was deleted, False otherwise
+
+        Raises:
+            SQLAlchemyError: If database operation fails
+        """
+        holding = self.get_by_id(holding_id)
+        if not holding:
+            return False
+
+        self.db.delete(holding)
+        self.db.commit()
+
+        return True
 
     def update_price(
         self,
@@ -516,8 +539,3 @@ class HoldingsRepository:
             summary[asset_class]['holdings_count'] += 1
 
         return list(summary.values())
-
-    def close_session(self):
-        """Close the database session."""
-        if self.db:
-            self.db.close()

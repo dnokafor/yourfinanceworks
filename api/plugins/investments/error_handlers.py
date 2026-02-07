@@ -52,7 +52,7 @@ def create_error_response(
         Dictionary containing error response data
     """
     response = {
-        "error": error_message,
+        "detail": error_message,
         "timestamp": datetime.utcnow().isoformat(),
         "status_code": status_code
     }

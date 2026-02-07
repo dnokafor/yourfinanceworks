@@ -36,6 +36,7 @@ import {
   Sun,
   Package,
   Clock,
+  TrendingUp,
 } from "lucide-react";
 import { API_BASE_URL, settingsApi } from "@/lib/api";
 import { isAdmin, getCurrentUserRole, getCurrentUser } from "@/utils/auth";
@@ -43,6 +44,8 @@ import { Building } from 'lucide-react';
 import { OrganizationSwitcher } from "./OrganizationSwitcher";
 import { useOrganizations } from "@/hooks/useOrganizations";
 import { useMe } from "@/hooks/useMe";
+import { usePlugins } from '@/contexts/PluginContext';
+import { PluginMenuErrorBoundary } from '@/components/plugins/PluginErrorBoundary';
 
 export function AppSidebar() {
   const { state, setOpenMobile, isMobile: isMobileContext } = useSidebar();
@@ -89,6 +92,9 @@ export function AppSidebar() {
   const { data: me, isLoading: roleLoading } = useMe();
   const effectiveRole = me?.role || userRole;
   const isAdminEffective = effectiveRole === 'admin';
+
+  // Plugin management
+  const { enabledPlugins, isPluginEnabled } = usePlugins();
 
   // Organization switching state - REMOVED, now handled by OrganizationSwitcher component
   const { data: userOrganizations = [] } = useOrganizations();
@@ -404,6 +410,42 @@ export function AppSidebar() {
     }] : [])
   ];
 
+  // Plugin menu items - dynamically generated based on enabled plugins
+  const pluginMenuItems = useMemo(() => {
+    const items = [];
+
+    // Define plugin configurations with sorting priority
+    const pluginConfigs = [
+      {
+        id: 'investments',
+        path: '/investments',
+        label: 'Investments',
+        icon: <TrendingUp className="w-5 h-5" />,
+        tourId: 'nav-investments',
+        priority: 1
+      }
+      // Additional plugins can be added here with their configurations
+    ];
+
+    // Filter enabled plugins and sort by priority
+    const enabledPluginConfigs = pluginConfigs
+      .filter(config => isPluginEnabled(config.id))
+      .sort((a, b) => (a.priority || 999) - (b.priority || 999));
+
+    // Convert to menu items
+    enabledPluginConfigs.forEach(config => {
+      items.push({
+        pluginId: config.id, // Add plugin ID for error boundary
+        path: config.path,
+        label: config.label,
+        icon: config.icon,
+        tourId: config.tourId
+      });
+    });
+
+    return items;
+  }, [enabledPlugins, isPluginEnabled]);
+
   const isActive = (path: string) => {
     return location.pathname === path;
   };
@@ -554,6 +596,55 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 ))}
               </div>
+
+              {/* Plugins Section - Only show if plugins are enabled */}
+              {pluginMenuItems.length > 0 && (
+                <>
+                  {/* Separator */}
+                  <div className="px-3">
+                    <div className="border-t border-slate-700/30"></div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="px-3 mb-3">
+                      <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                        Plugins
+                      </h3>
+                    </div>
+                    {pluginMenuItems.map((item) => (
+                      <SidebarMenuItem key={item.path}>
+                        <PluginMenuErrorBoundary
+                          pluginId={item.pluginId}
+                          pluginName={item.label}
+                        >
+                          <SidebarMenuButton
+                            className={`mx-2 rounded-xl transition-all duration-200 group relative overflow-hidden ${isActive(item.path)
+                              ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg ring-2 ring-blue-500/20"
+                              : "text-slate-300 hover:text-white hover:bg-slate-700/30 hover:shadow-sm"
+                              }`}
+                            isActive={isActive(item.path)}
+                          >
+                            <Link
+                              to={item.path}
+                              className="flex items-center gap-3 w-full h-full py-3 px-4"
+                              data-tour={item.tourId}
+                              onClick={handleNavigation}
+                            >
+                              <div className={`p-2 rounded-lg transition-all duration-200 ${isActive(item.path)
+                                ? "bg-white/20 shadow-sm"
+                                : "bg-slate-700/30 group-hover:bg-slate-600/30"
+                                }`}>
+                                {item.icon}
+                              </div>
+                              <span className="font-medium text-sm">{item.label}</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </PluginMenuErrorBoundary>
+                      </SidebarMenuItem>
+                    ))}
+                  </div>
+                </>
+              )}
             </SidebarMenu>
           </SidebarContent>
 

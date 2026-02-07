@@ -21,6 +21,7 @@ interface FeatureFlags {
   email_integration: boolean;
   prompt_management: boolean;
   anomaly_detection: boolean;
+  plugin_management: boolean;
   [key: string]: boolean;
 }
 
@@ -84,6 +85,7 @@ export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ child
           email_integration: false,
           prompt_management: false,
           anomaly_detection: false,
+          plugin_management: false,
           inventory: true,
           crm: true,
         });
@@ -132,6 +134,7 @@ export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ child
         email_integration: hasAllFeatures || enabledFeatures.includes('email_integration'),
         prompt_management: hasAllFeatures || enabledFeatures.includes('prompt_management'),
         anomaly_detection: hasAllFeatures || enabledFeatures.includes('anomaly_detection'),
+        plugin_management: hasAllFeatures || enabledFeatures.includes('plugin_management'),
         
         // Core features (client-side only for now)
         inventory: true,
@@ -175,6 +178,11 @@ export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       setLicenseStatus(licenseStatusData);
       setHasAttemptedFetch(true);
+
+      // Emit event to notify other components that features have been updated
+      window.dispatchEvent(new CustomEvent('feature-context-updated', {
+        detail: { features: featureFlags, licenseStatus: licenseStatusData }
+      }));
     } catch (err) {
       console.error('Failed to fetch feature flags:', err);
 
@@ -206,6 +214,7 @@ export const FeatureProvider: React.FC<{ children: React.ReactNode }> = ({ child
         email_integration: false,
         prompt_management: false,
         anomaly_detection: false,
+        plugin_management: false,
         crm: true,
       });
       setLicenseStatus(null);

@@ -27,7 +27,7 @@ from .schemas import (
     BuyTransactionCreate, SellTransactionCreate, DividendTransactionCreate,
     OtherTransactionCreate, TransactionResponse,
     PerformanceMetrics, AssetAllocation, DividendSummary, TaxExport,
-    DateRangeQuery, TaxYearQuery, ErrorResponse
+    DateRangeQuery, TaxYearQuery, ErrorResponse, RebalanceReport
 )
 
 # Import models for enums
@@ -38,6 +38,7 @@ from .services.portfolio_service import PortfolioService
 from .services.holdings_service import HoldingsService
 from .services.transaction_service import TransactionService
 from .services.analytics_service import AnalyticsService
+from .services.rebalance_service import RebalanceService
 
 # Import error handling
 from .exceptions import (
@@ -76,7 +77,6 @@ async def health_check():
 
 # Portfolio endpoints
 @investment_router.post("/portfolios", response_model=PortfolioResponse, status_code=status.HTTP_201_CREATED)
-@require_feature("investments")
 async def create_portfolio(
     portfolio: PortfolioCreate,
     current_user: MasterUser = Depends(get_current_user),
@@ -84,13 +84,10 @@ async def create_portfolio(
 ):
     """Create a new investment portfolio"""
     try:
-        # Validate and normalize input data
-        validated_data = RequestValidationMiddleware.validate_portfolio_create_request(portfolio.dict())
-
         service = PortfolioService(db)
         created_portfolio = service.create_portfolio(
             tenant_id=current_user.tenant_id,
-            portfolio_data=validated_data
+            portfolio_data=portfolio
         )
         return PortfolioResponse.model_validate(created_portfolio)
     except InvestmentError:
@@ -98,28 +95,78 @@ async def create_portfolio(
     except Exception as e:
         raise InvestmentError(f"Failed to create portfolio: {str(e)}")
 
-@investment_router.get("/portfolios", response_model=List[PortfolioResponse])
-@require_feature("investments")
+@investment_router.get("/portfolios")
 async def get_portfolios(
     current_user: MasterUser = Depends(get_current_user),
     db: Session = Depends(get_db),
-    include_archived: bool = False
+    include_archived: bool = False,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    search: Optional[str] = Query(None),
+    portfolio_type: Optional[str] = Query(None),
+    label: Optional[str] = Query(None)
 ):
-    """Get all portfolios for the current tenant"""
+    """Get all portfolios for the current tenant with pagination and filtering"""
     try:
         service = PortfolioService(db)
-        portfolios = service.get_portfolios(
+        portfolios, total = service.get_portfolios_paginated(
             tenant_id=current_user.tenant_id,
-            include_archived=include_archived
+            include_archived=include_archived,
+            skip=skip,
+            limit=limit,
+            search=search,
+            portfolio_type=portfolio_type,
+            label=label
         )
-        return [PortfolioResponse.model_validate(p) for p in portfolios]
+        return {
+            "items": [PortfolioResponse.model_validate(p) for p in portfolios],
+            "total": total
+        }
     except InvestmentError:
         raise
     except Exception as e:
         raise InvestmentError(f"Failed to retrieve portfolios: {str(e)}")
 
+@investment_router.get("/portfolios/deleted")
+async def get_deleted_portfolios(
+    current_user: MasterUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100)
+):
+    """Get all deleted (archived) portfolios for the current tenant"""
+    try:
+        service = PortfolioService(db)
+        portfolios, total = service.get_deleted_portfolios(
+            tenant_id=current_user.tenant_id,
+            skip=skip,
+            limit=limit
+        )
+        return {
+            "items": [PortfolioResponse.model_validate(p) for p in portfolios],
+            "total": total
+        }
+    except InvestmentError:
+        raise
+    except Exception as e:
+        raise InvestmentError(f"Failed to retrieve deleted portfolios: {str(e)}")
+
+@investment_router.post("/portfolios/recycle-bin/empty", response_model=int)
+async def empty_recycle_bin(
+    current_user: MasterUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Permanently delete all archived portfolios for a tenant"""
+    try:
+        service = PortfolioService(db)
+        count = service.empty_recycle_bin(tenant_id=current_user.tenant_id)
+        return count
+    except InvestmentError:
+        raise
+    except Exception as e:
+        raise InvestmentError(f"Failed to empty recycle bin: {str(e)}")
+
 @investment_router.get("/portfolios/{portfolio_id}", response_model=PortfolioResponse)
-@require_feature("investments")
 async def get_portfolio(
     portfolio_id: int = Depends(validate_portfolio_id_param),
     current_user: MasterUser = Depends(get_current_user),
@@ -147,7 +194,6 @@ async def get_portfolio(
         raise InvestmentError(f"Failed to retrieve portfolio: {str(e)}")
 
 @investment_router.put("/portfolios/{portfolio_id}", response_model=PortfolioResponse)
-@require_feature("investments")
 async def update_portfolio(
     portfolio: PortfolioUpdate,
     portfolio_id: int = Depends(validate_portfolio_id_param),
@@ -156,11 +202,6 @@ async def update_portfolio(
 ):
     """Update a portfolio"""
     try:
-        # Validate and normalize input data
-        validated_data = RequestValidationMiddleware.validate_portfolio_update_request(
-            portfolio.dict(exclude_unset=True)
-        )
-
         service = PortfolioService(db)
 
         # Validate tenant access
@@ -170,7 +211,7 @@ async def update_portfolio(
         updated_portfolio = service.update_portfolio(
             portfolio_id=portfolio_id,
             tenant_id=current_user.tenant_id,
-            updates=validated_data
+            updates=portfolio
         )
         if not updated_portfolio:
             raise_not_found_error("Portfolio", portfolio_id)
@@ -182,7 +223,6 @@ async def update_portfolio(
         raise InvestmentError(f"Failed to update portfolio: {str(e)}")
 
 @investment_router.delete("/portfolios/{portfolio_id}", status_code=status.HTTP_204_NO_CONTENT)
-@require_feature("investments")
 async def delete_portfolio(
     portfolio_id: int = Depends(validate_portfolio_id_param),
     current_user: MasterUser = Depends(get_current_user),
@@ -204,14 +244,53 @@ async def delete_portfolio(
             raise_not_found_error("Portfolio", portfolio_id)
 
         return None
-    except InvestmentError:
-        raise
     except Exception as e:
         raise InvestmentError(f"Failed to delete portfolio: {str(e)}")
 
+@investment_router.post("/portfolios/{portfolio_id}/restore", response_model=bool)
+async def restore_portfolio(
+    portfolio_id: int = Depends(validate_portfolio_id_param),
+    current_user: MasterUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Restore a deleted (archived) portfolio"""
+    try:
+        service = PortfolioService(db)
+        success = service.restore_portfolio(
+            portfolio_id=portfolio_id,
+            tenant_id=current_user.tenant_id
+        )
+        if not success:
+            raise_not_found_error("Portfolio", portfolio_id)
+        return success
+    except InvestmentError:
+        raise
+    except Exception as e:
+        raise InvestmentError(f"Failed to restore portfolio: {str(e)}")
+
+@investment_router.delete("/portfolios/{portfolio_id}/permanent", response_model=bool)
+async def permanent_delete_portfolio(
+    portfolio_id: int = Depends(validate_portfolio_id_param),
+    current_user: MasterUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Permanently delete a portfolio"""
+    try:
+        service = PortfolioService(db)
+        success = service.permanently_delete_portfolio(
+            portfolio_id=portfolio_id,
+            tenant_id=current_user.tenant_id
+        )
+        if not success:
+            raise_not_found_error("Portfolio", portfolio_id)
+        return success
+    except InvestmentError:
+        raise
+    except Exception as e:
+        raise InvestmentError(f"Failed to permanently delete portfolio: {str(e)}")
+
 # Holdings endpoints
 @investment_router.post("/portfolios/{portfolio_id}/holdings", response_model=HoldingResponse, status_code=status.HTTP_201_CREATED)
-@require_feature("investments")
 async def create_holding(
     holding: HoldingCreate,
     portfolio_id: int = Depends(validate_portfolio_id_param),
@@ -225,13 +304,11 @@ async def create_holding(
         if not portfolio_service.validate_tenant_access(portfolio_id, current_user.tenant_id):
             raise_not_found_error("Portfolio", portfolio_id)
 
-        # Validate and normalize input data
-        validated_data = RequestValidationMiddleware.validate_holding_create_request(holding.dict())
-
         holdings_service = HoldingsService(db)
         created_holding = holdings_service.create_holding(
+            tenant_id=current_user.tenant_id,
             portfolio_id=portfolio_id,
-            holding_data=validated_data
+            holding_data=holding
         )
         return HoldingResponse.model_validate(created_holding)
     except InvestmentError:
@@ -240,7 +317,6 @@ async def create_holding(
         raise InvestmentError(f"Failed to create holding: {str(e)}")
 
 @investment_router.get("/portfolios/{portfolio_id}/holdings", response_model=List[HoldingResponse])
-@require_feature("investments")
 async def get_holdings(
     portfolio_id: int = Depends(validate_portfolio_id_param),
     current_user: MasterUser = Depends(get_current_user),
@@ -256,6 +332,7 @@ async def get_holdings(
 
         holdings_service = HoldingsService(db)
         holdings = holdings_service.get_holdings(
+            tenant_id=current_user.tenant_id,
             portfolio_id=portfolio_id,
             include_closed=include_closed
         )
@@ -266,7 +343,6 @@ async def get_holdings(
         raise InvestmentError(f"Failed to retrieve holdings: {str(e)}")
 
 @investment_router.get("/holdings/{holding_id}", response_model=HoldingResponse)
-@require_feature("investments")
 async def get_holding(
     holding_id: int = Depends(validate_holding_id_param),
     current_user: MasterUser = Depends(get_current_user),
@@ -275,14 +351,12 @@ async def get_holding(
     """Get a specific holding"""
     try:
         holdings_service = HoldingsService(db)
-        holding = holdings_service.get_holding(holding_id)
+        holding = holdings_service.get_holding(
+            tenant_id=current_user.tenant_id,
+            holding_id=holding_id
+        )
         if not holding:
             raise_not_found_error("Holding", holding_id)
-
-        # Validate tenant access through portfolio
-        portfolio_service = PortfolioService(db)
-        if not portfolio_service.validate_tenant_access(holding.portfolio_id, current_user.tenant_id):
-            raise_tenant_access_error("Holding", holding_id)
 
         return HoldingResponse.model_validate(holding)
     except InvestmentError:
@@ -291,7 +365,6 @@ async def get_holding(
         raise InvestmentError(f"Failed to retrieve holding: {str(e)}")
 
 @investment_router.put("/holdings/{holding_id}", response_model=HoldingResponse)
-@require_feature("investments")
 async def update_holding(
     holding: HoldingUpdate,
     holding_id: int = Depends(validate_holding_id_param),
@@ -300,26 +373,20 @@ async def update_holding(
 ):
     """Update a holding"""
     try:
-        # Validate and normalize input data
-        validated_data = RequestValidationMiddleware.validate_holding_update_request(
-            holding.dict(exclude_unset=True)
-        )
-
         holdings_service = HoldingsService(db)
 
         # Get existing holding to validate tenant access
-        existing_holding = holdings_service.get_holding(holding_id)
+        existing_holding = holdings_service.get_holding(
+            tenant_id=current_user.tenant_id,
+            holding_id=holding_id
+        )
         if not existing_holding:
             raise_not_found_error("Holding", holding_id)
 
-        # Validate tenant access through portfolio
-        portfolio_service = PortfolioService(db)
-        if not portfolio_service.validate_tenant_access(existing_holding.portfolio_id, current_user.tenant_id):
-            raise_tenant_access_error("Holding", holding_id)
-
         updated_holding = holdings_service.update_holding(
+            tenant_id=current_user.tenant_id,
             holding_id=holding_id,
-            updates=validated_data
+            holding_data=holding
         )
         if not updated_holding:
             raise_not_found_error("Holding", holding_id)
@@ -331,7 +398,6 @@ async def update_holding(
         raise InvestmentError(f"Failed to update holding: {str(e)}")
 
 @investment_router.patch("/holdings/{holding_id}/price", response_model=HoldingResponse)
-@require_feature("investments")
 async def update_holding_price(
     price_update: PriceUpdate,
     holding_id: int = Depends(validate_holding_id_param),
@@ -340,25 +406,20 @@ async def update_holding_price(
 ):
     """Update the current price of a holding"""
     try:
-        # Validate and normalize input data
-        validated_data = RequestValidationMiddleware.validate_price_update_request(price_update.dict())
-
         holdings_service = HoldingsService(db)
 
         # Get existing holding to validate tenant access
-        existing_holding = holdings_service.get_holding(holding_id)
+        existing_holding = holdings_service.get_holding(
+            tenant_id=current_user.tenant_id,
+            holding_id=holding_id
+        )
         if not existing_holding:
             raise_not_found_error("Holding", holding_id)
-
-        # Validate tenant access through portfolio
-        portfolio_service = PortfolioService(db)
-        if not portfolio_service.validate_tenant_access(existing_holding.portfolio_id, current_user.tenant_id):
-            raise_tenant_access_error("Holding", holding_id)
 
         updated_holding = holdings_service.update_price(
             tenant_id=current_user.tenant_id,
             holding_id=holding_id,
-            price=validated_data["current_price"]
+            price=price_update.current_price
         )
         if not updated_holding:
             raise_not_found_error("Holding", holding_id)
@@ -369,9 +430,30 @@ async def update_holding_price(
     except Exception as e:
         raise InvestmentError(f"Failed to update holding price: {str(e)}")
 
+@investment_router.delete("/holdings/{holding_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_holding(
+    holding_id: int = Depends(validate_holding_id_param),
+    current_user: MasterUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a holding permanently"""
+    try:
+        service = HoldingsService(db)
+        success = service.delete_holding(
+            tenant_id=current_user.tenant_id,
+            holding_id=holding_id
+        )
+        if not success:
+            raise_not_found_error("Holding", holding_id)
+
+        return None
+    except InvestmentError:
+        raise
+    except Exception as e:
+        raise InvestmentError(f"Failed to delete holding: {str(e)}")
+
 # Transaction endpoints
 @investment_router.post("/portfolios/{portfolio_id}/transactions", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
-@require_feature("investments")
 async def create_transaction(
     transaction: dict,
     portfolio_id: int = Depends(validate_portfolio_id_param),
@@ -385,18 +467,15 @@ async def create_transaction(
         if not portfolio_service.validate_tenant_access(portfolio_id, current_user.tenant_id):
             raise_not_found_error("Portfolio", portfolio_id)
 
-        # Validate and normalize transaction data
-        validated_data = RequestValidationMiddleware.validate_transaction_request(transaction)
-
         # Check for duplicate transactions
         duplicate_detector = DuplicateTransactionDetector(db)
-        duplicate_detector.check_for_duplicate(portfolio_id, validated_data)
+        duplicate_detector.check_for_duplicate(portfolio_id, transaction)
 
         transaction_service = TransactionService(db)
         created_transaction = transaction_service.record_transaction(
             tenant_id=current_user.tenant_id,
             portfolio_id=portfolio_id,
-            transaction_data=validated_data
+            transaction_data=transaction
         )
         return created_transaction
     except InvestmentError:
@@ -405,7 +484,6 @@ async def create_transaction(
         raise InvestmentError(f"Failed to create transaction: {str(e)}")
 
 @investment_router.get("/portfolios/{portfolio_id}/transactions", response_model=List[TransactionResponse])
-@require_feature("investments")
 async def get_transactions(
     portfolio_id: int = Depends(validate_portfolio_id_param),
     current_user: MasterUser = Depends(get_current_user),
@@ -434,7 +512,6 @@ async def get_transactions(
         raise InvestmentError(f"Failed to retrieve transactions: {str(e)}")
 
 @investment_router.get("/transactions/{transaction_id}", response_model=TransactionResponse)
-@require_feature("investments")
 async def get_transaction(
     transaction_id: int = Depends(validate_transaction_id_param),
     current_user: MasterUser = Depends(get_current_user),
@@ -460,7 +537,6 @@ async def get_transaction(
 
 # Analytics endpoints
 @investment_router.get("/portfolios/{portfolio_id}/performance", response_model=PerformanceMetrics)
-@require_feature("investments")
 async def get_portfolio_performance(
     portfolio_id: int = Depends(validate_portfolio_id_param),
     current_user: MasterUser = Depends(get_current_user),
@@ -474,7 +550,7 @@ async def get_portfolio_performance(
             raise_not_found_error("Portfolio", portfolio_id)
 
         analytics_service = AnalyticsService(db)
-        performance = analytics_service.calculate_portfolio_performance(portfolio_id)
+        performance = analytics_service.calculate_portfolio_performance(current_user.tenant_id, portfolio_id)
         return performance
     except InvestmentError:
         raise
@@ -482,7 +558,6 @@ async def get_portfolio_performance(
         raise InvestmentError(f"Failed to calculate performance: {str(e)}")
 
 @investment_router.get("/portfolios/{portfolio_id}/allocation", response_model=AssetAllocation)
-@require_feature("investments")
 async def get_asset_allocation(
     portfolio_id: int = Depends(validate_portfolio_id_param),
     current_user: MasterUser = Depends(get_current_user),
@@ -504,7 +579,6 @@ async def get_asset_allocation(
         raise InvestmentError(f"Failed to calculate asset allocation: {str(e)}")
 
 @investment_router.get("/portfolios/{portfolio_id}/dividends", response_model=DividendSummary)
-@require_feature("investments")
 async def get_dividend_summary(
     portfolio_id: int = Depends(validate_portfolio_id_param),
     current_user: MasterUser = Depends(get_current_user),
@@ -533,8 +607,40 @@ async def get_dividend_summary(
     except Exception as e:
         raise InvestmentError(f"Failed to calculate dividend summary: {str(e)}")
 
+@investment_router.get("/portfolios/{portfolio_id}/rebalance", response_model=RebalanceReport)
+async def get_rebalance_report(
+    portfolio_id: int = Depends(validate_portfolio_id_param),
+    current_user: MasterUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get asset rebalancing analysis and recommendations"""
+    try:
+        # Validate portfolio access first
+        portfolio_service = PortfolioService(db)
+        if not portfolio_service.validate_tenant_access(portfolio_id, current_user.tenant_id):
+            raise_not_found_error("Portfolio", portfolio_id)
+
+        rebalance_service = RebalanceService(db)
+        report = rebalance_service.generate_rebalance_report(
+            portfolio_id=portfolio_id,
+            tenant_id=current_user.tenant_id
+        )
+
+        if report is None:
+            # Could be portfolio not found or no targets set
+            # If access validated, it means no targets
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                content={"detail": "No target allocations set for this portfolio. Please set targets first."}
+            )
+
+        return report
+    except InvestmentError:
+        raise
+    except Exception as e:
+        raise InvestmentError(f"Failed to generate rebalance report: {str(e)}")
+
 @investment_router.get("/portfolios/{portfolio_id}/dividends/yields")
-@require_feature("investments")
 async def get_dividend_yields(
     portfolio_id: int = Depends(validate_portfolio_id_param),
     period_months: int = Query(12, ge=1, le=60, description="Number of months to calculate yield over"),
@@ -566,7 +672,6 @@ async def get_dividend_yields(
         raise InvestmentError(f"Failed to calculate dividend yields: {str(e)}")
 
 @investment_router.get("/portfolios/{portfolio_id}/dividends/frequency")
-@require_feature("investments")
 async def get_dividend_frequency_analysis(
     portfolio_id: int = Depends(validate_portfolio_id_param),
     lookback_months: int = Query(24, ge=6, le=60, description="Number of months to analyze"),
@@ -598,7 +703,6 @@ async def get_dividend_frequency_analysis(
         raise InvestmentError(f"Failed to analyze dividend frequency: {str(e)}")
 
 @investment_router.get("/portfolios/{portfolio_id}/dividends/forecast")
-@require_feature("investments")
 async def get_dividend_forecast(
     portfolio_id: int = Depends(validate_portfolio_id_param),
     forecast_months: int = Query(12, ge=1, le=36, description="Number of months to forecast"),
@@ -629,7 +733,6 @@ async def get_dividend_forecast(
         raise InvestmentError(f"Failed to generate dividend forecast: {str(e)}")
 
 @investment_router.get("/portfolios/{portfolio_id}/tax-export", response_model=TaxExport)
-@require_feature("investments")
 async def export_tax_data(
     portfolio_id: int = Depends(validate_portfolio_id_param),
     tax_year: int = Depends(validate_tax_year_param),
@@ -656,7 +759,6 @@ async def export_tax_data(
 
 # Portfolio data export endpoints (separate from tax export)
 @investment_router.get("/portfolios/{portfolio_id}/export")
-@require_feature("investments")
 async def export_portfolio_data(
     portfolio_id: int = Depends(validate_portfolio_id_param),
     format: str = "json",
@@ -700,7 +802,6 @@ async def export_portfolio_data(
         raise InvestmentError(f"Failed to export portfolio data: {str(e)}")
 
 @investment_router.get("/portfolios/{portfolio_id}/export/transactions")
-@require_feature("investments")
 async def export_transactions_csv(
     portfolio_id: int = Depends(validate_portfolio_id_param),
     current_user: MasterUser = Depends(get_current_user),
@@ -731,7 +832,6 @@ async def export_transactions_csv(
         raise InvestmentError(f"Failed to export transactions: {str(e)}")
 
 @investment_router.get("/portfolios/{portfolio_id}/export/holdings")
-@require_feature("investments")
 async def export_holdings_csv(
     portfolio_id: int = Depends(validate_portfolio_id_param),
     current_user: MasterUser = Depends(get_current_user),
@@ -762,7 +862,6 @@ async def export_holdings_csv(
         raise InvestmentError(f"Failed to export holdings: {str(e)}")
 
 @investment_router.get("/portfolios/{portfolio_id}/backup")
-@require_feature("investments")
 async def get_portfolio_backup_data(
     portfolio_id: int = Depends(validate_portfolio_id_param),
     current_user: MasterUser = Depends(get_current_user),
@@ -789,7 +888,6 @@ async def get_portfolio_backup_data(
 
 # Business portfolio endpoints for portfolio type filtering
 @investment_router.get("/portfolios/by-type/{portfolio_type}", response_model=List[PortfolioResponse])
-@require_feature("investments")
 async def get_portfolios_by_type(
     portfolio_type: PortfolioType,
     current_user: MasterUser = Depends(get_current_user),
@@ -811,7 +909,6 @@ async def get_portfolios_by_type(
         raise InvestmentError(f"Failed to retrieve portfolios by type: {str(e)}")
 
 @investment_router.get("/analytics/aggregated", response_model=dict)
-@require_feature("investments")
 async def get_aggregated_analytics(
     current_user: MasterUser = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -831,7 +928,6 @@ async def get_aggregated_analytics(
         raise InvestmentError(f"Failed to calculate aggregated analytics: {str(e)}")
 
 @investment_router.get("/analytics/business-summary", response_model=dict)
-@require_feature("investments")
 async def get_business_analytics_summary(
     current_user: MasterUser = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -848,3 +944,24 @@ async def get_business_analytics_summary(
         raise
     except Exception as e:
         raise InvestmentError(f"Failed to calculate business analytics: {str(e)}")
+
+
+
+@investment_router.get("/portfolios/{portfolio_id}/diversification", response_model=dict)
+async def get_diversification_analysis(
+    portfolio_id: int,
+    current_user: MasterUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get diversification analysis for a portfolio"""
+    try:
+        analytics_service = AnalyticsService(db)
+        diversification_data = analytics_service.get_diversification_analysis(
+            tenant_id=current_user.tenant_id,
+            portfolio_id=portfolio_id
+        )
+        return diversification_data
+    except InvestmentError:
+        raise
+    except Exception as e:
+        raise InvestmentError(f"Failed to calculate diversification analysis: {str(e)}")

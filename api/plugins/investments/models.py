@@ -25,13 +25,13 @@ from core.utils.column_encryptor import EncryptedColumn
 from core.models.models_per_tenant import Base
 
 # Enumerations
-class PortfolioType(PyEnum):
+class PortfolioType(str, PyEnum):
     """Portfolio types supported by the investment system"""
     TAXABLE = "taxable"
     RETIREMENT = "retirement"  # Generic retirement account
     BUSINESS = "business"
 
-class SecurityType(PyEnum):
+class SecurityType(str, PyEnum):
     """Types of securities that can be held in portfolios"""
     STOCK = "stock"
     BOND = "bond"
@@ -39,7 +39,7 @@ class SecurityType(PyEnum):
     MUTUAL_FUND = "mutual_fund"
     CASH = "cash"
 
-class AssetClass(PyEnum):
+class AssetClass(str, PyEnum):
     """Asset classes for allocation analysis"""
     STOCKS = "stocks"
     BONDS = "bonds"
@@ -47,7 +47,7 @@ class AssetClass(PyEnum):
     REAL_ESTATE = "real_estate"
     COMMODITIES = "commodities"
 
-class TransactionType(PyEnum):
+class TransactionType(str, PyEnum):
     """Types of investment transactions"""
     BUY = "buy"
     SELL = "sell"
@@ -57,7 +57,7 @@ class TransactionType(PyEnum):
     TRANSFER = "transfer"
     CONTRIBUTION = "contribution"
 
-class DividendType(PyEnum):
+class DividendType(str, PyEnum):
     """Types of dividends (MVP uses single type)"""
     ORDINARY = "ordinary"  # MVP uses single type
 
@@ -83,6 +83,10 @@ class InvestmentPortfolio(Base):
     is_archived = Column(Boolean, default=False, nullable=False)  # Soft delete
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Rebalancing and Targets
+    from core.utils.column_encryptor import EncryptedJSON
+    target_allocations = Column(EncryptedJSON(), nullable=True)  # Store target weights by AssetClass as JSON
 
     # Relationships
     holdings = relationship("InvestmentHolding", back_populates="portfolio", cascade="all, delete-orphan")

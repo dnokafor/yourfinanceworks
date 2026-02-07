@@ -43,6 +43,18 @@ class PortfolioUpdate(BaseModel):
     """Schema for updating a portfolio"""
     name: Optional[str] = Field(None, min_length=1, max_length=100, description="Portfolio name")
     portfolio_type: Optional[PortfolioType] = Field(None, description="Portfolio type")
+    target_allocations: Optional[Dict[AssetClass, Decimal]] = Field(None, description="Target allocation weights (0-100)")
+
+    @validator('target_allocations')
+    def validate_targets(cls, v):
+        if v is not None:
+            total = sum(v.values())
+            if total != Decimal('100') and total != Decimal('0'):
+                raise ValueError('Total target allocation must sum to 100%')
+            for weight in v.values():
+                if weight < 0:
+                    raise ValueError('Target weights cannot be negative')
+        return v
 
 class PortfolioResponse(PortfolioBase, TimestampMixin):
     """Schema for portfolio responses"""
@@ -50,9 +62,37 @@ class PortfolioResponse(PortfolioBase, TimestampMixin):
     is_archived: bool
     holdings_count: Optional[int] = Field(None, description="Number of holdings in portfolio")
     total_value: Optional[Decimal] = Field(None, description="Total portfolio value")
+    target_allocations: Optional[Dict[AssetClass, Decimal]] = Field(None, description="Target allocation weights")
 
     class Config:
         from_attributes = True
+        use_enum_values = True
+
+
+# Rebalancing schemas
+class RebalanceAction(BaseModel):
+    """Schema for a recommended rebalance action"""
+    asset_class: AssetClass
+    security_symbol: Optional[str] = None
+    action_type: str  # "BUY" or "SELL"
+    amount: Decimal
+    percentage_drift: Decimal
+
+class RebalanceReport(BaseModel):
+    """Schema for a full portfolio rebalance report"""
+    portfolio_id: int
+    total_value: Decimal
+    current_allocations: Dict[AssetClass, Decimal]
+    target_allocations: Dict[AssetClass, Decimal]
+    drifts: Dict[AssetClass, Decimal]
+    recommended_actions: List[RebalanceAction]
+    is_balanced: bool
+    summary: str
+
+    class Config:
+        json_encoders = {
+            Decimal: lambda v: float(v)
+        }
 
 
 # Holding schemas
@@ -119,6 +159,7 @@ class HoldingResponse(HoldingBase, TimestampMixin):
 
     class Config:
         from_attributes = True
+        use_enum_values = True
 
 
 # Transaction schemas
@@ -221,6 +262,7 @@ class TransactionResponse(TransactionBase):
 
     class Config:
         from_attributes = True
+        use_enum_values = True
 
 
 # Analytics schemas
@@ -246,6 +288,7 @@ class AllocationDetail(BaseModel):
     holdings_count: int
 
     class Config:
+        use_enum_values = True
         json_encoders = {
             Decimal: lambda v: float(v)
         }

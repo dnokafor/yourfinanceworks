@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from decimal import Decimal
 
 from ..models import InvestmentPortfolio, PortfolioType
+from ..exceptions import PortfolioHasHoldingsError
 from ..repositories.portfolio_repository import PortfolioRepository
 from ..repositories.holdings_repository import HoldingsRepository
 from ..schemas import PortfolioCreate, PortfolioUpdate, PortfolioResponse
@@ -182,6 +183,10 @@ class PortfolioService:
                 raise ValueError(f"Invalid portfolio type: {updates.portfolio_type}")
             update_dict['portfolio_type'] = updates.portfolio_type
 
+        # Add target allocations if provided
+        if updates.target_allocations is not None:
+            update_dict['target_allocations'] = updates.target_allocations
+
         # If no updates provided, return current portfolio
         if not update_dict:
             return self.portfolio_repo.get_by_id(portfolio_id, tenant_id)
@@ -225,7 +230,7 @@ class PortfolioService:
         )
 
         if holdings_count > 0:
-            raise ValueError(
+            raise PortfolioHasHoldingsError(
                 f"Cannot delete portfolio with {holdings_count} active holdings. "
                 "Please close or transfer all holdings before deleting the portfolio."
             )
@@ -405,6 +410,113 @@ class PortfolioService:
             True if portfolio exists and is accessible, False otherwise
         """
         return self.portfolio_repo.exists(portfolio_id, tenant_id)
+
+    def get_portfolios_paginated(
+        self,
+        tenant_id: int,
+        include_archived: bool = False,
+        skip: int = 0,
+        limit: int = 50,
+        search: Optional[str] = None,
+        portfolio_type: Optional[str] = None,
+        label: Optional[str] = None
+    ) -> Tuple[List[InvestmentPortfolio], int]:
+        """
+        Get paginated portfolios with filtering and search.
+
+        Args:
+            tenant_id: Tenant ID for ownership and isolation
+            include_archived: Whether to include archived portfolios
+            skip: Number of records to skip
+            limit: Maximum number of records to return
+            search: Search query for portfolio name
+            portfolio_type: Filter by portfolio type
+            label: Filter by label
+
+        Returns:
+            Tuple of (portfolios list, total count)
+        """
+        return self.portfolio_repo.get_paginated(
+            tenant_id=tenant_id,
+            include_archived=include_archived,
+            skip=skip,
+            limit=limit,
+            search=search,
+            portfolio_type=portfolio_type,
+            label=label
+        )
+
+    def get_deleted_portfolios(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 10
+    ) -> Tuple[List[InvestmentPortfolio], int]:
+        """
+        Get deleted (archived) portfolios with pagination.
+
+        Args:
+            tenant_id: Tenant ID for ownership and isolation
+            skip: Number of records to skip
+            limit: Maximum number of records to return
+
+        Returns:
+            Tuple of (deleted portfolios list, total count)
+        """
+        return self.portfolio_repo.get_deleted_portfolios(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit
+        )
+
+    def restore_portfolio(
+        self,
+        portfolio_id: int,
+        tenant_id: int
+    ) -> bool:
+        """
+        Restore a deleted (archived) portfolio.
+
+        Args:
+            portfolio_id: Portfolio ID to restore
+            tenant_id: Tenant ID for ownership and isolation
+
+        Returns:
+            True if restored successfully, False if not found
+        """
+        return self.portfolio_repo.restore(portfolio_id, tenant_id)
+
+    def permanently_delete_portfolio(
+        self,
+        portfolio_id: int,
+        tenant_id: int
+    ) -> bool:
+        """
+        Permanently delete a portfolio (hard delete).
+
+        Args:
+            portfolio_id: Portfolio ID to delete
+            tenant_id: Tenant ID for ownership and isolation
+
+        Returns:
+            True if deleted successfully, False if not found
+        """
+        return self.portfolio_repo.permanently_delete(portfolio_id, tenant_id)
+
+    def empty_recycle_bin(
+        self,
+        tenant_id: int
+    ) -> int:
+        """
+        Permanently delete all archived portfolios for a tenant.
+
+        Args:
+            tenant_id: Tenant ID for ownership and isolation
+
+        Returns:
+            Number of portfolios deleted
+        """
+        return self.portfolio_repo.empty_recycle_bin(tenant_id)
 
     def close(self):
         """Close database connections and clean up resources."""

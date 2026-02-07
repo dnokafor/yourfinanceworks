@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Building2, FileText, Percent, Cpu, Bell, Activity, Search,
-  Database, User, Lock, Mail, Shield, ExternalLink, ShieldCheck, Terminal, Trophy
+  Database, User, Lock, Mail, Shield, ExternalLink, ShieldCheck, Terminal, Trophy, Puzzle
 } from "lucide-react";
 import { getCurrentUser } from "@/utils/auth";
 import { PageHeader, ContentSection } from "@/components/ui/professional-layout";
@@ -11,7 +11,7 @@ import {
   CompanyInfoTab, InvoiceSettingsTab, UserProfileTab, DiscountRulesTab, AIConfigTab,
   NotificationsTab, DataManagementTab, CurrenciesTab, SearchSettingsTab,
   CookieSettingsTab, ExportDestinationsTab, EmailIntegrationSettingsTab,
-  APIClientManagementTab, LicenseManagementTab, GamificationTab
+  APIClientManagementTab, LicenseManagementTab, GamificationTab, PluginsTab
 } from "@/components/settings";
 import PromptManagement from "./PromptManagement";
 
@@ -109,6 +109,13 @@ const Settings = () => {
                 >
                   <Trophy className="w-4 h-4 mr-2" />
                   {t('settings.tabs.gamification')}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="plugins"
+                  className="px-4 py-2 h-auto data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm rounded-md hover:bg-muted transition-all"
+                >
+                  <Puzzle className="w-4 h-4 mr-2" />
+                  {t('settings.tabs.plugins', 'Plugins')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="notifications"
@@ -209,6 +216,10 @@ const Settings = () => {
 
                 <TabsContent value="gamification" className="m-0 focus-visible:outline-none">
                   <GamificationTab isAdmin={isAdmin} />
+                </TabsContent>
+
+                <TabsContent value="plugins" className="m-0 focus-visible:outline-none">
+                  <PluginsTab isAdmin={isAdmin} />
                 </TabsContent>
 
                 <TabsContent value="notifications" className="m-0 focus-visible:outline-none">

@@ -21,6 +21,31 @@ License: Commercial tier required
 from fastapi import APIRouter, Depends
 from core.utils.feature_gate import require_feature
 
+def require_investments_or_any_license():
+    """
+    Allow investments plugin access if:
+    - Any commercial license is active, OR
+    - Specific 'investments' feature is present in the license
+
+    This allows all paying customers to access investment features,
+    not just those with the specific 'investments' feature flag.
+    """
+    from core.utils.license_service import get_license_service
+
+    try:
+        license_service = get_license_service()
+
+        # Check if any commercial license is active
+        if license_service.is_license_active():
+            # Any active commercial license grants access
+            return True
+    except Exception:
+        # If license service fails, fall back to feature check
+        pass
+
+    # Otherwise require specific investments feature
+    return require_feature("investments", tier="commercial")
+
 def register_investment_plugin(app, mcp_registry=None, feature_gate=None):
     """
     Register the investment management plugin with the main application.
@@ -35,15 +60,21 @@ def register_investment_plugin(app, mcp_registry=None, feature_gate=None):
         dict: Plugin metadata
     """
     from .router import investment_router
+    from .error_handlers import create_investment_exception_handler
+    from .exceptions import InvestmentError
+
+    # Register exception handler
+    app.add_exception_handler(InvestmentError, create_investment_exception_handler())
 
     # Register API routes under /api/v1/investments
     # All routes protected by commercial license requirement
     if feature_gate:
+        # Use custom dependency that allows any commercial license
         app.include_router(
             investment_router,
             prefix="/api/v1/investments",
             tags=["investments"],
-            dependencies=[Depends(lambda: require_feature("investments", tier="commercial"))]
+            dependencies=[Depends(require_investments_or_any_license)]
         )
     else:
         # For development/testing without feature gate

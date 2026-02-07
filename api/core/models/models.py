@@ -551,3 +551,26 @@ class GlobalLicenseValidationLog(Base):
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
+
+class TenantPluginSettings(Base):
+    """
+    Model for storing enabled plugins per tenant.
+    Replaces localStorage-based plugin state with persistent database storage.
+    """
+    __tablename__ = "tenant_plugin_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, unique=True, index=True)
+
+    # JSON array of enabled plugin IDs: ["investments", "reports", ...]
+    enabled_plugins = Column(JSON, default=list, nullable=False)
+
+    # Metadata
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    tenant = relationship("Tenant", foreign_keys=[tenant_id])
+
+    def __repr__(self):
+        return f"<TenantPluginSettings(tenant_id={self.tenant_id}, enabled_plugins={self.enabled_plugins})>"

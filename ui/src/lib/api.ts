@@ -447,6 +447,95 @@ export interface InventoryDashboardData {
   generated_at: string;
 }
 
+export interface InvestmentPortfolio {
+  id: number;
+  name: string;
+  portfolio_type: 'taxable' | 'retirement' | 'business';
+  is_archived: boolean;
+  created_at: string;
+  updated_at: string;
+  holdings_count?: number;
+  total_value?: number;
+  currency?: string;
+  target_allocations?: Record<string, number>;
+}
+
+export interface DeletedPortfolio extends InvestmentPortfolio {
+  deleted_at?: string | null;
+  deleted_by?: number | null;
+  deleted_by_username?: string | null;
+}
+
+export interface PortfolioListResponse {
+  items: InvestmentPortfolio[];
+  total: number;
+}
+
+export interface PerformanceMetrics {
+  total_value: number;
+  total_cost: number;
+  total_gain_loss: number;
+  total_return_percentage: number;
+  unrealized_gain_loss: number;
+  realized_gain_loss: number;
+}
+
+export interface AssetAllocation {
+  total_value: number;
+  allocations: {
+    [key: string]: {
+      value: number;
+      percentage: number;
+      holdings_count: number;
+    };
+  };
+}
+
+export interface RebalanceAction {
+  asset_class: string;
+  security_symbol?: string;
+  action_type: 'BUY' | 'SELL';
+  amount: number;
+  percentage_drift: number;
+}
+
+export interface RebalanceReport {
+  portfolio_id: number;
+  total_value: number;
+  current_allocations: Record<string, number>;
+  target_allocations: Record<string, number>;
+  drifts: Record<string, number>;
+  recommended_actions: RebalanceAction[];
+  is_balanced: boolean;
+  summary: string;
+}
+
+export interface DividendSummary {
+  total_dividends: number;
+  dividend_transactions: any[];
+  period_start: string;
+  period_end: string;
+}
+
+export interface AggregatedAnalytics {
+  portfolio_type_filter: string;
+  portfolio_count: number;
+  total_value: number;
+  total_cost: number;
+  total_gain_loss: number;
+  total_return_percentage: number;
+  unrealized_gain_loss: number;
+  realized_gain_loss: number;
+  asset_allocation: {
+    [key: string]: {
+      value: number;
+      percentage: number;
+      holdings_count: number;
+    };
+  };
+  dividend_income_last_12_months: number;
+}
+
 export interface Expense {
   id: number;
   amount: number;
@@ -681,6 +770,84 @@ export const bankStatementApi = {
       method: 'POST',
       body: JSON.stringify({ ids }),
     }),
+};
+
+export const investmentApi = {
+  list: async (params: {
+    skip?: number;
+    limit?: number;
+    search?: string;
+    portfolio_type?: string;
+    label?: string;
+    include_archived?: boolean;
+  } = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.skip !== undefined) searchParams.set('skip', params.skip.toString());
+    if (params.limit !== undefined) searchParams.set('limit', params.limit.toString());
+    if (params.search) searchParams.set('search', params.search);
+    if (params.portfolio_type) searchParams.set('portfolio_type', params.portfolio_type);
+    if (params.label) searchParams.set('label', params.label);
+    if (params.include_archived !== undefined) searchParams.set('include_archived', params.include_archived.toString());
+
+    return apiRequest<PortfolioListResponse>(`/investments/portfolios?${searchParams.toString()}`);
+  },
+
+  get: (id: number) => apiRequest<InvestmentPortfolio>(`/investments/portfolios/${id}`),
+
+  create: (data: any) => apiRequest<InvestmentPortfolio>('/investments/portfolios', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+
+  update: (id: number, data: any) => apiRequest<InvestmentPortfolio>(`/investments/portfolios/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+
+  delete: (id: number) => apiRequest(`/investments/portfolios/${id}`, { method: 'DELETE' }),
+
+  getDeleted: (skip: number = 0, limit: number = 10) =>
+    apiRequest<PortfolioListResponse & { items: DeletedPortfolio[] }>(`/investments/portfolios/deleted?skip=${skip}&limit=${limit}`),
+
+  restore: (id: number) => apiRequest(`/investments/portfolios/${id}/restore`, { method: 'POST' }),
+
+  permanentDelete: (id: number) => apiRequest(`/investments/portfolios/${id}/permanent`, { method: 'DELETE' }),
+
+  emptyRecycleBin: () => apiRequest('/investments/portfolios/recycle-bin/empty', { method: 'POST' }),
+
+  getPerformance: (id: number) =>
+    apiRequest<PerformanceMetrics>(`/investments/portfolios/${id}/performance`),
+
+  getAssetAllocation: (portfolioId: number) =>
+    apiRequest<AssetAllocation>(`/investments/portfolios/${portfolioId}/allocation`),
+
+  getRebalanceReport: (portfolioId: number) =>
+    apiRequest<RebalanceReport>(`/investments/portfolios/${portfolioId}/rebalance`),
+
+  getDividends: (portfolioId: number, params: { start_date?: string; end_date?: string } = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.start_date) searchParams.set('start_date', params.start_date);
+    if (params.end_date) searchParams.set('end_date', params.end_date);
+    return apiRequest<DividendSummary>(`/investments/portfolios/${portfolioId}/dividends?${searchParams.toString()}`);
+  },
+
+  getAggregatedAnalytics: (portfolio_type?: string) => {
+    const searchParams = new URLSearchParams();
+    if (portfolio_type) searchParams.set('portfolio_type', portfolio_type.toUpperCase());
+    return apiRequest<AggregatedAnalytics>(`/investments/analytics/aggregated?${searchParams.toString()}`);
+  },
+
+  getDividendYields: (portfolioId: number) =>
+    apiRequest<Record<string, number>>(`/investments/portfolios/${portfolioId}/dividends/yields`),
+
+  getDividendFrequency: (portfolioId: number) =>
+    apiRequest<Record<string, any>>(`/investments/portfolios/${portfolioId}/dividends/frequency`),
+
+  getDividendForecast: (portfolioId: number, forecastMonths: number = 12) =>
+    apiRequest<any>(`/investments/portfolios/${portfolioId}/dividends/forecast?forecast_months=${forecastMonths}`),
+
+  getDiversificationAnalysis: (portfolioId: number) =>
+    apiRequest<any>(`/investments/portfolios/${portfolioId}/diversification`),
 };
 
 // Add settings types
@@ -1251,6 +1418,8 @@ export interface ScheduledReport {
   schedule_config: ScheduleConfig;
   recipients: string[];
   is_active: boolean;
+  is_balanced: boolean;
+  summary: string;
   last_run?: string;
   next_run?: string;
   created_at: string;

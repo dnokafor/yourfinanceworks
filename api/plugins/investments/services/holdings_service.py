@@ -88,13 +88,14 @@ class HoldingsService:
 
         return HoldingResponse.from_orm(holding)
 
-    def get_holdings(self, tenant_id: int, portfolio_id: int) -> List[HoldingResponse]:
+    def get_holdings(self, tenant_id: int, portfolio_id: int, include_closed: bool = False) -> List[HoldingResponse]:
         """
         Get all holdings for a portfolio.
 
         Args:
             tenant_id: Tenant ID for isolation
             portfolio_id: Portfolio ID
+            include_closed: Whether to include closed holdings
 
         Returns:
             List of holdings
@@ -108,7 +109,7 @@ class HoldingsService:
             raise NotFoundError(f"Portfolio {portfolio_id} not found")
 
         # Get holdings
-        holdings = self.holdings_repo.get_by_portfolio(portfolio_id)
+        holdings = self.holdings_repo.get_by_portfolio(portfolio_id, include_closed=include_closed)
 
         return [HoldingResponse.from_orm(holding) for holding in holdings]
 
@@ -320,6 +321,33 @@ class HoldingsService:
         closed_holding = self.holdings_repo.close(holding_id)
 
         return HoldingResponse.from_orm(closed_holding)
+
+    def delete_holding(self, tenant_id: int, holding_id: int) -> bool:
+        """
+        Delete a holding permanently.
+
+        Args:
+            tenant_id: Tenant ID for isolation
+            holding_id: Holding ID
+
+        Returns:
+            True if holding was deleted, False otherwise
+
+        Raises:
+            NotFoundError: If holding doesn't exist or doesn't belong to tenant
+        """
+        # Get and validate holding
+        holding = self.holdings_repo.get_by_id(holding_id)
+        if not holding:
+            raise NotFoundError(f"Holding {holding_id} not found")
+
+        # Validate tenant access through portfolio
+        portfolio = self.portfolio_repo.get_by_id(holding.portfolio_id, tenant_id)
+        if not portfolio:
+            raise NotFoundError(f"Portfolio {holding.portfolio_id} not found")
+
+        # Delete the holding
+        return self.holdings_repo.delete(holding_id)
 
     def get_active_holdings(self, tenant_id: int, portfolio_id: int) -> List[HoldingResponse]:
         """

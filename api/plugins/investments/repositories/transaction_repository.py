@@ -17,7 +17,6 @@ from datetime import datetime, timezone, date, timedelta
 from decimal import Decimal
 
 from ..models import InvestmentTransaction, InvestmentPortfolio, InvestmentHolding, TransactionType, DividendType
-from core.models.database import SessionLocal
 
 
 class TransactionRepository:
@@ -28,14 +27,16 @@ class TransactionRepository:
     ownership. This ensures users can only access transactions from their own portfolios.
     """
 
-    def __init__(self, db_session: Session = None):
+    def __init__(self, db_session: Session):
         """
         Initialize the repository with a database session.
 
         Args:
-            db_session: SQLAlchemy session. If None, will create a new session.
+            db_session: SQLAlchemy session (required)
         """
-        self.db = db_session or SessionLocal()
+        if db_session is None:
+            raise ValueError("Database session is required")
+        self.db = db_session
 
     def create(
         self,

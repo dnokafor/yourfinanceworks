@@ -1,0 +1,56 @@
+{
+  "name": "investments",
+  "displayName": "Investment Management",
+  "version": "1.0.0",
+  "description": "Comprehensive investment portfolio management with holdings tracking, performance analytics, and tax reporting",
+  "author": "YourFinanceWORKS",
+  "license": "AGPL-3.0",
+  "licenseTier": "commercial",
+  "routes": [
+    {
+      "path": "/investments",
+      "component": "InvestmentDashboard",
+      "label": "Investment Dashboard"
+    },
+    {
+      "path": "/investments/portfolio/new",
+      "component": "CreatePortfolio",
+      "label": "Create Portfolio"
+    },
+    {
+      "path": "/investments/portfolio/:id",
+      "component": "PortfolioDetail",
+      "label": "Portfolio Details"
+    }
+  ],
+  "components": {
+    "HoldingsList": "components/investments/HoldingsList",
+    "CreateHoldingDialog": "components/investments/CreateHoldingDialog",
+    "EditHoldingDialog": "components/investments/EditHoldingDialog"
+  },
+  "apiEndpoints": {
+    "portfolios": "/investments/portfolios",
+    "holdings": "/investments/holdings",
+    "transactions": "/investments/transactions",
+    "performance": "/investments/portfolios/{id}/performance",
+    "allocation": "/investments/portfolios/{id}/allocation",
+    "dividends": "/investments/portfolios/{id}/dividends",
+    "taxExport": "/investments/portfolios/{id}/tax-export"
+  },
+  "features": [
+    "portfolio-management",
+    "holdings-tracking",
+    "transaction-recording",
+    "performance-analytics",
+    "asset-allocation",
+    "dividend-tracking",
+    "tax-reporting",
+    "price-management"
+  ],
+  "permissions": [
+    "investments:read",
+    "investments:create",
+    "investments:update",
+    "investments:delete"
+  ]
+}

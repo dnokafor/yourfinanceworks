@@ -28,6 +28,7 @@ import { toast } from 'sonner';
 import { superAdminApi, api } from '@/lib/api';
 import { PageHeader } from '@/components/ui/professional-layout';
 import { ProfessionalTextarea } from '@/components/ui/professional-textarea';
+import { useFeatures } from '@/contexts/FeatureContext';
 
 interface TenantLicenseInfo {
   id: number;
@@ -67,6 +68,7 @@ interface GlobalLicenseStatus {
 
 export const TenantLicenseMonitoring: React.FC = () => {
   const { t } = useTranslation();
+  const { refetch: refetchFeatures } = useFeatures();
   const [tenants, setTenants] = useState<TenantLicenseInfo[]>([]);
   const [users, setUsers] = useState<UserLicenseInfo[]>([]);
   const [status, setStatus] = useState<GlobalLicenseStatus | null>(null);
@@ -142,6 +144,8 @@ export const TenantLicenseMonitoring: React.FC = () => {
         toast.success(t('superAdmin.license_capacity_monitoring.global_license_activated', 'Global license activated successfully'));
         setGlobalKey('');
         fetchData();
+        // Refresh feature context so all tenants see the new global license features
+        await refetchFeatures();
       } else {
         toast.error(result.message || t('superAdmin.license_capacity_monitoring.activation_failed', 'Activation failed'));
       }
@@ -159,6 +163,8 @@ export const TenantLicenseMonitoring: React.FC = () => {
       if (result.success) {
         toast.success(t('superAdmin.license_capacity_monitoring.global_license_deactivated', 'Global license deactivated successfully'));
         fetchData();
+        // Refresh feature context so all tenants see the updated license status
+        await refetchFeatures();
       } else {
         toast.error(result.message || t('superAdmin.license_capacity_monitoring.deactivation_failed', 'Deactivation failed'));
       }

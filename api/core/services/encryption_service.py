@@ -16,8 +16,16 @@ import base64
 from functools import lru_cache
 import time
 from threading import Lock
+from decimal import Decimal
 
 from encryption_config import EncryptionConfig
+
+class DecimalEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles Decimal objects by converting them to strings."""
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return str(obj)
+        return super(DecimalEncoder, self).default(obj)
 from core.services.key_management_service import KeyManagementService
 from core.exceptions.encryption_exceptions import (
     EncryptionError,
@@ -229,7 +237,7 @@ class EncryptionService:
 
         try:
             # Convert dict to JSON string
-            json_string = json.dumps(data, separators=(',', ':'), sort_keys=True)
+            json_string = json.dumps(data, separators=(',', ':'), sort_keys=True, cls=DecimalEncoder)
 
             # Encrypt the JSON string
             return self.encrypt_data(json_string, tenant_id)
@@ -615,7 +623,7 @@ class AsyncEncryptionService(EncryptionService):
 
         try:
             # Convert dict to JSON string
-            json_string = json.dumps(data, separators=(',', ':'), sort_keys=True)
+            json_string = json.dumps(data, separators=(',', ':'), sort_keys=True, cls=DecimalEncoder)
 
             # Encrypt the JSON string asynchronously
             return await self.encrypt_data_async(json_string, tenant_id)

@@ -68,6 +68,7 @@ try:
     from commercial.prompt_management.router import router as prompts
     from commercial.ai_bank_statement.external_router import router as external_api
     from commercial.external_transactions.router import router as external_transactions
+    from commercial.plugin_management.router import router as plugin_management
     COMMERCIAL_MODULES_AVAILABLE = True
 except ImportError as e:
     logger.error(f"Failed to import commercial modules: {str(e)}")
@@ -77,6 +78,7 @@ except ImportError as e:
     slack_simplified = None
     email_integration = None
     external_api_auth = None
+    plugin_management = None
     approvals = None
     approval_reports = None
     batch_processing = None
@@ -595,6 +597,12 @@ if external_transactions:
     app.include_router(external_transactions, prefix="/api/v1")
 else:
     logger.warning("external_transactions router is None - not registering")
+
+if plugin_management:
+    logger.info("Registering plugin_management router")
+    app.include_router(plugin_management, prefix="/api/v1")
+else:
+    logger.warning("plugin_management router is None - not registering")
 
 @app.get("/")
 def read_root():

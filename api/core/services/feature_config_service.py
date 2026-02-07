@@ -176,6 +176,14 @@ class FeatureConfigService:
             'default': False,
             'license_tier': 'commercial'
         },
+        'plugin_management': {
+            'name': 'Plugin Management',
+            'description': 'Enable/disable plugins through settings interface with dynamic sidebar integration',
+            'category': 'advanced',
+            'env_var': 'FEATURE_PLUGIN_MANAGEMENT_ENABLED',
+            'default': False,
+            'license_tier': 'commercial'
+        },
     }
     
     @classmethod
