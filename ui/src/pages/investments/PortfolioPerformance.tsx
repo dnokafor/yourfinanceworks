@@ -2,6 +2,7 @@ import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useLocaleFormatter } from '@/i18n/formatters';
 import {
   TrendingUp, TrendingDown, Wallet, Activity, Target,
   ArrowLeft, Calendar, Info, BarChart3, PieChart,
@@ -17,6 +18,7 @@ const PortfolioPerformance: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const portfolioId = parseInt(id || '0', 10);
   const { t } = useTranslation();
+  const formatter = useLocaleFormatter();
 
   const { data: portfolio, isLoading: portfolioLoading } = useQuery<InvestmentPortfolio>({
     queryKey: ['portfolio', portfolioId],
@@ -42,14 +44,11 @@ const PortfolioPerformance: React.FC = () => {
   }
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: portfolio?.currency || 'USD',
-    }).format(amount);
+    return formatter.formatCurrency(amount, portfolio?.currency || 'USD');
   };
 
   const formatPercentage = (percentage: number) => {
-    return `${percentage >= 0 ? '+' : ''}${percentage.toFixed(2)}%`;
+    return formatter.formatPercent(percentage / 100, 2);
   };
 
   return (
@@ -147,7 +146,7 @@ const PortfolioPerformance: React.FC = () => {
                   </h3>
                   <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
                     <Calendar className="w-4 h-4 mr-1" />
-                    <span>Started on {portfolio ? new Date(portfolio.created_at).toLocaleDateString() : '...'}</span>
+                    <span>Started on {portfolio ? formatter.formatDate(new Date(portfolio.created_at), 'short') : '...'}</span>
                   </div>
                 </div>
               </div>

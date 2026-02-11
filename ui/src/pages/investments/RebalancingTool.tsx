@@ -11,6 +11,7 @@ import {
   PieChart
 } from 'lucide-react';
 import { investmentApi, InvestmentPortfolio, RebalanceReport } from '@/lib/api';
+import { useLocaleFormatter } from '@/i18n/formatters';
 import { toast } from 'sonner';
 
 const ASSET_CLASSES = ['stocks', 'bonds', 'cash', 'real_estate', 'commodities'];
@@ -19,6 +20,7 @@ const RebalancingTool: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const portfolioId = parseInt(id || '0');
+  const formatter = useLocaleFormatter();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -301,7 +303,7 @@ const RebalancingTool: React.FC = () => {
                           </div>
                           <div className="text-right">
                             <div className="text-lg font-bold text-gray-900">
-                              ${action.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              {formatter.formatCurrency(action.amount)}
                             </div>
                             <div className="text-xs text-gray-500 italic">Approximate Amount</div>
                           </div>

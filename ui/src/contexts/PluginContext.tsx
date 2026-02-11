@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { apiRequest } from '@/lib/api';
+import { loadPluginTranslations, unloadPluginTranslations } from '@/i18n';
 
 export interface Plugin {
   id: string;
@@ -22,6 +23,8 @@ export interface Plugin {
   rating?: number;
   homepage?: string;
   repository?: string;
+  translationsLoaded?: boolean;
+  translationError?: string;
 }
 
 interface PluginContextType {
@@ -966,6 +969,41 @@ export const PluginProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         const initSuccess = await initializePlugin(pluginId);
         if (!initSuccess) {
           throw new Error(`Failed to initialize plugin: ${plugin.name}`);
+        }
+
+        // Load plugin translations
+        try {
+          await loadPluginTranslations(pluginId);
+          console.log(`Loaded translations for plugin: ${pluginId}`);
+          // Update plugin translation status
+          setPlugins(prev => prev.map(p =>
+            p.id === pluginId
+              ? { ...p, translationsLoaded: true, translationError: undefined }
+              : p
+          ));
+        } catch (translationError) {
+          console.warn(`Failed to load translations for plugin ${pluginId}:`, translationError);
+          // Update plugin translation error status
+          setPlugins(prev => prev.map(p =>
+            p.id === pluginId
+              ? { ...p, translationsLoaded: false, translationError: translationError instanceof Error ? translationError.message : 'Unknown translation error' }
+              : p
+          ));
+          // Don't fail plugin enable if translations fail
+        }
+      } else {
+        // Unload plugin translations when disabling
+        try {
+          unloadPluginTranslations(pluginId);
+          console.log(`Unloaded translations for plugin: ${pluginId}`);
+          // Update plugin translation status
+          setPlugins(prev => prev.map(p =>
+            p.id === pluginId
+              ? { ...p, translationsLoaded: false, translationError: undefined }
+              : p
+          ));
+        } catch (translationError) {
+          console.warn(`Failed to unload translations for plugin ${pluginId}:`, translationError);
         }
       }
 

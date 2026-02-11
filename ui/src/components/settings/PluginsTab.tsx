@@ -119,21 +119,21 @@ const PluginCard: React.FC<PluginCardProps> = ({ plugin, onToggle, canToggle, li
 
   const getStatusText = (plugin: Plugin) => {
     if (plugin.initializationError) {
-      return 'Error';
+      return t('plugins.status.error');
     }
 
     switch (plugin.status) {
       case 'active':
-        return 'Active';
+        return t('plugins.status.active');
       case 'initializing':
-        return 'Initializing...';
+        return t('plugins.status.initializing');
       case 'error':
-        return 'Error';
+        return t('plugins.status.error');
       case 'disabled':
-        return 'Disabled';
+        return t('plugins.status.disabled');
       case 'inactive':
       default:
-        return plugin.enabled ? 'Enabled' : 'Inactive';
+        return plugin.enabled ? t('plugins.status.enabled') : t('plugins.status.inactive');
     }
   };
 
@@ -213,14 +213,14 @@ const PluginCard: React.FC<PluginCardProps> = ({ plugin, onToggle, canToggle, li
         <div className="space-y-2">
           {plugin.author && (
             <div className="flex items-center gap-2 text-xs text-gray-500">
-              <span className="font-medium">Author:</span>
+              <span className="font-medium">{t('plugins.author')}:</span>
               <span>{plugin.author}</span>
             </div>
           )}
 
           {plugin.dependencies && plugin.dependencies.length > 0 && (
             <div className="flex items-start gap-2 text-xs text-gray-500">
-              <span className="font-medium">Dependencies:</span>
+              <span className="font-medium">{t('plugins.dependencies')}:</span>
               <div className="flex flex-wrap gap-1">
                 {plugin.dependencies.map((dep, index) => (
                   <Badge key={index} variant="outline" className="text-xs">
@@ -242,14 +242,14 @@ const PluginCard: React.FC<PluginCardProps> = ({ plugin, onToggle, canToggle, li
             {plugin.downloadCount && (
               <div className="flex items-center gap-1">
                 <Download className="w-3 h-3" />
-                <span>{plugin.downloadCount.toLocaleString()} downloads</span>
+                <span>{plugin.downloadCount.toLocaleString()} {t('plugins.downloads')}</span>
               </div>
             )}
 
             {plugin.lastUpdated && (
               <div className="flex items-center gap-1">
                 <Calendar className="w-3 h-3" />
-                <span>Updated {
+                <span>{t('plugins.updated')} {
                   plugin.lastUpdated instanceof Date
                     ? plugin.lastUpdated.toLocaleDateString()
                     : new Date(plugin.lastUpdated).toLocaleDateString()
@@ -268,7 +268,7 @@ const PluginCard: React.FC<PluginCardProps> = ({ plugin, onToggle, canToggle, li
                   onClick={() => window.open(plugin.homepage, '_blank')}
                 >
                   <ExternalLink className="w-3 h-3 mr-1" />
-                  Homepage
+                  {t('plugins.homepage')}
                 </Button>
               )}
               {plugin.repository && (
@@ -279,7 +279,7 @@ const PluginCard: React.FC<PluginCardProps> = ({ plugin, onToggle, canToggle, li
                   onClick={() => window.open(plugin.repository, '_blank')}
                 >
                   <ExternalLink className="w-3 h-3 mr-1" />
-                  Repository
+                  {t('plugins.repository')}
                 </Button>
               )}
             </div>
@@ -292,8 +292,7 @@ const PluginCard: React.FC<PluginCardProps> = ({ plugin, onToggle, canToggle, li
             <AlertDescription className="text-amber-800 text-sm">
               {!isAdmin ? (
                 <span>
-                  <strong>Administrator Access Required:</strong> Only administrators can enable or disable plugins.
-                  Contact your system administrator to manage plugin settings.
+                  <strong>{t('plugins.administrator_access_required')}:</strong> {t('plugins.admin_only_message')}
                 </span>
               ) : (
                 <div>
@@ -308,7 +307,7 @@ const PluginCard: React.FC<PluginCardProps> = ({ plugin, onToggle, canToggle, li
                       }}
                       className="text-xs"
                     >
-                      Manage License
+                      {t('plugins.manage_license')}
                     </Button>
                   </div>
                 </div>
@@ -321,10 +320,10 @@ const PluginCard: React.FC<PluginCardProps> = ({ plugin, onToggle, canToggle, li
           <Alert className="mt-3 border-red-200 bg-red-50">
             <XCircle className="h-4 w-4 text-red-600" />
             <AlertDescription className="text-red-800 text-sm">
-              <strong>Initialization Error:</strong> {plugin.initializationError}
+              <strong>{t('plugins.initialization_error')}:</strong> {plugin.initializationError}
               {plugin.lastInitAttempt && (
                 <div className="text-xs mt-1 text-red-600">
-                  Last attempt: {plugin.lastInitAttempt.toLocaleString()}
+                  {t('plugins.last_attempt')}: {plugin.lastInitAttempt.toLocaleString()}
                 </div>
               )}
             </AlertDescription>
@@ -340,6 +339,7 @@ interface PluginsTabProps {
 }
 
 export const PluginsTab: React.FC<PluginsTabProps> = ({ isAdmin }) => {
+  const { t } = useTranslation();
   return (
     <FeatureGate
       feature="plugin_management"
@@ -349,32 +349,31 @@ export const PluginsTab: React.FC<PluginsTabProps> = ({ isAdmin }) => {
             <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
               <Puzzle className="w-8 h-8 text-blue-600 dark:text-blue-400" />
             </div>
-            <h3 className="text-2xl font-bold text-foreground mb-3">Business License Required</h3>
+            <h3 className="text-2xl font-bold text-foreground mb-3">{t('plugins.business_license_required')}</h3>
             <p className="text-muted-foreground mb-8 max-w-lg mx-auto leading-relaxed">
-              Plugin management allows you to enable or disable plugins to customize your YourFinanceWORKS experience.
-              Upgrade to a business license to access plugin management features.
+              {t('plugins.business_license_description')}
             </p>
             <div className="bg-background/80 backdrop-blur-sm rounded-xl p-6 mb-8 max-w-lg mx-auto shadow-sm border border-border/50">
               <h4 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                 <Shield className="h-4 w-4 text-primary" />
-                With Business License, you get:
+                {t('plugins.business_license_benefits')}
               </h4>
               <ul className="text-left space-y-3 text-sm text-foreground/80">
                 <li className="flex items-start">
                   <div className="mr-3 p-0.5 bg-green-100 rounded-full mt-0.5"><div className="w-2 h-2 bg-green-600 rounded-full" /></div>
-                  <span>Enable or disable plugins through settings interface</span>
+                  <span>{t('plugins.benefits.enable_disable')}</span>
                 </li>
                 <li className="flex items-start">
                   <div className="mr-3 p-0.5 bg-green-100 rounded-full mt-0.5"><div className="w-2 h-2 bg-green-600 rounded-full" /></div>
-                  <span>Dynamic sidebar integration with enabled plugins</span>
+                  <span>{t('plugins.benefits.sidebar_integration')}</span>
                 </li>
                 <li className="flex items-start">
                   <div className="mr-3 p-0.5 bg-green-100 rounded-full mt-0.5"><div className="w-2 h-2 bg-green-600 rounded-full" /></div>
-                  <span>Customize your application experience</span>
+                  <span>{t('plugins.benefits.customize_experience')}</span>
                 </li>
                 <li className="flex items-start">
                   <div className="mr-3 p-0.5 bg-green-100 rounded-full mt-0.5"><div className="w-2 h-2 bg-green-600 rounded-full" /></div>
-                  <span>Access to advanced plugin ecosystem</span>
+                  <span>{t('plugins.benefits.advanced_ecosystem')}</span>
                 </li>
               </ul>
             </div>
@@ -384,14 +383,14 @@ export const PluginsTab: React.FC<PluginsTabProps> = ({ isAdmin }) => {
                 onClick={() => window.location.href = '/settings?tab=license'}
                 size="lg"
               >
-                Activate Business License
+                {t('plugins.activate_business_license')}
               </ProfessionalButton>
               <ProfessionalButton
                 variant="outline"
                 onClick={() => window.open('https://docs.example.com/plugin-management', '_blank')}
                 size="lg"
               >
-                Learn More
+                {t('plugins.learn_more')}
               </ProfessionalButton>
             </div>
           </ProfessionalCardContent>
@@ -428,18 +427,18 @@ const PluginsTabContent: React.FC<PluginsTabProps> = ({ isAdmin }) => {
   // Listen for storage events and show appropriate notifications
   useEffect(() => {
     const handleStorageWarning = (event: CustomEvent) => {
-      toast.warning(`Plugin storage warning: ${event.detail.error}`);
+      toast.warning(t('plugins.plugin_storage_warning', { error: event.detail.error }));
     };
 
     const handleStorageError = (event: CustomEvent) => {
-      toast.error(`Failed to save plugin settings: ${event.detail.error}`);
+      toast.error(t('plugins.plugin_storage_error', { error: event.detail.error }));
     };
 
     const handlePluginInitialized = (event: CustomEvent) => {
       const { pluginId } = event.detail;
       const plugin = plugins.find(p => p.id === pluginId);
       if (plugin) {
-        toast.success(`${plugin.name} plugin initialized successfully`);
+        toast.success(t('plugins.plugin_initialized_success', { pluginName: plugin.name }));
       }
     };
 
@@ -447,23 +446,23 @@ const PluginsTabContent: React.FC<PluginsTabProps> = ({ isAdmin }) => {
       const { pluginId, error } = event.detail;
       const plugin = plugins.find(p => p.id === pluginId);
       if (plugin) {
-        toast.error(`${plugin.name} plugin failed to initialize: ${error}`);
+        toast.error(t('plugins.plugin_initialization_failed', { pluginName: plugin.name, error }));
       }
     };
 
     const handleDiscoveryWarnings = (event: CustomEvent) => {
       const { errors } = event.detail;
-      toast.warning(`Plugin discovery warnings: ${errors.length} issues found`);
+      toast.warning(t('plugins.plugin_discovery_warnings', { count: errors.length }));
     };
 
     const handleDiscoveryRefreshed = (event: CustomEvent) => {
       const { pluginCount } = event.detail;
-      toast.success(`Plugin discovery refreshed: ${pluginCount} plugins found`);
+      toast.success(t('plugins.plugin_discovery_refreshed', { count: pluginCount }));
     };
 
     const handleDiscoveryError = (event: CustomEvent) => {
       const { error } = event.detail;
-      toast.error(`Plugin discovery failed: ${error}`);
+      toast.error(t('plugins.plugin_discovery_failed', { error }));
     };
 
     window.addEventListener('plugin-storage-warning', handleStorageWarning as EventListener);
@@ -500,7 +499,7 @@ const PluginsTabContent: React.FC<PluginsTabProps> = ({ isAdmin }) => {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="w-8 h-8 animate-spin" />
-        <span className="ml-2">Loading plugins...</span>
+        <span className="ml-2">{t('plugins.loading')}</span>
       </div>
     );
   }
@@ -517,12 +516,12 @@ const PluginsTabContent: React.FC<PluginsTabProps> = ({ isAdmin }) => {
     const isExpired = isFeatureExpired(plugin.id);
 
     if (!hasLicense) {
-      let licenseMessage = `This plugin requires a ${plugin.requiresLicense} license.`;
+      let licenseMessage = t('plugins.this_plugin_requires_license', { licenseType: plugin.requiresLicense });
 
       if (isExpired) {
-        licenseMessage = `Your ${plugin.requiresLicense} license for this plugin has expired. Please renew your license to continue using this feature.`;
+        licenseMessage = t('plugins.license_expired_message', { licenseType: plugin.requiresLicense });
       } else {
-        licenseMessage = `This plugin requires a ${plugin.requiresLicense} license. Please upgrade your license to enable this feature.`;
+        licenseMessage = t('plugins.license_renewal_message', { licenseType: plugin.requiresLicense });
       }
 
       return {
@@ -539,10 +538,9 @@ const PluginsTabContent: React.FC<PluginsTabProps> = ({ isAdmin }) => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-medium">Plugin Management</h3>
+          <h3 className="text-lg font-medium">{t('plugins.title')}</h3>
           <p className="text-sm text-muted-foreground">
-            Enable or disable plugins to customize your YourFinanceWORKS experience.
-            Some plugins may require specific license tiers.
+            {t('plugins.description')}
           </p>
         </div>
         <Button
@@ -553,7 +551,7 @@ const PluginsTabContent: React.FC<PluginsTabProps> = ({ isAdmin }) => {
           className="flex items-center gap-2"
         >
           <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-          Refresh Plugins
+          {t('plugins.refresh_plugins')}
         </Button>
       </div>
 
@@ -562,7 +560,7 @@ const PluginsTabContent: React.FC<PluginsTabProps> = ({ isAdmin }) => {
         <Alert className="border-amber-200 bg-amber-50">
           <Info className="h-4 w-4 text-amber-600" />
           <AlertDescription className="text-amber-800">
-            <strong>Plugin Discovery Issues:</strong>
+            <strong>{t('plugins.discovery_issues')}</strong>
             <ul className="mt-2 list-disc list-inside text-sm">
               {discoveryErrors.map((error, index) => (
                 <li key={index}>{error}</li>
@@ -577,9 +575,9 @@ const PluginsTabContent: React.FC<PluginsTabProps> = ({ isAdmin }) => {
         <Alert className="border-amber-200 bg-amber-50">
           <Info className="h-4 w-4 text-amber-600" />
           <AlertDescription className="text-amber-800">
-            <strong>Storage Issue:</strong> {storageError}
+            <strong>{t('plugins.storage_issue')}</strong> {storageError}
             <br />
-            Your plugin settings may not persist across browser sessions.
+            {t('plugins.storage_warning')}
           </AlertDescription>
         </Alert>
       )}
@@ -588,9 +586,7 @@ const PluginsTabContent: React.FC<PluginsTabProps> = ({ isAdmin }) => {
         <Alert className="border-red-200 bg-red-50">
           <Shield className="h-4 w-4 text-red-600" />
           <AlertDescription className="text-red-800">
-            <strong>Administrator Access Required:</strong> Plugin management is restricted to administrators only.
-            You can view available plugins below, but cannot enable or disable them.
-            Contact your system administrator to request plugin changes.
+            <strong>{t('plugins.administrator_access_required')}:</strong> {t('plugins.plugin_management_restricted')}
           </AlertDescription>
         </Alert>
       )}
@@ -611,8 +607,7 @@ const PluginsTabContent: React.FC<PluginsTabProps> = ({ isAdmin }) => {
               />
               {isExpired && (
                 <div className="mt-2 text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
-                  <strong>License Expired:</strong> This plugin was previously enabled but your license has expired.
-                  Renew your license to continue using this feature.
+                  <strong>{t('plugins.license_expired')}</strong> {t('plugins.license_expired_banner')}
                 </div>
               )}
             </div>
@@ -623,9 +618,9 @@ const PluginsTabContent: React.FC<PluginsTabProps> = ({ isAdmin }) => {
       {plugins.length === 0 && (
         <div className="text-center py-8">
           <Puzzle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No plugins available</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">{t('plugins.no_plugins_available')}</h3>
           <p className="text-gray-600">
-            No plugins are currently installed in your system.
+            {t('plugins.no_plugins_installed')}
           </p>
         </div>
       )}

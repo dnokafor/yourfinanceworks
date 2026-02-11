@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { loadPluginTranslations, arePluginTranslationsLoaded } from '@/i18n';
+import { useLocaleFormatter } from '@/i18n/formatters';
 import {
   ArrowLeft, Wallet, TrendingUp, Activity, Target,
   Edit, BarChart3, PieChart, History, Trash2, Upload
@@ -35,10 +37,32 @@ const PortfolioDetail: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const portfolioId = parseInt(id || '0', 10);
-  const { t } = useTranslation();
+  const { t, ready } = useTranslation('investments');
+  const formatter = useLocaleFormatter();
 
   const [showEditPortfolio, setShowEditPortfolio] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [translationsReady, setTranslationsReady] = useState(false);
+
+  // Ensure plugin translations are loaded
+  React.useEffect(() => {
+    const loadTranslations = async () => {
+      if (!arePluginTranslationsLoaded('investments')) {
+        try {
+          await loadPluginTranslations('investments');
+          console.log('Investment translations loaded on portfolio detail page');
+          setTranslationsReady(true);
+        } catch (error) {
+          console.warn('Failed to load investment translations:', error);
+          setTranslationsReady(true); // Still mark as ready to avoid infinite loading
+        }
+      } else {
+        setTranslationsReady(true);
+      }
+    };
+
+    loadTranslations();
+  }, []);
 
   const { data: portfolio, isLoading: portfolioLoading } = useQuery<InvestmentPortfolio>({
     queryKey: ['portfolio', portfolioId],
@@ -97,14 +121,11 @@ const PortfolioDetail: React.FC = () => {
   }
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: portfolio.currency || 'USD'
-    }).format(amount);
+    return formatter.formatCurrency(amount, portfolio.currency || 'USD');
   };
 
   const formatPercentage = (percentage: number) => {
-    return `${percentage >= 0 ? '+' : ''}${percentage.toFixed(2)}%`;
+    return formatter.formatPercent(percentage / 100, 2);
   };
 
   const getPortfolioTypeColor = (type: string) => {
@@ -133,7 +154,7 @@ const PortfolioDetail: React.FC = () => {
 
       <PageHeader
         title={portfolio.name}
-        description={`Manage holdings and track performance for your ${portfolio.portfolio_type} portfolio.`}
+        description={translationsReady ? t('portfolio.taxable_portfolio_description') : 'Manage holdings and track performance for your taxable portfolio'}
         actions={
           <div className="flex gap-2">
             <ProfessionalButton
@@ -161,13 +182,13 @@ const PortfolioDetail: React.FC = () => {
       <ContentSection>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <MetricCard
-            title="Total Market Value"
+            title={t('portfolio.total_market_value_detail')}
             value={formatCurrency(performance?.total_value || portfolio.total_value || 0)}
             icon={Wallet}
-            description="Current value of all positions"
+            description={t('portfolio.total_market_value_detail_description')}
           />
           <MetricCard
-            title="Total Return"
+            title={t('portfolio.total_return_detail')}
             value={formatPercentage(performance?.total_return_percentage || 0)}
             change={{
               value: performance?.total_gain_loss || 0,
@@ -175,20 +196,20 @@ const PortfolioDetail: React.FC = () => {
             }}
             icon={TrendingUp}
             variant={(performance?.total_return_percentage || 0) >= 0 ? 'success' : 'danger'}
-            description="Lifetime portfolio performance"
+            description={t('portfolio.total_return_detail_description')}
           />
           <MetricCard
-            title="Unrealized Gain"
+            title={t('portfolio.unrealized_gain_detail')}
             value={formatCurrency(performance?.unrealized_gain_loss || 0)}
             icon={Activity}
             variant={(performance?.unrealized_gain_loss || 0) >= 0 ? 'success' : 'danger'}
-            description="Paper profit from open positions"
+            description={t('portfolio.unrealized_gain_detail_description')}
           />
           <MetricCard
-            title="Asset Classes"
+            title={t('portfolio.asset_classes_detail')}
             value={portfolio.holdings_count || 0}
             icon={Target}
-            description="Number of active holdings"
+            description={t('portfolio.asset_classes_detail_description')}
           />
         </div>
       </ContentSection>
@@ -200,11 +221,11 @@ const PortfolioDetail: React.FC = () => {
               <TabsList className="bg-muted/50 p-1 rounded-xl h-11 border border-border/50">
                 <TabsTrigger value="holdings" className="rounded-lg px-6 font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <PieChart className="w-4 h-4 mr-2" />
-                  Holdings
+                  {t('portfolio.holdings_tab')}
                 </TabsTrigger>
                 <TabsTrigger value="transactions" className="rounded-lg px-6 font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <History className="w-4 h-4 mr-2" />
-                  Transactions
+                  {t('portfolio.transactions_tab')}
                 </TabsTrigger>
                 <TabsTrigger value="analytics" className="rounded-lg px-6 font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   <BarChart3 className="w-4 h-4 mr-2" />
@@ -242,11 +263,11 @@ const PortfolioDetail: React.FC = () => {
             <div className="space-y-4 pt-4">
               <div className="flex justify-between items-center py-2 border-b border-border/30">
                 <span className="text-muted-foreground text-sm">Created At</span>
-                <span className="font-medium text-sm">{new Date(portfolio.created_at).toLocaleDateString()}</span>
+                <span className="font-medium text-sm">{formatter.formatDate(new Date(portfolio.created_at), 'medium')}</span>
               </div>
               <div className="flex justify-between items-center py-2 border-b border-border/30">
                 <span className="text-muted-foreground text-sm">Last Updated</span>
-                <span className="font-medium text-sm">{new Date(portfolio.updated_at).toLocaleDateString()}</span>
+                <span className="font-medium text-sm">{formatter.formatDate(new Date(portfolio.updated_at), 'medium')}</span>
               </div>
               <div className="flex justify-between items-center py-2 border-b border-border/30">
                 <span className="text-muted-foreground text-sm">Status</span>
@@ -267,7 +288,7 @@ const PortfolioDetail: React.FC = () => {
             </div>
           </ProfessionalCard>
 
-          <ProfessionalCard title="Quick Actions" className="border-border/40">
+          <ProfessionalCard title={t('portfolio.quick_actions')} className="border-border/40">
             <div className="grid grid-cols-1 gap-2 mt-2">
               <ProfessionalButton
                 variant="minimal"
@@ -277,7 +298,7 @@ const PortfolioDetail: React.FC = () => {
                 <div className="p-2 rounded-lg bg-primary/5 group-hover:bg-primary/10 mr-3">
                   <BarChart3 className="w-4 h-4" />
                 </div>
-                {t('Generate Performance Report')}
+                {t('portfolio.generate_performance_report')}
               </ProfessionalButton>
               <ProfessionalButton
                 variant="minimal"
@@ -287,7 +308,7 @@ const PortfolioDetail: React.FC = () => {
                 <div className="p-2 rounded-lg bg-primary/5 group-hover:bg-primary/10 mr-3">
                   <PieChart className="w-4 h-4" />
                 </div>
-                {t('Asset Rebalancing Tool')}
+                {t('portfolio.asset_rebalancing_tool')}
               </ProfessionalButton>
             </div>
           </ProfessionalCard>

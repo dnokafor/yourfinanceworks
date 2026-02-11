@@ -17,7 +17,7 @@ import FileAttachmentsList from '@/components/investments/FileAttachmentsList';
 const CreatePortfolio: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { t } = useTranslation();
+  const { t } = useTranslation('investments');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -29,7 +29,7 @@ const CreatePortfolio: React.FC = () => {
   const createPortfolioMutation = useMutation<InvestmentPortfolio, unknown, typeof formData>({
     mutationFn: (data: typeof formData) => investmentApi.create(data),
     onSuccess: async (portfolio) => {
-      toast.success(t('Portfolio created successfully'));
+      toast.success(t('portfolio.portfolio_created_successfully'));
       setCreatedPortfolioId(portfolio.id);
 
       // Invalidate portfolios list to refresh
@@ -42,7 +42,7 @@ const CreatePortfolio: React.FC = () => {
       // setShowFileUploadDialog(true);
     },
     onError: (error: any) => {
-      const errorMessage = error?.response?.data?.detail || t('Failed to create portfolio');
+      const errorMessage = error?.response?.data?.detail || t('portfolio.failed_to_create_portfolio');
       toast.error(errorMessage);
     }
   });

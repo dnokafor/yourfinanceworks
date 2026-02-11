@@ -419,7 +419,7 @@ export function AppSidebar() {
       {
         id: 'investments',
         path: '/investments',
-        label: 'Investments',
+        label: t('investments:navigation.investments', 'Investments'),
         icon: <TrendingUp className="w-5 h-5" />,
         tourId: 'nav-investments',
         priority: 1

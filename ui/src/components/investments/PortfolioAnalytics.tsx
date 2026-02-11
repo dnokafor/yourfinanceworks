@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useLocaleFormatter } from '@/i18n/formatters';
 import {
   PieChart, AlertCircle, Info
 } from 'lucide-react';
@@ -14,6 +15,7 @@ interface PortfolioAnalyticsProps {
 
 const PortfolioAnalytics: React.FC<PortfolioAnalyticsProps> = ({ portfolioId }) => {
   const { t } = useTranslation();
+  const formatter = useLocaleFormatter();
   const [forecastMonths, setForecastMonths] = useState(12);
 
   // Fetch diversification analysis
@@ -105,7 +107,7 @@ const PortfolioAnalytics: React.FC<PortfolioAnalyticsProps> = ({ portfolioId }) 
                   <div className="flex justify-between items-center py-2 border-b border-border/30">
                     <span className="text-sm text-muted-foreground">Largest Holding</span>
                     <span className={cn("font-bold text-sm", diversification.concentration_risk.largest_holding_percentage > 30 ? 'text-rose-600' : 'text-foreground')}>
-                      {diversification.concentration_risk.largest_holding_percentage.toFixed(1)}%
+                      {formatter.formatPercent(diversification.concentration_risk.largest_holding_percentage / 100, 1)}
                     </span>
                   </div>
                   {diversification.concentration_risk.largest_holding_percentage > 30 && (
@@ -134,7 +136,7 @@ const PortfolioAnalytics: React.FC<PortfolioAnalyticsProps> = ({ portfolioId }) 
                       <div key={symbol} className="flex justify-between items-center p-3 rounded-lg bg-muted/30 border border-border/50">
                         <span className="font-mono text-sm font-semibold">{symbol}</span>
                         <span className={cn("font-bold text-sm", yieldNum > 0 ? 'text-emerald-600' : 'text-muted-foreground')}>
-                          {yieldNum.toFixed(2)}%
+                          {formatter.formatPercent(yieldNum / 100, 2)}
                         </span>
                       </div>
                     );
@@ -174,12 +176,12 @@ const PortfolioAnalytics: React.FC<PortfolioAnalyticsProps> = ({ portfolioId }) 
                       </div>
                       <div className="flex items-center justify-between pt-3 border-t border-border/30">
                         <span className="text-xs text-muted-foreground">Avg Amount</span>
-                        <span className="font-semibold text-sm">${(typeof data.average_amount === 'number' ? data.average_amount : parseFloat(String(data.average_amount)) || 0).toFixed(2)}</span>
+                        <span className="font-semibold text-sm">{formatter.formatCurrency(typeof data.average_amount === 'number' ? data.average_amount : parseFloat(String(data.average_amount)) || 0)}</span>
                       </div>
                       {data.last_payment_date && (
                         <div className="flex items-center justify-between pt-2 text-xs text-muted-foreground">
                           <span>Last Payment</span>
-                          <span>{new Date(data.last_payment_date).toLocaleDateString()}</span>
+                          <span>{formatter.formatDate(new Date(data.last_payment_date), 'short')}</span>
                         </div>
                       )}
                     </div>
@@ -215,7 +217,7 @@ const PortfolioAnalytics: React.FC<PortfolioAnalyticsProps> = ({ portfolioId }) 
                     {t('Projected Income')}
                   </p>
                   <p className="text-2xl font-bold text-emerald-600">
-                    ${(typeof dividendForecast.total_forecast === 'number' ? dividendForecast.total_forecast : parseFloat(String(dividendForecast.total_forecast)) || 0).toFixed(2)}
+                    {formatter.formatCurrency(typeof dividendForecast.total_forecast === 'number' ? dividendForecast.total_forecast : parseFloat(String(dividendForecast.total_forecast)) || 0)}
                   </p>
                   <p className="text-xs text-emerald-600/70 mt-2">
                     {t('Next')} {forecastMonths} {t('months')}
@@ -231,7 +233,7 @@ const PortfolioAnalytics: React.FC<PortfolioAnalyticsProps> = ({ portfolioId }) 
                         return (
                           <div key={symbol} className="flex justify-between items-center text-xs p-2 rounded bg-muted/30">
                             <span className="font-mono font-semibold">{symbol}</span>
-                            <span className="text-emerald-600 font-bold">${expectedIncome.toFixed(2)}</span>
+                            <span className="text-emerald-600 font-bold">{formatter.formatCurrency(expectedIncome)}</span>
                           </div>
                         );
                       })}

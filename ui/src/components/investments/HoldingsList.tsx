@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useLocaleFormatter } from '@/i18n/formatters';
 import {
   Plus, Edit2, Trash2, TrendingUp, TrendingDown,
   DollarSign, Percent, Calendar, AlertCircle,
@@ -59,7 +60,8 @@ interface HoldingsListProps {
 
 const HoldingsList: React.FC<HoldingsListProps> = ({ portfolioId }) => {
   const queryClient = useQueryClient();
-  const { t } = useTranslation();
+  const { t } = useTranslation('investments');
+  const formatter = useLocaleFormatter();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editingHolding, setEditingHolding] = useState<Holding | null>(null);
   const [deletingHolding, setDeletingHolding] = useState<Holding | null>(null);
@@ -77,26 +79,23 @@ const HoldingsList: React.FC<HoldingsListProps> = ({ portfolioId }) => {
   const deleteHoldingMutation = useMutation({
     mutationFn: (holdingId: number) => api.delete(`/investments/holdings/${holdingId}`),
     onSuccess: () => {
-      toast.success(t('Holding deleted successfully'));
+      toast.success(t('holdings.holding_deleted_successfully'));
       queryClient.invalidateQueries({ queryKey: ['holdings', portfolioId] });
       queryClient.invalidateQueries({ queryKey: ['portfolio', portfolioId] });
       setDeletingHolding(null);
     },
     onError: (error: any) => {
-      const errorMessage = error instanceof Error ? error.message : t('Failed to delete holding');
+      const errorMessage = error instanceof Error ? error.message : t('holdings.failed_to_delete_holding');
       toast.error(errorMessage);
     }
   });
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
+    return formatter.formatCurrency(amount, 'USD');
   };
 
   const formatPercentage = (percentage: number) => {
-    return `${percentage >= 0 ? '+' : ''}${percentage.toFixed(2)}%`;
+    return formatter.formatPercent(percentage / 100, 2);
   };
 
   const getAssetClassColor = (assetClass: string) => {
@@ -129,10 +128,10 @@ const HoldingsList: React.FC<HoldingsListProps> = ({ portfolioId }) => {
     return (
       <div className="p-8 text-center rounded-3xl bg-destructive/5 border-2 border-dashed border-destructive/20">
         <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4 opacity-50" />
-        <h3 className="text-lg font-bold text-destructive">{t('Failed to load holdings')}</h3>
-        <p className="text-muted-foreground">{t('There was an error fetching your holdings. Please try again.')}</p>
+        <h3 className="text-lg font-bold text-destructive">{t('holdings.failed_to_load_holdings')}</h3>
+        <p className="text-muted-foreground">{t('holdings.error_fetching_holdings')}</p>
         <ProfessionalButton variant="outline" className="mt-4" onClick={() => queryClient.invalidateQueries({ queryKey: ['holdings', portfolioId] })}>
-          {t('Retry')}
+          {t('holdings.retry')}
         </ProfessionalButton>
       </div>
     );
@@ -151,17 +150,17 @@ const HoldingsList: React.FC<HoldingsListProps> = ({ portfolioId }) => {
         <ProfessionalCardHeader className="flex-row items-center justify-between space-y-0 px-6 py-4 border-b border-border/10 bg-muted/5">
           <div className="space-y-1">
             <ProfessionalCardTitle className="text-xl font-bold tracking-tight">
-              {t('Active Holdings')}
+              {t('holdings.active_holdings')}
             </ProfessionalCardTitle>
             {activeHoldings.length > 0 && (
               <ProfessionalCardDescription>
-                {t('Detailed overview of your current positions.')}
+                {t('holdings.detailed_overview')}
               </ProfessionalCardDescription>
             )}
           </div>
           <ProfessionalButton onClick={() => setShowCreateDialog(true)} size="sm" variant="gradient" className="rounded-lg">
             <Plus className="w-4 h-4 mr-2" />
-            {t('Add Position')}
+            {t('holdings.add_position')}
           </ProfessionalButton>
         </ProfessionalCardHeader>
         <div className="p-0">
@@ -170,13 +169,13 @@ const HoldingsList: React.FC<HoldingsListProps> = ({ portfolioId }) => {
             <div className="p-4 rounded-full bg-primary/5 inline-block mb-4 shadow-inner">
               <DollarSign className="w-10 h-10 text-primary/40" />
             </div>
-            <h3 className="text-xl font-bold mb-2">{t('No active holdings')}</h3>
+            <h3 className="text-xl font-bold mb-2">{t('holdings.no_active_holdings')}</h3>
             <p className="text-muted-foreground max-w-sm mx-auto mb-8">
-              {t('Start building your portfolio by adding your first investment position.')}
+              {t('holdings.start_building_portfolio')}
             </p>
             <ProfessionalButton onClick={() => setShowCreateDialog(true)} variant="secondary" className="rounded-xl px-8 shadow-md">
               <Plus className="w-4 h-4 mr-2" />
-              {t('Add Your First Holding')}
+              {t('holdings.add_first_holding')}
             </ProfessionalButton>
           </div>
         ) : (
@@ -184,14 +183,14 @@ const HoldingsList: React.FC<HoldingsListProps> = ({ portfolioId }) => {
             <Table>
               <TableHeader className="bg-muted/50">
                 <TableRow className="hover:bg-transparent border-border/50">
-                  <TableHead className="font-bold py-4 pl-6 uppercase tracking-wider text-[10px] text-muted-foreground">{t('Security')}</TableHead>
-                  <TableHead className="font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('Type')}</TableHead>
-                  <TableHead className="text-right font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('Position')}</TableHead>
-                  <TableHead className="text-right font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('Currency')}</TableHead>
-                  <TableHead className="text-right font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('Market Price')}</TableHead>
-                  <TableHead className="text-right font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('Market Value')}</TableHead>
-                  <TableHead className="text-right font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('Total G/L')}</TableHead>
-                  <TableHead className="text-right pr-6 font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('Actions')}</TableHead>
+                  <TableHead className="font-bold py-4 pl-6 uppercase tracking-wider text-[10px] text-muted-foreground">{t('holdings.security')}</TableHead>
+                  <TableHead className="font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('holdings.type')}</TableHead>
+                  <TableHead className="text-right font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('holdings.position')}</TableHead>
+                  <TableHead className="text-right font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('holdings.currency')}</TableHead>
+                  <TableHead className="text-right font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('holdings.market_price')}</TableHead>
+                  <TableHead className="text-right font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('holdings.market_value')}</TableHead>
+                  <TableHead className="text-right font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('holdings.total_gl')}</TableHead>
+                  <TableHead className="text-right pr-6 font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('holdings.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -205,7 +204,7 @@ const HoldingsList: React.FC<HoldingsListProps> = ({ portfolioId }) => {
                         <div className="flex items-center gap-3">
                           <div className="flex flex-col">
                             <span className="font-black text-sm tracking-tight">{holding.security_symbol}</span>
-                            <span className="text-[10px] text-muted-foreground font-medium truncate max-w-[120px]">{holding.security_name || t('Custom Asset')}</span>
+                            <span className="text-[10px] text-muted-foreground font-medium truncate max-w-[120px]">{holding.security_name || t('holdings.custom_asset')}</span>
                           </div>
                         </div>
                       </TableCell>
@@ -215,7 +214,7 @@ const HoldingsList: React.FC<HoldingsListProps> = ({ portfolioId }) => {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-mono text-xs">
-                        {holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                        {formatter.formatNumber(holding.quantity, 4)}
                       </TableCell>
                       <TableCell className="text-right">
                         <Badge variant="outline" className="px-2 py-0 rounded-md font-bold text-[9px] uppercase tracking-tighter border shadow-sm bg-muted/50">
@@ -249,16 +248,16 @@ const HoldingsList: React.FC<HoldingsListProps> = ({ portfolioId }) => {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="rounded-xl border-border/50 shadow-2xl w-48">
                             <DropdownMenuItem className="rounded-lg m-1 cursor-pointer" onClick={() => setEditingHolding(holding)}>
-                              <Edit2 className="w-4 h-4 mr-2 opacity-60" /> {t('Edit Position')}
+                              <Edit2 className="w-4 h-4 mr-2 opacity-60" /> {t('holdings.edit_position')}
                             </DropdownMenuItem>
                             <DropdownMenuItem className="rounded-lg m-1 cursor-pointer">
-                              <ExternalLink className="w-4 h-4 mr-2 opacity-60" /> {t('Market Insights')}
+                              <ExternalLink className="w-4 h-4 mr-2 opacity-60" /> {t('holdings.market_insights')}
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="rounded-lg m-1 cursor-pointer text-destructive focus:text-destructive"
                               onClick={() => setDeletingHolding(holding)}
                             >
-                              <Trash2 className="w-4 h-4 mr-2 opacity-60" /> {t('Remove Position')}
+                              <Trash2 className="w-4 h-4 mr-2 opacity-60" /> {t('holdings.remove_position')}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -281,10 +280,10 @@ const HoldingsList: React.FC<HoldingsListProps> = ({ portfolioId }) => {
         >
           <ProfessionalCardHeader className="px-6 py-4 border-b border-border/10 bg-muted/5">
             <ProfessionalCardTitle className="text-lg font-bold">
-              {t('Closed Positions')}
+              {t('holdings.closed_positions')}
             </ProfessionalCardTitle>
             <ProfessionalCardDescription>
-              {t('History of successfully exited investments.')}
+              {t('holdings.history_exited_investments')}
             </ProfessionalCardDescription>
           </ProfessionalCardHeader>
           <div className="p-0">
@@ -292,11 +291,11 @@ const HoldingsList: React.FC<HoldingsListProps> = ({ portfolioId }) => {
             <Table>
               <TableHeader className="bg-muted/10">
                 <TableRow className="hover:bg-transparent border-border/50">
-                  <TableHead className="font-bold py-3 pl-6 uppercase tracking-wider text-[10px] text-muted-foreground">{t('Security')}</TableHead>
-                  <TableHead className="font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('Asset Class')}</TableHead>
-                  <TableHead className="text-right font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('Currency')}</TableHead>
-                  <TableHead className="text-right font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('Closed G/L')}</TableHead>
-                  <TableHead className="text-right pr-6 font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('Exit Date')}</TableHead>
+                  <TableHead className="font-bold py-3 pl-6 uppercase tracking-wider text-[10px] text-muted-foreground">{t('holdings.security')}</TableHead>
+                  <TableHead className="font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('holdings.asset_class')}</TableHead>
+                  <TableHead className="text-right font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('holdings.currency')}</TableHead>
+                  <TableHead className="text-right font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('holdings.closed_gl')}</TableHead>
+                  <TableHead className="text-right pr-6 font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('holdings.exit_date')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -324,7 +323,7 @@ const HoldingsList: React.FC<HoldingsListProps> = ({ portfolioId }) => {
                       </span>
                     </TableCell>
                     <TableCell className="text-right pr-6 text-xs text-muted-foreground font-medium">
-                      {new Date(holding.updated_at).toLocaleDateString()}
+                      {formatter.formatDate(new Date(holding.updated_at), 'short')}
                     </TableCell>
                   </TableRow>
                 ))}

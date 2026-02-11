@@ -1027,7 +1027,8 @@
       "gamification": "Gamification",
       "cookies": "Cookie Settings",
       "export": "Data Management",
-      "email": "Email Settings"
+      "email": "Email Settings",
+      "plugins": "Plugins"
     },
     "discount_rules": {
       "title": "Discount Rules",
@@ -1875,8 +1876,7 @@
         "ocr": "OCR Conversion",
         "email_processing": "Email Processing",
         "bank_processing": "Bank Processing",
-        "fraud_detection": "FinanceWorks Insights",
-        "investments": "Investments"
+        "fraud_detection": "FinanceWorks Insights"
       },
       "messages": {
         "failedToLoadPrompts": "Failed to load prompts",
@@ -3906,5 +3906,67 @@
     "connectionSuccessful": "Connection successful!",
     "connectionFailed": "Connection failed",
     "syncStarted": "Sync started in background..."
+  },
+  "plugins": {
+    "title": "Plugin Management",
+    "description": "Enable or disable plugins to customize your YourFinanceWORKS experience. Some plugins may require specific license tiers.",
+    "loading": "Loading plugins...",
+    "refresh_plugins": "Refresh Plugins",
+    "status": {
+      "active": "Active",
+      "initializing": "Initializing...",
+      "error": "Error",
+      "disabled": "Disabled",
+      "inactive": "Inactive",
+      "enabled": "Enabled"
+    },
+    "business_license_required": "Business License Required",
+    "business_license_description": "Plugin management allows you to enable or disable plugins to customize your YourFinanceWORKS experience. Upgrade to a business license to access plugin management features.",
+    "business_license_benefits": "With Business License, you get:",
+    "benefits": {
+      "enable_disable": "Enable or disable plugins through settings interface",
+      "sidebar_integration": "Dynamic sidebar integration with enabled plugins",
+      "customize_experience": "Customize your application experience",
+      "advanced_ecosystem": "Access to advanced plugin ecosystem"
+    },
+    "activate_business_license": "Activate Business License",
+    "learn_more": "Learn More",
+    "author": "Author",
+    "dependencies": "Dependencies",
+    "downloads": "downloads",
+    "updated": "Updated",
+    "homepage": "Homepage",
+    "repository": "Repository",
+    "administrator_access_required": "Administrator Access Required",
+    "admin_only_message": "Only administrators can enable or disable plugins. Contact your system administrator to manage plugin settings.",
+    "manage_license": "Manage License",
+    "initialization_error": "Initialization Error",
+    "last_attempt": "Last attempt",
+    "discovery_issues": "Plugin Discovery Issues:",
+    "storage_issue": "Storage Issue:",
+    "storage_warning": "Your plugin settings may not persist across browser sessions.",
+    "plugin_management_restricted": "Plugin management is restricted to administrators only. You can view available plugins below, but cannot enable or disable them. Contact your system administrator to request plugin changes.",
+    "no_plugins_available": "No plugins available",
+    "no_plugins_installed": "No plugins are currently installed in your system.",
+    "license_expired": "License Expired:",
+    "license_expired_banner": "This plugin was previously enabled but your license has expired. Renew your license to continue using this feature.",
+    "plugin_enabled_success": "{{pluginName}} plugin enabled",
+    "plugin_disabled_success": "{{pluginName}} plugin disabled",
+    "plugin_initialized_success": "{{pluginName}} plugin initialized successfully",
+    "plugin_initialization_failed": "{{pluginName}} plugin failed to initialize: {{error}}",
+    "plugin_storage_warning": "Plugin storage warning: {{error}}",
+    "plugin_storage_error": "Failed to save plugin settings: {{error}}",
+    "plugin_discovery_warnings": "Plugin discovery warnings: {{count}} issues found",
+    "plugin_discovery_refreshed": "Plugin discovery refreshed: {{count}} plugins found",
+    "plugin_discovery_failed": "Plugin discovery failed: {{error}}",
+    "unauthorized_message": "Unauthorized: Only administrators can manage plugins",
+    "license_validation_failed": "License validation failed: {{error}}",
+    "storage_error_message": "Storage error: Plugin settings may not be saved. {{error}}",
+    "storage_quota_exceeded": "Storage quota exceeded. Please clear some browser data and try again.",
+    "plugin_initialization_failed_message": "Plugin initialization failed: {{error}}",
+    "failed_to_enable_disable": "Failed to {{action}} plugin: {{error}}",
+    "this_plugin_requires_license": "This plugin requires a {{licenseType}} license.",
+    "license_expired_message": "Your {{licenseType}} license for this plugin has expired. Please renew your license to continue using this feature.",
+    "license_renewal_message": "This plugin requires a {{licenseType}} license. Please upgrade your license to enable this feature."
   }
 }

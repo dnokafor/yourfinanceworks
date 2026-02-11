@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { loadPluginTranslations, arePluginTranslationsLoaded } from '@/i18n';
 import {
   TrendingUp, TrendingDown, PieChart, Plus, BarChart3, Calendar,
   Wallet, Target, Activity, Archive, Trash2, RotateCcw,
@@ -34,9 +35,30 @@ import { toast } from 'sonner';
 import { cn, formatDate } from '@/lib/utils';
 
 const InvestmentDashboard: React.FC = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('investments');
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [translationsReady, setTranslationsReady] = useState(false);
+
+  // Ensure plugin translations are loaded
+  useEffect(() => {
+    const loadTranslations = async () => {
+      if (!arePluginTranslationsLoaded('investments')) {
+        try {
+          await loadPluginTranslations('investments');
+          console.log('Investment translations loaded on page mount');
+          setTranslationsReady(true);
+        } catch (error) {
+          console.warn('Failed to load investment translations:', error);
+          setTranslationsReady(true); // Still mark as ready to avoid infinite loading
+        }
+      } else {
+        setTranslationsReady(true);
+      }
+    };
+
+    loadTranslations();
+  }, []);
 
   // Parse search params for initial state
   const pageParam = parseInt(searchParams.get('page') || '1', 10);
@@ -133,10 +155,10 @@ const InvestmentDashboard: React.FC = () => {
   const handleDelete = async (id: number) => {
     try {
       await investmentApi.delete(id);
-      toast.success(t('Portfolio deleted successfully'));
+      toast.success(t('portfolio.portfolio_deleted_successfully'));
       queryClient.invalidateQueries({ queryKey: ['portfolios'] });
     } catch (error: any) {
-      const message = error instanceof Error ? error.message : t('Failed to delete portfolio');
+      const message = error instanceof Error ? error.message : t('portfolio.failed_to_delete_portfolio');
       // If the message is a generic code or contains "Error:", it's already processed by api.ts
       toast.error(message);
     } finally {
@@ -147,10 +169,10 @@ const InvestmentDashboard: React.FC = () => {
   const handleRestore = async (id: number) => {
     try {
       await investmentApi.restore(id);
-      toast.success(t('Portfolio restored successfully'));
+      toast.success(t('portfolio.portfolio_restored_successfully'));
       queryClient.invalidateQueries({ queryKey: ['portfolios'] });
     } catch (error: any) {
-      const message = error instanceof Error ? error.message : t('Failed to restore portfolio');
+      const message = error instanceof Error ? error.message : t('portfolio.failed_to_restore_portfolio');
       toast.error(message);
     }
   };
@@ -158,10 +180,10 @@ const InvestmentDashboard: React.FC = () => {
   const handlePermanentDelete = async (id: number) => {
     try {
       await investmentApi.permanentDelete(id);
-      toast.success(t('Portfolio permanently deleted'));
+      toast.success(t('portfolio.portfolio_permanently_deleted'));
       queryClient.invalidateQueries({ queryKey: ['portfolios'] });
     } catch (error: any) {
-      const message = error instanceof Error ? error.message : t('Failed to delete portfolio permanently');
+      const message = error instanceof Error ? error.message : t('portfolio.failed_to_delete_permanently');
       toast.error(message);
     } finally {
       setPermanentDeleteId(null);
@@ -171,10 +193,10 @@ const InvestmentDashboard: React.FC = () => {
   const handleEmptyBin = async () => {
     try {
       await investmentApi.emptyRecycleBin();
-      toast.success(t('Recycle bin emptied successfully'));
+      toast.success(t('portfolio.recycle_bin_emptied_successfully'));
       queryClient.invalidateQueries({ queryKey: ['portfolios'] });
     } catch (error: any) {
-      const message = error instanceof Error ? error.message : t('Failed to empty recycle bin');
+      const message = error instanceof Error ? error.message : t('portfolio.failed_to_empty_recycle_bin');
       toast.error(message);
     } finally {
       setEmptyBinDialogOpen(false);
@@ -229,14 +251,23 @@ const InvestmentDashboard: React.FC = () => {
 
   const totalPages = Math.ceil(totalPortfolios / pageSize);
 
+  if (!translationsReady) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 min-h-[400px] space-y-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <p className="text-muted-foreground animate-pulse font-medium">{t('Loading portfolio details...')}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-20">
       {/* Hero Header - Refined to match Expenses page */}
       <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent rounded-2xl border border-primary/20 p-8 backdrop-blur-sm">
         <div className="flex items-center justify-between gap-6">
           <div className="space-y-2">
-            <h1 className="text-4xl font-bold tracking-tight text-foreground">{t('Investment Portfolio')}</h1>
-            <p className="text-lg text-muted-foreground">{t('Track your wealth and performance across all investment accounts')}</p>
+            <h1 className="text-4xl font-bold tracking-tight text-foreground">{t('portfolio.investment_portfolio')}</h1>
+            <p className="text-lg text-muted-foreground">{t('portfolio.track_wealth_performance')}</p>
           </div>
           <div className="flex flex-wrap gap-3 items-center justify-end">
             <ProfessionalButton
@@ -246,7 +277,7 @@ const InvestmentDashboard: React.FC = () => {
               className="bg-background/50 border-border/50 backdrop-blur-sm hover:bg-background transition-colors"
             >
               <RefreshCw className={cn("w-4 h-4 mr-2", portfoliosFetching && "animate-spin")} />
-              {t('Refresh')}
+              {t('portfolio.refresh')}
             </ProfessionalButton>
             <ProfessionalButton
               variant="outline"
@@ -254,7 +285,7 @@ const InvestmentDashboard: React.FC = () => {
               onClick={() => setShowRecycleBin(!showRecycleBin)}
             >
               <Trash2 className="w-4 h-4 mr-2" />
-              {t('Recycle Bin')}
+              {t('portfolio.recycle_bin')}
               {totalDeletedCount > 0 && (
                 <Badge variant="destructive" className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full text-[10px]">
                   {totalDeletedCount}
@@ -268,13 +299,13 @@ const InvestmentDashboard: React.FC = () => {
             >
               <Link to="/investments/analytics">
                 <BarChart3 className="w-4 h-4 mr-2" />
-                {t('Analytics')}
+                {t('portfolio.analytics')}
               </Link>
             </ProfessionalButton>
             <ProfessionalButton asChild variant="default" className="shadow-lg shadow-primary/20 font-bold px-6">
               <Link to="/investments/portfolio/new">
                 <Plus className="w-4 h-4 mr-2" />
-                {t('New Portfolio')}
+                {t('portfolio.new_portfolio')}
               </Link>
             </ProfessionalButton>
           </div>
@@ -293,10 +324,10 @@ const InvestmentDashboard: React.FC = () => {
                     <Trash2 className="h-6 w-6 text-destructive" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-xl tracking-tight">{t('Recycle Bin')}</h3>
+                    <h3 className="font-bold text-xl tracking-tight">{t('portfolio.recycle_bin')}</h3>
                     <p className="text-sm text-muted-foreground flex items-center">
                       <Trash2 className="h-3 w-3 mr-1 opacity-60" />
-                      {totalDeletedCount} {t('items found')} • {t('Restore or permanently erase portfolios')}
+                      {totalDeletedCount} {t('portfolio.items_found')} • {t('portfolio.restore_or_permanently_erase')}
                     </p>
                   </div>
                 </div>
@@ -308,7 +339,7 @@ const InvestmentDashboard: React.FC = () => {
                     onClick={() => setEmptyBinDialogOpen(true)}
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
-                    {t('Empty Bin')}
+                    {t('portfolio.empty_bin')}
                   </Button>
                 )}
               </div>
@@ -324,8 +355,8 @@ const InvestmentDashboard: React.FC = () => {
                       <Archive className="h-6 w-6 text-muted-foreground/30" />
                     </div>
                     <div>
-                      <h4 className="font-bold">{t('Your bin is empty')}</h4>
-                      <p className="text-xs text-muted-foreground">{t('Deleted portfolios will appear here.')}</p>
+                      <h4 className="font-bold">{t('portfolio.your_bin_is_empty')}</h4>
+                      <p className="text-xs text-muted-foreground">{t('portfolio.deleted_portfolios_will_appear_here')}</p>
                     </div>
                   </div>
                 ) : (
@@ -397,24 +428,23 @@ const InvestmentDashboard: React.FC = () => {
       <ContentSection>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <MetricCard
-            title="Portfolio Value"
+            title={t('portfolio.total_value')}
             value={formatCurrency(performanceStats.total_value)}
             icon={Wallet}
-            description="Total market value of all holdings"
+            description={t('portfolio.total_market_value')}
           />
           <MetricCard
-            title="Overall Return"
+            title={t('portfolio.total_return')}
             value={formatPercentage(performanceStats.total_return_percentage)}
-            change={{ value: performanceStats.total_return_percentage, type: performanceStats.total_return_percentage >= 0 ? 'increase' : 'decrease' }}
-            icon={Activity}
-            description="Weighted return across all accounts"
+            icon={TrendingUp}
+            description={t('portfolio.total_return_description')}
             variant={performanceStats.total_return_percentage >= 0 ? 'success' : 'danger'}
           />
           <MetricCard
-            title="Active Positions"
+            title={t('portfolio.holdings_count')}
             value={portfolios.reduce((acc, p) => acc + (p.holdings_count || 0), 0)}
             icon={Target}
-            description="Currently tracked securities"
+            description={t('portfolio.currently_tracked_securities')}
           />
           <MetricCard
             title="Total Gain/Loss"
@@ -435,7 +465,7 @@ const InvestmentDashboard: React.FC = () => {
               <div className="relative flex-1 max-w-md group">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                 <Input
-                  placeholder="Search portfolios by name..."
+                  placeholder={t('portfolio.search_portfolios_placeholder')}
                   className="pl-10 h-10 bg-background/50 border-border/50 focus-visible:ring-primary/20 focus-visible:border-primary transition-all rounded-xl"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -446,11 +476,11 @@ const InvestmentDashboard: React.FC = () => {
                 <SelectTrigger className="w-[180px] h-10 rounded-xl bg-background/50 border-border/50">
                   <div className="flex items-center gap-2">
                     <Filter className="w-4 h-4 text-muted-foreground" />
-                    <SelectValue placeholder="All Types" />
+                    <SelectValue placeholder={t('portfolio.all_types')} />
                   </div>
                 </SelectTrigger>
                 <SelectContent className="rounded-xl border-border/50 shadow-xl">
-                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="all">{t('portfolio.all_types')}</SelectItem>
                   <SelectItem value="taxable">Taxable</SelectItem>
                   <SelectItem value="retirement">Retirement</SelectItem>
                   <SelectItem value="business">Business</SelectItem>
@@ -469,7 +499,7 @@ const InvestmentDashboard: React.FC = () => {
                 onClick={() => setViewMode('grid')}
               >
                 <LayoutGrid className="h-4 w-4 mr-2" />
-                Grid
+                {t('portfolio.grid_view')}
               </Button>
               <Button
                 variant={viewMode === 'table' ? 'secondary' : 'ghost'}
@@ -481,7 +511,7 @@ const InvestmentDashboard: React.FC = () => {
                 onClick={() => setViewMode('table')}
               >
                 <List className="h-4 w-4 mr-2" />
-                Table
+                {t('portfolio.table_view')}
               </Button>
             </div>
           </div>
@@ -570,7 +600,7 @@ const InvestmentDashboard: React.FC = () => {
                   <CardContent className="p-6 pt-0">
                     <div className="flex items-end justify-between mt-2">
                       <div>
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Total Value</p>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">{t('portfolio.total_value')}</p>
                         <p className="text-2xl font-bold tracking-tight">{formatCurrency(portfolio.total_value || 0)}</p>
                       </div>
                       <div className="text-right">
@@ -578,7 +608,7 @@ const InvestmentDashboard: React.FC = () => {
                           <TrendingUp className="w-4 h-4" />
                           <span>+2.5%</span>
                         </div>
-                        <p className="text-xs text-muted-foreground font-medium">{portfolio.holdings_count || 0} holdings</p>
+                        <p className="text-xs text-muted-foreground font-medium">{portfolio.holdings_count || 0} {t('portfolio.holdings_count')}</p>
                       </div>
                     </div>
 
@@ -602,11 +632,11 @@ const InvestmentDashboard: React.FC = () => {
               <Table>
                 <TableHeader className="bg-muted/30">
                   <TableRow className="hover:bg-transparent border-border/50">
-                    <TableHead className="py-4 pl-6 font-semibold">Portfolio Name</TableHead>
-                    <TableHead className="font-semibold">Type</TableHead>
-                    <TableHead className="font-semibold">Holdings</TableHead>
-                    <TableHead className="text-right font-semibold">Value</TableHead>
-                    <TableHead className="text-right pr-6 font-semibold">Actions</TableHead>
+                    <TableHead className="py-4 pl-6 font-semibold">{t('portfolio.portfolio_name')}</TableHead>
+                    <TableHead className="font-semibold">{t('portfolio.type')}</TableHead>
+                    <TableHead className="font-semibold">{t('portfolio.holdings')}</TableHead>
+                    <TableHead className="text-right font-semibold">{t('portfolio.value')}</TableHead>
+                    <TableHead className="text-right pr-6 font-semibold">{t('portfolio.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -628,7 +658,7 @@ const InvestmentDashboard: React.FC = () => {
                       <TableCell>
                         <div className="flex items-center text-muted-foreground font-medium">
                           <LayoutGrid className="w-3.5 h-3.5 mr-1.5 opacity-60" />
-                          {portfolio.holdings_count || 0} Securities
+                          {portfolio.holdings_count || 0} {t('portfolio.securities')}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
@@ -710,7 +740,7 @@ const InvestmentDashboard: React.FC = () => {
         <div className="mt-8">
           <h2 className="text-2xl font-bold mb-6 tracking-tight flex items-center gap-2">
             <Target className="w-6 h-6 text-primary" />
-            Strategic Actions
+            {t('portfolio.strategic_actions')}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <ProfessionalCard variant="elevated" className="group p-6 border-l-4 border-l-primary hover:border-l-primary/100 transition-all shadow-md">
@@ -719,8 +749,8 @@ const InvestmentDashboard: React.FC = () => {
                   <Plus className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg mb-1 group-hover:text-primary transition-colors">Expand Portfolio</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">Start tracking a new investment strategy or financial account.</p>
+                  <h3 className="font-bold text-lg mb-1 group-hover:text-primary transition-colors">{t('portfolio.expand_portfolio')}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{t('portfolio.expand_portfolio_description')}</p>
                 </div>
               </Link>
             </ProfessionalCard>
@@ -731,8 +761,8 @@ const InvestmentDashboard: React.FC = () => {
                   <BarChart3 className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg mb-1 group-hover:text-violet-600 transition-colors">Advanced Analysis</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">View detailed performance charts, allocation, and risk metrics.</p>
+                  <h3 className="font-bold text-lg mb-1 group-hover:text-violet-600 transition-colors">{t('portfolio.advanced_analysis')}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{t('portfolio.advanced_analysis_description')}</p>
                 </div>
               </Link>
             </ProfessionalCard>
@@ -743,8 +773,8 @@ const InvestmentDashboard: React.FC = () => {
                   <Calendar className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg mb-1 group-hover:text-emerald-600 transition-colors">Tax Efficiency</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">Generate realized gain/loss reports and dividend summaries for tax prep.</p>
+                  <h3 className="font-bold text-lg mb-1 group-hover:text-emerald-600 transition-colors">{t('portfolio.tax_efficiency')}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{t('portfolio.tax_efficiency_description')}</p>
                 </div>
               </Link>
             </ProfessionalCard>
@@ -756,7 +786,7 @@ const InvestmentDashboard: React.FC = () => {
       <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
         <AlertDialogContent className="rounded-3xl border-border/50 shadow-2xl scale-in duration-300">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-2xl font-bold tracking-tight">Delete Portfolio?</AlertDialogTitle>
+            <AlertDialogTitle className="text-2xl font-bold tracking-tight">{t('portfolio.delete_portfolio_question')}</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground leading-relaxed">
               This will move the portfolio to the recycle bin. You can restore it later if needed. All active holdings will be hidden.
             </AlertDialogDescription>
