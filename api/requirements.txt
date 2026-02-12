@@ -55,7 +55,7 @@ pytest-mock==3.14.1
 pytest-cov==6.2.1
 
 # Image processing
-pillow==11.3.0
+pillow==12.1.1
 
 # Excel export
 openpyxl==3.1.2
@@ -83,7 +83,7 @@ azure-keyvault-secrets==4.8.0  # Azure Key Vault secrets
 azure-identity==1.19.0  # Azure authentication
 hvac==2.3.0  # HashiCorp Vault client
 tenacity==9.0.0  # Retry logic for key vault operations
-cryptography==46.0.3  # Cryptographic operations
+cryptography==46.0.5  # Cryptographic operations
 
 # Export Destination
 azure-storage-blob==12.27.1
