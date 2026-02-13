@@ -237,10 +237,16 @@ docker compose exec api python scripts/create_test_user.py
 
 ### create_super_user.py
 
-Create administrator users.
+Create administrator users. The script ensures the Super Admin tenant's database exists and syncs the user into it so they can log in.
 
 ```bash
 docker compose exec api python scripts/create_super_user.py
+```
+
+If you already see "Tenant database for tenant 1 does not exist" (e.g. after creating a super user before this fix), create the missing tenant database by running database initialization:
+
+```bash
+docker compose exec api python run_init.py
 ```
 
 ### create_batch_api_key.py

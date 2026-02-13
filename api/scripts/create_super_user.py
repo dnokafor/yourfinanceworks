@@ -13,9 +13,11 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.constants.password import MIN_PASSWORD_LENGTH
-from core.models.database import get_master_db
+from core.models.database import get_master_db, set_tenant_context, clear_tenant_context
 from core.models.models import MasterUser, Tenant
 from core.utils.auth import get_password_hash
+from core.services.tenant_database_manager import tenant_db_manager
+from core.utils.user_sync import sync_user_to_tenant_database
 
 def create_super_user():
     """Create a super user"""
@@ -42,6 +44,18 @@ def create_super_user():
                 existing_user.is_superuser = True
                 existing_user.role = "admin"
                 db.commit()
+                # Ensure their tenant database exists so they can log in
+                tenant = db.query(Tenant).filter(Tenant.id == existing_user.tenant_id).first()
+                if tenant and not tenant_db_manager.tenant_database_exists(tenant.id):
+                    print(f"Creating tenant database for tenant {tenant.id}...")
+                    if tenant_db_manager.create_tenant_database(tenant.id, tenant.name):
+                        print("✅ Tenant database created")
+                if tenant:
+                    try:
+                        set_tenant_context(tenant.id)
+                        sync_user_to_tenant_database(existing_user, tenant.id, role="admin")
+                    finally:
+                        clear_tenant_context()
                 print(f"✅ User {email} is now a super user")
             return
         
@@ -75,7 +89,18 @@ def create_super_user():
             db.commit()
             db.refresh(super_admin_tenant)
             print("✅ Super Admin tenant created")
-        
+
+        # Ensure the tenant database exists (required for login and tenant context)
+        if not tenant_db_manager.tenant_database_exists(super_admin_tenant.id):
+            print(f"Creating tenant database for '{super_admin_tenant.name}' (tenant_id={super_admin_tenant.id})...")
+            if tenant_db_manager.create_tenant_database(super_admin_tenant.id, super_admin_tenant.name):
+                print("✅ Tenant database created")
+            else:
+                print("❌ Failed to create tenant database. Run: docker-compose exec api python run_init.py")
+                return
+        else:
+            print("✅ Tenant database already exists")
+
         # Create the super user
         hashed_password = get_password_hash(password)
         super_user = MasterUser(
@@ -93,7 +118,17 @@ def create_super_user():
         db.add(super_user)
         db.commit()
         db.refresh(super_user)
-        
+
+        # Sync super user to tenant database so they can log in (tenant context required for encryption)
+        try:
+            set_tenant_context(super_admin_tenant.id)
+            if sync_user_to_tenant_database(super_user, super_admin_tenant.id, role=super_user.role):
+                print("✅ Super user synced to tenant database")
+            else:
+                print("⚠️ Could not sync user to tenant database; they may need to log in once to sync")
+        finally:
+            clear_tenant_context()
+
         print("✅ Super user created successfully!")
         print(f"   Email: {email}")
         print(f"   Name: {first_name} {last_name}")
