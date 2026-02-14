@@ -1,12 +1,12 @@
 # YourFinanceWORKS
 
-![License: AGPL v3](https://img.shields.io/badge/License-AGPLv3-blue.svg)
+![License: Dual](https://img.shields.io/badge/License-Dual%20License-blue.svg)
 ![Python: 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB.svg?logo=python&logoColor=white)
 ![React: 18+](https://img.shields.io/badge/React-18+-61DAFB.svg?logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6.svg?logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-5.0-646CFF.svg?logo=vite&logoColor=white)
 
-A modern, AI-powered multi-tenant financial management system. YourFinanceWORKS empowers businesses with professional invoicing, automated expense tracking through OCR, and deep business intelligence powered by the Model Context Protocol (MCP).
+YourFinanceWORKS transforms financial futures for businesses and individuals through AI-powered automation of invoicing, expense tracking, banking reconciliation, and comprehensive business intelligence in a secure multi-tenant platform.
 
 ## ⚡ Quick Start (Docker)
 
@@ -16,7 +16,7 @@ git clone git@github.com:snowsky/yourfinanceworks.git
 cd yourfinanceworks
 
 # 2. Configure environment
-cp api/.env.example.full .env
+cp api/.env.example.full api/.env
 # Edit .env with your settings (especially database credentials)
 
 # 3. Spin up the entire stack
@@ -38,11 +38,45 @@ The first user to sign up in a fresh system is automatically granted Super User 
 
 ## 🧩 Product Highlights
 
-- Professional invoicing with revenue cycle insights
-- OCR-powered expense intelligence and approval workflows
-- MCP-backed AI assistant for business queries
-- Multi-tenant architecture with audit-ready governance
-- Cloud storage, batch processing, and integrations
+### 💰 Revenue & Billing
+- Professional invoicing with AI-powered templates and tax compliance
+- Multi-provider email delivery with professional PDF attachments
+- Real-time payment tracking and automated collection reminders
+- Revenue cycle optimization with strategic billing insights
+
+### 📊 Expense Intelligence & Automation
+- OCR-powered receipt processing with high-accuracy data extraction
+- Smart expense categorization based on vendor patterns and history
+- Approval workflows with configurable rules and audit trails
+- Batch processing for efficient receipt management
+- AI-powered invoice OCR for automated data entry and line item extraction
+
+### 🏦 Banking & Financial Health
+- Automated bank statement processing with AI OCR transaction extraction
+- Smart transaction matching for one-click reconciliation
+- Real-time financial health monitoring and cash flow analysis
+
+### 🕵️ AI-Powered Business Intelligence
+- MCP-backed AI assistant for natural language business queries
+- AI-powered fraud detection and risk scoring for financial documents
+- Forensic auditing with anomaly detection and attachment integrity analysis
+- Growth analytics with interactive dashboards and actionable recommendations
+- AI prompt management with provider-specific optimizations
+- Advanced document processing with vision-capable models for complex layouts
+
+### 🏦 Enterprise & Governance
+- Multi-tenant architecture with secure database-per-tenant isolation
+- Role-based access control with granular permissions and governance
+- Comprehensive audit trails and compliance reporting
+- Advanced data export/import and backup capabilities
+
+### 🛠️ Advanced Infrastructure
+- Extensible plugin management system for custom functionality
+- Investment management plugins for portfolio tracking and analysis
+- Cloud storage integration with multiple provider support
+- RESTful API for system integration and batch processing
+- Slack integration and external transaction management
+- Advanced export capabilities with multiple format support
 
 ## 🏗️ Architecture (High Level)
 
@@ -77,7 +111,8 @@ This project utilizes a **Split-Licensing Model** to provide maximum transparenc
    - **Applies to**: `api/commercial/` directory.
    - While the source code is visible, usage is restricted to licensed customers.
    - Ideal for businesses requiring enterprise features or proprietary integration.
-   - Contact licensing@yourfinanceworks.com for license acquisition or visit [LICENSE-COMMERCIAL.txt](LICENSE-COMMERCIAL.txt).
+   - Contact licensing@yourfinanceworks.com or visit https://www.yourfinanceworks.com for license acquisition.
+   - See [LICENSE-COMMERCIAL.txt](LICENSE-COMMERCIAL.txt) for details.
 
 ## 🆘 Support
 

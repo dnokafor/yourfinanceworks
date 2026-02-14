@@ -50,7 +50,31 @@ Ensure the stability of the underlying data infrastructure.
 - **Auto-Recovery Tools**: Use built-in diagnostics to detect and fix missing or corrupted tenant databases on the fly.
 - **Database Operations**: Trigger backups or database migrations across the entire multi-tenant fleet.
 
-## 4. System Statistics
+## 4. FinanceWorks Insights (AI Forensic Auditor)
+
+System-wide oversight and fraud detection powered by AI.
+
+- **Enterprise-Grade Fraud Detection**: AI-powered "Senior Auditor" that monitors every invoice, expense, and bank transaction for anomalies
+- **Risk Scoring System**: Automated risk assessment (Low, Medium, High) with detailed forensic reasoning for each flagged transaction
+- **Advanced Detection Rules**: Protection against phantom vendors, duplicate billing, threshold splitting, rounding anomalies, description mismatches, and temporal anomalies
+- **Attachment Integrity Analysis**: AI analysis of receipts and invoices for signs of digital tampering or formatting inconsistencies
+- **System-Wide Audit Logs**: Permanent, defensible audit trails creating comprehensive paper trails for external auditors
+- **Full System Audit**: Trigger reprocessing of historical data when policies change or new detection rules are deployed
+
+**Enterprise License Required**: FinanceWorks Insights requires an Enterprise-tier license and is enabled globally via Settings → AI Configuration.
+
+## 5. System Level Licensing
+
+Manage commercial licensing and feature access across the entire platform.
+
+- **License Tier Management**: Configure and assign license tiers (Free, Professional, Enterprise) to individual organizations
+- **Feature Gate Control**: Enable or disable premium features like FinanceWorks Insights, advanced analytics, and plugin management per tenant
+- **License Compliance Monitoring**: Track usage and ensure organizations remain within their licensed limits
+- **Automated License Enforcement**: System automatically restricts access to features based on current license status
+- **License Analytics**: View system-wide license distribution, revenue tracking, and upgrade opportunities
+- **Bulk License Operations**: Apply license changes across multiple organizations simultaneously
+
+## 6. System Statistics
 
 Get a "Bird's Eye" view of your platform's usage.
 
