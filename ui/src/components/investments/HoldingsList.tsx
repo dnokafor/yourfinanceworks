@@ -6,7 +6,7 @@ import {
   Plus, Edit2, Trash2, TrendingUp, TrendingDown,
   DollarSign, Percent, Calendar, AlertCircle,
   MoreHorizontal, Eye, ExternalLink, ArrowUpRight, ArrowDownRight,
-  ArrowRight
+  ArrowRight, RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,7 +27,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { api } from '@/lib/api';
+import { api, investmentApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import CreateHoldingDialog from './CreateHoldingDialog';
@@ -46,6 +46,8 @@ interface Holding {
   currency?: string;
   current_price?: number;
   price_updated_at?: string;
+  imported_price?: number;
+  imported_price_date?: string;
   is_closed: boolean;
   average_cost_per_share: number;
   current_value: number;
@@ -73,6 +75,29 @@ const HoldingsList: React.FC<HoldingsListProps> = ({ portfolioId }) => {
       const response = await api.get(`/investments/portfolios/${portfolioId}/holdings`);
       return Array.isArray(response) ? response : [];
     }
+  });
+
+  // Fetch price status
+  const { data: priceStatus } = useQuery({
+    queryKey: ['holdings-price-status'],
+    queryFn: () => investmentApi.getPriceStatus(),
+    staleTime: 60_000,
+  });
+
+  // Refresh all prices mutation
+  const refreshPricesMutation = useMutation({
+    mutationFn: () => investmentApi.updatePrices(),
+    onSuccess: (result) => {
+      toast.success(
+        `Prices updated: ${result.success} succeeded, ${result.failed} failed (${result.total} total)`
+      );
+      queryClient.invalidateQueries({ queryKey: ['holdings', portfolioId] });
+      queryClient.invalidateQueries({ queryKey: ['portfolio', portfolioId] });
+      queryClient.invalidateQueries({ queryKey: ['holdings-price-status'] });
+    },
+    onError: (error: any) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to refresh prices');
+    },
   });
 
   // Delete holding mutation
@@ -155,13 +180,30 @@ const HoldingsList: React.FC<HoldingsListProps> = ({ portfolioId }) => {
             {activeHoldings.length > 0 && (
               <ProfessionalCardDescription>
                 {t('holdings.detailed_overview')}
+                {priceStatus && (
+                  <span className="ml-2 text-[10px] font-medium opacity-70">
+                    · {priceStatus.fresh_prices} fresh · {priceStatus.stale_prices} stale · {priceStatus.without_prices} missing
+                  </span>
+                )}
               </ProfessionalCardDescription>
             )}
           </div>
-          <ProfessionalButton onClick={() => setShowCreateDialog(true)} size="sm" variant="gradient" className="rounded-lg">
-            <Plus className="w-4 h-4 mr-2" />
-            {t('holdings.add_position')}
-          </ProfessionalButton>
+          <div className="flex items-center gap-2">
+            <ProfessionalButton
+              onClick={() => refreshPricesMutation.mutate()}
+              disabled={refreshPricesMutation.isPending}
+              size="sm"
+              variant="outline"
+              className="rounded-lg"
+            >
+              <RefreshCw className={cn('w-4 h-4 mr-2', refreshPricesMutation.isPending && 'animate-spin')} />
+              {refreshPricesMutation.isPending ? 'Refreshing…' : 'Refresh Prices'}
+            </ProfessionalButton>
+            <ProfessionalButton onClick={() => setShowCreateDialog(true)} size="sm" variant="gradient" className="rounded-lg">
+              <Plus className="w-4 h-4 mr-2" />
+              {t('holdings.add_position')}
+            </ProfessionalButton>
+          </div>
         </ProfessionalCardHeader>
         <div className="p-0">
         {activeHoldings.length === 0 ? (
@@ -179,16 +221,17 @@ const HoldingsList: React.FC<HoldingsListProps> = ({ portfolioId }) => {
             </ProfessionalButton>
           </div>
         ) : (
-          <div className="mt-4 overflow-hidden rounded-xl border border-border/50 shadow-inner bg-card/30">
-            <Table>
+          <div className="mt-4 overflow-x-auto rounded-xl border border-border/50 shadow-inner bg-card/30">
+            <Table className="min-w-[900px]">
               <TableHeader className="bg-muted/50">
                 <TableRow className="hover:bg-transparent border-border/50">
                   <TableHead className="font-bold py-4 pl-6 uppercase tracking-wider text-[10px] text-muted-foreground">{t('holdings.security')}</TableHead>
                   <TableHead className="font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('holdings.type')}</TableHead>
                   <TableHead className="text-right font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('holdings.position')}</TableHead>
                   <TableHead className="text-right font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('holdings.currency')}</TableHead>
-                  <TableHead className="text-right font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('holdings.market_price')}</TableHead>
-                  <TableHead className="text-right font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('holdings.market_value')}</TableHead>
+                  <TableHead className="text-right font-bold uppercase tracking-wider text-[10px] text-muted-foreground">Statement Price</TableHead>
+                  <TableHead className="text-right font-bold uppercase tracking-wider text-[10px] text-muted-foreground">Current Price</TableHead>
+                  <TableHead className="text-right font-bold uppercase tracking-wider text-[10px] text-muted-foreground">Stmt / Current Value</TableHead>
                   <TableHead className="text-right font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('holdings.total_gl')}</TableHead>
                   <TableHead className="text-right pr-6 font-bold uppercase tracking-wider text-[10px] text-muted-foreground">{t('holdings.actions')}</TableHead>
                 </TableRow>
@@ -197,6 +240,12 @@ const HoldingsList: React.FC<HoldingsListProps> = ({ portfolioId }) => {
                 {activeHoldings.map((holding) => {
                   const gainPercentage = calculateUnrealizedGainPercentage(holding);
                   const isPositive = holding.unrealized_gain_loss >= 0;
+                  const statementValue = holding.imported_price != null
+                    ? holding.imported_price * holding.quantity
+                    : null;
+                  const currentValue = holding.current_price != null
+                    ? holding.current_price * holding.quantity
+                    : null;
 
                   return (
                     <TableRow key={holding.id} className="group hover:bg-primary/5 transition-colors border-border/50">
@@ -221,15 +270,55 @@ const HoldingsList: React.FC<HoldingsListProps> = ({ portfolioId }) => {
                           {holding.currency || 'USD'}
                         </Badge>
                       </TableCell>
+
+                      {/* Statement Price (from imported file) */}
                       <TableCell className="text-right">
                         <div className="flex flex-col items-end">
-                          <span className="font-bold text-sm tracking-tight">{formatCurrency(holding.current_price || 0)}</span>
-                          <span className="text-[10px] text-muted-foreground opacity-60">Avg: {formatCurrency(holding.average_cost_per_share)}</span>
+                          {holding.imported_price != null ? (
+                            <>
+                              <span className="font-bold text-sm tracking-tight">{formatCurrency(holding.imported_price)}</span>
+                              {holding.imported_price_date && (
+                                <span className="text-[10px] text-muted-foreground opacity-60">{holding.imported_price_date}</span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground opacity-40">—</span>
+                          )}
                         </div>
                       </TableCell>
+
+                      {/* Current Price (live from Yahoo Finance) */}
                       <TableCell className="text-right">
-                        <span className="font-black text-sm tracking-tight text-foreground">{formatCurrency(holding.current_value)}</span>
+                        <div className="flex flex-col items-end">
+                          {holding.current_price != null ? (
+                            <>
+                              <span className="font-bold text-sm tracking-tight">{formatCurrency(holding.current_price)}</span>
+                              {holding.price_updated_at && (
+                                <span className="text-[10px] text-muted-foreground opacity-60">Live</span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground opacity-40">—</span>
+                          )}
+                        </div>
                       </TableCell>
+
+                      {/* Statement Value / Current Value (merged column) */}
+                      <TableCell className="text-right">
+                        <div className="flex flex-col items-end gap-0.5">
+                          {statementValue != null ? (
+                            <span className="font-bold text-sm tracking-tight text-foreground">{formatCurrency(statementValue)}</span>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground opacity-40">—</span>
+                          )}
+                          {currentValue != null ? (
+                            <span className="font-black text-sm tracking-tight text-primary">{formatCurrency(currentValue)}</span>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground opacity-40">—</span>
+                          )}
+                        </div>
+                      </TableCell>
+
                       <TableCell className="text-right">
                         <div className={cn("flex flex-col items-end", isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
                           <div className="flex items-center gap-1 font-black text-sm">

@@ -76,10 +76,23 @@ class PortfolioImportService:
         self.portfolio_repo = PortfolioRepository(db)
         self.holdings_repo = HoldingsRepository(db)
         self.transaction_repo = TransactionRepository(db)
-        self.file_storage_service = FileStorageService(db)
-        self.llm_extraction_service = LLMExtractionService(db)
         self.holdings_service = HoldingsService(db)
         self.holdings_validator = HoldingsValidator(self.holdings_repo, DuplicateHandlingMode.MERGE)
+        # Heavy services are lazy-initialized to avoid noisy startup logs on every request
+        self._file_storage_service: Optional[FileStorageService] = None
+        self._llm_extraction_service: Optional[LLMExtractionService] = None
+
+    @property
+    def file_storage_service(self) -> FileStorageService:
+        if self._file_storage_service is None:
+            self._file_storage_service = FileStorageService(self.db)
+        return self._file_storage_service
+
+    @property
+    def llm_extraction_service(self) -> LLMExtractionService:
+        if self._llm_extraction_service is None:
+            self._llm_extraction_service = LLMExtractionService(self.db)
+        return self._llm_extraction_service
 
     def _calculate_file_hash(self, file_content: bytes) -> str:
         """
@@ -688,7 +701,8 @@ class PortfolioImportService:
                         holding_data.get("security_symbol"),
                         holding_currency,
                         Decimal(str(holding_data.get("quantity"))),
-                        Decimal(str(holding_data.get("cost_basis")))
+                        Decimal(str(holding_data.get("cost_basis"))),
+                        tenant_id
                     )
 
                     if is_duplicate:
@@ -759,7 +773,24 @@ class PortfolioImportService:
                     )
 
                     # Create holding via holdings service
-                    self.holdings_service.create_holding(tenant_id, portfolio_id, holding_create)
+                    new_holding = self.holdings_service.create_holding(tenant_id, portfolio_id, holding_create)
+
+                    # Persist imported price separately (preserves statement price from PDF or CSV)
+                    raw_market_price = holding_data.get("market_price")
+                    if raw_market_price is not None:
+                        try:
+                            market_price_decimal = Decimal(str(raw_market_price))
+                            if market_price_decimal > 0:
+                                self.holdings_repo.set_imported_price(new_holding.id, market_price_decimal)
+                                logger.info(
+                                    f"Set imported price for {holding_data.get('security_symbol')}: "
+                                    f"{market_price_decimal}"
+                                )
+                        except Exception as price_e:
+                            logger.warning(
+                                f"Failed to set imported price for {holding_data.get('security_symbol')}: {price_e}"
+                            )
+                            # Non-fatal: holding was created successfully, just without imported price
 
                     created_count += 1
                     process_log["holdings"]["created"].append({
@@ -904,7 +935,7 @@ class PortfolioImportService:
                     security_symbol = transaction_data.get("security_symbol")
                     if security_symbol and transaction_type not in [TransactionType.DIVIDEND]:
                         # Try to find existing holding
-                        holdings = self.holdings_repo.get_by_portfolio(portfolio_id)
+                        holdings = self.holdings_repo.get_by_portfolio(portfolio_id, tenant_id)
                         for holding in holdings:
                             if holding.security_symbol.upper() == security_symbol.upper():
                                 holding_id = holding.id

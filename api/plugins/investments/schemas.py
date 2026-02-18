@@ -64,6 +64,7 @@ class PortfolioResponse(PortfolioBase, TimestampMixin):
     currency: str = Field(default="USD", description="Portfolio currency code")
     holdings_count: Optional[int] = Field(None, description="Number of holdings in portfolio")
     total_value: Optional[Decimal] = Field(None, description="Total portfolio value")
+    total_cost: Optional[Decimal] = Field(None, description="Total cost basis of portfolio")
     target_allocations: Optional[Dict[AssetClass, Decimal]] = Field(None, description="Target allocation weights")
 
     class Config:
@@ -154,8 +155,10 @@ class HoldingResponse(HoldingBase, TimestampMixin):
     """Schema for holding responses"""
     id: int
     portfolio_id: int
-    current_price: Optional[Decimal] = Field(None, description="Current price per share")
-    price_updated_at: Optional[datetime] = Field(None, description="When price was last updated")
+    current_price: Optional[Decimal] = Field(None, description="Live market price per share (from Yahoo Finance)")
+    price_updated_at: Optional[datetime] = Field(None, description="When live price was last updated")
+    imported_price: Optional[Decimal] = Field(None, description="Price extracted from uploaded file (PDF or CSV)")
+    imported_price_date: Optional[date] = Field(None, description="Statement date the imported price was extracted from")
     is_closed: bool
     average_cost_per_share: Decimal = Field(..., description="Average cost per share")
     current_value: Decimal = Field(..., description="Current market value")
