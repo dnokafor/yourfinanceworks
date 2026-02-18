@@ -352,7 +352,7 @@ class InvestmentMCPProvider:
             for holding in holdings:
                 if not holding.is_closed and holding.quantity > 0:
                     # Check if this holding has dividend transactions
-                    transactions = self.transaction_repo.get_by_holding(holding.id)
+                    transactions = self.transaction_repo.get_by_holding(holding.id, tenant_id)
                     dividend_transactions = [t for t in transactions if t.transaction_type.value == 'dividend']
 
                     if dividend_transactions:

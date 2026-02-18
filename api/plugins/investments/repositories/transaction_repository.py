@@ -242,29 +242,31 @@ t_date: Start date filter (inclusive)
 
         return query.order_by(asc(InvestmentTransaction.transaction_date), asc(InvestmentTransaction.id)).all()
 
-    def get_buy_transactions(self, holding_id: int) -> List[InvestmentTransaction]:
+    def get_buy_transactions(self, holding_id: int, tenant_id: int) -> List[InvestmentTransaction]:
         """
         Get all buy transactions for a holding (used for cost basis calculations).
 
         Args:
             holding_id: Holding ID
+            tenant_id: Tenant ID for isolation
 
         Returns:
             List of buy transactions ordered by transaction_date (ascending)
         """
-        return self.get_by_holding(holding_id, [TransactionType.BUY])
+        return self.get_by_holding(holding_id, tenant_id, [TransactionType.BUY])
 
-    def get_sell_transactions(self, holding_id: int) -> List[InvestmentTransaction]:
+    def get_sell_transactions(self, holding_id: int, tenant_id: int) -> List[InvestmentTransaction]:
         """
         Get all sell transactions for a holding.
 
         Args:
             holding_id: Holding ID
+            tenant_id: Tenant ID for isolation
 
         Returns:
             List of sell transactions ordered by transaction_date (ascending)
         """
-        return self.get_by_holding(holding_id, [TransactionType.SELL])
+        return self.get_by_holding(holding_id, tenant_id, [TransactionType.SELL])
 
     def get_dividend_transactions(
         self,

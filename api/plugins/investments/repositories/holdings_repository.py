@@ -389,6 +389,7 @@ class HoldingsRepository:
         self,
         portfolio_id: int,
         asset_class: AssetClass,
+        tenant_id: int,
         include_closed: bool = False
     ) -> List[InvestmentHolding]:
         """
@@ -420,6 +421,7 @@ class HoldingsRepository:
         self,
         portfolio_id: int,
         security_type: SecurityType,
+        tenant_id: int,
         include_closed: bool = False
     ) -> List[InvestmentHolding]:
         """
