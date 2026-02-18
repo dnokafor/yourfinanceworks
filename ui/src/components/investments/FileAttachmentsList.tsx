@@ -52,7 +52,7 @@ const FileAttachmentsList: React.FC<FileAttachmentsListProps> = ({
   onRefresh,
 }) => {
   const queryClient = useQueryClient();
-  const { t } = useTranslation();
+  const { t } = useTranslation('investments');
   const [selectedAttachment, setSelectedAttachment] = useState<FileAttachment | null>(null);
   const [showDetails, setShowDetails] = useState(false);
 
@@ -236,9 +236,9 @@ const FileAttachmentsList: React.FC<FileAttachmentsListProps> = ({
               <FileText className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="font-bold text-lg">{t('Uploaded Files')}</h3>
+              <h3 className="font-bold text-lg">{t('file_upload.uploaded_files')}</h3>
               <p className="text-sm text-muted-foreground">
-                {t('Track the status of your holdings file imports')}
+                {t('file_upload.track_status_description')}
               </p>
             </div>
           </div>
@@ -260,10 +260,10 @@ const FileAttachmentsList: React.FC<FileAttachmentsListProps> = ({
                     </div>
                     <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground">
                       <div>
-                        <span className="font-medium">{t('Size')}:</span> {formatFileSize(attachment.file_size)}
+                        <span className="font-medium">{t('file_upload.size')}:</span> {formatFileSize(attachment.file_size)}
                       </div>
                       <div>
-                        <span className="font-medium">{t('Uploaded')}:</span>{' '}
+                        <span className="font-medium">{t('file_upload.uploaded')}:</span>{' '}
                         {format(parseISO(attachment.created_at), 'MMM d, yyyy HH:mm')}
                       </div>
                     </div>
@@ -271,9 +271,16 @@ const FileAttachmentsList: React.FC<FileAttachmentsListProps> = ({
                     {attachment.status === 'completed' && (
                       <div className="mt-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
                         <p className="text-sm text-emerald-700">
-                          <span className="font-medium">{attachment.extracted_holdings_count}</span> {t('holdings')}{attachment.extracted_transactions_count > 0 && (
-                            <>, <span className="font-medium">{attachment.extracted_transactions_count}</span> {t('transactions')}</>
-                          )} {t('created')}
+                          {attachment.extracted_transactions_count > 0 ? (
+                            t('x_holdings_y_transactions_created', {
+                              holdings: attachment.extracted_holdings_count,
+                              transactions: attachment.extracted_transactions_count
+                            })
+                          ) : (
+                            t('x_holdings_created', {
+                              count: attachment.extracted_holdings_count
+                            })
+                          )}
                         </p>
                       </div>
                     )}
@@ -281,11 +288,17 @@ const FileAttachmentsList: React.FC<FileAttachmentsListProps> = ({
                     {attachment.status === 'partial' && (
                       <div className="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200">
                         <p className="text-sm text-amber-700">
-                          <span className="font-medium">{attachment.extracted_holdings_count}</span> {t('holdings')}{attachment.extracted_transactions_count > 0 && (
-                            <>, <span className="font-medium">{attachment.extracted_transactions_count}</span> {t('transactions')}</>
-                          )} {t('created')}
-                          {(attachment.failed_holdings_count > 0 || attachment.failed_transactions_count > 0) && (
-                            <>, <span className="font-medium">{attachment.failed_holdings_count + attachment.failed_transactions_count}</span> {t('failed')}</>
+                          {(attachment.failed_holdings_count > 0 || attachment.failed_transactions_count > 0) ? (
+                            t('x_holdings_y_transactions_z_failed', {
+                              holdings: attachment.extracted_holdings_count,
+                              transactions: attachment.extracted_transactions_count,
+                              failed: attachment.failed_holdings_count + attachment.failed_transactions_count
+                            })
+                          ) : (
+                            t('x_holdings_y_transactions_created', {
+                              holdings: attachment.extracted_holdings_count,
+                              transactions: attachment.extracted_transactions_count
+                            })
                           )}
                         </p>
                       </div>
