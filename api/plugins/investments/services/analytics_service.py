@@ -80,19 +80,14 @@ class AnalyticsService:
 
         # Get holdings and transactions
         holdings = self.holdings_repo.get_by_portfolio(portfolio_id, tenant_id)
-        transactions = self.transaction_repo.get_by_portfolio(
-            portfolio_id=portfolio_id,
-            tenant_id=tenant_id,
-            start_date=None,
-            end_date=None
-        )
+        transactions = self.transaction_repo.get_by_portfolio(portfolio_id, tenant_id)
 
         # Calculate metrics using performance calculator
         total_return_percentage = self.performance_calculator.calculate_total_return(holdings, transactions)
         unrealized_gain_loss = self.performance_calculator.calculate_unrealized_gains(holdings)
         realized_gain_loss = self.performance_calculator.calculate_realized_gains(transactions)
         total_value = self.performance_calculator.calculate_total_value(holdings)
-        total_cost = self.performance_calculator.calculate_total_cost(transactions, holdings)
+        total_cost = self.performance_calculator.calculate_total_cost(transactions)
 
         # Calculate total gain/loss
         total_gain_loss = unrealized_gain_loss + realized_gain_loss
@@ -173,7 +168,8 @@ class AnalyticsService:
             portfolio_id=portfolio_id,
             tenant_id=tenant_id,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            transaction_types=[TransactionType.DIVIDEND]
         )
 
         # Calculate total dividend income
@@ -247,7 +243,8 @@ class AnalyticsService:
                 portfolio_id=portfolio_id,
                 tenant_id=tenant_id,
                 start_date=start_date,
-                end_date=end_date
+                end_date=end_date,
+                transaction_types=[TransactionType.DIVIDEND]
             )
 
             # Filter dividends for this specific holding
@@ -306,7 +303,8 @@ class AnalyticsService:
             portfolio_id=portfolio_id,
             tenant_id=tenant_id,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            transaction_types=[TransactionType.DIVIDEND]
         )
 
         # Group by holding and analyze frequency
@@ -325,7 +323,7 @@ class AnalyticsService:
                 continue
 
             # Get holding info
-            holding = self.holdings_repo.get_by_id(holding_id)
+            holding = self.holdings_repo.get_by_id(holding_id, tenant_id)
             if not holding:
                 continue
 
@@ -537,13 +535,16 @@ class AnalyticsService:
         # Get asset allocation
         allocation = self.calculate_asset_allocation(tenant_id, portfolio_id)
 
-        # Get holdings count
+        # Get holdings count and summary
         holdings = self.holdings_repo.get_by_portfolio(portfolio_id, tenant_id)
+        tx_summary = self.transaction_repo.get_portfolio_transaction_summary(portfolio_id, tenant_id)
         active_holdings_count = len([h for h in holdings if not h.is_closed and h.quantity > 0])
 
         # Get recent dividend income (last 12 months)
         end_date = date.today()
         start_date = date(end_date.year - 1, end_date.month, end_date.day)
+        if start_date.month <= 0:
+            start_date = date(start_date.year - 1, start_date.month + 12, start_date.day)
         dividend_summary = self.calculate_dividend_income(tenant_id, portfolio_id, start_date, end_date)
 
         return {
