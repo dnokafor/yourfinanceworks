@@ -472,6 +472,7 @@ async def update_holding(
         raise InvestmentError(f"Failed to update holding: {str(e)}")
 
 @investment_router.patch("/holdings/{holding_id}/price", response_model=HoldingResponse)
+@investment_router.put("/holdings/{holding_id}/price", response_model=HoldingResponse)
 async def update_holding_price(
     price_update: PriceUpdate,
     holding_id: int = Depends(validate_holding_id_param),
