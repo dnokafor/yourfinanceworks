@@ -53,7 +53,7 @@ class InvoiceBase(BaseModel):
     subtotal: Optional[float] = Field(None, description="Subtotal before discount")
     custom_fields: Optional[Dict[str, Any]] = None
     show_discount_in_pdf: Optional[bool] = True
-    payer: str = Field("You", description="Who is paying the invoice: 'You' or 'Client'")
+    payer: str = Field("Client", description="Who is paying the invoice: 'You' or 'Client'")
     labels: Optional[List[str]] = Field(None, description="Invoice labels")
 
     # Review Worker fields

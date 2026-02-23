@@ -2511,7 +2511,8 @@ export const dashboardApi = {
         const currency = invoice.currency || 'USD';
 
         // Only count income from invoices where the payer is 'Client'
-        if ((invoice.status === 'paid' || invoice.status === 'partially_paid') && invoice.payer === 'Client') {
+        const payer = (invoice.payer || '').toLowerCase();
+        if ((invoice.status === 'paid' || invoice.status === 'partially_paid') && (payer === 'client' || payer === '')) {
           totalIncome[currency] = (totalIncome[currency] || 0) + invoice.paid_amount;
         }
         // Calculate pending amounts for invoices that are not fully paid

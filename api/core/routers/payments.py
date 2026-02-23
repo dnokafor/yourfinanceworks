@@ -94,6 +94,43 @@ def _prepare_payment_chart_data(payments: List[Dict[str, Any]]) -> Dict[str, Any
         }
 
 
+def sync_invoice_status(db: Session, invoice_id: int):
+    """Update invoice status based on total payments"""
+    try:
+        from sqlalchemy import func
+        from core.models.models_per_tenant import Payment
+
+        invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+        if not invoice:
+            logger.warning(f"Could not find invoice {invoice_id} to sync status")
+            return
+
+        # Calculate total paid directly from DB to avoid relationship caching issues
+        total_paid = db.query(func.sum(Payment.amount)).filter(Payment.invoice_id == invoice_id).scalar() or 0
+
+        # Determine status
+        old_status = invoice.status
+        if total_paid >= invoice.amount:
+            invoice.status = "paid"
+        elif total_paid > 0:
+            invoice.status = "partially_paid"
+        else:
+            # If no payments, revert to pending if it was previously paid
+            if invoice.status in ["paid", "partially_paid"]:
+                invoice.status = "pending"
+
+        db.commit()
+        # Expire to ensure next access sees the updated status
+        db.expire(invoice)
+
+        if old_status != invoice.status:
+            logger.info(f"Updated status for invoice {invoice_id}: {old_status} -> {invoice.status} (total_paid=${total_paid:.2f})")
+        else:
+            logger.debug(f"Status for invoice {invoice_id} remains {invoice.status} (total_paid=${total_paid:.2f})")
+    except Exception as e:
+        logger.error(f"Error syncing invoice status: {e}")
+        db.rollback()
+
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -277,6 +314,9 @@ async def create_payment(
         db.commit()
         db.refresh(db_payment)
         
+        # Sync invoice status
+        sync_invoice_status(db, db_payment.invoice_id)
+
         # Log audit event
         log_audit_event(
             db=db,
@@ -351,6 +391,10 @@ async def update_payment(
         db_payment.updated_at = get_tenant_timezone_aware_datetime(db)
         db.commit()
         db.refresh(db_payment)
+
+        # Sync invoice status
+        sync_invoice_status(db, db_payment.invoice_id)
+
         # Audit log for payment update
         log_audit_event(
             db=db,
@@ -392,8 +436,13 @@ async def delete_payment(
                 detail="Payment not found"
             )
         
+        invoice_id = db_payment.invoice_id
         db.delete(db_payment)
         db.commit()
+
+        # Sync invoice status
+        sync_invoice_status(db, invoice_id)
+
         # Audit log for payment delete
         log_audit_event(
             db=db,

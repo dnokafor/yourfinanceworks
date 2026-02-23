@@ -2,36 +2,90 @@
 Pytest configuration and fixtures for inventory and investment testing
 """
 import pytest
-from unittest.mock import Mock
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
+from unittest.mock import Mock
 
-from core.models.models_per_tenant import Base
+from core.models.models_per_tenant import Base as TenantBase
+from core.models.models import Base as MasterBase
+from core.models.analytics import Base as AnalyticsBase
+from core.models.gamification import Base as GamificationBase
 from main import app
 
-# Import investment models to ensure they're registered with the Base
+# Import all models to ensure they're registered with their respective Bases
 try:
+    import core.models.models
+    import core.models.models_per_tenant
+    import core.models.analytics
+    import core.models.gamification
     from plugins.investments.models import (
         InvestmentPortfolio, InvestmentHolding, InvestmentTransaction,
+        InvestmentAccount, FileAttachment,
         PortfolioType, SecurityType, AssetClass, TransactionType, DividendType
     )
     INVESTMENT_MODELS_AVAILABLE = True
 except ImportError:
     INVESTMENT_MODELS_AVAILABLE = False
 
-# Create in-memory SQLite database for TestingSessionLocal
-engine = create_engine(
-    "sqlite:///:memory:",
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-    echo=False
-)
+# Postgres test configuration
+POSTGRES_BASE_URL = "postgresql://postgres:password@postgres-master:5432/postgres"
+TEST_DB_NAME = "invoice_test"
+SQLALCHEMY_DATABASE_URL = f"postgresql://postgres:password@postgres-master:5432/{TEST_DB_NAME}"
+
+# Create the test database if it doesn't exist
+def setup_test_db():
+    engine = create_engine(POSTGRES_BASE_URL, isolation_level="AUTOCOMMIT")
+    with engine.connect() as conn:
+        # Terminate other connections if any (unlikely for test_db which we control)
+        conn.execute(text(f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{TEST_DB_NAME}' AND pid <> pg_backend_pid()"))
+        conn.execute(text(f"DROP DATABASE IF EXISTS {TEST_DB_NAME}"))
+        conn.execute(text(f"CREATE DATABASE {TEST_DB_NAME}"))
+    engine.dispose()
+
+setup_test_db()
+
+engine = create_engine(SQLALCHEMY_DATABASE_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Create all tables once for TestingSessionLocal (including investment tables if available)
-Base.metadata.create_all(bind=engine)
+# Monkeypatch to ensure middleware uses testing DB
+import core.models.database
+core.models.database.SessionLocal = TestingSessionLocal
+core.models.database.engine = engine
+
+# Create all tables - TenantBase first to win on common table names (like 'users')
+TenantBase.metadata.create_all(bind=engine)
+MasterBase.metadata.create_all(bind=engine)
+AnalyticsBase.metadata.create_all(bind=engine)
+GamificationBase.metadata.create_all(bind=engine)
+
+# Seed default tenant for tests
+db = TestingSessionLocal()
+from core.models.models import Tenant
+if not db.query(Tenant).filter(Tenant.id == 1).first():
+    tenant = Tenant(id=1, name="Default Tenant", is_active=True)
+    db.add(tenant)
+    db.commit()
+
+# Seed supported currencies
+from core.models.models_per_tenant import SupportedCurrency
+if not db.query(SupportedCurrency).filter(SupportedCurrency.code == "USD").first():
+    usd = SupportedCurrency(
+        code="USD",
+        name="US Dollar",
+        symbol="$",
+        decimal_places=2,
+        is_active=True
+    )
+    db.add(usd)
+    db.commit()
+db.close()
+
+# Mock TenantDatabaseManager to use the testing session
+from core.services.tenant_database_manager import tenant_db_manager
+tenant_db_manager.create_tenant_database = Mock(return_value=True)
+tenant_db_manager.get_tenant_session = Mock(return_value=TestingSessionLocal)
+tenant_db_manager.get_existing_tenant_ids = Mock(return_value=[1])
 
 def override_get_db():
     try:
@@ -41,6 +95,9 @@ def override_get_db():
         db.close()
 
 def create_test_client():
+    from core.models.database import get_db, get_master_db
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_master_db] = override_get_db
     return TestClient(app)
 
 @pytest.fixture
@@ -85,9 +142,31 @@ def db_session():
     finally:
         session.close()
         # Clean up data but keep tables
-        for table in reversed(Base.metadata.sorted_tables):
-            session.execute(table.delete())
+        for base in [MasterBase, TenantBase, AnalyticsBase, GamificationBase]:
+            for table in reversed(base.metadata.sorted_tables):
+                session.execute(table.delete())
         session.commit()
+
+        # Re-seed tenant after cleanup
+        db = TestingSessionLocal()
+        from core.models.models import Tenant
+        if not db.query(Tenant).filter(Tenant.id == 1).first():
+            tenant = Tenant(id=1, name="Default Tenant", is_active=True)
+            db.add(tenant)
+            db.commit()
+
+        from core.models.models_per_tenant import SupportedCurrency
+        if not db.query(SupportedCurrency).filter(SupportedCurrency.code == "USD").first():
+            usd = SupportedCurrency(
+                code="USD",
+                name="US Dollar",
+                symbol="$",
+                decimal_places=2,
+                is_active=True
+            )
+            db.add(usd)
+            db.commit()
+        db.close()
 
 
 @pytest.fixture

@@ -154,6 +154,13 @@ class Invoice(Base):
             return self.created_by.email
         return None
 
+    @property
+    def paid_amount(self):
+        """Calculate total paid amount from all associated payments"""
+        if self.payments:
+            return sum(payment.amount for payment in self.payments)
+        return 0.0
+
 class Payment(Base):
     __tablename__ = "payments"
 
