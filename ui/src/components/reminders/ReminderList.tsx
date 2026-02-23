@@ -15,8 +15,28 @@ import {
   Timer,
   Trash2,
   CheckSquare,
-  Square
+  Square,
+  GripVertical
 } from 'lucide-react';
+
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  rectSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 import { Button } from '@/components/ui/button';
 import { ProfessionalButton } from '@/components/ui/professional-button';
@@ -49,13 +69,13 @@ interface Reminder {
   priority: 'low' | 'medium' | 'high' | 'urgent';
   status: 'pending' | 'completed' | 'snoozed' | 'cancelled';
   recurrence_pattern: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly';
-  assigned_to: {
+  assigned_to?: {
     id: number;
     email: string;
     first_name?: string;
     last_name?: string;
   };
-  created_by: {
+  created_by?: {
     id: number;
     email: string;
     first_name?: string;
@@ -65,6 +85,52 @@ interface Reminder {
   snoozed_until?: string;
   tags?: string[];
   snooze_count?: number;
+  is_pinned?: boolean;
+  position?: number;
+}
+
+interface SortableReminderProps {
+  id: number;
+  reminder: Reminder;
+  currentUserId: number;
+  onEdit: (reminder: any) => void;
+  onComplete: (id: number) => void;
+  onSnooze: (id: number, until: Date) => void;
+  onUnsnooze: (id: number) => void;
+  onDelete: (id: number) => void;
+  onTogglePin: (id: number) => void;
+  isSelected: boolean;
+  onSelect: (id: number) => void;
+  showSelection: boolean;
+}
+
+function SortableReminder({ id, reminder, ...props }: SortableReminderProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 1 : 0,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="h-full">
+      <ReminderCard
+        reminder={reminder}
+        className="h-full"
+        {...props}
+        dragHandleProps={{ ...attributes, ...listeners }}
+      />
+    </div>
+  );
 }
 
 interface User {
@@ -89,6 +155,17 @@ export function ReminderList({ className }: ReminderListProps) {
   const [selectedReminders, setSelectedReminders] = useState<Set<number>>(new Set());
   const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // Filter states
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
@@ -182,8 +259,8 @@ export function ReminderList({ className }: ReminderListProps) {
 
       const params: any = {
         page,
-        per_page: 20,
-        sort_by: 'created_at',
+        per_page: 100, // Show more for manual reordering
+        sort_by: 'due_date',
         sort_order: 'desc',
       };
 
@@ -326,6 +403,36 @@ export function ReminderList({ className }: ReminderListProps) {
       fetchTabCounts();
     } catch (error) {
       toast.error('Failed to complete reminder');
+    }
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      setReminders((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over.id);
+        const newItems = arrayMove(items, oldIndex, newIndex);
+
+        // Sync with backend
+        reminderApi.reorderReminders(newItems.map(item => item.id)).catch(err => {
+          console.error("Failed to reorder reminders:", err);
+          toast.error("Failed to save new order");
+        });
+
+        return newItems;
+      });
+    }
+  };
+
+  const handleTogglePin = async (id: number) => {
+    try {
+      await reminderApi.toggleReminderPin(id);
+      loadReminders(); // Reload to get correct ordering based on pinned status
+    } catch (err) {
+      console.error("Failed to toggle pin:", err);
+      toast.error("Failed to pin/unpin reminder");
     }
   };
 
@@ -691,27 +798,40 @@ export function ReminderList({ className }: ReminderListProps) {
                         </Button>
                         <span className="text-sm text-muted-foreground">
                           {selectedReminders.size === reminders.length && reminders.length > 0
-                            ? 'Deselect all'
-                            : `Select all (${reminders.length})`}
+                            ? t('reminders.deselect_all')
+                            : t('reminders.select_all', { count: reminders.length })}
                         </span>
                       </div>
                     )}
-                    <div className="grid gap-4">
-                      {reminders.map((reminder) => (
-                        <ReminderCard
-                          key={reminder.id}
-                          reminder={reminder}
-                          currentUserId={currentUser?.id || 0}
-                          onEdit={setEditingReminder}
-                          onComplete={handleCompleteReminder}
-                          onSnooze={handleSnoozeReminder}
-                          onUnsnooze={handleUnsnoozeReminder}
-                          onDelete={handleDeleteReminder}
-                          isSelected={selectedReminders.has(reminder.id)}
-                          onSelect={handleSelectReminder}
-                          showSelection={true}
-                        />
-                      ))}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        onDragEnd={handleDragEnd}
+                      >
+                        <SortableContext
+                          items={reminders.map((r) => r.id)}
+                          strategy={rectSortingStrategy}
+                        >
+                          {reminders.map((reminder) => (
+                            <SortableReminder
+                              key={reminder.id}
+                              id={reminder.id}
+                              reminder={reminder}
+                              currentUserId={currentUser?.id || 0}
+                              onEdit={setEditingReminder}
+                              onComplete={handleCompleteReminder}
+                              onSnooze={handleSnoozeReminder}
+                              onUnsnooze={handleUnsnoozeReminder}
+                              onDelete={handleDeleteReminder}
+                              onTogglePin={handleTogglePin}
+                              isSelected={selectedReminders.has(reminder.id)}
+                              onSelect={handleSelectReminder}
+                              showSelection={true}
+                            />
+                          ))}
+                        </SortableContext>
+                      </DndContext>
                     </div>
                   </div>
                 )}
@@ -732,7 +852,7 @@ export function ReminderList({ className }: ReminderListProps) {
               {t('reminders.previous')}
             </ProfessionalButton>
             <span className="text-sm text-muted-foreground">
-              {t('reminders.page')} {page} {t('reminders.of')} {totalPages}
+              {t('reminders.page_of', { page, total: totalPages })}
             </span>
             <ProfessionalButton
               variant="outline"
@@ -748,13 +868,13 @@ export function ReminderList({ className }: ReminderListProps) {
         <AlertDialog open={bulkDeleteModalOpen} onOpenChange={setBulkDeleteModalOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete Selected Reminders</AlertDialogTitle>
+              <AlertDialogTitle>{t('reminders.bulk_delete_title')}</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to delete {selectedReminders.size} selected reminder(s)? This action cannot be undone.
+                {t('reminders.bulk_delete_description', { count: selectedReminders.size })}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={bulkDeleteLoading}>Cancel</AlertDialogCancel>
+              <AlertDialogCancel disabled={bulkDeleteLoading}>{t('common.cancel')}</AlertDialogCancel>
               <AlertDialogAction
                 onClick={handleBulkDelete}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -765,7 +885,7 @@ export function ReminderList({ className }: ReminderListProps) {
                 ) : (
                   <Trash2 className="mr-2 h-4 w-4" />
                 )}
-                Delete {selectedReminders.size} Reminder(s)
+                {t('reminders.bulk_delete_confirm', { count: selectedReminders.size })}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
