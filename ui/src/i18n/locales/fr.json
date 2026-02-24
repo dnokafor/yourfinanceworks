@@ -294,8 +294,8 @@
   "dashboard": {
     "title": "Tableau de Bord",
     "welcome": "Bon retour, {{name}}!",
-    "overview": "Aperçu de votre activité de facturation",
-    "tenant_overview": "{{tenant}} - Aperçu de votre activité de facturation",
+    "overview": "Aperçu de votre activité financière",
+    "tenant_overview": "{{tenant}} - Aperçu de votre activité financière",
     "total_invoices": "Total des Factures",
     "total_clients": "Total des Clients",
     "total_revenue": "Revenus Totaux",

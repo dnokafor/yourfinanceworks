@@ -286,8 +286,8 @@
   "dashboard": {
     "title": "Dashboard",
     "welcome": "Willkommen zurück, {{name}}!",
-    "overview": "Übersicht über Ihre Rechnungsaktivitäten",
-    "tenant_overview": "{{tenant}} - Übersicht über Ihre Rechnungsaktivitäten",
+    "overview": "Übersicht über Ihre Finanzaktivitäten",
+    "tenant_overview": "{{tenant}} - Übersicht über Ihre Finanzaktivitäten",
     "total_invoices": "Gesamt Rechnungen",
     "total_clients": "Gesamt Kunden",
     "total_revenue": "Gesamtumsatz",

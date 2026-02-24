@@ -294,8 +294,8 @@
   "dashboard": {
     "title": "Panel de Control",
     "welcome": "¡Bienvenido de vuelta, {{name}}!",
-    "overview": "Resumen de tu actividad de facturación",
-    "tenant_overview": "{{tenant}} - Resumen de tu actividad de facturación",
+    "overview": "Resumen de tu actividad financiera",
+    "tenant_overview": "{{tenant}} - Resumen de tu actividad financiera",
     "total_invoices": "Total de Facturas",
     "total_clients": "Total de Clientes",
     "total_revenue": "Ingresos Totales",

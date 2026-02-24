@@ -295,8 +295,8 @@
   "dashboard": {
     "title": "Dashboard",
     "welcome": "Welcome back, {{name}}!",
-    "overview": "Overview of your invoicing activity",
-    "tenant_overview": "{{tenant}} - Overview of your invoicing activity",
+    "overview": "Overview of your finance activity",
+    "tenant_overview": "{{tenant}} - Overview of your finance activity",
     "total_invoices": "Total Invoices",
     "total_revenue": "Total Revenue",
     "pending_invoices": "Pending Invoices",
