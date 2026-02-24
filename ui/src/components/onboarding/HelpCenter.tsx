@@ -308,14 +308,13 @@ export function HelpCenter() {
                     </p>
                     
                     <div className="space-y-3">
-                      <Button variant="default" className="w-full justify-start h-11 px-4 text-xs font-bold rounded-xl shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5">
-                        <Mail className="h-4 w-4 mr-3" />
-                        {t('helpCenter.email_support')}
-                      </Button>
-                      
-                      <Button variant="outline" className="w-full justify-start h-11 px-4 text-xs font-bold rounded-xl border-border hover:bg-muted transition-all">
-                        <Video className="h-4 w-4 mr-3" />
-                        {t('helpCenter.schedule_demo')}
+                      <Button
+                        variant="default"
+                        className="w-full justify-start h-11 px-4 text-xs font-bold rounded-xl shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5"
+                        onClick={() => window.open('https://www.yourfinanceworks.com/support', '_blank')}
+                      >
+                        <MessageCircle className="h-4 w-4 mr-3" />
+                        {t('helpCenter.support_center')}
                       </Button>
                     </div>
                   </CardContent>
