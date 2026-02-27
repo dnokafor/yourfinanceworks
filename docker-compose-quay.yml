@@ -23,9 +23,7 @@ services:
 
   # API service with multi-tenant support
   api:
-    build:
-      context: ./api
-      dockerfile: Dockerfile
+    image: quay.io/yourfinanceworks/api:3.1.0
     container_name: invoice_app_api
     env_file:
       - ./api/.env
@@ -96,9 +94,7 @@ services:
 
   # UI service
   ui:
-    build:
-      context: ./ui
-      dockerfile: Dockerfile
+    image: quay.io/yourfinanceworks/ui:3.1.0
     container_name: invoice_app_ui
     environment:
       - VITE_API_URL=/api/v1
@@ -189,9 +185,7 @@ services:
 
   # OCR Worker running as a separate container
   ocr-worker:
-    build:
-      context: ./api
-      dockerfile: Dockerfile
+    image: quay.io/yourfinanceworks/api:3.1.0
     deploy:
       replicas: 2 #variable is not supported ${KAFKA_OCR_TOPIC_PARTITIONS:2}
     extra_hosts:
@@ -244,9 +238,7 @@ services:
 
   # Audit Worker for AI forensic analysis and fraud detection
   audit-worker:
-    build:
-      context: ./api
-      dockerfile: Dockerfile
+    image: quay.io/yourfinanceworks/api:3.1.0
     deploy:
       replicas: 1
     extra_hosts:
@@ -291,9 +283,7 @@ services:
 
   # Email Worker for fetching and processing emails
   email-worker:
-    build:
-      context: ./api
-      dockerfile: Dockerfile
+    image: quay.io/yourfinanceworks/api:3.1.0
     deploy:
       replicas: 2 # ${EMAIL_WORKER_REPLICAS:2}
     extra_hosts:
@@ -340,9 +330,7 @@ services:
 
   # Review Worker for background AI verification
   review-worker:
-    build:
-      context: ./api
-      dockerfile: Dockerfile
+    image: quay.io/yourfinanceworks/api:3.1.0
     deploy:
       replicas: 1
     extra_hosts:
@@ -381,9 +369,7 @@ services:
 
   # Portfolio Import Worker for portfolio holdings/transactions file processing
   portfolio-import-worker:
-    build:
-      context: ./api
-      dockerfile: Dockerfile
+    image: quay.io/yourfinanceworks/api:3.1.0
     deploy:
       replicas: 1
     extra_hosts:
