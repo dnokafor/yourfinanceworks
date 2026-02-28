@@ -32,6 +32,7 @@ export default function ExpensesEdit() {
   const categoryOptions = EXPENSE_CATEGORY_OPTIONS;
   const { isFeatureEnabled } = useFeatures();
   const hasAIExpenseFeature = isFeatureEnabled('ai_expense');
+  const isApprovalsEnabled = isFeatureEnabled('approvals');
   const [form, setForm] = useState<Partial<Expense>>({ currency: 'USD' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -53,7 +54,6 @@ export default function ExpensesEdit() {
   const [selectedApproverId, setSelectedApproverId] = useState<string>('');
   const [availableApprovers, setAvailableApprovers] = useState<Array<{ id: number; name: string; email: string }>>([]);
   const [approvalsNotLicensed, setApprovalsNotLicensed] = useState(false);
-  const { isFeatureEnabled: isApprovalsEnabled } = useFeatures();
 
   useEffect(() => {
     const load = async () => {
@@ -729,67 +729,78 @@ export default function ExpensesEdit() {
               <CardTitle>{t('expenses.approval_workflow')}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="submit-for-approval"
-                  checked={submitForApproval}
-                  onCheckedChange={(checked) => setSubmitForApproval(checked as boolean)}
-                />
-                <label
-                  htmlFor="submit-for-approval"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                >
-                  {t('expenses.submit_this_expense_for_approval_after_saving_changes')}
-                </label>
-              </div>
-              {submitForApproval && (
-                <div className="mt-3 space-y-3">
-                  {approvalsNotLicensed ? (
-                    <Alert className="border-amber-200 bg-amber-50">
-                      <AlertCircle className="h-4 w-4 text-amber-600" />
-                      <AlertDescription className="text-amber-800">
-                        {t('common.feature_not_licensed', {
-                          defaultValue: 'Approval workflows require a commercial license. Please upgrade your license to use this feature.'
-                        })}
-                      </AlertDescription>
-                    </Alert>
-                  ) : (
-                    <>
-                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p className="text-sm text-blue-700">
-                          {t('expenses.this_expense_will_be_submitted_for_approval')}
-                        </p>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="approver-select" className="flex items-center gap-2 text-sm font-medium">
-                          <Users className="h-4 w-4" />
-                          {t('expenses.select_approver')} *
-                        </Label>
-                        <Select value={selectedApproverId} onValueChange={setSelectedApproverId}>
-                          <SelectTrigger>
-                            <SelectValue placeholder={t('expenses.choose_an_approver')} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableApprovers.map((approver) => (
-                              <SelectItem key={approver.id} value={approver.id.toString()}>
-                                {approver.name} ({approver.email})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </>
-                  )}
+              <div className={`space-y-3 ${!isApprovalsEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
+                {!isApprovalsEnabled && (
+                  <Alert className="border-amber-200 bg-amber-50">
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="text-amber-800">
+                      <strong>Note:</strong> Approval workflows are not available in your current plan. Please submit expenses directly.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="submit-for-approval"
+                    checked={submitForApproval}
+                    onCheckedChange={(checked) => setSubmitForApproval(checked as boolean)}
+                    disabled={!isApprovalsEnabled}
+                  />
+                  <label
+                    htmlFor="submit-for-approval"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    {t('expenses.submit_this_expense_for_approval_after_saving_changes')}
+                  </label>
                 </div>
-              )}
+                {submitForApproval && (
+                  <div className="mt-3 space-y-3">
+                    {approvalsNotLicensed ? (
+                      <Alert className="border-amber-200 bg-amber-50">
+                        <AlertCircle className="h-4 w-4 text-amber-600" />
+                        <AlertDescription className="text-amber-800">
+                          {t('common.feature_not_licensed', {
+                            defaultValue: 'Approval workflows require a commercial license. Please upgrade your license to use this feature.'
+                          })}
+                        </AlertDescription>
+                      </Alert>
+                    ) : (
+                      <>
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <p className="text-sm text-blue-700">
+                            {t('expenses.this_expense_will_be_submitted_for_approval')}
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="approver-select" className="flex items-center gap-2 text-sm font-medium">
+                            <Users className="h-4 w-4" />
+                            {t('expenses.select_approver')} *
+                          </Label>
+                          <Select value={selectedApproverId} onValueChange={setSelectedApproverId}>
+                            <SelectTrigger>
+                              <SelectValue placeholder={t('expenses.choose_an_approver')} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availableApprovers.map((approver) => (
+                                <SelectItem key={approver.id} value={approver.id.toString()}>
+                                  {approver.name} ({approver.email})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         )}
 
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => navigate('/expenses')}>{t('common.cancel')}</Button>
-          <Button onClick={onSave} disabled={saving || (submitForApproval && !selectedApproverId)}>
+          <Button onClick={onSave} disabled={saving || (submitForApproval && (!selectedApproverId || !isApprovalsEnabled))}>
             {saving ? t('common.saving', { defaultValue: 'Saving...' }) :
               (submitForApproval ? t('expenses.save_and_submit_for_approval') : t('expenses.buttons.save_changes'))}
           </Button>

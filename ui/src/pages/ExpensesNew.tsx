@@ -30,6 +30,7 @@ export default function ExpensesNew() {
   const categoryOptions = EXPENSE_CATEGORY_OPTIONS;
   const { isFeatureEnabled } = useFeatures();
   const hasAIExpenseFeature = isFeatureEnabled('ai_expense');
+  const isApprovalsEnabled = isFeatureEnabled('approvals');
 
   // Get prefill values from URL parameters
   const prefillAmount = searchParams.get('amount');
@@ -37,7 +38,7 @@ export default function ExpensesNew() {
   const prefillInvoiceId = searchParams.get('invoiceId');
 
   const [form, setForm] = useState<Partial<Expense>>({
-    amount: prefillAmount ? prefillAmount : '',
+    amount: prefillAmount ? parseFloat(prefillAmount) : 0,
     currency: prefillCurrency || 'USD',
     expense_date: new Date().toISOString().split('T')[0],
     category: 'General',
@@ -206,7 +207,7 @@ export default function ExpensesNew() {
     try {
       // Validate using current form state directly
       const amountValue = Number(form.amount);
-      const hasValidAmount = form.amount && form.amount !== '' && amountValue > 0;
+      const hasValidAmount = form.amount && amountValue > 0;
       
       if (!hasValidAmount && files.length === 0 && !isInventoryConsumption) {
         toast.error(t('expenses.amount_required'));
@@ -346,7 +347,7 @@ export default function ExpensesNew() {
                 <Input
                   type="number"
                   value={form.amount === undefined || form.amount === null ? '' : String(form.amount)}
-                  onChange={e => setForm({ ...form, amount: e.target.value })}
+                  onChange={e => setForm({ ...form, amount: e.target.value ? Number(e.target.value) : undefined })}
                   disabled={isInventoryConsumption}
                   placeholder={isInventoryConsumption ? t('expenses.calculated_from_items') : undefined}
                 />
@@ -600,11 +601,20 @@ export default function ExpensesNew() {
               <h2 className="text-2xl font-bold text-foreground">{t('expenses.approval_workflow')}</h2>
               <p className="text-muted-foreground mt-1">Submit this expense for approval after creation</p>
             </div>
-            <div className="flex items-center space-x-2">
+            {!isApprovalsEnabled && (
+              <Alert className="border-amber-200 bg-amber-50">
+                <AlertCircle className="h-4 w-4 text-amber-600" />
+                <AlertDescription className="text-amber-800">
+                  <strong>Note:</strong> Approval workflows are not available in your current plan. Please submit expenses directly.
+                </AlertDescription>
+              </Alert>
+            )}
+            <div className={`flex items-center space-x-2 ${!isApprovalsEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
               <Checkbox
                 id="submit-for-approval"
                 checked={submitForApproval}
                 onCheckedChange={(checked) => setSubmitForApproval(checked as boolean)}
+                disabled={!isApprovalsEnabled}
               />
               <label
                 htmlFor="submit-for-approval"
@@ -668,7 +678,7 @@ export default function ExpensesNew() {
           <Button
             ref={buttonRef}
             onClick={onSubmit}
-            disabled={saving || isSubmitting || (submitForApproval && !selectedApproverId)}
+            disabled={saving || isSubmitting || (submitForApproval && (!selectedApproverId || !isApprovalsEnabled))}
             className={(saving || isSubmitting) ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}
           >
             {saving ? t('common.saving') : (submitForApproval ? t('expenses.create_and_submit_for_approval') : t('expenses.create_expense'))}

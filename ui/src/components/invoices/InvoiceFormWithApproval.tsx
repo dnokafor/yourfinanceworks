@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ApprovalHistoryEntry } from '@/types';
+import { useFeatures } from '@/contexts/FeatureContext';
 
 interface InvoiceFormWithApprovalProps {
   invoice?: Invoice;
@@ -39,6 +40,8 @@ export function InvoiceFormWithApproval({
 }: InvoiceFormWithApprovalProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { isFeatureEnabled } = useFeatures();
+  const isApprovalsEnabled = isFeatureEnabled('approvals');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasClients, setHasClients] = useState(true);
   const [loadingClients, setLoadingClients] = useState(true);
@@ -314,11 +317,20 @@ export function InvoiceFormWithApproval({
               ) : (
                 // Show approval submission form for new/draft invoices
                 <>
-                  <div className="flex items-center space-x-2">
+                  {!isApprovalsEnabled && (
+                    <Alert className="mb-4 border-amber-200 bg-amber-50">
+                      <AlertCircle className="h-4 w-4 text-amber-600" />
+                      <AlertDescription className="text-amber-800">
+                        <strong>Note:</strong> Approval workflows are not available in your current plan. Please submit invoices directly.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  <div className={`flex items-center space-x-2 ${!isApprovalsEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
                     <Checkbox
                       id="submit-for-approval"
                       checked={submitForApproval}
                       onCheckedChange={(checked) => setSubmitForApproval(checked as boolean)}
+                      disabled={!isApprovalsEnabled}
                     />
                     <label
                       htmlFor="submit-for-approval"
@@ -392,7 +404,7 @@ export function InvoiceFormWithApproval({
             <Button
               type="button"
               onClick={handleFormSubmit}
-              disabled={isSubmitting || (submitForApproval && !approvalsNotLicensed && !selectedApproverId)}
+              disabled={isSubmitting || (submitForApproval && !approvalsNotLicensed && (!selectedApproverId || !isApprovalsEnabled))}
             >
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {t('invoices.create_invoice')}
