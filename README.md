@@ -8,6 +8,12 @@
 
 YourFinanceWORKS transforms financial futures for businesses and individuals through AI-powered automation of invoicing, expense tracking, banking reconciliation, and comprehensive business intelligence in a secure multi-tenant platform.
 
+## 🎬 Videos
+
+|                                            Introduction                                             |                                            Features                                            |
+| :-------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------: |
+| [![Introduction Video](https://img.youtube.com/vi/xP6NmpaEe6c/0.jpg)](https://youtu.be/xP6NmpaEe6c) | [![Feature Video](https://img.youtube.com/vi/Yj-WUDgdlM4/0.jpg)](https://youtu.be/Yj-WUDgdlM4) |
+
 ## ⚡ Quick Start (Docker)
 
 ```bash
@@ -26,6 +32,8 @@ docker-compose up --build -d
 docker-compose exec api python scripts/create_super_user.py
 ```
 
+▶️ **Watch the Docker Compose setup walkthrough**: [https://youtu.be/810xppiTtAE](https://youtu.be/810xppiTtAE)
+
 The first user to sign up in a fresh system is automatically granted Super User privileges and assigned the global `admin` role.
 
 ## 📚 Documentation
@@ -39,12 +47,14 @@ The first user to sign up in a fresh system is automatically granted Super User 
 ## 🧩 Product Highlights
 
 ### 💰 Revenue & Billing
+
 - Professional invoicing with AI-powered templates and tax compliance
 - Multi-provider email delivery with professional PDF attachments
 - Real-time payment tracking and automated collection reminders
 - Revenue cycle optimization with strategic billing insights
 
 ### 📊 Expense Intelligence & Automation
+
 - OCR-powered receipt processing with high-accuracy data extraction
 - Smart expense categorization based on vendor patterns and history
 - Approval workflows with configurable rules and audit trails
@@ -52,11 +62,13 @@ The first user to sign up in a fresh system is automatically granted Super User 
 - AI-powered invoice OCR for automated data entry and line item extraction
 
 ### 🏦 Banking & Financial Health
+
 - Automated bank statement processing with AI OCR transaction extraction
 - Smart transaction matching for one-click reconciliation
 - Real-time financial health monitoring and cash flow analysis
 
 ### 🕵️ AI-Powered Business Intelligence
+
 - MCP-backed AI assistant for natural language business queries
 - AI-powered fraud detection and risk scoring for financial documents
 - Forensic auditing with anomaly detection and attachment integrity analysis
@@ -65,12 +77,14 @@ The first user to sign up in a fresh system is automatically granted Super User 
 - Advanced document processing with vision-capable models for complex layouts
 
 ### 🏦 Enterprise & Governance
+
 - Multi-tenant architecture with secure database-per-tenant isolation
 - Role-based access control with granular permissions and governance
 - Comprehensive audit trails and compliance reporting
 - Advanced data export/import and backup capabilities
 
 ### 🛠️ Advanced Infrastructure
+
 - Extensible plugin management system for custom functionality
 - Investment management plugins for portfolio tracking and analysis
 - Cloud storage integration with multiple provider support
