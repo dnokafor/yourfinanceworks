@@ -13,6 +13,7 @@ YourFinanceWORKS transforms financial futures for businesses and individuals thr
 |                                            Introduction                                             |                                            Features                                            |
 | :-------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------: |
 | [![Introduction Video](https://img.youtube.com/vi/xP6NmpaEe6c/0.jpg)](https://youtu.be/xP6NmpaEe6c) | [![Feature Video](https://img.youtube.com/vi/Yj-WUDgdlM4/0.jpg)](https://youtu.be/Yj-WUDgdlM4) |
+|                                 How to use the app & license portal                                 |                                   Product features overview                                    |
 
 ## ⚡ Quick Start (Docker)
 
