@@ -465,6 +465,18 @@ export default function Statements() {
       const data = await bankStatementApi.list(skip, pageSize, labelFilter || undefined, searchQuery || undefined, status);
       setStatements(data.statements);
       setTotalStatements(data.total);
+
+      // Start polling for any statements that are still processing
+      const processingIds = data.statements
+        .filter(s => s.status === 'processing' || s.status === 'uploaded')
+        .map(s => s.id);
+      
+      if (processingIds.length > 0) {
+        const startPolling = (window as any).startStatementPolling;
+        if (typeof startPolling === 'function') {
+          startPolling(processingIds);
+        }
+      }
     } catch (e: any) {
       toast.error(e?.message || 'Failed to load statements');
     }
@@ -473,6 +485,26 @@ export default function Statements() {
   useEffect(() => {
     loadList();
   }, [statusFilter, labelFilter, searchQuery, page, pageSize]);
+
+  // Listen for polling completion events
+  useEffect(() => {
+    const handleRefresh = (e: any) => {
+      loadList();
+      
+      // If we're looking at the detail for the processed statement, reload it
+      if (selected && e?.detail?.id === selected) {
+        openStatement(selected);
+      }
+    };
+
+    window.addEventListener('statement-processed', handleRefresh);
+    window.addEventListener('statement-failed', handleRefresh);
+
+    return () => {
+      window.removeEventListener('statement-processed', handleRefresh);
+      window.removeEventListener('statement-failed', handleRefresh);
+    };
+  }, [loadList, selected]);
 
   useEffect(() => {
     if (!recycleBinLoading && deletedStatements.length === 0 && showRecycleBin && prevDeletedCount.current > 0) {
@@ -527,6 +559,13 @@ export default function Statements() {
       addNotification?.('processing', t('statements.processing'), `Analyzing ${files.length} ${providerName.toLowerCase()} statement files with AI...`);
 
       const resp = await bankStatementApi.uploadAndExtract(files);
+
+      if (resp.statements && resp.statements.length > 0) {
+        const startPolling = (window as any).startStatementPolling;
+        if (typeof startPolling === 'function') {
+          startPolling(resp.statements.map((s: any) => s.id));
+        }
+      }
 
       addNotification?.('success', `${providerName} ${t('statements.upload')}`, `Successfully uploaded ${files.length} statement files. AI extraction in progress.`);
       toast.success(`Uploaded ${files.length} ${providerName.toLowerCase()} ${t('statements.statements').toLowerCase()}`);
@@ -1227,7 +1266,7 @@ export default function Statements() {
                 </div>
               )}
 
-              <div className="rounded-xl border border-border/50 overflow-hidden shadow-sm">
+              <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-gradient-to-r from-muted/50 to-muted/30 hover:bg-gradient-to-r hover:from-muted/50 hover:to-muted/30 border-b border-border/50">
@@ -1428,6 +1467,10 @@ export default function Statements() {
                                 try {
                                   setReprocessingLocks(prev => new Set([...prev, s.id]));
                                   await bankStatementApi.reprocess(s.id);
+                                  const startPolling = (window as any).startStatementPolling;
+                                  if (typeof startPolling === 'function') {
+                                    startPolling([s.id]);
+                                  }
                                   toast.success('Reprocessing started');
                                   await loadList();
                                   setTimeout(() => {
@@ -1992,7 +2035,7 @@ export default function Statements() {
                 </div>
               </CardHeader>
 
-              <div className="rounded-xl border border-border/50 overflow-hidden shadow-sm bg-background">
+              <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm bg-background">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/30 hover:bg-muted/30 border-b border-border/50">
