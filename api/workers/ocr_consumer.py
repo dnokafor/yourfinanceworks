@@ -482,10 +482,13 @@ class ExpenseMessageHandler(BaseMessageHandler):
                 with database_session(tenant_id) as db:
                     from core.models.models_per_tenant import Expense
 
-                    # Check if expense exists and is not manually overridden
+                    # Check if expense exists, is not deleted, and is not manually overridden
                     exp = db.query(Expense).filter(Expense.id == expense_id).first()
                     if not exp:
                         self.logger.warning(f"Expense {expense_id} not found; skipping")
+                        return ProcessingResult(success=True, committed=True)
+                    if getattr(exp, 'is_deleted', False):
+                        self.logger.warning(f"Expense {expense_id} is deleted; skipping OCR")
                         return ProcessingResult(success=True, committed=True)
 
                     if exp.manual_override:
@@ -595,6 +598,17 @@ class ExpenseMessageHandler(BaseMessageHandler):
         error_message = getattr(expense, "analysis_error", "Unknown error")
 
         # Check if error is retryable
+        # Non-retryable errors: invalid request, bad image, model limitations, auth failures
+        non_retryable_patterns = [
+            "invalid_request_error", "could not process image", "bad request",
+            "invalidaccesskeyid", "authentication", "authorization",
+            "does not support image", "does not support vision",
+        ]
+        if any(p in error_message.lower() for p in non_retryable_patterns):
+            self.logger.warning(f"Non-retryable OCR error for expense_id={expense_id}: {error_message}")
+            await self._send_to_dlq(expense_id, tenant_id, payload.get("attachment_id"), payload.get("file_path"), error_message, payload)
+            return ProcessingResult(success=False, committed=True)
+
         if "timeout" in error_message.lower():
             retry_delay = min(300000, 60000 * (attempt + 1))  # 1-5 minutes for timeouts
         else:
