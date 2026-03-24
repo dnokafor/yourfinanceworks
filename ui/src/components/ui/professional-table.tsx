@@ -2,6 +2,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp, MoreHorizontal, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useListDensity } from "@/hooks/use-list-density";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -98,21 +99,45 @@ const ProfessionalTableHead = React.forwardRef<
   HTMLTableCellElement,
   SortableHeaderProps
 >(({ className, sortable = false, sortDirection, onSort, children, ...props }, ref) => {
+  const { density } = useListDensity();
   const handleSort = () => {
     if (sortable && onSort) {
       onSort();
     }
   };
 
+  const handleSortKeyDown = (event: React.KeyboardEvent<HTMLTableCellElement>) => {
+    if (!sortable || !onSort) return;
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onSort();
+    }
+  };
+
+  const ariaSortValue =
+    sortDirection === "asc"
+      ? "ascending"
+      : sortDirection === "desc"
+        ? "descending"
+        : sortable
+          ? "none"
+          : undefined;
+
+  const densityClass = density === "compact" ? "h-10 px-3 text-[11px]" : "h-12 px-4 text-xs";
+
   return (
     <th
       ref={ref}
       className={cn(
-        "h-12 px-4 text-left align-middle font-semibold text-muted-foreground [&:has([role=checkbox])]:pr-0",
+        "text-left align-middle font-semibold text-muted-foreground [&:has([role=checkbox])]:pr-0",
+        densityClass,
         sortable && "cursor-pointer hover:text-foreground transition-colors select-none",
         className
       )}
       onClick={handleSort}
+      onKeyDown={handleSortKeyDown}
+      tabIndex={sortable ? 0 : undefined}
+      aria-sort={ariaSortValue as React.AriaAttributes["aria-sort"]}
       {...props}
     >
       <div className="flex items-center gap-2">
@@ -133,13 +158,17 @@ ProfessionalTableHead.displayName = "ProfessionalTableHead";
 const ProfessionalTableCell = React.forwardRef<
   HTMLTableCellElement,
   React.TdHTMLAttributes<HTMLTableCellElement>
->(({ className, ...props }, ref) => (
-  <td
-    ref={ref}
-    className={cn("px-4 py-3 align-middle [&:has([role=checkbox])]:pr-0", className)}
-    {...props}
-  />
-));
+>(({ className, ...props }, ref) => {
+  const { density } = useListDensity();
+  const densityClass = density === "compact" ? "px-3 py-2.5" : "px-4 py-3";
+  return (
+    <td
+      ref={ref}
+      className={cn("align-middle [&:has([role=checkbox])]:pr-0", densityClass, className)}
+      {...props}
+    />
+  );
+});
 ProfessionalTableCell.displayName = "ProfessionalTableCell";
 
 // Status Badge Component for Tables

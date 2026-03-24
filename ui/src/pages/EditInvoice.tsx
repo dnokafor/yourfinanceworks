@@ -369,7 +369,7 @@ const EditInvoice = () => {
                   )}
                 </div>
               </div>
-              <h1 className="text-4xl font-bold tracking-tight text-foreground">
+              <h1 className="text-4xl font-bold tracking-tight">
                 {t('editInvoice.editInvoice')}
               </h1>
               <p className="text-lg text-muted-foreground">
