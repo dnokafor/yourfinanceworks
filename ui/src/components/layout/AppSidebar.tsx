@@ -55,12 +55,19 @@ import { PluginMenuErrorBoundary } from '@/components/plugins/PluginErrorBoundar
 // Calling import.meta.glob inside a component body creates a new object
 // reference each render, which breaks useMemo dependency tracking.
 // ---------------------------------------------------------------------------
-const _pluginNavModules = import.meta.glob('../../plugins/*/index.ts', { eager: true }) as Record<
-  string,
-  { navItems?: PluginNavItem[] }
->;
+import type { LucideIcon } from 'lucide-react';
+import { Puzzle } from 'lucide-react';
+import { usePluginModules } from '@/hooks/usePluginModules';
 
 export function AppSidebar() {
+  const pluginModules = usePluginModules();
+  const _runtimeIconRegistry: Record<string, LucideIcon> = {
+    ...iconRegistry,
+    ...pluginModules.reduce<Record<string, LucideIcon>>(
+      (acc, m) => ({ ...acc, ...(m.pluginIcons ?? {}) }),
+      {},
+    ),
+  };
   const { state, setOpenMobile, isMobile: isMobileContext } = useSidebar();
   const location = useLocation();
   const navigate = useNavigate();
@@ -427,13 +434,11 @@ export function AppSidebar() {
   // Plugin menu items — auto-discovered from each plugin's navItems export via import.meta.glob.
   // The glob runs at module level (above) so the reference is stable across renders.
   const pluginMenuItems = useMemo(() => {
-    const allNavItems: PluginNavItem[] = Object.values(_pluginNavModules)
+    return pluginModules
       .flatMap((m) => m.navItems ?? [])
       .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
       .filter((item) => isPluginEnabled(item.id));
-
-    return allNavItems;
-  }, [enabledPlugins, isPluginEnabled]);
+  }, [pluginModules, enabledPlugins, isPluginEnabled]);
 
   const isActive = (path: string) => {
     return location.pathname === path;
@@ -569,7 +574,7 @@ export function AppSidebar() {
                       </h3>
                     </div>
                     {pluginMenuItems.map((item) => {
-                      const IconComponent = iconRegistry[item.icon];
+                      const IconComponent = _runtimeIconRegistry[item.icon] ?? Puzzle;
                       return (
                         <SidebarMenuItem key={item.path}>
                           <PluginMenuErrorBoundary

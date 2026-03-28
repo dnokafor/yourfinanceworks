@@ -21,6 +21,47 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# TypeScript / JSDoc comment safety helpers
+# ---------------------------------------------------------------------------
+_BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
+
+
+def _sanitize_ts_comments(path: Path) -> bool:
+    """Replace bare ``*/`` sequences inside block comments with ``* /``.
+
+    Returns True if the file was modified.
+    """
+    text = path.read_text(encoding="utf-8")
+
+    def _fix(m: re.Match) -> str:
+        # Only fix occurrences that are NOT the genuine closing delimiter
+        # (i.e. ``*/`` that appears in the interior of the comment body).
+        body = m.group(0)
+        # Replace interior */ (not the final one that closes the comment)
+        fixed = re.sub(r"\*/(?!$)", "* /", body[2:-2])  # strip /* … */
+        return "/*" + fixed + "*/"
+
+    new_text = _BLOCK_COMMENT_RE.sub(_fix, text)
+    if new_text != text:
+        path.write_text(new_text, encoding="utf-8")
+        return True
+    return False
+
+
+def _validate_and_sanitize_ui_plugin(dest_ui: Path) -> list[str]:
+    """Scan all .ts/.tsx files under *dest_ui*, auto-fix dangerous comment
+    patterns, and return a list of warning messages (empty = all OK).
+    """
+    warnings: list[str] = []
+    for ts_file in dest_ui.rglob("*.ts*"):
+        try:
+            if _sanitize_ts_comments(ts_file):
+                warnings.append(f"Auto-fixed block comment in {ts_file.name}")
+        except Exception as exc:
+            warnings.append(f"Could not sanitize {ts_file.name}: {exc}")
+    return warnings
+
 # Paths relative to this file:
 # api/commercial/plugin_management/services/git_installer.py
 #  ^4 parents up = api/
@@ -214,9 +255,6 @@ def run_install(job_id: str) -> None:
             _ok(step, job, f"Plugin: {raw_name} v{manifest['version']}")
 
             dest_api = _API_PLUGINS_DIR / folder_name
-            if dest_api.exists():
-                _fail(step, job, f"Plugin folder already exists: {dest_api}")
-                raise RuntimeError("Plugin already installed")
 
             # ── 3. Install Python dependencies ───────────────────────────────
             req_file = tmp_dir / "requirements.txt"
@@ -235,15 +273,51 @@ def run_install(job_id: str) -> None:
 
             # ── 4. Copy backend plugin files ─────────────────────────────────
             step = _step(job, "Installing plugin files")
-            nested = tmp_dir / "api" / "plugins" / folder_name
-            source_api = nested if nested.exists() else tmp_dir
-            shutil.copytree(str(source_api), str(dest_api), ignore=shutil.ignore_patterns("ui", ".git", "__pycache__", "*.pyc"))
+            # Standard layout (recommended): copy the whole repo root so that
+            # both plugin/ and shared/ land in dest_api together.  The root
+            # __init__.py adds dest_api to sys.path at startup so both packages
+            # are importable.
+            # Legacy layout: if the repo already mirrors the installed path
+            # (api/plugins/<name>/), copy just that subtree.
+            legacy_src = tmp_dir / "api" / "plugins" / folder_name
+            source_api = legacy_src if legacy_src.exists() else tmp_dir
+
+            if dest_api.exists():
+                shutil.rmtree(str(dest_api))
+            shutil.copytree(
+                str(source_api),
+                str(dest_api),
+                ignore=shutil.ignore_patterns(
+                    "ui",                       # frontend — installed separately
+                    ".git", "__pycache__", "*.pyc", ".ruff_cache",
+                    "standalone",               # standalone deployment artefacts
+                    "docs",
+                    ".env", ".env.*",
+                    "docker-compose.yml", "tsconfig.json",
+                ),
+            )
+
+            # Ensure plugin.json lands in dest_api so the plugin loader can discover it.
+            # For plugins whose layout puts plugin.json at the repo root rather than
+            # inside the api/ sub-directory, copy it explicitly.
+            dest_manifest = dest_api / "plugin.json"
+            if not dest_manifest.exists():
+                for candidate in (
+                    tmp_dir / "plugin.json",
+                    tmp_dir / "plugin" / "plugin.json",
+                ):
+                    if candidate.exists():
+                        shutil.copy2(str(candidate), str(dest_manifest))
+                        break
+
             _ok(step, job, f"Backend installed to plugins/{folder_name}/")
 
             # ── 5. Copy frontend plugin files (if present) ───────────────────
             ui_source = None
             for candidate in (
                 tmp_dir / "ui" / "src" / "plugins" / folder_name,
+                tmp_dir / "plugin" / "ui",
+                tmp_dir / "ui" / "plugin-ui",
                 tmp_dir / "ui",
             ):
                 if candidate.exists() and (candidate / "index.ts").exists():
@@ -253,8 +327,16 @@ def run_install(job_id: str) -> None:
             if ui_source and _UI_PLUGINS_DIR.exists():
                 step = _step(job, "Installing frontend plugin files")
                 dest_ui = _UI_PLUGINS_DIR / folder_name
+                overwritten = dest_ui.exists()
+                if overwritten:
+                    shutil.rmtree(str(dest_ui))
                 shutil.copytree(str(ui_source), str(dest_ui))
-                _ok(step, job, f"Frontend installed to ui/src/plugins/{folder_name}/")
+                san_warnings = _validate_and_sanitize_ui_plugin(dest_ui)
+                suffix = " (overwritten)" if overwritten else ""
+                msg = f"Frontend installed to ui/src/plugins/{folder_name}/{suffix}"
+                if san_warnings:
+                    msg += "; auto-fixed: " + ", ".join(san_warnings)
+                _ok(step, job, msg)
             else:
                 step = _step(job, "Frontend files")
                 _ok(step, job, "No frontend files found (backend-only plugin)")
