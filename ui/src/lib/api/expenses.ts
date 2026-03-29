@@ -36,6 +36,8 @@ export interface Expense {
   review_result?: any;
   reviewed_at?: string;
   is_inventory_consumption?: boolean;
+  statement_transaction_id?: number | null;
+  statement_id?: number | null;
 }
 
 export interface ExpenseAttachmentMeta {
