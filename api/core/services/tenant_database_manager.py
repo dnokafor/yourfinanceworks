@@ -10,6 +10,7 @@ from core.models.models import Base, Tenant
 from core.models.database import SQLALCHEMY_DATABASE_URL
 from core.models.models_per_tenant import Base as TenantBase
 from core.utils.plugin_context import get_current_plugin_id, is_lockdown_mode
+from core.utils._plugin_isolation import is_isolation_bypassed
 
 import re
 
@@ -27,6 +28,12 @@ def _enforce_database_isolation(conn, cursor, statement, parameters, context, ex
     """
     plugin_id = get_current_plugin_id()
     if not plugin_id:
+        return
+
+    # Core services called from within a plugin request (e.g. BatchProcessingService,
+    # user_sync) use enter_trusted_service() to opt out.  Trust them — they are
+    # not plugin-owned code and should not be blocked.
+    if is_isolation_bypassed():
         return
 
     # Import here to avoid circular dependencies
@@ -50,8 +57,19 @@ def _enforce_database_isolation(conn, cursor, statement, parameters, context, ex
         if owner == plugin_id:
             continue
         # Allow core tables unless this is a dynamic plugin running in lockdown
-        if owner == "core" and not (is_dynamic and locked):
-            continue
+        if owner == "core":
+            permitted = plugin_loader.get_permitted_core_tables(plugin_id)
+            if not (is_dynamic and locked):
+                continue
+            # Except if explicitly permitted in the plugin's manifest
+            if table_name in permitted:
+                continue
+
+            logger.debug(
+                "Access to core table '%s' is being checked for plugin '%s' (is_dynamic=%s, locked=%s). "
+                "Permitted tables: %s",
+                table_name, plugin_id, is_dynamic, locked, permitted
+            )
 
         table_upper = table_name.upper()
         # Primary check via pre-extracted set; fallback to word-boundary search

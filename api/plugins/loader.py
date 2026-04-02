@@ -29,6 +29,7 @@ Public helpers
 import importlib
 import json
 import logging
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
@@ -72,6 +73,7 @@ class PluginLoader:
         self._discovered: list[DiscoveredPlugin] = []
         self._discovery_done = False
         self._table_registry: dict[str, str] = {}
+        self._permissions_registry: dict[str, set[str]] = {}
         self._load_errors: dict[str, str] = {}  # plugin_id → human-readable error
         self._plugin_route_map: dict[str, str] = {}  # route_prefix → plugin_id
         self._plugin_dir_cache: dict[str, Path] = {}  # plugin_id → plugin_dir
@@ -97,9 +99,9 @@ class PluginLoader:
             {"dir": _DYNAMIC_PLUGINS_DIR, "prefix": None}  # Direct import
         ]
 
-        import sys
         for config in scan_configs:
             scan_dir = config["dir"]
+            logger.info("Scanning directory: %s (exists=%s)", scan_dir, scan_dir.exists())
             if not scan_dir.exists():
                 continue
 
@@ -135,10 +137,28 @@ class PluginLoader:
                         plugin_dir=plugin_dir,
                     )
                 )
-                logger.info("Plugin discovered: %s v%s (from %s)", plugin_id, manifest.get("version", "?"), scan_dir)
+                logger.info(
+                    "Plugin discovered: %s v%s (Package: %s, Path: %s)",
+                    plugin_id,
+                    manifest.get("version", "?"),
+                    package,
+                    plugin_dir
+                )
 
         self._discovery_done = True
         self._plugin_dir_cache = {p.plugin_id: p.plugin_dir for p in self._discovered}
+        self._permissions_registry = {}
+        for p in self._discovered:
+            permitted = set(p.manifest.get("permitted_core_tables", []))
+            self._permissions_registry[p.plugin_id] = permitted
+
+            # Also allow access by the 'name' field in manifest for backward compatibility
+            # and to handle folder prefixes like 'yfw-' correctly.
+            manifest_name = p.manifest.get("name")
+            if manifest_name and manifest_name != p.plugin_id:
+                # Normalize manifest name just in case
+                manifest_name_normalized = manifest_name.lower().replace("_", "-")
+                self._permissions_registry[manifest_name_normalized] = permitted
         logger.info(
             "Plugin discovery complete — found %d plugin(s): %s",
             len(self._discovered),
@@ -180,13 +200,16 @@ class PluginLoader:
            existing ``investments`` and ``time_tracking`` plugins
         """
         for plugin in self.discover():
+            logger.info("Attempting to register plugin: %s (package: %s)", plugin.plugin_id, plugin.package)
             try:
                 mod = importlib.import_module(plugin.package)
+                logger.info("Plugin '%s': package imported successfully.", plugin.plugin_id)
             except Exception as exc:
-                logger.warning(
-                    "Plugin '%s': cannot import package '%s' — %s",
+                logger.error(
+                    "Plugin '%s': CRITICAL - cannot import package '%s'. Search path: %s. Error: %s",
                     plugin.plugin_id,
                     plugin.package,
+                    sys.path,
                     exc,
                 )
                 self._load_errors[plugin.plugin_id] = f"Import failed: {exc}"
@@ -239,6 +262,11 @@ class PluginLoader:
         """Return the physical directory of a discovered plugin."""
         self.discover()  # ensure cache is populated
         return self._plugin_dir_cache.get(plugin_id)
+
+    def get_permitted_core_tables(self, plugin_id: str) -> set[str]:
+        """Return the set of core tables a plugin is explicitly permitted to access."""
+        self.discover()  # ensure registry is populated
+        return self._permissions_registry.get(plugin_id, set())
 
     def is_dynamic_plugin(self, plugin_id: str) -> bool:
         """Return True if the plugin was loaded from the dynamic plugins directory."""
