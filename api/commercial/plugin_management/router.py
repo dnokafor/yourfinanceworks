@@ -18,6 +18,7 @@ from commercial.plugin_management.services.git_installer import (
     start_install,
     run_install,
     get_job,
+    get_install_meta,
     uninstall_plugin,
 )
 
@@ -644,6 +645,60 @@ async def get_install_status(
         )
 
     return job.to_dict()
+
+
+@router.post("/{plugin_id}/reinstall", status_code=status.HTTP_202_ACCEPTED)
+async def reinstall_plugin_endpoint(
+    plugin_id: str,
+    payload: dict,
+    background_tasks: BackgroundTasks,
+    current_user: MasterUser = Depends(get_current_user),
+):
+    """
+    Re-install an externally installed plugin from its original git source.
+    Requires admin role. Uses the URL and ref recorded at install time.
+    A server restart is required after reinstallation.
+    """
+    if not _is_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can reinstall plugins",
+        )
+
+    normalized = _normalize_plugin_id(plugin_id)
+
+    if not plugin_loader.is_dynamic_plugin(normalized):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only externally installed plugins can be reinstalled",
+        )
+
+    # Prefer stored metadata; fall back to URL supplied in the request body
+    # (needed for plugins installed before metadata tracking was added).
+    meta = get_install_meta(normalized)
+    git_url = (meta or {}).get("git_url") or str(payload.get("git_url", "")).strip()
+    ref = (meta or {}).get("ref") or str(payload.get("ref", "main")).strip() or "main"
+
+    if not git_url:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="git_url is required — install metadata not found for this plugin.",
+        )
+
+    github_token = str(payload["github_token"]).strip() if payload.get("github_token") else None
+
+    try:
+        job = start_install(git_url=git_url, ref=ref, github_token=github_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    background_tasks.add_task(run_install, job.job_id)
+
+    return {
+        "job_id": job.job_id,
+        "message": "Reinstallation started",
+        "status_url": f"/api/v1/plugins/install/status/{job.job_id}",
+    }
 
 
 @router.delete("/{plugin_id}/uninstall", status_code=status.HTTP_200_OK)

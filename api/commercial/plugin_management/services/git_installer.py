@@ -308,30 +308,42 @@ def run_install(job_id: str) -> None:
                         shutil.copy2(str(candidate), str(dest_manifest))
                         break
 
+            # Write install metadata so reinstall can re-use the same URL/ref
+            meta = {"git_url": job.git_url, "ref": job.ref, "installed_at": datetime.now(timezone.utc).isoformat()}
+            (dest_api / ".install_meta.json").write_text(json.dumps(meta), encoding="utf-8")
+
             _ok(step, job, f"Backend installed to plugins/{folder_name}/")
 
             # ── 5. Copy frontend plugin files (if present) ───────────────────
-            ui_source = None
-            for candidate in (
-                tmp_dir / "ui" / "src" / "plugins" / folder_name,
-                tmp_dir / "plugin" / "ui",
-                tmp_dir / "ui" / "plugin-ui",
-                tmp_dir / "ui",
-            ):
-                if candidate.exists() and (candidate / "index.ts").exists():
-                    ui_source = candidate
-                    break
-
-            if ui_source and _UI_PLUGINS_DIR.exists():
+            # Detect UI presence by checking either:
+            #   • legacy layout: ui/ dir at repo root
+            #   • standard layout: plugin/ui/ dir (e.g. yfw-surveys, yfw-plugin-template)
+            has_ui = (tmp_dir / "ui").exists() or (tmp_dir / "plugin" / "ui").exists()
+            if has_ui and _UI_PLUGINS_DIR.exists():
                 step = _step(job, "Installing frontend plugin files")
                 dest_ui = _UI_PLUGINS_DIR / folder_name
                 overwritten = dest_ui.exists()
                 if overwritten:
                     shutil.rmtree(str(dest_ui))
-                shutil.copytree(str(ui_source), str(dest_ui))
+                
+                # Copy entire repo to preserve relative paths like ui/ -> ../shared/
+                shutil.copytree(
+                    str(tmp_dir),
+                    str(dest_ui),
+                    ignore=shutil.ignore_patterns(
+                        ".git", "__pycache__", "*.pyc", ".ruff_cache",
+                        "standalone", "docs", ".env", ".env.*",
+                        "docker-compose.yml", "tsconfig.json", "requirements.txt",
+                        "plugin.json", "__init__.py", "api",
+                        # Note: "plugin/" is intentionally NOT excluded here.
+                        # plugin/ui/index.ts is the frontend entry point discovered
+                        # by the host app via import.meta.glob("../plugins_dynamic/*/plugin/ui/index.ts").
+                    )
+                )
+                
                 san_warnings = _validate_and_sanitize_ui_plugin(dest_ui)
                 suffix = " (overwritten)" if overwritten else ""
-                msg = f"Frontend installed to ui/src/plugins/{folder_name}/{suffix}"
+                msg = f"Frontend (mirrored) installed to ui/src/plugins/{folder_name}/{suffix}"
                 if san_warnings:
                     msg += "; auto-fixed: " + ", ".join(san_warnings)
                 _ok(step, job, msg)
@@ -389,6 +401,19 @@ def start_install(git_url: str, ref: str = "main", github_token: Optional[str] =
 def get_job(job_id: str) -> Optional[InstallJob]:
     """Load job state from disk — survives process restarts."""
     return _load_job(job_id)
+
+
+def get_install_meta(plugin_id: str) -> Optional[dict]:
+    """Return the install metadata written during installation, or None if not found."""
+    folder_name = plugin_id.replace("-", "_")
+    meta_file = _API_PLUGINS_DIR / folder_name / ".install_meta.json"
+    if not meta_file.exists():
+        return None
+    try:
+        return json.loads(meta_file.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("Could not read install meta for %s: %s", plugin_id, exc)
+        return None
 
 
 def uninstall_plugin(plugin_id: str) -> None:
