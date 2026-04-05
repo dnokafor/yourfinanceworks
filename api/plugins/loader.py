@@ -29,6 +29,7 @@ Public helpers
 import importlib
 import json
 import logging
+import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -53,6 +54,7 @@ class DiscoveredPlugin:
     package: str            # e.g. "plugins.investments"
     manifest: dict          # full plugin.json content
     plugin_dir: Path        # absolute path to the plugin folder
+    is_sidecar: bool = False  # True when plugin runs as a separate Docker service
 
 
 # ---------------------------------------------------------------------------
@@ -145,6 +147,9 @@ class PluginLoader:
                     plugin_dir
                 )
 
+        # Discover sidecar plugins declared via SIDECAR_PLUGINS env var
+        self._discovered.extend(self._discover_sidecar_plugins())
+
         self._discovery_done = True
         self._plugin_dir_cache = {p.plugin_id: p.plugin_dir for p in self._discovered}
         self._permissions_registry = {}
@@ -174,6 +179,8 @@ class PluginLoader:
         Plugins that have no ``models.py`` are silently skipped.
         """
         for plugin in self.discover():
+            if plugin.is_sidecar:
+                continue  # Sidecar plugins manage their own DB; nothing to import in-process
             models_module = f"{plugin.package}.models"
             try:
                 importlib.import_module(models_module)
@@ -200,6 +207,12 @@ class PluginLoader:
            existing ``investments`` and ``time_tracking`` plugins
         """
         for plugin in self.discover():
+            if plugin.is_sidecar:
+                logger.info(
+                    "Sidecar plugin '%s': routed via nginx, no in-process registration needed.",
+                    plugin.plugin_id,
+                )
+                continue
             logger.info("Attempting to register plugin: %s (package: %s)", plugin.plugin_id, plugin.package)
             try:
                 mod = importlib.import_module(plugin.package)
@@ -277,6 +290,11 @@ class PluginLoader:
         """Return the mapping of URL prefixes to plugin IDs."""
         return self._plugin_route_map
 
+    def is_sidecar_plugin(self, plugin_id: str) -> bool:
+        """Return True if the plugin runs as a sidecar Docker service."""
+        self.discover()
+        return any(p.plugin_id == plugin_id and p.is_sidecar for p in self._discovered)
+
     def get_registry(self) -> list[dict]:
         """Return a list of manifest dicts suitable for the /plugins/registry endpoint.
 
@@ -284,13 +302,16 @@ class PluginLoader:
         frontend can show an error state on the plugin card instead of hiding them.
         Dynamic (externally installed) plugins also expose ``is_external`` and
         ``git_source`` fields so the frontend can show a reinstall button.
+        Sidecar plugins expose ``is_sidecar`` so the frontend knows they are external services.
         """
         result = []
         for p in self.discover():
             entry = dict(p.manifest)
             if p.plugin_id in self._load_errors:
                 entry["load_error"] = self._load_errors[p.plugin_id]
-            if self.is_dynamic_plugin(p.plugin_id):
+            if p.is_sidecar:
+                entry["is_sidecar"] = True
+            elif self.is_dynamic_plugin(p.plugin_id):
                 entry["is_external"] = True
                 meta_file = p.plugin_dir / ".install_meta.json"
                 if meta_file.exists():
@@ -362,6 +383,106 @@ class PluginLoader:
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    def _discover_sidecar_plugins(self) -> list[DiscoveredPlugin]:
+        """
+        Probe HTTP endpoints for sidecar plugins declared in the ``SIDECAR_PLUGINS``
+        environment variable (comma-separated plugin names, e.g. ``socialhub,crm``).
+
+        Each plugin must expose ``GET /plugin.json`` on port 8000 at the Docker service
+        hostname ``plugin_<name>`` within the shared ``invoice_app_network``.
+
+        Plugins that are not reachable at startup are retried in a background thread
+        (up to ``_SIDECAR_RETRY_ATTEMPTS`` times with ``_SIDECAR_RETRY_DELAY`` seconds
+        between attempts) so that slow-starting containers are eventually registered
+        without requiring an API restart.
+        """
+        declared = [n.strip() for n in os.getenv("SIDECAR_PLUGINS", "").split(",") if n.strip()]
+        if not declared:
+            return []
+
+        try:
+            import httpx
+        except ImportError:
+            logger.warning("httpx not available — sidecar plugin discovery skipped")
+            return []
+
+        found: list[DiscoveredPlugin] = []
+        pending: list[str] = []
+
+        for name in declared:
+            plugin = self._probe_sidecar(name, httpx)
+            if plugin:
+                found.append(plugin)
+            else:
+                pending.append(name)
+
+        if pending:
+            import threading
+            threading.Thread(
+                target=self._retry_sidecar_plugins,
+                args=(pending, httpx),
+                daemon=True,
+                name="sidecar-plugin-retry",
+            ).start()
+
+        return found
+
+    _SIDECAR_RETRY_ATTEMPTS = 10
+    _SIDECAR_RETRY_DELAY = 5  # seconds between attempts
+
+    def _probe_sidecar(self, name: str, httpx: Any) -> Optional[DiscoveredPlugin]:
+        service_name = f"plugin_{name.replace('-', '_')}"
+        url = f"http://{service_name}:8000/plugin.json"
+        try:
+            resp = httpx.get(url, timeout=2.0)
+            resp.raise_for_status()
+            manifest = resp.json()
+        except Exception as exc:
+            logger.debug("Sidecar plugin '%s' not reachable at %s: %s", name, url, exc)
+            return None
+
+        if not self._validate_manifest(name, manifest):
+            return None
+
+        plugin = DiscoveredPlugin(
+            plugin_id=name,
+            package="",
+            manifest=manifest,
+            plugin_dir=Path(f"/sidecar/{name}"),
+            is_sidecar=True,
+        )
+        logger.info("Sidecar plugin discovered: %s at %s", name, url)
+        return plugin
+
+    def _retry_sidecar_plugins(self, names: list[str], httpx: Any) -> None:
+        import time
+        remaining = list(names)
+        for attempt in range(1, self._SIDECAR_RETRY_ATTEMPTS + 1):
+            time.sleep(self._SIDECAR_RETRY_DELAY)
+            still_pending = []
+            for name in remaining:
+                plugin = self._probe_sidecar(name, httpx)
+                if plugin:
+                    self._discovered.append(plugin)
+                    self._plugin_dir_cache[plugin.plugin_id] = plugin.plugin_dir
+                    permitted = set(plugin.manifest.get("permitted_core_tables", []))
+                    self._permissions_registry[plugin.plugin_id] = permitted
+                    logger.info(
+                        "Sidecar plugin '%s' registered after %d retry attempt(s).",
+                        name, attempt,
+                    )
+                else:
+                    still_pending.append(name)
+            remaining = still_pending
+            if not remaining:
+                break
+
+        for name in remaining:
+            logger.warning(
+                "Sidecar plugin '%s' never became reachable after %d attempts — giving up.",
+                name, self._SIDECAR_RETRY_ATTEMPTS,
+            )
 
     @staticmethod
     def _load_manifest(path: Path) -> dict:

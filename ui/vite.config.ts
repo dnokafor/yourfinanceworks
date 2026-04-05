@@ -4,6 +4,7 @@ import path from "path"
 
 export default defineConfig({
   plugins: [react()],
+  cacheDir: '/app/.vite-cache',
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -29,6 +30,9 @@ export default defineConfig({
     port: 8080,
     host: '0.0.0.0',
     allowedHosts: ['ui', 'localhost', '127.0.0.1', '0.0.0.0', 'demo.yourfinanceworks.com'],
+    warmup: {
+      clientFiles: ['./src/App.tsx', './src/main.tsx'],
+    },
     hmr: {
       clientPort: 443, // Assuming they use HTTPS on the demo site
     },
@@ -38,7 +42,7 @@ export default defineConfig({
     watch: {
       usePolling: true,
       interval: 1000,
-      ignored: ['**/node_modules/**', '**/.git/**'],
+      ignored: ['**/node_modules/**', '**/.git/**', '**/../yfw-*/**', '**/../api/**'],
     },
   },
 })

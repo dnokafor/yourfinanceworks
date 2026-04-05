@@ -116,7 +116,7 @@ export function AppSidebar() {
   const isAdminEffective = effectiveRole === 'admin';
 
   // Plugin management
-  const { enabledPlugins, isPluginEnabled } = usePlugins();
+  const { enabledPlugins, isPluginEnabled, getPlugin } = usePlugins();
 
   // Organization switching state - REMOVED, now handled by OrganizationSwitcher component
   const { data: userOrganizations = [] } = useOrganizations();
@@ -439,14 +439,21 @@ export function AppSidebar() {
     }] : [])
   ];
 
-  // Plugin menu items — auto-discovered from each plugin's navItems export via import.meta.glob.
-  // The glob runs at module level (above) so the reference is stable across renders.
+  // Plugin menu items — static plugins via import.meta.glob, sidecar plugins via API registry.
+  // Sidecar items are shown by default (deploying a sidecar = active) but respect explicit disable.
   const pluginMenuItems = useMemo(() => {
     return pluginModules
-      .flatMap((m) => m.navItems ?? [])
+      .flatMap((m) => (m.navItems ?? []).map((item) => ({ ...item, _sidecar: m.isSidecar ?? false })))
       .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
-      .filter((item) => isPluginEnabled(item.id));
-  }, [pluginModules, enabledPlugins, isPluginEnabled]);
+      .filter((item) => {
+        if (item._sidecar) {
+          // Hide only when the user has explicitly disabled it via the plugin toggle.
+          const plugin = getPlugin(item.id);
+          return plugin ? plugin.enabled : true;
+        }
+        return isPluginEnabled(item.id);
+      });
+  }, [pluginModules, enabledPlugins, isPluginEnabled, getPlugin]);
 
   const isActive = (path: string) => {
     return location.pathname === path;

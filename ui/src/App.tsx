@@ -75,8 +75,8 @@ const SearchDialog = React.lazy(() => import("./components/search/SearchDialog")
 const MenuSearchDialog = React.lazy(() => import("./components/search/MenuSearchDialog").then(module => ({ default: module.MenuSearchDialog })));
 const FeatureProvider = React.lazy(() => import("./contexts/FeatureContext").then(module => ({ default: module.FeatureProvider })));
 const PluginProvider = React.lazy(() => import("./contexts/PluginContext").then(module => ({ default: module.PluginProvider })));
-const PluginStorageNotifications = React.lazy(() => import("./components/notifications/PluginStorageNotifications").then(module => ({ default: module.PluginStorageNotifications })));
-const PluginAccessApprovalPrompt = React.lazy(() => import("./components/notifications/PluginAccessApprovalPrompt").then(module => ({ default: module.PluginAccessApprovalPrompt })));
+import { PluginStorageNotifications } from "./components/notifications/PluginStorageNotifications";
+import { PluginAccessApprovalPrompt } from "./components/notifications/PluginAccessApprovalPrompt";
 const PluginRouteErrorBoundary = React.lazy(() => import("./components/plugins/PluginRouteErrorBoundary").then(module => ({ default: module.PluginRouteErrorBoundary })));
 const PluginRouteGuard = React.lazy(() => import("./components/plugins/PluginRouteGuard").then(module => ({ default: module.PluginRouteGuard })));
 const ApprovalDashboard = React.lazy(() => import("./components/approvals/ApprovalDashboard").then(module => ({ default: module.ApprovalDashboard })));
@@ -133,6 +133,7 @@ const AppContent = () => {
   const allPluginRoutes = pluginModules.flatMap((m) => m.pluginRoutes ?? []);
   const publicPluginRoutes = allPluginRoutes.filter(r => r.isPublic);
   const privatePluginRoutes = allPluginRoutes.filter(r => !r.isPublic);
+  const sidecarPluginModules = pluginModules.filter(m => m.isSidecar && m.uiEntry);
   const { notifications, addNotification, markAsRead, clearAll } = useNotifications();
   const { startPolling } = useExpenseStatusPolling();
   const { startPolling: startStatementPolling } = useStatementStatusPolling();
@@ -228,6 +229,25 @@ const AppContent = () => {
                     {privatePluginRoutes.map(r => (
                       <Route key={r.path} path={r.path} element={buildPluginElement(r)} />
                     ))}
+
+                    {/* ---- Sidecar Plugin Routes — iframe into each plugin's UI ---- */}
+                    {sidecarPluginModules.flatMap(m =>
+                      (m.navItems ?? []).map(item => (
+                        <Route
+                          key={item.path}
+                          path={`${item.path}/*`}
+                          element={
+                            <div style={{ width: '100%', height: 'calc(100vh - 4rem)', overflow: 'hidden' }}>
+                              <iframe
+                                src={m.uiEntry}
+                                style={{ width: '100%', height: '100%', border: 'none' }}
+                                title={item.label}
+                              />
+                            </div>
+                          }
+                        />
+                      ))
+                    )}
 
                     <Route path="/statements" element={<Statements />} />
                     <Route path="/settings" element={<Settings />} />
