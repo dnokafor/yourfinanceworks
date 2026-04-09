@@ -3,13 +3,17 @@ Plugin management router for handling plugin settings and configuration.
 Commercial feature - requires plugin_management license.
 """
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime, timezone
+import stripe
+import logging
 
-from core.models.models import TenantPluginSettings, MasterUser
-from core.models.database import get_master_db
+from core.models.models import Tenant, TenantPluginSettings, MasterUser, PluginUser
+from core.models.models_per_tenant import Settings as TenantSettings
+from core.models.database import get_db, get_master_db
 from core.routers.auth import get_current_user
 from core.services.plugin_access_control_service import PluginAccessControlService
 from core.services.tenant_database_manager import tenant_db_manager
@@ -21,9 +25,15 @@ from commercial.plugin_management.services.git_installer import (
     get_install_meta,
     uninstall_plugin,
 )
+from config import config
 
+logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/plugins", tags=["plugins"])
+router = APIRouter(tags=["plugins"])
+
+from commercial.plugin_management.auth import router as auth_router
+
+router.include_router(auth_router)
 
 
 def _valid_plugins() -> set[str]:
@@ -555,12 +565,12 @@ async def update_plugin_config(
         # Update plugin_config safely
         current_config = settings.plugin_config or {}
         existing_plugin_cfg = current_config.get(plugin_id, {})
-        
+
         # Merge the new config, but preserve public_access which is managed separately
         new_plugin_cfg = dict(config)
         if _PUBLIC_ACCESS_KEY in existing_plugin_cfg:
             new_plugin_cfg[_PUBLIC_ACCESS_KEY] = existing_plugin_cfg[_PUBLIC_ACCESS_KEY]
-            
+
         current_config[plugin_id] = new_plugin_cfg
         settings.plugin_config = current_config
         # Mark the column as modified so SQLAlchemy detects the change
@@ -583,7 +593,14 @@ async def update_plugin_config(
 # ---------------------------------------------------------------------------
 
 _PUBLIC_ACCESS_KEY = "public_access"
-_PUBLIC_ACCESS_DEFAULTS = {"enabled": False, "require_login": True}
+_PUBLIC_ACCESS_DEFAULTS = {"enabled": False, "require_login": True, "stripe_price_id": None, "free_clicks": 0}
+
+
+class PublicAccessUpdate(BaseModel):
+    enabled: bool
+    require_login: bool
+    stripe_price_id: str | None = None
+    free_clicks: int = 0
 
 
 def _get_public_access_config(plugin_config: dict | None, plugin_id: str) -> dict:
@@ -593,6 +610,8 @@ def _get_public_access_config(plugin_config: dict | None, plugin_id: str) -> dic
     return {
         "enabled": bool(pa.get("enabled", False)),
         "require_login": bool(pa.get("require_login", True)),
+        "stripe_price_id": pa.get("stripe_price_id", None),
+        "free_clicks": int(pa.get("free_clicks", 0)),
     }
 
 
@@ -623,6 +642,8 @@ async def get_plugin_public_access(
         "plugin_id": plugin_id,
         "enabled": pa["enabled"],
         "require_login": pa["require_login"],
+        "stripe_price_id": pa.get("stripe_price_id"),
+        "free_clicks": pa.get("free_clicks", 0),
         "public_page": manifest.get("public_page"),
     }
 
@@ -630,13 +651,12 @@ async def get_plugin_public_access(
 @router.put("/{plugin_id}/public-access")
 async def update_plugin_public_access(
     plugin_id: str,
-    payload: dict,
+    payload: PublicAccessUpdate,
     db: Session = Depends(get_master_db),
     current_user: MasterUser = Depends(get_current_user),
 ):
     """
     Update the public-access configuration for a plugin.
-    Payload: {"enabled": bool, "require_login": bool}
     Admin-only.
     """
     if not _is_admin(current_user):
@@ -644,24 +664,28 @@ async def update_plugin_public_access(
 
     plugin_id = _normalize_plugin_id(plugin_id)
 
-    enabled = bool(payload.get("enabled", False))
-    require_login = bool(payload.get("require_login", True))
-
     settings = db.query(TenantPluginSettings).filter(
         TenantPluginSettings.tenant_id == current_user.tenant_id
     ).with_for_update().first()
+
+    new_pa_config = {
+        "enabled": payload.enabled,
+        "require_login": payload.require_login,
+        "stripe_price_id": payload.stripe_price_id,
+        "free_clicks": payload.free_clicks,
+    }
 
     if not settings:
         settings = TenantPluginSettings(
             tenant_id=current_user.tenant_id,
             enabled_plugins=[],
-            plugin_config={plugin_id: {_PUBLIC_ACCESS_KEY: {"enabled": enabled, "require_login": require_login}}},
+            plugin_config={plugin_id: {_PUBLIC_ACCESS_KEY: new_pa_config}},
         )
         db.add(settings)
     else:
         cfg = settings.plugin_config or {}
         plugin_cfg = cfg.get(plugin_id, {})
-        plugin_cfg[_PUBLIC_ACCESS_KEY] = {"enabled": enabled, "require_login": require_login}
+        plugin_cfg[_PUBLIC_ACCESS_KEY] = new_pa_config
         cfg[plugin_id] = plugin_cfg
         settings.plugin_config = cfg
         flag_modified(settings, "plugin_config")
@@ -670,8 +694,10 @@ async def update_plugin_public_access(
     db.commit()
     return {
         "plugin_id": plugin_id,
-        "enabled": enabled,
-        "require_login": require_login,
+        "enabled": payload.enabled,
+        "require_login": payload.require_login,
+        "stripe_price_id": payload.stripe_price_id,
+        "free_clicks": payload.free_clicks,
         "message": f"Public access for plugin '{plugin_id}' updated",
     }
 
@@ -704,7 +730,7 @@ async def get_plugin_public_config(
     if resolved_tenant_id is None:
         host = request.headers.get("host", "").split(":")[0]  # strip port
         subdomain = host.split(".")[0] if "." in host else None
-        
+
         if subdomain and subdomain != "localhost":
             tenant = db.query(Tenant).filter(Tenant.subdomain == subdomain).first()
             if tenant:
@@ -724,6 +750,8 @@ async def get_plugin_public_config(
         "plugin_id": plugin_id,
         "enabled": pa["enabled"],
         "require_login": pa["require_login"],
+        "stripe_price_id": pa.get("stripe_price_id"),
+        "free_clicks": pa.get("free_clicks", 0),
         "public_page": manifest.get("public_page"),
     }
 
@@ -900,3 +928,193 @@ async def uninstall_plugin_endpoint(
         "message": f"Plugin '{normalized}' uninstalled. A server restart is required.",
         "restart_required": True,
     }
+
+# --- Plugin Payment & Paywall Helper Functions ---
+
+def get_tenant_payment_settings(tenant_id: int):
+    try:
+        session_factory = tenant_db_manager.get_tenant_session(tenant_id)
+        db = session_factory()
+        try:
+            setting = db.query(TenantSettings).filter(TenantSettings.key == "payment_settings").first()
+            if not setting or not setting.value:
+                return None
+
+            settings_val = setting.value
+            stripe_cfg = settings_val.get("stripe", {})
+            if not stripe_cfg.get("enabled"):
+                return None
+
+            return stripe_cfg
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Error fetching tenant payment settings for {tenant_id}: {e}")
+        return None
+
+class CheckoutRequest(BaseModel):
+    tenant_id: int
+    plugin_user_id: int
+
+# --- Plugin Payment & Paywall Endpoints ---
+
+@router.post("/{plugin_id}/public-paywall/checkout")
+async def plugin_paywall_checkout(
+    plugin_id: str,
+    payload: CheckoutRequest,
+    db: Session = Depends(get_master_db)
+):
+    # Normalize plugin ID to match config keys (e.g. "statement_tools" -> "statement-tools")
+    plugin_id = _normalize_plugin_id(plugin_id)
+
+    plugin_user = db.query(PluginUser).filter(
+        PluginUser.id == payload.plugin_user_id,
+        PluginUser.tenant_id == payload.tenant_id,
+        PluginUser.plugin_id == plugin_id
+    ).first()
+
+    if not plugin_user:
+        logger.error(f"Plugin user not found: id={payload.plugin_user_id}, tenant={payload.tenant_id}, plugin={plugin_id}")
+        raise HTTPException(status_code=404, detail="Plugin user not found")
+
+    # Get Stripe credentials for the tenant from their own DB
+    stripe_cfg = get_tenant_payment_settings(payload.tenant_id)
+    if not stripe_cfg or not stripe_cfg.get("secretKey"):
+        logger.error(f"Payments not configured for tenant {payload.tenant_id}")
+        raise HTTPException(status_code=400, detail="Payments are not configured by the organization")
+
+    # Get the price_id from the plugin config
+    plugin_settings = db.query(TenantPluginSettings).filter(TenantPluginSettings.tenant_id == payload.tenant_id).first()
+    if not plugin_settings or plugin_id not in plugin_settings.enabled_plugins:
+        logger.error(f"Plugin {plugin_id} not enabled for tenant {payload.tenant_id}")
+        raise HTTPException(status_code=403, detail="Plugin not available")
+
+    cfg = plugin_settings.plugin_config or {}
+    p_cfg = cfg.get(plugin_id, {})
+    pa = p_cfg.get("public_access", {})
+
+    if not pa.get("enabled"):
+        logger.error(f"Public access not enabled for plugin {plugin_id} (tenant {payload.tenant_id})")
+        raise HTTPException(status_code=403, detail="Plugin not public")
+
+    stripe_price_id = pa.get("stripe_price_id")
+    if not stripe_price_id:
+        logger.error(f"Stripe price ID missing for plugin {plugin_id} (tenant {payload.tenant_id})")
+        raise HTTPException(status_code=400, detail="A price has not been set for this plugin")
+
+    stripe.api_key = stripe_cfg.get("secretKey")
+
+    # Create or retrieve customer
+    customer_id = plugin_user.stripe_customer_id
+    if not customer_id:
+        try:
+            customer = stripe.Customer.create(
+                email=plugin_user.email,
+                metadata={"tenant_id": payload.tenant_id, "plugin_id": plugin_id, "plugin_user_id": plugin_user.id}
+            )
+            customer_id = customer.id
+            plugin_user.stripe_customer_id = customer_id
+            db.commit()
+        except stripe.StripeError as e:
+            logger.error(f"Stripe error creating customer: {e}")
+            raise HTTPException(status_code=500, detail="Error communicating with Stripe")
+
+    success_url = f"{request.base_url}p/{plugin_id}?t={payload.tenant_id}&payment=success"
+    cancel_url = f"{request.base_url}p/{plugin_id}?t={payload.tenant_id}&payment=cancel"
+
+    try:
+        session = stripe.checkout.Session.create(
+            customer=customer_id,
+            payment_method_types=['card'],
+            line_items=[{
+                'price': stripe_price_id,
+                'quantity': 1,
+            }],
+            mode='subscription', 
+            success_url=success_url,
+            cancel_url=cancel_url,
+        )
+        return {"checkout_url": session.url}
+    except stripe.StripeError as e:
+        logger.error(f"Stripe error creating checkout session: {e}")
+        raise HTTPException(status_code=500, detail="Error communicating with Stripe")
+
+@router.post("/{plugin_id}/public-paywall/status")
+async def plugin_paywall_status(
+    plugin_id: str,
+    payload: CheckoutRequest,
+    db: Session = Depends(get_master_db)
+):
+    # Normalize plugin ID
+    plugin_id = _normalize_plugin_id(plugin_id)
+
+    plugin_user = db.query(PluginUser).filter(
+        PluginUser.id == payload.plugin_user_id,
+        PluginUser.tenant_id == payload.tenant_id,
+        PluginUser.plugin_id == plugin_id
+    ).first()
+
+    is_paid = False
+    usage_count = 0
+    free_clicks = 0
+
+    if not plugin_user:
+        logger.warning(f"Paywall status check: Plugin user not found for id={payload.plugin_user_id}, tenant={payload.tenant_id}, plugin={plugin_id}. Returning default trial state.")
+    else:
+        usage_count = plugin_user.usage_count or 0
+        # Get Stripe credentials for the tenant
+        stripe_cfg = get_tenant_payment_settings(payload.tenant_id)
+        if stripe_cfg and stripe_cfg.get("secretKey") and plugin_user.stripe_customer_id:
+            stripe.api_key = stripe_cfg["secretKey"]
+            try:
+                subscriptions = stripe.Subscription.list(
+                    customer=plugin_user.stripe_customer_id,
+                    status="active"
+                )
+                if subscriptions.data:
+                    is_paid = True
+            except Exception as e:
+                logger.error(f"Error checking Stripe subscription: {e}")
+
+    # Also check free click limit
+    settings_record = db.query(TenantPluginSettings).filter(TenantPluginSettings.tenant_id == payload.tenant_id).first()
+    pa_cfg = _get_public_access_config(settings_record.plugin_config if settings_record else None, plugin_id)
+
+    free_clicks = pa_cfg.get("free_clicks", 0)
+
+    return {
+        "plugin_id": plugin_id,
+        "is_paid": is_paid,
+        "usage_count": usage_count,
+        "free_clicks": free_clicks,
+        "trial_limit_reached": not is_paid and free_clicks > 0 and usage_count >= free_clicks
+    }
+
+@router.post("/{plugin_id}/public-paywall/increment-usage")
+async def increment_plugin_usage(
+    plugin_id: str,
+    payload: CheckoutRequest,
+    db: Session = Depends(get_master_db),
+):
+    """
+    Increment the usage count for a plugin user.
+    """
+    plugin_id = _normalize_plugin_id(plugin_id)
+
+    plugin_user = db.query(PluginUser).filter(
+        PluginUser.id == payload.plugin_user_id,
+        PluginUser.tenant_id == payload.tenant_id,
+        PluginUser.plugin_id == plugin_id
+    ).first()
+
+    if not plugin_user:
+        raise HTTPException(status_code=404, detail="Plugin user not found")
+
+    # Initialize usage_count if it's None
+    if plugin_user.usage_count is None:
+        plugin_user.usage_count = 0
+
+    plugin_user.usage_count += 1
+    db.commit()
+
+    return {"usage_count": plugin_user.usage_count}
