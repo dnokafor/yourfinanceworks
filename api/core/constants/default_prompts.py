@@ -6,6 +6,9 @@ BANK_TRANSACTION_EXTRACTION_PROMPT = """You are a financial data extraction expe
 CONTEXT:
 This is a statement for a **{{card_type}}** card/account.
 {{statement_context}} 
+- If the bank name is NOT provided in the CONTEXT above, you MUST try to identify it from the text header, branch address, or other clues.
+- Common banks: "Scotiabank", "TD Bank", "RBC", "BMO", "CIBC", "Chase Bank", "Wells Fargo", "Bank of America", "Citi", "HSBC", "Lloyds", "Barclays", "Santander", "NatWest".
+- LOOK EVERYWHERE: If it's not in the main header, check the tiny print at the bottom of the page (copyright notices, for example "© 2024 The Bank of Nova Scotia"), look for URLs (e.g., "td.com"), or check the branch address information.
 - If 'auto', you must first determine if this is a Credit Card or a Debit/Checking account statement based on the text.
 - If it is a Credit Card, follow 'credit' rules below.
 - Otherwise, follow 'debit' rules.
@@ -45,11 +48,12 @@ STEP-BY-STEP PROCESS:
 TEXT:
 {{text}}
 
-Return ONLY a valid JSON array. Each transaction must have these fields:
+Return ONLY a valid JSON array. Each transaction MUST have these fields:
 - date (string, YYYY-MM-DD format, REQUIRED)
 - description (string, merchant/vendor name, REQUIRED)
 - amount (number, according to sign rules above, REQUIRED)
 - transaction_type (string, "debit" or "credit", REQUIRED)
+- bank_name (string, the name of the bank found in headers, REQUIRED if not in context)
 - balance (number, account balance after transaction, OPTIONAL)
 
 JSON:"""
@@ -74,6 +78,13 @@ Look for:
 1. The Statement Year (4-digit format, e.g., 2024).
 2. The Statement Period (e.g., "Jan 01, 2024 to Jan 31, 2024").
 3. The Account Type (detect if 'credit' or 'debit').
+4. The Bank Name (e.g., "Scotiabank", "RBC", "TD Bank", "BMO", "CIBC", "Chase Bank", "Wells Fargo", "Bank of America", "Citi", "HSBC", "Lloyds", "Barclays", "Santander", "NatWest", "Standard Chartered", "Standard Bank"). 
+   - NOTE: If the bank name is not explicitly stated in large header text, YOU MUST act as a detective:
+     - Check the copyright notice at the bottom (e.g. "Member of ABC Group").
+     - Search for a support URL (e.g. "www.rbc.com").
+     - Look for the legal entity name in the footer or branch address headers.
+     - Infer from Logos described in the text if applicable.
+     - DO NOT return "Unknown" if there is ANY clue available.
 
 TEXT:
 {{header_text}}
@@ -83,7 +94,8 @@ Example output:
 {
   "year": 2024,
   "period": "January 2024",
-  "card_type": "credit"
+  "card_type": "credit",
+  "bank_name": "Chase Bank"
 }
 
 JSON:"""

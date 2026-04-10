@@ -59,6 +59,7 @@ export default function Statements() {
   const [invoiceInitialData, setInvoiceInitialData] = useState<any>(null);
   const [statementNotes, setStatementNotes] = useState<string>('');
   const [statementLabels, setStatementLabels] = useState<string[]>([]);
+  const [statementBankName, setStatementBankName] = useState<string>('');
   const [newStatementLabel, setNewStatementLabel] = useState<string>('');
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -104,6 +105,7 @@ export default function Statements() {
   const [pageSize, setPageSize] = useState(50);
   const [totalStatements, setTotalStatements] = useState(0);
   const [newLabelValueById, setNewLabelValueById] = useState<Record<number, string>>({});
+  const [bankNameValueById, setBankNameValueById] = useState<Record<number, string>>({});
 
   // Recycle bin state
   const [showRecycleBin, setShowRecycleBin] = useState(false);
@@ -166,7 +168,7 @@ export default function Statements() {
         const { blob } = await bankStatementApi.fetchFileBlob(selected, true);
         if (!active) return;
         const objectUrl = URL.createObjectURL(blob);
-        setSplitViewPdfObjectUrl(prev => { if (prev) URL.revokeObjectURL(prev); return objectUrl; });
+        setSplitViewPdfObjectUrl((prev: string | null) => { if (prev) URL.revokeObjectURL(prev); return objectUrl; });
         setSplitViewPdfUrl(objectUrl);
       } catch (e: any) {
         if (active) console.error('Failed to update parallel view PDF:', e);
@@ -340,6 +342,7 @@ export default function Statements() {
       setDetail(s);
       setStatementLabels(Array.isArray((s as any).labels) ? ((s as any).labels as string[]).slice(0, 10) : []);
       setStatementNotes(s.notes || '');
+      setStatementBankName(s.bank_name || '');
       const transactionsWithIds = (s.transactions || []).map((t: BankTransactionEntry, index: number) => ({
         id: index + 1,
         date: t.date,
@@ -366,7 +369,7 @@ export default function Statements() {
   };
 
   const addFiles = useCallback((newFiles: File[]) => {
-    setFiles(prev => {
+    setFiles((prev: File[]) => {
       const combined = [...prev, ...newFiles];
       if (combined.length > 12) {
         toast.warning(t('statements.max_files_warning', { defaultValue: 'Maximum 12 files allowed. Some files were ignored.' }));
@@ -411,7 +414,7 @@ export default function Statements() {
   const addEmptyRow = () => {
     const today = new Date();
     const iso = formatDateToISO(today);
-    setRows(prev => {
+    setRows((prev: BankTransactionEntry[]) => {
       const newRowsWithoutIds = [{ date: iso, description: '', amount: 0, transaction_type: 'debit' as 'debit', balance: null, category: 'Other', backend_id: null }, ...prev];
       const newRowsWithIds = newRowsWithoutIds.map((row, index) => ({ ...row, id: index + 1 }));
       setEditingRow(0);
@@ -441,13 +444,62 @@ export default function Statements() {
     } finally { setDetailLoading(false); }
   };
 
+  const saveAll = async () => {
+    if (!selected) return;
+    try {
+      setDetailLoading(true);
+      
+      // Part 1: Save transactions
+      const cleaned = rows.map(r => ({
+        ...r,
+        id: (r as any).backend_id || undefined,
+        balance: r.balance === undefined ? null : r.balance,
+        category: r.category || null,
+        notes: (r as any).notes || null,
+        invoice_id: r.invoice_id ?? null,
+        expense_id: r.expense_id ?? null,
+      }));
+      await bankStatementApi.replaceTransactions(selected, cleaned);
+
+      // Part 2: Save metadata
+      const updates = { 
+        labels: (statementLabels || []).filter((x) => (x || '').trim()).slice(0, 10), 
+        notes: statementNotes || null,
+        bank_name: statementBankName || null
+      };
+      const resp = await bankStatementApi.updateMeta(selected, updates);
+      
+      // Synchronize states
+      const newBankName = resp.statement.bank_name || '';
+      setBankNameValueById((prev: Record<number, string>) => ({ ...prev, [selected]: newBankName }));
+      setDetail((prev: BankStatementDetail | null) => prev ? { ...prev, notes: resp.statement.notes || null, labels: (resp.statement as any).labels || [], bank_name: newBankName || null } : prev);
+      
+      toast.success(t('statements.save_success', { defaultValue: 'Changes saved successfully' }));
+      await openStatement(selected);
+      await loadList();
+    } catch (e: any) {
+      toast.error(e?.message || t('statements.save_failed', { defaultValue: 'Failed to save changes' }));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
   const saveMeta = async () => {
     if (!selected) return;
     try {
       setDetailLoading(true);
-      const updates = { labels: (statementLabels || []).filter((x) => (x || '').trim()).slice(0, 10), notes: statementNotes || null };
+      const updates = { 
+        labels: (statementLabels || []).filter((x) => (x || '').trim()).slice(0, 10), 
+        notes: statementNotes || null,
+        bank_name: statementBankName || null
+      };
       const resp = await bankStatementApi.updateMeta(selected, updates);
-      setDetail(prev => prev ? { ...prev, notes: resp.statement.notes || null, labels: (resp.statement as any).labels || [] } : prev);
+      
+      // Synchronize List View override state to prevent it from nulling out the value on next blur/render
+      const newBankName = resp.statement.bank_name || '';
+      setBankNameValueById((prev: Record<number, string>) => ({ ...prev, [selected]: newBankName }));
+      
+      setDetail((prev: BankStatementDetail | null) => prev ? { ...prev, notes: resp.statement.notes || null, labels: (resp.statement as any).labels || [], bank_name: newBankName || null } : prev);
       await loadList();
       toast.success(t('statements.update_success', { defaultValue: 'Statement updated' }));
     } catch (e: any) {
@@ -671,7 +723,7 @@ export default function Statements() {
       const expenseData = { amount: Math.abs(transaction.amount), expense_date: transaction.date, category: expenseCategory, vendor: transaction.description, notes: `Created from bank statement: ${detail?.original_filename}`, payment_method: 'Bank Transfer', status: 'recorded', analysis_status: 'done' };
       const created = await expenseApi.createExpense(expenseData as any);
       toast.success(t('statements.expense.create_success', { defaultValue: 'Expense created successfully' }));
-      setRows(prev => prev.map((r, i) => i === rowIndex ? { ...r, expense_id: created.id } : r));
+      setRows((prev: BankTransactionEntry[]) => prev.map((r, i) => i === rowIndex ? { ...r, expense_id: created.id } : r));
       const backendId = (transaction as any).backend_id;
       if (selected && backendId) {
         try {
@@ -707,7 +759,7 @@ export default function Statements() {
   };
 
   const handleTransactionLinked = (rowIdx: number, link: TransactionLinkInfo) => {
-    setRows(prev => prev.map((r, i) => i === rowIdx ? { ...r, linked_transfer: link } : r));
+    setRows((prev: BankTransactionEntry[]) => prev.map((r, i) => i === rowIdx ? { ...r, linked_transfer: link } : r));
     closeLinkTransferModal();
     if (selected) { const id = selected; setTimeout(() => openStatement(id), 350); }
   };
@@ -808,6 +860,7 @@ export default function Statements() {
             selectedIds={selectedIds} setSelectedIds={setSelectedIds}
             bulkLabel={bulkLabel} setBulkLabel={setBulkLabel}
             newLabelValueById={newLabelValueById} setNewLabelValueById={setNewLabelValueById}
+            bankNameValueById={bankNameValueById} setBankNameValueById={setBankNameValueById}
             handleReviewClick={handleReviewClick} handleRunReview={handleRunReview} handleCancelReview={handleCancelReview}
             handleBulkRunReview={handleBulkRunReview}
             exportSelectedAsZip={exportSelectedAsZip}
@@ -885,6 +938,7 @@ export default function Statements() {
             detailLoading={detailLoading}
             statementLabels={statementLabels} setStatementLabels={setStatementLabels}
             statementNotes={statementNotes} setStatementNotes={setStatementNotes}
+            statementBankName={statementBankName} setStatementBankName={setStatementBankName}
             newStatementLabel={newStatementLabel} setNewStatementLabel={setNewStatementLabel}
             isSplitView={isSplitView} splitViewPdfUrl={splitViewPdfUrl}
             highlightedBackendId={highlightedBackendId}
@@ -892,7 +946,7 @@ export default function Statements() {
             previewLoading={previewLoading}
             loading={loading}
             getLocale={getLocale} timezone={timezone}
-            saveRows={saveRows} saveMeta={saveMeta} addEmptyRow={addEmptyRow} exportToCSV={exportToCSV}
+            saveRows={saveAll} saveMeta={saveMeta} addEmptyRow={addEmptyRow} exportToCSV={exportToCSV}
             createExpenseFromTransaction={createExpenseFromTransaction}
             createInvoiceFromTransaction={createInvoiceFromTransaction}
             openStatement={openStatement} handlePreview={handlePreview} handleDownload={handleDownload}
@@ -940,7 +994,7 @@ export default function Statements() {
           onClose={() => { setUploadModalOpen(false); setFiles([]); setSelectedProvider('bank'); }}
           files={files}
           onAddFiles={addFiles}
-          onRemoveFile={(index) => setFiles(prev => prev.filter((_, i) => i !== index))}
+          onRemoveFile={(index) => setFiles((prev: File[]) => prev.filter((_, i) => i !== index))}
           selectedProvider={selectedProvider} setSelectedProvider={setSelectedProvider}
           cardType={cardType} setCardType={setCardType}
           dragActive={dragActive} setDragActive={setDragActive}
@@ -997,7 +1051,7 @@ export default function Statements() {
                   if (!transactionToDelete) return;
                   try {
                     await bankStatementApi.deleteTransaction(selected!, transactionToDelete.backendId);
-                    setRows(prev => prev.filter((_, i) => i !== transactionToDelete.idx));
+                    setRows((prev: BankTransactionEntry[]) => prev.filter((_, i) => i !== transactionToDelete.idx));
                     toast.success('Transaction deleted');
                   } catch (e: any) { toast.error(e?.message || 'Failed to delete transaction'); }
                   finally { setTransactionToDelete(null); setDeleteTransactionModalOpen(false); }

@@ -406,17 +406,22 @@ class UniversalBankTransactionExtractor:
 
             if response and response.choices:
                 result_text = response.choices[0].message.content
-                # Basic JSON extraction from response
-                # More robust JSON extraction - find the outermost { }
+                logger.debug(f"📄 RAW METADATA RESPONSE from {self.provider_name}: {result_text}")
+                
+                # Basic JSON extraction from response - handles conversational filler
                 match = re.search(r'(\{[\s\S]*\})', result_text)
                 if match:
                     try:
                         json_str = match.group(0)
+                        # Clean up common OCR/LLM hallucinations in JSON
+                        json_str = json_str.replace('```json', '').replace('```', '')
                         self.statement_metadata = json.loads(json_str)
+                        
                         logger.info(f"✨ [AI SMARTS] Successfully detected statement metadata:")
                         logger.info(f"   - Year: {self.statement_metadata.get('year')}")
                         logger.info(f"   - Period: {self.statement_metadata.get('period')}")
                         logger.info(f"   - Type: {self.statement_metadata.get('card_type')}")
+                        logger.info(f"   - Bank: {self.statement_metadata.get('bank_name')}")
 
                         # Update card_type if it was auto and we detected it here
                         if self.card_type == "auto" and self.statement_metadata.get('card_type'):
@@ -425,10 +430,12 @@ class UniversalBankTransactionExtractor:
                             logger.info(f"   - Card type set to: {self.card_type}")
                     except json.JSONDecodeError as e:
                         logger.warning(f"🔍 [AI SMARTS] Found JSON-like block but it was invalid: {e}")
-                        logger.info(f"📄 RAW METADATA RESPONSE: {result_text}")
+                        logger.info(f"📄 RAW RESPONSE THAT FAILED PARSING: {result_text}")
                 else:
                     logger.warning("🔍 [AI SMARTS] Metadata extraction LLM responded, but no JSON was found.")
                     logger.info(f"📄 RAW METADATA RESPONSE: {result_text}")
+            else:
+                logger.warning("🔍 [AI SMARTS] No response received from metadata extraction LLM.")
         except Exception as e:
             logger.warning(f"Metadata extraction failed: {e}")
             # Non-critical failure, we continue with empty metadata
@@ -475,9 +482,24 @@ class UniversalBankTransactionExtractor:
                     logger.info(f"🔍 AI detected card_type: {self.detected_card_type}")
 
                 txns = self._parse_response(result_text)
-                # Inject card_type for TransactionModel validation
+                
+                # BUBBLE UP BANK NAME: If metadata missed it, the main pass might have found it
+                meta_bank = self.statement_metadata.get('bank_name')
+                if not meta_bank and txns:
+                    # Look for bank_name in any of the extracted transactions
+                    for t in txns:
+                        found_bank = t.get('bank_name')
+                        if found_bank and found_bank.lower() != 'unknown':
+                            logger.info(f"✨ [AI SMARTS] Bank name '{found_bank}' discovered during transaction extraction pass")
+                            self.statement_metadata['bank_name'] = found_bank
+                            meta_bank = found_bank
+                            break
+
+                # Inject card_type and bank_name for TransactionModel validation
                 for t in txns:
                     t['card_type'] = self.card_type
+                    if meta_bank:
+                        t['bank_name'] = meta_bank
                 return txns
             else:
                 logger.warning("No response received from LLM")
@@ -748,13 +770,13 @@ class UniversalBankTransactionExtractor:
                 extraction_method = extraction_result.method
                 processing_time = extraction_result.processing_time
 
-                # Track extraction method for analytics
-                self._track_extraction_method(extraction_method, pdf_path, processing_time)
-
                 # Store extraction metadata for later AI usage tracking
                 self.last_extraction_method = extraction_method
                 self.last_processing_time = processing_time
                 self.last_text_length = len(text)
+
+                # Track extraction method for analytics
+                self._track_extraction_method(extraction_method, pdf_path, processing_time)
 
                 # Notify user about processing completion
                 try:
