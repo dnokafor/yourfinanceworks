@@ -7,6 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ReportFilters } from '@/components/reports/ReportFilters';
 import { ReportPreview } from '@/components/reports/ReportPreview';
 import { ExportFormatSelector } from '@/components/reports/ExportFormatSelector';
+import { ReportRelationshipCloud } from '@/components/reports/ReportRelationshipCloud';
+import { ReportRelationshipSummary } from '@/components/reports/ReportRelationshipSummary';
 import {
     reportApi,
     ReportFilters as ReportFiltersType,
@@ -301,6 +303,11 @@ const ReportDetail: React.FC = () => {
                             onFiltersChange={setFilters}
                         />
 
+                        <ReportRelationshipSummary
+                            reportType={reportType!}
+                            filters={filters}
+                        />
+
                         {/* Preview Button */}
                         <Card className="slide-in">
                             <CardContent className="pt-6">
@@ -329,6 +336,11 @@ const ReportDetail: React.FC = () => {
 
                     {/* Right Column - Preview */}
                     <div className="xl:col-span-2 space-y-6">
+                        <ReportRelationshipCloud
+                            reportType={reportType!}
+                            filters={filters}
+                        />
+
                         <ReportPreview
                             reportData={previewData}
                             loading={previewMutation.isPending}
