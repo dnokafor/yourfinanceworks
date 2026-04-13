@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { shareTokenApi } from '@/lib/api/share-tokens';
-import { AlertCircle, FileText, Receipt, CreditCard, Users, Landmark, TrendingUp } from 'lucide-react';
+import { AlertCircle, FileText, Receipt, CreditCard, Users, Landmark, TrendingUp, Download } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 const RECORD_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   invoice: FileText,
@@ -101,32 +102,50 @@ function ClientView({ data }: { data: any }) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function BankStatementView({ data }: { data: any }) {
+  const hasBalance = data.transactions?.some((tx: any) => tx.balance != null);
+  const hasCategory = data.transactions?.some((tx: any) => tx.category);
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4 text-sm">
+        {data.bank_name && <div className="col-span-2"><span className="text-muted-foreground">Bank</span><p className="font-medium">{data.bank_name}</p></div>}
         <div><span className="text-muted-foreground">File</span><p className="font-medium">{data.original_filename}</p></div>
         <div><span className="text-muted-foreground">Card type</span><p className="font-medium capitalize">{data.card_type}</p></div>
         <div><span className="text-muted-foreground">Status</span><p className="font-medium capitalize">{data.status}</p></div>
         <div><span className="text-muted-foreground">Transactions</span><p className="font-medium">{data.extracted_count}</p></div>
       </div>
-      {data.transactions?.length > 0 && (
+      {data.transactions?.length > 0 ? (
         <div>
-          <p className="text-sm font-semibold mb-2">Transactions</p>
-          <table className="w-full text-sm border-collapse">
-            <thead><tr className="border-b text-muted-foreground"><th className="text-left py-1">Date</th><th className="text-left py-1">Description</th><th className="text-right py-1">Amount</th><th className="text-left py-1">Type</th></tr></thead>
-            <tbody>
-              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-              {data.transactions.map((tx: any, i: number) => (
-                <tr key={i} className="border-b last:border-0">
-                  <td className="py-1">{formatDate(tx.date)}</td>
-                  <td className="py-1">{tx.description}</td>
-                  <td className="text-right py-1">{tx.amount}</td>
-                  <td className="py-1 capitalize">{tx.transaction_type}</td>
+          <p className="text-sm font-semibold mb-2">Transactions ({data.transactions.length})</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse min-w-[480px]">
+              <thead>
+                <tr className="border-b text-muted-foreground">
+                  <th className="text-left py-1.5 pr-3">Date</th>
+                  <th className="text-left py-1.5 pr-3">Description</th>
+                  {hasCategory && <th className="text-left py-1.5 pr-3">Category</th>}
+                  <th className="text-right py-1.5 pr-3">Amount</th>
+                  {hasBalance && <th className="text-right py-1.5">Balance</th>}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                {data.transactions.map((tx: any, i: number) => (
+                  <tr key={i} className="border-b last:border-0 hover:bg-muted/30">
+                    <td className="py-1.5 pr-3 whitespace-nowrap">{formatDate(tx.date)}</td>
+                    <td className="py-1.5 pr-3">{tx.description}</td>
+                    {hasCategory && <td className="py-1.5 pr-3 text-muted-foreground capitalize">{tx.category || '—'}</td>}
+                    <td className={`py-1.5 pr-3 text-right font-mono whitespace-nowrap ${tx.transaction_type === 'credit' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {tx.transaction_type === 'credit' ? '+' : '-'}{Math.abs(tx.amount).toFixed(2)}
+                    </td>
+                    {hasBalance && <td className="py-1.5 text-right font-mono text-muted-foreground whitespace-nowrap">{tx.balance != null ? tx.balance.toFixed(2) : '—'}</td>}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
+      ) : (
+        <p className="text-sm text-muted-foreground italic">No transactions available.</p>
       )}
     </div>
   );
@@ -165,6 +184,62 @@ function PortfolioView({ data }: { data: any }) {
   );
 }
 
+function escapeCsvField(value: unknown): string {
+  const str = value == null ? '' : String(value);
+  return str.includes(',') || str.includes('"') || str.includes('\n')
+    ? `"${str.replace(/"/g, '""')}"`
+    : str;
+}
+
+function buildCsv(rows: unknown[][]): string {
+  return rows.map(row => row.map(escapeCsvField).join(',')).join('\n');
+}
+
+function downloadCsv(content: string, filename: string) {
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildRecordCsv(recordType: string, data: any): { csv: string; filename: string } | null {
+  if (recordType === 'bank_statement' && data.transactions?.length > 0) {
+    const header = ['Date', 'Description', 'Type', 'Category', 'Amount', 'Balance'];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows = data.transactions.map((tx: any) => [
+      tx.date,
+      tx.description,
+      tx.transaction_type,
+      tx.category ?? '',
+      (tx.transaction_type === 'credit' ? 1 : -1) * Math.abs(tx.amount),
+      tx.balance ?? '',
+    ]);
+    const base = (data.original_filename as string).replace(/\.[^.]+$/, '');
+    return { csv: buildCsv([header, ...rows]), filename: `${base}-transactions.csv` };
+  }
+  if (recordType === 'invoice' && data.items?.length > 0) {
+    const header = ['Description', 'Quantity', 'Price', 'Amount', 'Unit'];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows = data.items.map((item: any) => [
+      item.description, item.quantity, item.price, item.amount, item.unit_of_measure ?? '',
+    ]);
+    return { csv: buildCsv([header, ...rows]), filename: `invoice-${data.number}-items.csv` };
+  }
+  if (recordType === 'portfolio' && data.holdings?.length > 0) {
+    const header = ['Symbol', 'Name', 'Type', 'Asset Class', 'Quantity', 'Currency'];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows = data.holdings.map((h: any) => [
+      h.security_symbol, h.security_name ?? '', h.security_type, h.asset_class, h.quantity, h.currency,
+    ]);
+    return { csv: buildCsv([header, ...rows]), filename: `${data.name}-holdings.csv` };
+  }
+  return null;
+}
+
 const RECORD_LABELS: Record<string, string> = {
   invoice: 'Invoice',
   expense: 'Expense',
@@ -192,9 +267,11 @@ export default function SharedRecord() {
   const Icon = RECORD_ICONS[recordType] ?? FileText;
   const label = RECORD_LABELS[recordType] ?? 'Record';
 
+  const isBankStatement = recordType === 'bank_statement';
+
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-start p-6">
-      <div className="w-full max-w-2xl space-y-6 mt-8">
+      <div className={`w-full ${isBankStatement ? 'max-w-4xl' : 'max-w-2xl'} space-y-6 mt-8`}>
         {loading && (
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground text-sm">Loading…</CardContent>
@@ -216,10 +293,26 @@ export default function SharedRecord() {
         {data && (
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <Icon className="h-5 w-5" />
-                {label}
-              </CardTitle>
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <Icon className="h-5 w-5" />
+                  {label}
+                </CardTitle>
+                {(() => {
+                  const exportable = buildRecordCsv(recordType, data);
+                  if (!exportable) return null;
+                  return (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => downloadCsv(exportable.csv, exportable.filename)}
+                    >
+                      <Download className="h-4 w-4 mr-1" />
+                      Export CSV
+                    </Button>
+                  );
+                })()}
+              </div>
             </CardHeader>
             <CardContent>
               {recordType === 'invoice' && <InvoiceView data={data} />}
