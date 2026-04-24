@@ -117,7 +117,7 @@ export const CompanyInfoTab: React.FC<CompanyInfoTabProps> = ({ isAdmin }) => {
                 company_info: { ...companyInfo, logo: currentLogo },
                 timezone,
                 allow_join_lookup: allowJoinLookup,
-                join_lookup_exact_match: joinLookupExactMatch
+                join_lookup_exact_match: joinLookupExactMatch,
             });
         } catch {
             toast.error(t('settings.failed_to_save_settings'));
