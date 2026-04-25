@@ -7,9 +7,11 @@ from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 from jinja2 import Template
+from sqlalchemy import inspect, or_, text
 from sqlalchemy.orm import Session
 
 from config import APP_NAME
+from core.models import EmailNotificationSettings
 from core.models.models_per_tenant import Expense, Settings, User
 from core.services.email_service import EmailMessage, EmailService
 
@@ -23,6 +25,7 @@ DEFAULT_EXPENSE_SETTINGS: Dict[str, Any] = {
         "delivery_time": "09:00",
         "timezone": "UTC",
         "include_no_activity": False,
+        "allow_user_overrides": True,
         "recipients": {
             "mode": "admins",
             "custom_emails": "",
@@ -35,6 +38,35 @@ DEFAULT_EXPENSE_SETTINGS: Dict[str, Any] = {
         },
     }
 }
+
+
+def ensure_expense_digest_preference_columns(db: Session) -> None:
+    """Backfill per-user digest columns for tenant DBs that have not run migrations yet."""
+    bind = db.get_bind()
+    inspector = inspect(bind)
+    if not inspector.has_table("email_notification_settings"):
+        return
+
+    existing = {col["name"] for col in inspector.get_columns("email_notification_settings")}
+    dialect = bind.dialect.name
+    column_defs = {
+        "expense_digest_enabled": (
+            "BOOLEAN NOT NULL DEFAULT FALSE"
+            if dialect == "postgresql"
+            else "BOOLEAN NOT NULL DEFAULT 0"
+        ),
+        "expense_digest_frequency": "VARCHAR DEFAULT 'weekly' NOT NULL",
+        "expense_digest_next_run_at": "TIMESTAMP WITH TIME ZONE" if dialect == "postgresql" else "DATETIME",
+        "expense_digest_last_sent_at": "TIMESTAMP WITH TIME ZONE" if dialect == "postgresql" else "DATETIME",
+    }
+
+    changed = False
+    for column_name, column_def in column_defs.items():
+        if column_name not in existing:
+            db.execute(text(f"ALTER TABLE email_notification_settings ADD COLUMN {column_name} {column_def}"))
+            changed = True
+    if changed:
+        db.commit()
 
 
 class ExpenseDigestService:
@@ -127,6 +159,138 @@ class ExpenseDigestService:
             "expenses_count": len(expenses),
         }
 
+    def process_due_user_digests(
+        self,
+        force: bool = False,
+        company_name: str = APP_NAME,
+    ) -> Dict[str, Any]:
+        """Send due personal expense digests for users who opted in."""
+        if not self.email_service:
+            return {"status": "skipped", "reason": "email_service_not_configured"}
+
+        ensure_expense_digest_preference_columns(self.db)
+        settings = self._load_expense_settings()
+        digest_cfg = settings.get("digest", {})
+        if not bool(digest_cfg.get("allow_user_overrides", True)):
+            return {"status": "skipped", "reason": "user_overrides_disabled"}
+
+        rows = (
+            self.db.query(EmailNotificationSettings)
+            .join(User, User.id == EmailNotificationSettings.user_id)
+            .filter(
+                EmailNotificationSettings.expense_digest_enabled.is_(True),
+                User.is_active.is_(True),
+            )
+            .all()
+        )
+
+        processed = 0
+        sent = 0
+        skipped = 0
+        errors: List[str] = []
+
+        for row in rows:
+            result = self.process_user_digest(row.user_id, digest_cfg, force=force, company_name=company_name)
+            status = result.get("status")
+            if status == "sent":
+                sent += 1
+            elif status == "failed":
+                errors.extend(result.get("errors", []))
+            else:
+                skipped += 1
+            processed += 1
+
+        return {
+            "status": "processed",
+            "users_total": processed,
+            "users_sent": sent,
+            "users_skipped": skipped,
+            "errors": errors,
+        }
+
+    def process_user_digest(
+        self,
+        user_id: int,
+        digest_cfg: Optional[Dict[str, Any]] = None,
+        force: bool = False,
+        company_name: str = APP_NAME,
+    ) -> Dict[str, Any]:
+        """Send one user's personal digest if it is due."""
+        if not self.email_service:
+            return {"status": "skipped", "reason": "email_service_not_configured", "user_id": user_id}
+
+        ensure_expense_digest_preference_columns(self.db)
+        user = self.db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
+        if not user:
+            return {"status": "skipped", "reason": "user_not_found", "user_id": user_id}
+
+        notification_settings = self._get_or_create_notification_settings(user.id)
+        if not notification_settings.expense_digest_enabled:
+            return {"status": "skipped", "reason": "digest_disabled", "user_id": user_id}
+
+        frequency = str(notification_settings.expense_digest_frequency or "weekly").lower()
+        if frequency not in {"daily", "weekly"}:
+            frequency = "weekly"
+
+        digest_cfg = digest_cfg or self._load_expense_settings().get("digest", {})
+        now_utc = datetime.now(timezone.utc)
+        if not force and not self._is_user_digest_due(now_utc, frequency, digest_cfg, notification_settings):
+            return {"status": "skipped", "reason": "not_due", "user_id": user_id}
+
+        start_utc, end_utc = self._period_bounds(now_utc, frequency)
+        expenses = (
+            self.db.query(Expense)
+            .filter(
+                Expense.is_deleted.is_(False),
+                Expense.expense_date >= start_utc,
+                Expense.expense_date < end_utc,
+                or_(
+                    Expense.created_by_user_id == user.id,
+                    (Expense.created_by_user_id.is_(None) & (Expense.user_id == user.id)),
+                ),
+            )
+            .order_by(Expense.expense_date.desc())
+            .all()
+        )
+
+        if not expenses and not bool(digest_cfg.get("include_no_activity", False)) and not force:
+            self._save_user_digest_runtime(notification_settings, now_utc, frequency, digest_cfg, sent=False)
+            return {"status": "skipped", "reason": "no_activity", "user_id": user_id}
+
+        recipient_email = notification_settings.notification_email or user.email
+        recipient_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
+        digest_data = self._build_digest_data(expenses, digest_cfg)
+        errors: List[str] = []
+
+        try:
+            message = self._create_digest_message(
+                recipient_email=recipient_email,
+                recipient_name=recipient_name,
+                company_name=company_name,
+                interval=frequency,
+                start_utc=start_utc,
+                end_utc=end_utc,
+                digest_data=digest_data,
+            )
+            success = self.email_service.send_email(message)
+        except Exception as exc:  # pragma: no cover - defensive
+            success = False
+            errors.append(f"failed_to_send:{recipient_email}:{exc}")
+            logger.error("Failed sending personal expense digest to %s: %s", recipient_email, exc)
+
+        if success:
+            self._save_user_digest_runtime(notification_settings, now_utc, frequency, digest_cfg, sent=True)
+            return {
+                "status": "sent",
+                "user_id": user_id,
+                "interval": frequency,
+                "expenses_count": len(expenses),
+            }
+
+        if not errors:
+            errors.append(f"failed_to_send:{recipient_email}")
+        return {"status": "failed", "user_id": user_id, "errors": errors}
+
     def _load_expense_settings(self) -> Dict[str, Any]:
         record = self.db.query(Settings).filter(Settings.key == self.SETTINGS_KEY).first()
         raw = record.value if record and isinstance(record.value, dict) else {}
@@ -159,6 +323,67 @@ class ExpenseDigestService:
         else:
             runtime = Settings(key=self.RUNTIME_KEY, value=runtime_value)
             self.db.add(runtime)
+        self.db.commit()
+
+    def _get_or_create_notification_settings(self, user_id: int) -> EmailNotificationSettings:
+        settings = (
+            self.db.query(EmailNotificationSettings)
+            .filter(EmailNotificationSettings.user_id == user_id)
+            .first()
+        )
+        if settings:
+            return settings
+        settings = EmailNotificationSettings(user_id=user_id)
+        self.db.add(settings)
+        self.db.commit()
+        self.db.refresh(settings)
+        return settings
+
+    def _is_user_digest_due(
+        self,
+        now_utc: datetime,
+        frequency: str,
+        digest_cfg: Dict[str, Any],
+        settings: EmailNotificationSettings,
+    ) -> bool:
+        next_run = settings.expense_digest_next_run_at
+        if next_run:
+            if next_run.tzinfo is None:
+                next_run = next_run.replace(tzinfo=timezone.utc)
+            return now_utc >= next_run
+
+        tz = self._safe_timezone(str(digest_cfg.get("timezone", "UTC")))
+        hh, mm = self._parse_delivery_time(str(digest_cfg.get("delivery_time", "09:00")))
+        local_now = now_utc.astimezone(tz)
+        scheduled_today = local_now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+
+        if local_now >= scheduled_today:
+            return True
+
+        settings.expense_digest_next_run_at = scheduled_today.astimezone(timezone.utc)
+        self.db.commit()
+        return False
+
+    def _save_user_digest_runtime(
+        self,
+        settings: EmailNotificationSettings,
+        now_utc: datetime,
+        frequency: str,
+        digest_cfg: Dict[str, Any],
+        sent: bool,
+    ) -> None:
+        tz = self._safe_timezone(str(digest_cfg.get("timezone", "UTC")))
+        hh, mm = self._parse_delivery_time(str(digest_cfg.get("delivery_time", "09:00")))
+        local_now = now_utc.astimezone(tz).replace(hour=hh, minute=mm, second=0, microsecond=0)
+        if frequency == "daily":
+            next_local = local_now + timedelta(days=1)
+        else:
+            next_local = local_now + timedelta(days=7)
+
+        if sent:
+            settings.expense_digest_last_sent_at = now_utc
+        settings.expense_digest_next_run_at = next_local.astimezone(timezone.utc)
+        settings.expense_digest_frequency = frequency
         self.db.commit()
 
     def _is_due(
