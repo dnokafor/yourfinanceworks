@@ -5,7 +5,7 @@
 ![React: 18+](https://img.shields.io/badge/React-18+-61DAFB.svg?logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6.svg?logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-5.0-646CFF.svg?logo=vite&logoColor=white)
-
+ 
 YourFinanceWORKS transforms financial futures for businesses and individuals through AI-powered automation of invoicing, expense tracking, banking reconciliation, and comprehensive business intelligence in a secure multi-tenant platform.
 
 ## 🎬 Videos
