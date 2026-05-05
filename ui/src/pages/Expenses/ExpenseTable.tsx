@@ -1,14 +1,13 @@
 import { useTranslation } from 'react-i18next';
-import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CurrencyDisplay } from '@/components/ui/currency-display';
 import { Input } from '@/components/ui/input';
 import {
-  AlertCircle, Loader2, X, Eye, Upload,
+  AlertCircle, CheckCircle2, Clock3, FileSearch, Loader2, Eye, Upload,
   MoreHorizontal, Edit, RotateCcw, Receipt,
-  Trash2
+  Trash2, X
 } from 'lucide-react';
 import { Share2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -17,6 +16,8 @@ import { expenseApi, type Expense, type ExpenseAttachmentMeta } from '@/lib/api'
 import { Badge } from '@/components/ui/badge';
 import { canPerformActions, canEditExpense, canDeleteExpense } from '@/utils/auth';
 import { ExpenseApprovalStatus } from '@/components/approvals/ExpenseApprovalStatus';
+import { ReviewStatusCell } from '@/components/ReviewStatusCell';
+import { CreatedAtByCell } from '@/components/CreatedAtByCell';
 import { toast } from 'sonner';
 
 interface ExpenseTableProps {
@@ -70,6 +71,173 @@ export function ExpenseTable({
 }: ExpenseTableProps) {
   const { t } = useTranslation();
 
+  const renderAnalysisCell = (e: Expense) => {
+    const status = e.analysis_status || (e.imported_from_attachment ? 'not_started' : undefined);
+    const fileCount = Array.isArray(attachments[e.id]) ? attachments[e.id].length : e.attachments_count || 0;
+    const canShowAction = Boolean(status || fileCount > 0 || e.imported_from_attachment) && canPerformActions() && e.status !== 'pending_approval' && e.status !== 'approved';
+    const isActionDisabled = (!e.imported_from_attachment && fileCount === 0) || processingLocks.has(e.id) || uploadingId === e.id;
+    const fileSummary = fileCount > 0
+      ? `${fileCount} ${t('expenses.file_count', { defaultValue: 'file(s)', count: fileCount })}`
+      : e.imported_from_attachment
+        ? t('expenses.imported_receipt', { defaultValue: 'Imported receipt' })
+        : t('expenses.no_receipt', { defaultValue: 'No receipt' });
+
+    const statusMeta = (() => {
+      switch (status) {
+        case 'done':
+          return {
+            label: t('expenses.status_done'),
+            icon: CheckCircle2,
+            className: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/30 dark:text-green-300 dark:border-green-800',
+          };
+        case 'processing':
+          return {
+            label: t('expenses.status_processing'),
+            icon: Loader2,
+            className: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800',
+          };
+        case 'queued':
+          return {
+            label: t('expenses.status_queued'),
+            icon: Clock3,
+            className: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800',
+          };
+        case 'failed':
+          return {
+            label: t('common.failed', { defaultValue: 'Failed' }),
+            icon: AlertCircle,
+            className: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-300 dark:border-red-800',
+          };
+        case 'cancelled':
+          return {
+            label: t('common.cancelled', { defaultValue: 'Cancelled' }),
+            icon: X,
+            className: 'bg-muted/60 text-muted-foreground border-border',
+          };
+        case 'not_started':
+          return {
+            label: t('common.not_started', { defaultValue: 'Not Started' }),
+            icon: FileSearch,
+            className: 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900/50 dark:text-slate-300 dark:border-slate-700',
+          };
+        default:
+          return {
+            label: t('common.not_available', { defaultValue: 'N/A' }),
+            icon: FileSearch,
+            className: 'bg-muted/50 text-muted-foreground border-transparent',
+          };
+      }
+    })();
+
+    const StatusIcon = statusMeta.icon;
+    const isStatusSpinning = status === 'processing';
+
+    return (
+      <div className="flex min-w-[150px] items-center justify-start gap-1.5">
+        <div className="min-w-0 space-y-1">
+          <Badge variant="outline" className={`h-6 gap-1.5 whitespace-nowrap px-2 font-medium shadow-none ${statusMeta.className}`}>
+            <StatusIcon className={`h-3 w-3 ${isStatusSpinning ? 'animate-spin' : ''}`} />
+            {statusMeta.label}
+          </Badge>
+          <div className="max-w-[130px] truncate text-[11px] leading-none text-muted-foreground">
+            {fileSummary}
+          </div>
+        </div>
+        {canShowAction && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0"
+            onClick={() => onRequeue(e.id)}
+            disabled={isActionDisabled}
+            title={t('expenses.process_again', { defaultValue: 'Process Again' })}
+            aria-label={t('expenses.process_again', { defaultValue: 'Process Again' })}
+          >
+            {processingLocks.has(e.id) || uploadingId === e.id ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RotateCcw className="h-3.5 w-3.5" />
+            )}
+          </Button>
+        )}
+      </div>
+    );
+  };
+
+  const renderReceiptCell = (e: Expense) => {
+    const fileCount = Array.isArray(attachments[e.id]) ? attachments[e.id].length : e.attachments_count || 0;
+    const hasKnownFileCount = Array.isArray(attachments[e.id]) || typeof e.attachments_count === 'number';
+    const isUploading = uploadingId === e.id;
+    const fileSummary = fileCount > 0
+      ? `${fileCount} ${t('expenses.file_count', { defaultValue: 'file(s)', count: fileCount })}`
+      : t('expenses.no_receipt', { defaultValue: 'No receipt' });
+    const canPreview = !hasKnownFileCount || fileCount > 0;
+
+    const openPreview = async () => {
+      const list = await expenseApi.listAttachments(e.id);
+      setAttachments(prev => ({ ...prev, [e.id]: list }));
+      setAttachmentPreviewOpen({ expenseId: e.id });
+    };
+
+    return (
+      <div className="flex min-w-[150px] items-center justify-start gap-1.5">
+        <div className="min-w-0 space-y-1">
+          <Badge
+            variant="outline"
+            className={`h-6 gap-1.5 whitespace-nowrap px-2 font-medium shadow-none ${
+              fileCount > 0
+                ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800'
+                : 'bg-muted/50 text-muted-foreground border-transparent'
+            }`}
+          >
+            <Receipt className="h-3 w-3" />
+            {fileSummary}
+          </Badge>
+          <div className="max-w-[130px] truncate text-[11px] leading-none text-muted-foreground">
+            {isUploading ? t('expenses.uploading') : t('expenses.receipt_attachments', { defaultValue: 'Receipt attachments' })}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            className={`h-7 w-7 ${isUploading ? 'pointer-events-none opacity-50' : ''}`}
+            title={t('expenses.upload')}
+            aria-label={t('expenses.upload')}
+          >
+            <label>
+              {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+              <input
+                type="file"
+                accept="application/pdf,image/jpeg,image/png"
+                className="hidden"
+                onChange={async (ev) => {
+                  const file = ev.target.files?.[0];
+                  if (!file) return;
+                  await onUpload(e.id, file);
+                  await openPreview();
+                  ev.currentTarget.value = '';
+                }}
+              />
+            </label>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={openPreview}
+            disabled={!canPreview}
+            title={t('common.view')}
+            aria-label={t('common.view')}
+          >
+            <Eye className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="rounded-xl border border-border/50 overflow-x-auto shadow-sm">
       <Table className="min-w-[1100px]">
@@ -99,7 +267,7 @@ export function ExpenseTable({
             {isVisible('analyzed') && <TableHead className="font-bold text-foreground">{t('expenses.table.analyzed')}</TableHead>}
             {isVisible('review') && <TableHead className="font-bold text-foreground">{t('expenses.review.title', { defaultValue: 'Review' })}</TableHead>}
             {isVisible('receipt') && <TableHead className="font-bold text-foreground">{t('expenses.table.receipt')}</TableHead>}
-            <TableHead className="w-[100px] text-right font-bold text-foreground">{t('expenses.table.actions')}</TableHead>
+            <TableHead className="sticky right-0 z-30 w-[88px] bg-muted/80 text-center font-bold text-foreground shadow-[-6px_0_10px_-6px_hsl(var(--foreground)/0.35)]">{t('expenses.table.actions')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -223,170 +391,34 @@ export function ExpenseTable({
                   />
                 </TableCell>}
                 {isVisible('created_at_by') && <TableCell>
-                  <div className="text-sm">
-                    <div className="text-muted-foreground">
-                      {e.created_at ? new Date(e.created_at).toLocaleString(getLocale(), {
-                        timeZone: timezone,
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      }) : 'N/A'}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {e.created_by_username || e.created_by_email || t('common.unknown')}
-                    </div>
-                  </div>
+                  <CreatedAtByCell
+                    createdAt={e.created_at}
+                    createdByUsername={e.created_by_username}
+                    createdByEmail={e.created_by_email}
+                    locale={getLocale()}
+                    timezone={timezone}
+                    unknownLabel={t('common.unknown')}
+                  />
                 </TableCell>}
-                {isVisible('analyzed') && <TableCell>
-                  <div className="flex flex-col gap-2">
-                    <div>
-                      {e.analysis_status === 'done' ? (
-                        <div className="text-xs px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded">{t('expenses.status_done')}</div>
-                      ) : e.analysis_status === 'processing' || e.analysis_status === 'queued' ? (
-                        <div className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 rounded capitalize">{e.analysis_status === 'processing' ? t('expenses.status_processing') : t('expenses.status_queued')}</div>
-                      ) : e.analysis_status === 'failed' ? (
-                        <div className="text-xs px-2 py-1 bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 rounded">{t('common.failed', { defaultValue: 'Failed' })}</div>
-                      ) : e.analysis_status === 'cancelled' ? (
-                        <div className="text-xs px-2 py-1 bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200 rounded">{t('common.cancelled', { defaultValue: 'Cancelled' })}</div>
-                      ) : e.imported_from_attachment ? (
-                        <div className="text-xs px-2 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded">{t('common.not_started', { defaultValue: 'Not Started' })}</div>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">—</span>
-                      )}
-                    </div>
-                    {(e.analysis_status || (e.attachments_count && e.attachments_count > 0) || e.imported_from_attachment) && canPerformActions() && e.status !== 'pending_approval' && e.status !== 'approved' && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-fit"
-                        onClick={() => onRequeue(e.id)}
-                        disabled={
-                          !e.imported_from_attachment &&
-                          (!e.attachments_count || e.attachments_count === 0) ||
-                          processingLocks.has(e.id) ||
-                          uploadingId === e.id
-                        }
-                        title="Process Again"
-                      >
-                        {processingLocks.has(e.id) ? (
-                          <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                            <span className="animate-pulse">...</span>
-                          </div>
-                        ) : uploadingId === e.id ? (
-                          'Uploading...'
-                        ) : (
-                          <RotateCcw className="w-4 h-4" />
-                        )}
-                      </Button>
-                    )}
-                  </div>
-                </TableCell>}
+                {isVisible('analyzed') && <TableCell>{renderAnalysisCell(e)}</TableCell>}
                 {isVisible('review') && <TableCell>
-                  {/* Review Status Column */}
-                  {e.review_status === 'diff_found' ? (
-                    <Button size="sm" variant="outline" className="border-amber-500 text-amber-600 hover:bg-amber-50" onClick={() => onReviewClick(e)}>
-                      <AlertCircle className="w-3 h-3 mr-1" />
-                      Review Diff
-                    </Button>
-                  ) : (e.review_status === 'reviewed' || e.review_status === 'no_diff') ? (
-                    <div className="flex flex-col gap-1 items-start">
-                      <Badge variant="outline" className={cn(
-                        "font-medium shadow-none",
-                        e.review_status === 'reviewed' ? "text-green-600 border-green-200 bg-green-50" : "text-blue-600 border-blue-200 bg-blue-50"
-                      )}>
-                        {e.review_status === 'reviewed' ? 'Reviewed' : 'Verified'}
-                      </Badge>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 text-[10px] px-2 text-muted-foreground hover:text-foreground"
-                        onClick={() => onReviewClick(e)}
-                      >
-                        <Eye className="w-3 h-3 mr-1" />
-                        View Report
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-1 items-start">
-                      <Badge variant="outline" className={cn(
-                        "font-medium shadow-none",
-                        e.review_status === 'pending'
-                          ? "bg-blue-50 text-blue-700 border-blue-200"
-                          : e.review_status === 'rejected'
-                          ? "bg-amber-50 text-amber-700 border-amber-200"
-                          : e.review_status === 'failed'
-                          ? "bg-red-50 text-red-700 border-red-200"
-                          : "bg-muted/50 text-muted-foreground border-transparent"
-                      )}>
-                        {e.review_status === 'pending' ? 'Review Pending' :
-                         e.review_status === 'rejected' ? 'Review Dismissed' :
-                         e.review_status === 'failed' ? 'Review Failed' :
-                         t('common.not_started', { defaultValue: 'Not Started' })}
-                      </Badge>
-                      {(!e.review_status || e.review_status === 'not_started' || e.review_status === 'failed' || e.review_status === 'rejected') && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 text-[10px] text-primary hover:bg-primary/5 p-0 px-1"
-                          onClick={() => onRunReview(e.id)}
-                        >
-                          <RotateCcw className="h-2.5 w-2.5 mr-1" />
-                          Trigger Review
-                        </Button>
-                      )}
-                      {(e.review_status === 'pending' || e.review_status === 'rejected' || e.review_status === 'failed') && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 text-[10px] text-destructive hover:bg-destructive/5 p-0 px-1"
-                          onClick={() => onCancelReview(e.id)}
-                        >
-                          <X className="h-2.5 w-2.5 mr-1" />
-                          {e.review_status === 'pending' ? 'Cancel Review' : 'Clear Status'}
-                        </Button>
-                      )}
-                    </div>
-                  )}
+                  <ReviewStatusCell
+                    status={e.review_status}
+                    reviewedAt={e.reviewed_at}
+                    hasReport={Boolean(e.review_result)}
+                    onView={() => onReviewClick(e)}
+                    onRun={() => onRunReview(e.id)}
+                    onCancel={() => onCancelReview(e.id)}
+                    labels={{
+                      view: t('expenses.review.view_report', { defaultValue: 'View review report' }),
+                      run: t('expenses.review.trigger', { defaultValue: 'Run review' }),
+                      cancel: t('expenses.review.cancel', { defaultValue: 'Cancel review' }),
+                      clear: t('expenses.review.clear_status', { defaultValue: 'Clear review status' }),
+                    }}
+                  />
                 </TableCell>}
-                {isVisible('receipt') && <TableCell>
-                  <div className="flex flex-col gap-2">
-                    <label className="inline-flex items-center gap-2 cursor-pointer w-fit">
-                      <Upload className="w-4 h-4" />
-                      <input
-                        type="file"
-                        accept="application/pdf,image/jpeg,image/png"
-                        className="hidden"
-                        onChange={async (ev) => {
-                          const file = ev.target.files?.[0];
-                          if (file) await onUpload(e.id, file);
-                          // refresh attachment list and auto-open preview
-                          const list = await expenseApi.listAttachments(e.id);
-                          setAttachments(prev => ({ ...prev, [e.id]: list }));
-                          setAttachmentPreviewOpen({ expenseId: e.id });
-                        }}
-                      />
-                      <span className="text-sm">{uploadingId === e.id ? t('expenses.uploading') : t('expenses.upload')}</span>
-                    </label>
-                    <Button variant="ghost" size="sm" className="w-fit justify-start px-0" onClick={async () => {
-                      const list = await expenseApi.listAttachments(e.id);
-                      setAttachments(prev => ({ ...prev, [e.id]: list }));
-                      setAttachmentPreviewOpen({ expenseId: e.id });
-                    }}>
-                      {Array.isArray(attachments[e.id]) || typeof e.attachments_count === 'number' ? (
-                        <span className="text-sm">{Array.isArray(attachments[e.id]) ? attachments[e.id].length : e.attachments_count} {t('expenses.file_count', { defaultValue: 'file(s)', count: Array.isArray(attachments[e.id]) ? attachments[e.id].length : e.attachments_count })}</span>
-                      ) : (
-                        <>
-                          <Eye className="w-4 h-4 mr-2" />
-                          <span className="text-sm">{t('common.view')}</span>
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </TableCell>}
-                <TableCell className="text-right">
+                {isVisible('receipt') && <TableCell>{renderReceiptCell(e)}</TableCell>}
+                <TableCell className="sticky right-0 z-20 bg-background text-center shadow-[-6px_0_10px_-6px_hsl(var(--foreground)/0.25)]">
                   {canPerformActions() && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
